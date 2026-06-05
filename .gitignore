@@ -1,0 +1,40 @@
+# Secrets / local config
+.env
+.env.*
+!.env.example
+
+# Local scratch space
+IGNORED/
+
+# Local app state
+.var/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.vite/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# OS/editor noise
+.DS_Store
+
+# Agent profile local config
+agent-server-client/config/agent-profiles.json
+
+# Skill-local generated artifacts
+my-agent/skills/youtube-transcript/node_modules/
+my-agent/skills/youtube-transcript/.env

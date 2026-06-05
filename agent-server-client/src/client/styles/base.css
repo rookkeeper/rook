@@ -1,0 +1,38 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(124, 58, 237, 0.28), transparent 34rem),
+    linear-gradient(135deg, #100d16, #19141f 54%, #241b32);
+  color: var(--text-normal);
+}
+
+button {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 7px 12px;
+}
+
+button:hover:not(:disabled) {
+  background: var(--interactive-accent-hover);
+}
+
+button:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

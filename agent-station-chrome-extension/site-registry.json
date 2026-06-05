@@ -1,0 +1,11 @@
+{
+  "sites": [
+    {
+      "id": "wikipedia",
+      "environmentId": "web:wikipedia",
+      "sourceName": "Wikipedia",
+      "hostSuffixes": [".wikipedia.org"],
+      "hostsExact": ["wikipedia.org", "www.wikipedia.org"]
+    }
+  ]
+}

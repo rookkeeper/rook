@@ -1,0 +1,10 @@
+{
+  "profiles": [
+    {
+      "id": "MyPiAgent",
+      "type": "pi",
+      "parentId": "PiAgent",
+      "args": ["-e", "../my-agent", "--mode", "rpc"]
+    }
+  ]
+}

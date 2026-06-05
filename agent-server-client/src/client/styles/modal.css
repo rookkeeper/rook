@@ -1,0 +1,175 @@
+/* =========================================================
+   Block modal
+   ========================================================= */
+
+.cwa-modal {
+  padding: 16px;
+  overflow-y: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* In the modal, bubbles take full width and shed the max-width cap */
+.cwa-modal .cwa-user-message,
+.cwa-modal .cwa-agent-text,
+.cwa-modal .cwa-thinking,
+.cwa-modal .cwa-error-block {
+  max-width: 100%;
+  cursor: default;
+}
+
+/* In the modal, thinking content is uncapped — shows everything */
+.cwa-modal .cwa-thinking__content {
+  height: auto;
+  overflow-y: visible;
+}
+
+/* In the modal, tool block args/result are uncapped */
+.cwa-modal .cwa-tool-block {
+  max-width: 100%;
+  cursor: default;
+}
+
+.cwa-modal .cwa-tool-block__args,
+.cwa-modal .cwa-tool-block__result-content {
+  height: auto;
+  overflow-y: visible;
+}
+
+/* =========================================================
+   Streaming cursor
+   ========================================================= */
+
+.cwa-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: currentColor;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cwa-blink 1s step-end infinite;
+}
+
+.cwa-cursor--dark {
+  background: var(--text-muted);
+}
+
+@keyframes cwa-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* =========================================================
+   Queue
+   ========================================================= */
+
+.cwa-queue {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: rgba(17, 13, 24, 0.34);
+}
+
+.cwa-queue__label {
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cwa-queue__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 7.5em;
+  margin: 0;
+  overflow-y: auto;
+  padding-left: 1.35em;
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.cwa-queue__item {
+  padding-right: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =========================================================
+   Compose box
+   ========================================================= */
+
+.cwa-compose {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.cwa-compose__textarea {
+  flex: 1;
+  resize: none;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.95em;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.cwa-compose__textarea:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+}
+
+.cwa-compose__send {
+  align-self: flex-end;
+}
+
+/* =========================================================
+   Standalone modal chrome
+   ========================================================= */
+
+.cwa-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.cwa-modal-card {
+  width: min(920px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  position: relative;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 14px;
+  background: var(--background-secondary);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+
+.cwa-modal-close {
+  position: sticky;
+  top: 10px;
+  float: right;
+  z-index: 1;
+  margin: 10px 10px 0 0;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
+}

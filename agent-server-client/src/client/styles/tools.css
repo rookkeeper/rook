@@ -1,0 +1,125 @@
+/* =========================================================
+   Tool block — card style, collapsed by default
+   ========================================================= */
+
+.cwa-tool-block {
+  align-self: flex-start;
+  max-width: 90%;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.88em;
+}
+
+.cwa-tool-block:hover {
+  border-color: var(--interactive-accent);
+}
+
+/* Header — always visible */
+.cwa-tool-block__call-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--background-modifier-hover);
+  cursor: pointer;
+}
+
+.cwa-tool-block__call-label {
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.cwa-tool-block__call-name {
+  font-family: var(--font-monospace);
+  font-weight: 600;
+  color: var(--text-normal);
+  flex: 1;
+}
+
+.cwa-tool-block__status {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.72em;
+  font-weight: 600;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+.cwa-tool-block__status--running {
+  color: #f8d477;
+}
+
+.cwa-tool-block__status--completed {
+  color: #9ff0b4;
+}
+
+.cwa-tool-block__status--error {
+  color: var(--text-error);
+}
+
+.cwa-tool-block__chevron {
+  font-size: 0.7em;
+  color: var(--text-muted);
+}
+
+/* Expanded body */
+.cwa-tool-block__body {
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.cwa-tool-block__call {
+  background: var(--background-secondary);
+}
+
+.cwa-tool-block__args {
+  margin: 0;
+  padding: 6px 10px;
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  word-break: break-all;
+  height: 4.5em;
+  overflow-y: auto;
+  color: var(--text-normal);
+  background: var(--background-primary);
+}
+
+.cwa-tool-block__result {
+  background: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.cwa-tool-block__result-label {
+  padding: 4px 10px;
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--background-modifier-hover);
+}
+
+.cwa-tool-block__result--error .cwa-tool-block__result-label {
+  color: var(--text-error);
+}
+
+.cwa-tool-block__result-content {
+  margin: 0;
+  padding: 6px 10px;
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  word-break: break-all;
+  height: 4.5em;
+  overflow-y: auto;
+  color: var(--text-normal);
+}
+
+.cwa-tool-block__result--error .cwa-tool-block__result-content {
+  color: var(--text-error);
+}

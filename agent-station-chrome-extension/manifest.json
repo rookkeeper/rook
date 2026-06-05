@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Agent Station Chrome Extension",
+  "version": "1.2.1",
+  "description": "Agent Station Chrome extension: mirrored host view with localhost agent panel and direct environment availability registration.",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "http://127.0.0.1:3000/*"
+  ],
+  "permissions": ["tabs"],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.wikipedia.org/*",
+        "*://wikipedia.org/*",
+        "*://www.wikipedia.org/*"
+      ],
+      "js": ["content.js"],
+      "css": ["split.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

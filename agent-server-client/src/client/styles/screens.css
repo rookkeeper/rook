@@ -1,0 +1,311 @@
+/* =========================================================
+   Selection screens
+   ========================================================= */
+
+.cwa-agent-selection,
+.cwa-session-selection {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  gap: 24px;
+  padding: 32px;
+}
+
+.cwa-agent-selection__intro,
+.cwa-session-selection__intro {
+  text-align: center;
+}
+
+.cwa-agent-selection__intro h2,
+.cwa-session-selection__intro h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.cwa-agent-selection__intro p,
+.cwa-session-selection__intro p {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+}
+
+.cwa-environment-skills-notice {
+  width: min(680px, 100%);
+  justify-self: center;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  border-radius: 14px;
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.cwa-environment-skills-notice__heading {
+  font-weight: 800;
+}
+
+.cwa-environment-skills-notice p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.cwa-environment-skills-notice ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.cwa-environment-skills-notice li {
+  margin-top: 4px;
+}
+
+.cwa-environment-skills-notice__source {
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.cwa-agent-selection__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 320px));
+  gap: 16px;
+}
+
+.cwa-agent-card {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 16px;
+  text-align: left;
+  background: rgba(35, 28, 45, 0.86);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.cwa-agent-card:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(139, 92, 246, 0.75);
+}
+
+.cwa-agent-card__name {
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.cwa-agent-card__description {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.cwa-agent-card__action {
+  margin-top: auto;
+  color: var(--text-on-accent);
+  font-size: 0.86rem;
+}
+
+.cwa-agent-selection__error,
+.cwa-session-selection__error {
+  max-width: 656px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 156, 163, 0.4);
+  border-radius: 10px;
+  background: rgba(255, 156, 163, 0.1);
+  color: var(--text-error);
+}
+
+.cwa-agent-tree,
+.cwa-session-list {
+  width: min(680px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cwa-session-list {
+  max-height: min(420px, calc(100vh - 360px));
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.cwa-agent-tree__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cwa-agent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  padding: 1px 0;
+}
+
+.cwa-agent-row__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-monospace);
+  line-height: 1.2;
+}
+
+.cwa-agent-row__branch,
+.cwa-session-row__id,
+.cwa-session-list__empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.cwa-agent-row__name {
+  font-weight: 700;
+}
+
+.cwa-agent-row__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.cwa-agent-row__actions button {
+  border-radius: 999px;
+  font-size: 0.78rem;
+  line-height: 1;
+  padding: 3px 8px;
+}
+
+.cwa-session-row {
+  width: 100%;
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) max-content auto;
+  align-items: center;
+  gap: 18px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-normal);
+  text-align: left;
+  font: inherit;
+  font-weight: 500;
+}
+
+.cwa-session-row:hover:not(:disabled) {
+  background: var(--background-modifier-hover);
+}
+
+.cwa-session-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cwa-session-row--running {
+  cursor: pointer;
+}
+
+.cwa-session-row__main {
+  min-width: 0;
+  display: contents;
+}
+
+.cwa-session-row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.cwa-session-row__created {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.cwa-session-row__pill {
+  min-width: 92px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 8px;
+  text-align: center;
+}
+
+.cwa-session-row__running {
+  border: 1px solid color-mix(in srgb, var(--interactive-accent) 45%, transparent);
+  color: var(--interactive-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}
+
+.cwa-session-row__stopped {
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cwa-session-selection__back {
+  justify-self: start;
+  width: max-content;
+}
+
+.cwa-session-name-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(10, 8, 14, 0.62);
+}
+
+.cwa-session-name-dialog {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 14px;
+  background: var(--background-secondary);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+.cwa-session-name-dialog h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.cwa-session-name-dialog p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.cwa-session-name-dialog__field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.cwa-session-name-dialog__field input {
+  width: 100%;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: rgba(17, 13, 24, 0.72);
+  color: var(--text-normal);
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.cwa-session-name-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

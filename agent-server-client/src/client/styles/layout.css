@@ -1,0 +1,77 @@
+.cwa-app-shell {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.cwa-window {
+  width: min(1040px, 100%);
+  height: min(860px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--background-secondary) 88%, transparent);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.cwa-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: rgba(17, 13, 24, 0.78);
+}
+
+.cwa-header h1 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.cwa-header p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.cwa-header__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cwa-header__status {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.cwa-header__agent-action {
+  border-radius: 999px;
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 3px 7px;
+}
+
+/* =========================================================
+   Layout
+   ========================================================= */
+
+.cwa-container {
+  padding: 0 !important;
+}
+
+.cwa-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}

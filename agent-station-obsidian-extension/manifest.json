@@ -1,0 +1,10 @@
+{
+  "id": "agent-station-obsidian-extension",
+  "name": "Agent Station Obsidian Extension",
+  "version": "0.0.1",
+  "minAppVersion": "1.0.0",
+  "description": "A chat interface for interacting with an AI agent inside Obsidian.",
+  "author": "Arcturus Labs",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}
