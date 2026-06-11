@@ -26,7 +26,7 @@ describe("loadAgentProfiles", () => {
     if (existsSync(profilesPath)) renameSync(profilesPath, backupPath);
     writeFileSync(profilesPath, JSON.stringify({
       profiles: [
-        { id: "MyPiAgent", type: "pi", args: ["-e", "../my-agent"], startupTimeoutMs: 5000 },
+        { id: "MyPiOpenAiAgent", type: "pi", args: ["-e", "../my-agent", "--model", "openai/gpt-4o"], startupTimeoutMs: 5000 },
         { id: "MyClaudeAgent", type: "claude", command: "claude", args: ["--add-dir", "../workspace"], mcpServers: [{ name: "docs", command: "npx" }] },
         { id: "Worker", type: "acp", command: "node", env: { FOO: "bar" } },
         { id: "", type: "pi" },
@@ -38,7 +38,7 @@ describe("loadAgentProfiles", () => {
     }), "utf8");
 
     expect(loadAgentProfiles()).toEqual([
-      { id: "MyPiAgent", type: "pi", args: ["-e", "../my-agent"], startupTimeoutMs: 5000 },
+      { id: "MyPiOpenAiAgent", type: "pi", args: ["-e", "../my-agent", "--model", "openai/gpt-4o"], startupTimeoutMs: 5000 },
       { id: "MyClaudeAgent", type: "claude", command: "claude", args: ["--add-dir", "../workspace"], mcpServers: [{ name: "docs", command: "npx" }] },
       { id: "Worker", type: "acp", command: "node", env: { FOO: "bar" } },
     ]);

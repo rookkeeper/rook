@@ -6,7 +6,7 @@
 #
 # Setup once: cd agent-server-client && npm install
 #
-# Common flags: --agent PiAgent | MyPiAgent  --omit-deltas  --only <types>  --omit <types>
+# Common flags: --agent PiAgent | MyPiOpenAiAgent  --omit-deltas  --only <types>  --omit <types>
 #               --session '<json>'  --restart  --replay  --no-session  --no-replay  --raw-acp  --help
 #
 # SessionEvent types (--omit-deltas hides text_delta, thinking_delta, tool_input_delta, tool_output_delta):
@@ -17,8 +17,8 @@
 #
 # Full example:
 #   ./scripts/interact-with-remote-agent.sh \
-#     --agent MyPiAgent \
-#     --session '{"id":"8f2c1a40-9b3e-4d12-8c01-2a9f0e7d31b4","agent":"MyPiAgent","name":"vault-chat","createdAt":"2026-06-02T18:30:00.000Z","restart":{"cwd":"/Users/me/vault"}}' \
+#     --agent MyPiOpenAiAgent \
+#     --session '{"id":"8f2c1a40-9b3e-4d12-8c01-2a9f0e7d31b4","agent":"MyPiOpenAiAgent","name":"vault-chat","createdAt":"2026-06-02T18:30:00.000Z","restart":{"cwd":"/Users/me/vault"}}' \
 #     --restart --replay --omit-deltas --omit status_changed,environment_event \
 #     "Summarize our thread and list open tasks"
 #

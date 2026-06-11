@@ -12,7 +12,7 @@ describe("PiAgent", () => {
       args: ["-e", MY_AGENT_PACKAGE],
       skillPaths: ["/tmp/a/skills", "/tmp/b/skills"],
       extensionPaths: ["/tmp/parentMessageTool.ts"],
-      agentName: "MyPiAgent",
+      agentName: "MyPiOpenAiAgent",
       cwd: REPO_ROOT,
     });
 

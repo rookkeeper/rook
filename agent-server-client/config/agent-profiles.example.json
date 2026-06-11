@@ -1,10 +1,10 @@
 {
   "profiles": [
     {
-      "id": "MyPiAgent",
+      "id": "MyPiOpenAiAgent",
       "type": "pi",
       "parentId": "PiAgent",
-      "args": ["-e", "../my-agent"]
+      "args": ["-e", "../my-agent", "--provider", "openai-codex", "--model", "gpt-5.4"]
     },
     {
       "id": "MyClaudeAgent",

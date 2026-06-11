@@ -32,10 +32,10 @@ Default example:
 
 ```json
 {
-  "id": "MyPiAgent",
+  "id": "MyPiOpenAiAgent",
   "type": "pi",
   "parentId": "PiAgent",
-  "args": ["-e", "../my-agent"]
+  "args": ["-e", "../my-agent", "--provider", "openai-codex", "--model", "gpt-5.4"]
 }
 ```
 
@@ -49,7 +49,7 @@ Important defaults:
 - `agent-server-client/node_modules/pi-acp/dist/index.js` is the ACP adapter used for Pi
 - `agent-server-client/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js` is the ACP adapter used for Claude
 - `PiAgent` generates a tiny launcher internally at runtime instead of relying on a checked-in wrapper script
-- `args: ["-e", "../my-agent"]` still points Pi at `../my-agent`
+- `args: ["-e", "../my-agent", "--provider", "openai-codex", "--model", "gpt-5.4"]` points Pi at `../my-agent` on ChatGPT Codex subscription auth (`pi` then `/login`). Use provider `openai` with `--model openai/...` for direct API keys instead.
 
 Example Claude profile:
 

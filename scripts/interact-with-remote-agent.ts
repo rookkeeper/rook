@@ -14,7 +14,7 @@
  * starts a local Fastify server on a random port and streams session events.
  *
  * Options:
- *   --agent <id>           Agent backend (default: MyPiAgent). Use PiAgent for a quick direct test.
+ *   --agent <id>           Agent backend (default: MyPiOpenAiAgent). Use PiAgent for a quick direct test.
  *   --session '<json>'     Continue an existing session record (AgentSessionSummary JSON).
  *   --restart              Restart the existing session in place.
  *   --replay               Include HTTP replay events on start (also needs --no-replay off).
@@ -58,8 +58,8 @@
  * Full example (resume a session, restart its runtime, replay prior events, filter noisy types):
  *
  *   ./scripts/interact-with-remote-agent.sh \
- *     --agent MyPiAgent \
- *     --session '{"id":"8f2c1a40-9b3e-4d12-8c01-2a9f0e7d31b4","agent":"MyPiAgent","name":"vault-chat","createdAt":"2026-06-02T18:30:00.000Z","restart":{"cwd":"/Users/me/vault"}}' \
+ *     --agent MyPiOpenAiAgent \
+ *     --session '{"id":"8f2c1a40-9b3e-4d12-8c01-2a9f0e7d31b4","agent":"MyPiOpenAiAgent","name":"vault-chat","createdAt":"2026-06-02T18:30:00.000Z","restart":{"cwd":"/Users/me/vault"}}' \
  *     --restart \
  *     --replay \
  *     --omit-deltas \
@@ -67,8 +67,8 @@
  *     "Summarize our thread and list open tasks"
  *
  *   npm run agent:cli -- \
- *     --agent MyPiAgent \
- *     --session '{"id":"8f2c1a40-9b3e-4d12-8c01-2a9f0e7d31b4","agent":"MyPiAgent","name":"vault-chat","createdAt":"2026-06-02T18:30:00.000Z","restart":{"cwd":"/Users/me/vault"}}' \
+ *     --agent MyPiOpenAiAgent \
+ *     --session '{"id":"8f2c1a40-9b3e-4d12-8c01-2a9f0e7d31b4","agent":"MyPiOpenAiAgent","name":"vault-chat","createdAt":"2026-06-02T18:30:00.000Z","restart":{"cwd":"/Users/me/vault"}}' \
  *     --restart --replay --omit-deltas --omit status_changed,environment_event \
  *     "Summarize our thread and list open tasks"
  */
@@ -105,7 +105,7 @@ function usage(): never {
   npm run agent:cli -- [options] <prompt>
 
 Options:
-  --agent <id>           Agent backend (default: MyPiAgent)
+  --agent <id>           Agent backend (default: MyPiOpenAiAgent)
   --session '<json>'     Continue an existing session record
   --restart              Restart existing session in place
   --replay               Emit HTTP replay events on start
@@ -145,7 +145,7 @@ function parseArgs(argv: string[]): {
   filter: EventFilter;
   rawAcp: boolean;
 } {
-  let agent = "MyPiAgent";
+  let agent = "MyPiOpenAiAgent";
   let session: AgentSessionSummary | undefined;
   let restart = false;
   let replay = false;

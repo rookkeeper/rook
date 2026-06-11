@@ -9,7 +9,7 @@ describe("agentDiscovery", () => {
   it("exposes the built-in PiAgent plus configured child agents", async () => {
     vi.doMock("../config/agentProfiles.js", () => ({
       AGENT_PROFILES: [
-        { id: "MyPiAgent", type: "pi", parentId: "PiAgent", args: ["-e", "../my-agent"], skillPaths: ["/profile-skill"], extensionPaths: ["/profile-extension"], startupTimeoutMs: 3000 },
+        { id: "MyPiOpenAiAgent", type: "pi", parentId: "PiAgent", args: ["-e", "../my-agent", "--model", "openai/gpt-4o"], skillPaths: ["/profile-skill"], extensionPaths: ["/profile-extension"], startupTimeoutMs: 3000 },
         { id: "MyClaudeAgent", type: "claude", parentId: "ClaudeAgent", command: "claude", args: ["--add-dir", "../workspace"], env: { ANTHROPIC_API_KEY: "secret" } },
         { id: "Worker", type: "acp", command: "node", args: ["worker.mjs"], env: { FOO: "bar" } },
       ],
@@ -20,14 +20,14 @@ describe("agentDiscovery", () => {
     expect(getAgentDefinitions()).toEqual([
       { id: "PiAgent", parentId: null },
       { id: "ClaudeAgent", parentId: null },
-      { id: "MyPiAgent", parentId: "PiAgent" },
+      { id: "MyPiOpenAiAgent", parentId: "PiAgent" },
       { id: "MyClaudeAgent", parentId: "ClaudeAgent" },
       { id: "Worker", parentId: null },
     ]);
-    expect(isKnownAgent("MyPiAgent")).toBe(true);
+    expect(isKnownAgent("MyPiOpenAiAgent")).toBe(true);
     expect(isKnownAgent("unknown")).toBe(false);
 
-    const piAgent = createAgent("MyPiAgent", undefined, {
+    const piAgent = createAgent("MyPiOpenAiAgent", undefined, {
       skillPaths: ["/runtime-skill", "/profile-skill"],
       extensionPaths: ["/runtime-extension"],
     }) as unknown as { options: { env: Record<string, string> } };
