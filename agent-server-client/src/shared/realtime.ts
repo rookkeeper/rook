@@ -16,6 +16,7 @@ import type {
   AgentRunFailedEvent,
   AgentProtocolErrorEvent,
 } from "./agent.js";
+import type { AcpSessionUpdateNotification } from "./acp.js";
 
 export type SessionEvent =
   | ({ type: "status_changed" } & AgentStatusChangedEvent)
@@ -127,7 +128,12 @@ export type ErrorEventMessage = {
   error: string;
 };
 
-export type OutboundRealtimeMessage = SessionEventMessage | AckEventMessage | ErrorEventMessage;
+export type AcpUpdateMessage = {
+  type: "acp_update";
+  notification: AcpSessionUpdateNotification;
+};
+
+export type OutboundRealtimeMessage = SessionEventMessage | AcpUpdateMessage | AckEventMessage | ErrorEventMessage;
 export type RealtimeMessage = UserEventMessage | OutboundRealtimeMessage;
 
 export function environmentPayloadToSessionEvent(payload: EnvironmentEventPayload): SessionEvent {

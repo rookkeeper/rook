@@ -1,4 +1,5 @@
 import type { SessionEvent, SessionEventMessage, OutboundRealtimeMessage } from "../../shared/realtime.js";
+import type { AcpSessionUpdateNotification } from "../../shared/acp.js";
 import type { RoomSubscriber } from "./SessionRoom.js";
 
 export class RoomEventStream {
@@ -44,6 +45,13 @@ export class RoomEventStream {
         sequence: this.sequence,
         event: sessionEvent,
       });
+    });
+  }
+
+  /** Publish a raw ACP session/update notification, bypassing the SessionEvent translation layer. */
+  async publishAcpUpdate(notification: AcpSessionUpdateNotification): Promise<void> {
+    await this.enqueueOperation(async () => {
+      this.emit({ type: "acp_update", notification });
     });
   }
 

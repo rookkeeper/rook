@@ -4,6 +4,7 @@ import {
   environmentPayloadToSessionEvent,
   type OutboundRealtimeMessage,
 } from "../../shared/realtime.js";
+import type { AcpSessionUpdateNotification } from "../../shared/acp.js";
 import {
   ENVIRONMENT_ENTERED_KIND,
   ENVIRONMENT_EXITED_KIND,
@@ -74,6 +75,9 @@ export class SessionRoom implements EnvironmentEventListener {
   attachRuntimeEventSink(): void {
     this.currentRuntime.agent.setEventSink((event) => {
       void this.publishSessionEvent(event);
+    });
+    this.currentRuntime.agent.setAcpEventSink((notification) => {
+      void this.events.publishAcpUpdate(notification);
     });
   }
 
@@ -167,10 +171,23 @@ export class SessionRoom implements EnvironmentEventListener {
 
   async publishEnvironmentEvent(event: EnvironmentEventPayload): Promise<void> {
     await this.publishSessionEvent(environmentPayloadToSessionEvent(event));
+    await this.emitAcpEnvironmentEvent(event);
   }
 
   async broadcastEnvironmentEvent(event: EnvironmentEventPayload): Promise<void> {
     await this.events.broadcast(environmentPayloadToSessionEvent(event));
+    await this.emitAcpEnvironmentEvent(event);
+  }
+
+  private async emitAcpEnvironmentEvent(event: EnvironmentEventPayload): Promise<void> {
+    await this.events.publishAcpUpdate({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: {
+        sessionId: this.sessionId,
+        update: { sessionUpdate: "_rookery_environment_event", kind: event.kind, ...(event.payload !== undefined ? { payload: event.payload } : {}) },
+      },
+    } as never);
   }
 
   private emitPendingEnvironmentOffers(subscriber: RoomSubscriber): void {

@@ -1,8 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import type { SessionEvent } from "../../shared/realtime.js";
-import type { JsonRpcFailure, JsonRpcId, JsonRpcMessage, JsonRpcRequest, JsonRpcSuccess } from "../../shared/acp.js";
-import { acpServerMessageToSessionEvents } from "../../client/acpToSessionEvent.js";
+import type { AcpSessionUpdateNotification, JsonRpcFailure, JsonRpcId, JsonRpcMessage, JsonRpcRequest, JsonRpcSuccess } from "../../shared/acp.js";
 import { appendSessionRecord, createSessionRecord, type AgentRestartMetadata, type AgentSessionRecord } from "./sessionLog.js";
 
 type JsonObject = Record<string, unknown>;
@@ -53,6 +52,7 @@ export class BaseAgent {
   private activeRunReject?: (error: Error) => void;
   private sessionName = "default";
   private eventSink?: (event: SessionEvent) => void;
+  private acpEventSink?: (notification: AcpSessionUpdateNotification) => void;
   private process: ChildProcessWithoutNullStreams | null = null;
   private startPromise: Promise<void> | null = null;
   private pendingRequests = new Map<JsonRpcId, PendingRequest>();
@@ -69,6 +69,11 @@ export class BaseAgent {
 
   setEventSink(eventSink: ((event: SessionEvent) => void) | undefined): void {
     this.eventSink = eventSink;
+  }
+
+  /** Raw ACP session/update notifications bypass the SessionEvent translation layer. */
+  setAcpEventSink(sink: ((notification: AcpSessionUpdateNotification) => void) | undefined): void {
+    this.acpEventSink = sink;
   }
 
   setSessionName(name: string): void {
@@ -153,6 +158,7 @@ export class BaseAgent {
     } finally {
       this.isReplayingSessionLoad = false;
     }
+    this.emitAcpUpdate({ sessionUpdate: "_rookery_assistant_message_completed" });
     this.emitSessionEvent({ type: "assistant_message_completed" });
   }
 
@@ -181,6 +187,7 @@ export class BaseAgent {
     if (!this.sessionIdValue) throw new Error("ACP agent session is not initialized.");
 
     this.suppressUserMessageText = userMessage;
+    this.emitAcpUpdate({ sessionUpdate: "user_message_chunk", content: { type: "text", text: userMessage } });
     this.emitSessionEvent({ type: "user_message", text: userMessage, queued: false });
 
     const result = await this.sendRequest("session/prompt", {
@@ -190,10 +197,12 @@ export class BaseAgent {
 
     const stopReason = isObject(result) && typeof result.stopReason === "string" ? result.stopReason : "end_turn";
     if (stopReason === "cancelled") {
+      this.emitAcpUpdate({ sessionUpdate: "_rookery_run_failed", error: "ACP prompt was cancelled." });
       this.emitSessionEvent({ type: "run_failed", error: "ACP prompt was cancelled." });
       throw new Error("ACP prompt was cancelled.");
     }
 
+    this.emitAcpUpdate({ sessionUpdate: "_rookery_run_completed" });
     this.emitSessionEvent({ type: "run_completed" });
   }
 
@@ -236,6 +245,7 @@ export class BaseAgent {
 
       child.once("spawn", () => resolve());
       child.once("error", (error) => {
+        this.emitAcpUpdate({ sessionUpdate: "_rookery_connection_error", error: error.message });
         this.emitSessionEvent({ type: "connection_error", error: error.message });
         reject(error);
       });
@@ -245,6 +255,7 @@ export class BaseAgent {
         const message = `ACP agent process exited${code === null ? "" : ` with code ${code}`}${signal ? ` (${signal})` : ""}.`;
         for (const pending of this.pendingRequests.values()) pending.reject(new Error(message));
         this.pendingRequests.clear();
+        this.emitAcpUpdate({ sessionUpdate: "_rookery_connection_error", error: message });
         this.emitSessionEvent({ type: "connection_error", error: message });
       });
     });
@@ -303,6 +314,7 @@ export class BaseAgent {
     try {
       message = JSON.parse(line) as JsonRpcMessage;
     } catch {
+      this.emitAcpUpdate({ sessionUpdate: "_rookery_protocol_error", error: `ACP agent emitted non-JSON line: ${line}` });
       this.emitSessionEvent({ type: "protocol_error", error: `ACP agent emitted non-JSON line: ${line}` });
       return;
     }
@@ -319,15 +331,22 @@ export class BaseAgent {
 
     if ("method" in message && message.method === "session/update") {
       if (this.shouldIgnoreServerMessage(message)) return;
-      const events = acpServerMessageToSessionEvents(message as never);
-      for (const event of events) {
-        if (event.type === "user_message" && event.text === this.suppressUserMessageText) continue;
-        this.emitSessionEvent(event);
+
+      // Forward raw ACP notification — subprocess content bypasses SessionEvent.
+      if (this.acpEventSink) {
+        const update = (message as AcpSessionUpdateNotification).params?.update;
+        const isOwnUserEcho =
+          update?.sessionUpdate === "user_message_chunk" &&
+          (update as { content?: { text?: unknown } }).content?.text === this.suppressUserMessageText;
+        if (!isOwnUserEcho) {
+          this.acpEventSink(message as AcpSessionUpdateNotification);
+        }
       }
       return;
     }
 
     if ("method" in message && id !== undefined) {
+      this.emitAcpUpdate({ sessionUpdate: "_rookery_protocol_error", error: `Unsupported ACP server request: ${message.method}` });
       this.emitSessionEvent({ type: "protocol_error", error: `Unsupported ACP server request: ${message.method}` });
       if (this.process?.stdin.writable) {
         const response: JsonRpcFailure = {
@@ -343,6 +362,7 @@ export class BaseAgent {
   protected handleStderrLine(line: string): void {
     const trimmed = line.trim();
     if (!trimmed) return;
+    this.emitAcpUpdate({ sessionUpdate: "_rookery_status_changed", status: "busy", message: trimmed });
     this.emitSessionEvent({ type: "status_changed", status: "busy", message: trimmed });
   }
 
@@ -366,6 +386,16 @@ export class BaseAgent {
     stream.on("error", (error) => {
       this.emitSessionEvent({ type: "connection_error", error: errorMessage(error) });
     });
+  }
+
+  /** Emit a server-synthesized ACP session/update notification directly. */
+  protected emitAcpUpdate(update: Record<string, unknown>): void {
+    if (!this.acpEventSink || !this.sessionIdValue) return;
+    this.acpEventSink({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: { sessionId: this.sessionIdValue, update },
+    } as unknown as AcpSessionUpdateNotification);
   }
 
   private isPiAcpStartupInfo(message: JsonRpcMessage): boolean {

@@ -47,8 +47,12 @@ export async function registerWebsocketRoute(app: FastifyInstance, roomManager: 
 
     let unsubscribe: () => void = () => {};
     let closed = false;
-    const onRoomEvent = (event: { type: string }) => {
+    const onRoomEvent = (event: { type: string;[key: string]: unknown }) => {
       try {
+        if (event.type === "acp_update") {
+          send(event.notification);
+          return;
+        }
         if (event.type !== "session_event") return;
         for (const message of translateSessionEventMessageToAcp(event as never)) send(message);
       } catch {

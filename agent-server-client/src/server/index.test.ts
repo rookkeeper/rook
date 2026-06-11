@@ -22,6 +22,9 @@ vi.mock("./agents/agentDiscovery.js", () => ({
       setEventSink(nextEventSink: ((event: Record<string, unknown>) => void) | undefined) {
         eventSink = nextEventSink;
       },
+      setAcpEventSink(_sink: ((_notification: unknown) => void) | undefined) {
+        // ACP passthrough — no-op in mock; SessionEvent path covers test needs.
+      },
       async ensureStarted() {
         if (restart?.sessionId) {
           eventSink?.({ type: "user_message", text: "earlier question", queued: false });
