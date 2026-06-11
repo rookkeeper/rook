@@ -177,7 +177,7 @@ describe("RemoteAgent", () => {
     expect(events).toContainEqual({ type: "connection_error", error: "Remote exploded" });
   });
 
-  it("reconnects to an existing session from the last seen event sequence", async () => {
+  it("reconnects to an existing session without requesting transcript replay", async () => {
     vi.stubGlobal("WebSocket", websocketMock.MockWebSocket);
     const agent = new RemoteAgent({ session });
 
@@ -185,20 +185,12 @@ describe("RemoteAgent", () => {
     const firstSocket = websocketMock.MockWebSocket.instances[0]!;
     firstSocket.emitOpen();
     await Promise.resolve();
-    firstSocket.emitMessage({
-      jsonrpc: "2.0",
-      method: "session/update",
-      params: {
-        sessionId: "s1",
-        _meta: { rookery: { sequence: 3 } },
-        update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Earlier" } },
-      },
-    });
     firstSocket.close();
 
     void agent.connect();
     const secondSocket = websocketMock.MockWebSocket.instances[1]!;
-    expect(secondSocket.url).toContain("fromSequence=3");
+    expect(secondSocket.url).toContain("sessionId=s1");
+    expect(secondSocket.url).not.toContain("fromSequence=");
   });
 
   it("reports malformed websocket payloads as protocol_error session events", async () => {

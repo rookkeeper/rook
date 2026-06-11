@@ -6,15 +6,18 @@
 
 These are the next things we should do, in order:
 
-1. **Finish deleting the remaining Rookery-owned replay scaffolding.**
+1. **Browser-check the post-replay-cleanup state.**
    - Product decision stands: chat replay comes from ACP (`session/load`), not from Rookery transcript persistence.
+   - `fromSequence` reconnect/replay scaffolding has now been removed.
    - Keep environment decision persistence; it is separate.
-   - Remaining likely targets: `fromSequence` reconnect/replay behavior and any replay-oriented helpers that only exist for the old path.
 2. **Finish the ACP-only cleanup pass.**
    - Confirm deprecated Pi-RPC-era code is actually gone.
    - Confirm there is no compatibility-only replay path left behind.
-3. **Then continue with client-state/UI follow-through.**
-4. **Before the farthest-out UI changes, we're going to have a conversation about it.**
+3. **Add non-native ACP adapters for Cursor and Claude Code before the client-state/UI mismatch work.**
+   - Treat these like `PiAgent`: thin runtime-specific adapters that enter Rookery through ACP.
+   - They should give us better test cases because their interactions are richer than Pi's.
+4. **Then continue with client-state/UI follow-through.**
+5. **Before the farthest-out UI changes, we're going to have a conversation about it.**
 
 Recently completed cleanup:
 
@@ -23,6 +26,7 @@ Recently completed cleanup:
 - reintroduced a thin `PiAgent` subclass for Pi-specific launch shaping
 - removed the checked-in `scripts/pi-with-rookery-profile.mjs` wrapper and generate the Pi launch helper internally at runtime instead
 - updated `agent-server-client/config/agent-profiles.json` back to a Pi-shaped profile (`type: "pi"`, `args: ["-e", "../my-agent"]`)
+- removed the remaining `fromSequence` / Rookery-owned websocket replay scaffolding
 
 This changes the migration emphasis slightly:
 
@@ -50,11 +54,12 @@ Where we are leaving off now:
 - **Pi subprocess boundary:** ACP-shaped through `pi-acp`
 - **Server runtime bridge:** generic `BaseAgent`
 - **UI state/reducer:** still legacy `SessionEvent`-driven via translation
-- **Transcript persistence:** Rookery-owned durable transcript persistence has been removed from the intended replay path; the remaining server event store is now in-memory scaffolding only
+- **Transcript persistence:** Rookery-owned durable transcript persistence has been removed from the replay path, and the remaining websocket replay scaffolding has now been deleted
 
 So the next major steps are now:
 
-- **Immediate priority:** finish deleting the remaining replay scaffolding and double-check nothing deprecated remains
+- **Immediate priority:** browser-check the cleanup checkpoint and confirm nothing deprecated remains
+- **Then:** add Cursor and Claude Code adapters as richer non-native ACP test cases
 - **Then:** continue with the ACP-friendly UI state work
 
 When resuming work, start by re-running the helper script commands above to confirm both PiAgent and MyPiAgent still behave correctly over ACP.
@@ -486,6 +491,36 @@ Success criteria:
 
 ---
 
+## Phase 2.5 — add Cursor and Claude Code adapters before the client refactor
+
+Before reshaping the client reducer, add non-native ACP adapters for Cursor and Claude Code.
+
+Why do this now:
+
+- they do not natively speak ACP in the same way Pi now does inside Rookery
+- they have richer forms of interaction than Pi
+- they will give us better traces and better pressure tests for the boundary before we change client state
+
+This should be treated like the `PiAgent` step:
+
+- keep adapters thin
+- make them enter Rookery through ACP-oriented boundaries
+- do not reintroduce protocol sprawl
+
+Deliverable:
+
+- Cursor adapter
+- Claude Code adapter
+- enough raw ACP and translated traces to inform the next UI/client-state step
+
+Success criteria:
+
+- both runtimes can be exercised through the existing script/debug path
+- adapter code remains simpler than the old custom-runtime approach
+- we learn from richer interactions before reshaping the reducer
+
+---
+
 ## Phase 3 — refactor the client reducer into ACP-friendly UI state
 
 This should be treated as the **next big step after the server/client interaction boundary is ACP-shaped and stable**.
@@ -621,9 +656,10 @@ So we should keep the transition shallow and remove obsolete layers quickly.
 2. **Add ACP-shaped server/client messages**
 3. **Use one temporary adapter to keep the current UI running**
 4. **Move replay/storage to ACP-native data**
-5. **Refactor UI state to be ACP-friendly**
-6. **Delete old custom protocol code**
-7. **Add richer ACP-native UX**
+5. **Add Cursor and Claude Code adapters as richer non-native ACP test cases**
+6. **Refactor UI state to be ACP-friendly**
+7. **Delete old custom protocol code**
+8. **Add richer ACP-native UX**
 
 ---
 

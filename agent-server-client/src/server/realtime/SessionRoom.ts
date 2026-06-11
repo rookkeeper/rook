@@ -11,7 +11,6 @@ import {
 import type { EnvironmentEventListener, EnvironmentOfferInfo, EnvironmentResolution } from "../environment/types.js";
 import type { BaseAgent } from "../agents/BaseAgent.js";
 import type { AgentSessionRecord } from "../agents/sessionLog.js";
-import type { SessionEventStore } from "../sessionEvents.js";
 import { EnvironmentSessionState } from "./EnvironmentSessionState.js";
 import { RoomEventStream } from "./RoomEventStream.js";
 
@@ -42,10 +41,9 @@ export class SessionRoom implements EnvironmentEventListener {
   constructor(
     readonly sessionId: string,
     private currentRuntime: RoomRuntime,
-    eventStore: SessionEventStore,
     private readonly options: { idleTimeoutMs?: number; onIdle?: () => Promise<void> | void } = {},
   ) {
-    this.events = new RoomEventStream(sessionId, eventStore);
+    this.events = new RoomEventStream(sessionId);
     this.scheduleIdleStop();
   }
 
@@ -130,13 +128,6 @@ export class SessionRoom implements EnvironmentEventListener {
     return () => this.removeSubscriber(unsubscribe);
   }
 
-  async subscribeWithReplay(subscriber: RoomSubscriber, fromSequence = 0): Promise<() => void> {
-    this.cancelIdleStop();
-    const unsubscribe = await this.events.subscribeWithReplay(subscriber, fromSequence);
-    this.emitPendingEnvironmentOffers(subscriber);
-    return () => this.removeSubscriber(unsubscribe);
-  }
-
   async ensureStarted(): Promise<void> {
     if (this.started) return;
     if (!this.startPromise) {
@@ -149,10 +140,6 @@ export class SessionRoom implements EnvironmentEventListener {
         });
     }
     await this.startPromise;
-  }
-
-  async replay(fromSequence = 0): Promise<OutboundRealtimeMessage[]> {
-    return this.events.replay(fromSequence);
   }
 
   async run(message: string): Promise<{ ok: true } | { ok: false; error: string }> {

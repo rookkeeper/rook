@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BaseAgent } from "../agents/BaseAgent.js";
 import type { AgentSessionRecord } from "../agents/sessionLog.js";
-import { SessionEventStore } from "../sessionEvents.js";
 import { SessionRoom } from "./SessionRoom.js";
 import { ENVIRONMENT_OFFER_AVAILABLE_KIND } from "../../shared/environment.js";
 
@@ -43,42 +42,17 @@ describe("SessionRoom", () => {
       },
       agentId: "TestAgent",
       agent,
-    }, new SessionEventStore());
+    });
     room.attachRuntimeEventSink();
     return room;
   }
 
-  it("does not miss events published while a subscriber is joining with replay", async () => {
-    const room = createRoom(new TestAgent());
-
-    await room.publishEnvironmentEvent({ kind: "replay" });
-
-    const seen: Array<{ type: string; sequence?: number; event?: unknown }> = [];
-    const subscribePromise = room.subscribeWithReplay((event) => {
-      seen.push({
-        type: event.type,
-        ...(typeof (event as { sequence?: number }).sequence === "number" ? { sequence: (event as { sequence: number }).sequence } : {}),
-        ...("event" in event ? { event: event.event } : {}),
-      });
-    });
-    const publishPromise = room.publishEnvironmentEvent({ kind: "live" });
-
-    const unsubscribe = await subscribePromise;
-    await publishPromise;
-    unsubscribe();
-
-    expect(seen).toEqual([
-      { type: "session_event", sequence: 1, event: { type: "environment_event", kind: "replay" } },
-      { type: "session_event", sequence: 2, event: { type: "environment_event", kind: "live" } },
-    ]);
-  });
-
-  it("replays unresolved environment offers to late-joining subscribers", async () => {
+  it("replays unresolved environment offers to late-joining subscribers", () => {
     const room = createRoom(new TestAgent());
     room.onEnvironmentOffered("web:wikipedia", { sourceName: "Wikipedia" });
 
     const seen: Array<{ type: string; sequence?: number; event?: unknown }> = [];
-    const unsubscribe = await room.subscribeWithReplay((event) => {
+    const unsubscribe = room.subscribe((event) => {
       seen.push({
         type: event.type,
         ...(typeof (event as { sequence?: number }).sequence === "number" ? { sequence: (event as { sequence: number }).sequence } : {}),
@@ -96,13 +70,13 @@ describe("SessionRoom", () => {
     ]);
   });
 
-  it("does not replay environment offers after they are resolved", async () => {
+  it("does not replay environment offers after they are resolved", () => {
     const room = createRoom(new TestAgent());
     room.onEnvironmentOffered("web:wikipedia", { sourceName: "Wikipedia" });
     room.onEnvironmentResolved("web:wikipedia", "approved");
 
     const seen: Array<{ type: string; sequence?: number; event?: unknown }> = [];
-    const unsubscribe = await room.subscribeWithReplay((event) => {
+    const unsubscribe = room.subscribe((event) => {
       seen.push({
         type: event.type,
         ...(typeof (event as { sequence?: number }).sequence === "number" ? { sequence: (event as { sequence: number }).sequence } : {}),
@@ -114,7 +88,7 @@ describe("SessionRoom", () => {
     expect(seen).toEqual([]);
   });
 
-  it("publishes run_failed directly when an agent run rejects", async () => {
+  it("publishes run_failed directly to current subscribers when an agent run rejects", async () => {
     class RejectingAgent extends TestAgent {
       protected override async runImpl(): Promise<void> {
         throw new Error("boom");
@@ -122,11 +96,20 @@ describe("SessionRoom", () => {
     }
 
     const room = createRoom(new RejectingAgent());
+    const seen: Array<{ type: string; sequence?: number; event?: unknown }> = [];
+    const unsubscribe = room.subscribe((event) => {
+      seen.push({
+        type: event.type,
+        ...(typeof (event as { sequence?: number }).sequence === "number" ? { sequence: (event as { sequence: number }).sequence } : {}),
+        ...("event" in event ? { event: event.event } : {}),
+      });
+    });
 
     await room.run("hello");
+    unsubscribe();
 
-    await expect(room.replay()).resolves.toEqual([
-      { type: "session_event", sessionId: "s1", sequence: 1, event: { type: "run_failed", error: "boom" } },
+    expect(seen).toEqual([
+      { type: "session_event", sequence: 1, event: { type: "run_failed", error: "boom" } },
     ]);
   });
 });

@@ -3,14 +3,12 @@ import { getAgentDefinitions } from "../agents/agentDiscovery.js";
 import { readSessionRecords } from "../agents/sessionLog.js";
 import type { EnvironmentManager } from "../environment/EnvironmentManager.js";
 import type { SessionRoomManager } from "../realtime/SessionRoomManager.js";
-import type { SessionEventStore } from "../sessionEvents.js";
 import { createOrReuseRoom } from "../roomRuntime.js";
 import { isSessionRecord, rejectUnknownAgent } from "../serverHelpers.js";
 
 export async function registerAgentRoutes(app: FastifyInstance, deps: {
   roomManager: SessionRoomManager;
   environmentManager: EnvironmentManager;
-  sessionEventStore: SessionEventStore;
 }): Promise<void> {
   app.get("/api/health", async () => ({ ok: true, service: "agent-station" }));
   app.get("/api/agents", async () => ({ agents: getAgentDefinitions() }));
@@ -61,7 +59,6 @@ export async function registerAgentRoutes(app: FastifyInstance, deps: {
       agentId,
       roomManager: deps.roomManager,
       environmentManager: deps.environmentManager,
-      sessionEventStore: deps.sessionEventStore,
       session,
       sessionName,
       restartExisting,

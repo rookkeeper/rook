@@ -15,21 +15,6 @@ function getRookeryMeta(value: unknown): Record<string, unknown> | undefined {
   return meta && typeof meta === "object" ? meta as Record<string, unknown> : undefined;
 }
 
-export function getSequenceFromAcpMessage(message: JsonRpcMessage): number | undefined {
-  if ("method" in message && message.method === "session/update") {
-    const params = message.params as { _meta?: unknown; update?: { _meta?: unknown } } | undefined;
-    const direct = getRookeryMeta(params?._meta)?.sequence;
-    if (typeof direct === "number") return direct;
-    const updateLevel = getRookeryMeta(params?.update?._meta)?.sequence;
-    if (typeof updateLevel === "number") return updateLevel;
-  }
-  if ("result" in message && message.result && typeof message.result === "object") {
-    const direct = getRookeryMeta((message.result as Record<string, unknown>)._meta)?.sequence;
-    if (typeof direct === "number") return direct;
-  }
-  return undefined;
-}
-
 function textFromContentItems(content: unknown): string {
   if (!Array.isArray(content)) return "";
   return content

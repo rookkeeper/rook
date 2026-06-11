@@ -1,7 +1,7 @@
 import { AgentBackend, AgentDefinition, AgentSessionSummary } from "./agent";
 import type { SessionEvent } from "../shared/realtime";
 import type { AcpPromptResponse, AcpServerMessage, JsonRpcMessage } from "../shared/acp";
-import { acpServerMessageToSessionEvents, getSequenceFromAcpMessage, isJsonRpcFailure, isJsonRpcNotification, isJsonRpcSuccess } from "./acpToSessionEvent";
+import { acpServerMessageToSessionEvents, isJsonRpcFailure, isJsonRpcNotification, isJsonRpcSuccess } from "./acpToSessionEvent";
 
 export type RemoteSessionEvent = SessionEvent;
 
@@ -72,13 +72,12 @@ interface RemoteAgentStartPayload {
 
 type PendingRun = { requestId: string; promptText: string; resolve: () => void; reject: (error: Error) => void };
 
-function websocketUrl(endpoint: string, sessionId: string, fromSequence?: number): string {
+function websocketUrl(endpoint: string, sessionId: string): string {
   const base = endpoint.includes("://")
     ? new URL(endpoint)
     : new URL(endpoint, window.location.href);
   base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
   base.searchParams.set("sessionId", sessionId);
-  if (typeof fromSequence === "number" && fromSequence > 0) base.searchParams.set("fromSequence", String(fromSequence));
   return base.toString();
 }
 
@@ -93,7 +92,6 @@ export class RemoteAgent {
   private onSessionEvent?: (event: SessionEvent) => void;
   private socket: WebSocket | null = null;
   private connectPromise: Promise<void> | null = null;
-  private lastSequence = 0;
   private pendingRuns: PendingRun[] = [];
   private requestCounter = 0;
   private closed = false;
@@ -139,7 +137,7 @@ export class RemoteAgent {
     if (this.socket?.readyState === WebSocket.OPEN) return;
     if (this.connectPromise) return this.connectPromise;
 
-    const url = websocketUrl(this.wsEndpoint, this.session.id, this.lastSequence || undefined);
+    const url = websocketUrl(this.wsEndpoint, this.session.id);
 
     this.connectPromise = new Promise<void>((resolve, reject) => {
       const socket = new WebSocket(url);
@@ -253,9 +251,6 @@ export class RemoteAgent {
   }
 
   private handleMessage(message: JsonRpcMessage): void {
-    const sequence = getSequenceFromAcpMessage(message);
-    if (typeof sequence === "number") this.lastSequence = Math.max(this.lastSequence, sequence);
-
     if (isJsonRpcNotification(message)) {
       for (const event of acpServerMessageToSessionEvents(message as AcpServerMessage)) {
         if (event.type === "user_message") {

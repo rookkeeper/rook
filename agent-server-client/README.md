@@ -73,7 +73,7 @@ Terse map of `src/`:
 - **Transport layer**: `remoteAgent.ts`, `agent.ts`
   - `RemoteAgent` uses **HTTP for session control** and **WebSocket for in-session events**.
   - `POST /api/agent/start` creates/reuses/restarts a session runtime.
-  - `GET /api/ws?sessionId=...&fromSequence=...` replays persisted events, then subscribes to live session events.
+  - `GET /api/ws?sessionId=...` subscribes to live session events; restored transcript history comes from ACP `session/load` after the websocket is attached.
   - The websocket boundary now carries **ACP-shaped JSON-RPC messages**; the current browser client still reduces them into the existing `SessionEvent`/UI view-model as a migration step.
   - Session runtimes are automatically stopped after the last websocket client leaves and the room stays idle past a short grace period.
 - **Screens (`src/client/screens`)**:
@@ -108,7 +108,7 @@ Terse map of `src/`:
 - **Domain / service layer**: long-lived coordinators with in-memory runtime state.
   - `SessionRoomManager.ts`, `SessionRoom.ts`, `EnvironmentManager.ts`
 - **Repository layer**: disk/SQLite-backed persistence behind small interfaces.
-  - `LocalEnvironmentRepository.ts`, `EnvironmentDecisionStore.ts`, `sessionEvents.ts`, `sessionLog.ts`
+  - `LocalEnvironmentRepository.ts`, `EnvironmentDecisionStore.ts`, `sessionLog.ts`
 
 The goal is not perfect purity yet; this is the direction to follow when adding new server code.
 
@@ -122,12 +122,12 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
 - `POST /api/environments/unavailable { id }`: mark an environment unavailable.
 - `POST /api/environments/decision { environmentId, decision }`: record `accept | approve | ignore | reject`.
 - `GET /api/environments/preview?environmentId=...`: return skill/file preview data for the approval UI.
-- `GET /api/ws?sessionId=...&fromSequence=...`: WebSocket endpoint for replay + live session events.
+- `GET /api/ws?sessionId=...`: WebSocket endpoint for live session events.
 
 ### Main domain/service objects
 - **Realtime session layer (`src/server/realtime`)**:
   - `SessionRoom.ts`: high-level room coordinator for runtime lifecycle, chat runs, subscriptions, and environment-driven rebuilds.
-  - `RoomEventStream.ts`: event persistence, replay, sequencing, and live subscriber fan-out.
+  - `RoomEventStream.ts`: in-memory sequencing and live subscriber fan-out.
   - `EnvironmentSessionState.ts`: unresolved environment offers + active environment skill-set state.
   - `SessionRoomManager.ts`: owns active `SessionRoom`s, keyed by `sessionId`, and swaps runtimes in place on restart.
   - `EnvironmentEventStub.ts`, `types.ts`: room/runtime plumbing.
@@ -146,7 +146,6 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
 - `EnvironmentDecisionStore.ts`: SQLite-backed store for persistent `approve` / `reject` decisions.
   - Current DB location: `.var/agent-station/environment-decisions.sqlite`
   - Drop it with `../scripts/drop-database.sh --yes`
-- `sessionEvents.ts`: in-memory session event scaffolding for live fan-out while ACP-native replay cleanup is still being finished.
 - `sessionLog.ts`: stores provider/session restart metadata used to recreate stopped rooms.
 
 ### Other server pieces
@@ -162,17 +161,17 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
 - **Shared agent/session payload types**: `shared/agent.ts`
   - session metadata, run status, message/tool payload shapes
 - **Realtime/session event contract**: `shared/realtime.ts`
-  - inbound client messages such as `user_event`
-  - outbound websocket messages such as `session_event`, `ack`, and `error`
-  - `SessionEvent` is the single replay/wire/runtime update vocabulary
+  - `SessionEvent` is the current internal UI/runtime update vocabulary
+  - this remains transitional while the browser client is still reduced from ACP into the legacy view-model
 - **Environment contracts**: `shared/environment.ts`, `shared/environmentSkillPreview.ts`
   - environment decision types, websocket event kind names, and preview payload shapes shared by client/server
 
 ## Session / room mental model
 
-Two separate stores back every session:
+The durable store that still matters for sessions is:
 - **Session records** (`sessionLog.ts`) — provider-level resume metadata (agent id, restart args, skill paths). Used to recreate a live runtime after it has been stopped.
-- **Session event logs** (`sessionEvents.ts`) — sequenced `SessionEvent` JSONL under `.var/agent-station/session-events`. The source of truth for chat history, replayed to both live and rejoining clients.
+
+Transcript history is no longer Rookery-owned durable replay state; restored history comes from the agent through ACP `session/load`.
 
 The **`SessionRoom`** is the live coordinator for one session. It holds the current `BaseAgent` runtime, serialises event publication, and fans events out to WebSocket subscribers. Rooms are managed by **`SessionRoomManager`** (keyed by `sessionId`).
 
@@ -188,9 +187,9 @@ The **`EnvironmentManager`** sits alongside the room manager. When a room is cre
 | prior session, room gone (was idle-stopped) | new agent from saved restart metadata + new room |
 
 **Event flow (runtime → clients):**
-`BaseAgent.emitSessionEvent` → room's event sink (set via `attachRuntimeEventSink`) → `eventStore.append` + fan-out to WebSocket subscribers.
+`BaseAgent.emitSessionEvent` → room's event sink (set via `attachRuntimeEventSink`) → in-memory sequencing + fan-out to WebSocket subscribers.
 
-**Joining a live room** (`GET /api/ws`): `subscribeWithReplay` replays from the persisted log and then registers the subscriber in one serialised operation, so a client cannot miss events that arrive mid-replay.
+**Joining a live room** (`GET /api/ws`): subscribe first, then let restored sessions stream history from ACP `session/load` if the agent/runtime supports it.
 
 **Idle shutdown:** when the last subscriber disconnects, the room starts a grace-period timer (default 15 s). If no client rejoins, `agent.stop()` is called and the room is removed from the manager.
 

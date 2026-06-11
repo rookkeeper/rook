@@ -15,17 +15,6 @@ export function isSessionRecord(value: unknown): value is AgentSessionRecord {
   return typeof record.id === "string" && typeof record.agent === "string" && typeof record.createdAt === "string" && typeof record.restart === "object" && record.restart !== null;
 }
 
-export function parseFromSequence(value: unknown): number | null {
-  if (value === undefined) return 0;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) return null;
-  return parsed;
-}
-
-export function createWsError(error: string, requestId?: string) {
-  return JSON.stringify({ type: "error", error, ...(requestId ? { requestId } : {}) });
-}
-
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

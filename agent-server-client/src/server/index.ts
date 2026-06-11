@@ -11,7 +11,6 @@ import { SessionRoomManager } from "./realtime/SessionRoomManager.js";
 import { registerAgentRoutes } from "./routes/agentRoutes.js";
 import { registerEnvironmentRoutes } from "./routes/environmentRoutes.js";
 import { registerWebsocketRoute } from "./routes/websocketRoute.js";
-import { SessionEventStore } from "./sessionEvents.js";
 import { registerClientApp } from "./clientApp.js";
 
 dotenv.config({ path: path.join(REPO_ROOT, ".env") });
@@ -30,11 +29,10 @@ export interface BuildServerOptions {
 export async function buildServer(options: BuildServerOptions = {}) {
   const app = fastify({ logger: options.logger ?? true });
   const enableClient = options.enableClient ?? true;
-  const sessionEventStore = new SessionEventStore();
   const environmentRepository = new LocalEnvironmentRepository();
   const environmentDecisionStore = new EnvironmentDecisionStore(options.environmentDecisionStoreLocation);
   const environmentManager = new EnvironmentManager(environmentRepository, environmentDecisionStore);
-  const roomManager = new SessionRoomManager(sessionEventStore, {
+  const roomManager = new SessionRoomManager({
     idleTimeoutMs: options.roomIdleTimeoutMs,
     onRoomRemoved: (sessionId) => environmentManager.unsubscribe(sessionId),
   });
@@ -45,7 +43,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
     await roomManager.closeAll();
   });
 
-  await registerAgentRoutes(app, { roomManager, environmentManager, sessionEventStore });
+  await registerAgentRoutes(app, { roomManager, environmentManager });
   await registerEnvironmentRoutes(app, environmentManager);
   await registerWebsocketRoute(app, roomManager);
 

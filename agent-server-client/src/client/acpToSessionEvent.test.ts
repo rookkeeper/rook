@@ -1,32 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { acpServerMessageToSessionEvents, getSequenceFromAcpMessage } from "./acpToSessionEvent";
+import { acpServerMessageToSessionEvents } from "./acpToSessionEvent";
 
 describe("acpToSessionEvent", () => {
-  it("extracts sequence numbers from session/update metadata", () => {
-    expect(getSequenceFromAcpMessage({
-      jsonrpc: "2.0",
-      method: "session/update",
-      params: {
-        sessionId: "s1",
-        _meta: { rookery: { sequence: 7 } },
-        update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "hi" } },
-      },
-    })).toBe(7);
-
-    expect(getSequenceFromAcpMessage({
-      jsonrpc: "2.0",
-      method: "session/update",
-      params: {
-        sessionId: "s1",
-        update: {
-          sessionUpdate: "agent_message_chunk",
-          content: { type: "text", text: "hi" },
-          _meta: { rookery: { sequence: 9 } },
-        },
-      },
-    })).toBe(9);
-  });
-
   it("maps ACP tool lifecycle updates into session events", () => {
     expect(acpServerMessageToSessionEvents({
       jsonrpc: "2.0",

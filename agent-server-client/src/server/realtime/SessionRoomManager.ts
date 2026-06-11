@@ -1,11 +1,9 @@
-import type { SessionEventStore } from "../sessionEvents.js";
 import { SessionRoom, type RoomRuntime } from "./SessionRoom.js";
 
 export class SessionRoomManager {
   private rooms = new Map<string, SessionRoom>();
 
   constructor(
-    private readonly eventStore: SessionEventStore,
     private readonly options: { idleTimeoutMs?: number; onRoomRemoved?: (sessionId: string) => void } = {},
   ) {}
 
@@ -29,7 +27,7 @@ export class SessionRoomManager {
       return existing;
     }
 
-    const room = new SessionRoom(runtime.session.id, runtime, this.eventStore, {
+    const room = new SessionRoom(runtime.session.id, runtime, {
       idleTimeoutMs: this.options.idleTimeoutMs,
       onIdle: async () => {
         const current = this.rooms.get(runtime.session.id);

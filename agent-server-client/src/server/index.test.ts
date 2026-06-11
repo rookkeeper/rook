@@ -363,7 +363,7 @@ describe("server", () => {
     ]);
   });
 
-  it("replays websocket events from a requested sequence", async () => {
+  it("does not replay prior websocket transcript messages on reconnect", async () => {
     const app = await buildServer({ enableClient: false });
     const baseUrl = await listen(app);
     await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MyPiAgent", session: myPiSession } });
@@ -379,15 +379,14 @@ describe("server", () => {
     await firstMessages;
     firstSocket.close();
 
-    const replaySocket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=${myPiSession.id}&fromSequence=3`);
-    const replayed = await collectJsonMessages(replaySocket, 3);
+    const replaySocket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=${myPiSession.id}`);
+    const noMessages = await Promise.race([
+      collectJsonMessages(replaySocket, 1).then(() => false),
+      delay(100).then(() => true),
+    ]);
     replaySocket.close();
     await app.close();
 
-    expect(replayed).toEqual([
-      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "user_message_chunk", content: { type: "text", text: "hello" } }) }) }),
-      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } }) }) }),
-      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "_rookery_run_completed" }) }) }),
-    ]);
+    expect(noMessages).toBe(true);
   });
 });

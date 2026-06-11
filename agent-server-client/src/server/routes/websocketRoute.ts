@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { AcpPromptRequest, JsonRpcFailure, JsonRpcMessage, JsonRpcSuccess } from "../../shared/acp.js";
 import type { SessionRoomManager } from "../realtime/SessionRoomManager.js";
 import { translateSessionEventMessageToAcp } from "../realtime/sessionEventToAcp.js";
-import { errorMessage, parseFromSequence } from "../serverHelpers.js";
+import { errorMessage } from "../serverHelpers.js";
 
 function jsonRpcError(message: string, id: string | number | null = null, code = -32000): JsonRpcFailure {
   return {
@@ -25,16 +25,10 @@ function isPromptRequest(message: JsonRpcMessage): message is AcpPromptRequest {
 }
 
 export async function registerWebsocketRoute(app: FastifyInstance, roomManager: SessionRoomManager): Promise<void> {
-  app.get<{ Querystring: { sessionId?: string; fromSequence?: string } }>("/api/ws", { websocket: true }, (socket, request) => {
+  app.get<{ Querystring: { sessionId?: string } }>("/api/ws", { websocket: true }, (socket, request) => {
     const sessionId = typeof request.query.sessionId === "string" ? request.query.sessionId.trim() : "";
-    const fromSequence = parseFromSequence(request.query.fromSequence);
     if (!sessionId) {
       socket.send(JSON.stringify(jsonRpcError("Missing sessionId")));
-      socket.close();
-      return;
-    }
-    if (fromSequence === null) {
-      socket.send(JSON.stringify(jsonRpcError("Invalid fromSequence")));
       socket.close();
       return;
     }
@@ -63,23 +57,16 @@ export async function registerWebsocketRoute(app: FastifyInstance, roomManager: 
       }
     };
 
-    const subscribePromise = room.hasStarted
-      ? room.subscribeWithReplay(onRoomEvent as never, fromSequence)
-      : Promise.resolve(room.subscribe(onRoomEvent as never));
-
-    void subscribePromise
-      .then(async (nextUnsubscribe) => {
-        unsubscribe = nextUnsubscribe;
-        if (closed) {
-          unsubscribe();
-          return;
-        }
+    unsubscribe = room.subscribe(onRoomEvent as never);
+    void (async () => {
+      try {
         if (!room.hasStarted) await room.ensureStarted();
-      })
-      .catch((error) => {
+        if (closed) unsubscribe();
+      } catch (error) {
         send(jsonRpcError(errorMessage(error)));
         socket.close();
-      });
+      }
+    })();
 
     socket.on("message", (raw: unknown) => {
       let message: JsonRpcMessage;

@@ -4,17 +4,20 @@
 
 ## Immediate next to-dos
 
-1. **Finish deleting the remaining Rookery-owned replay scaffolding**
+1. **Browser-check the post-replay-cleanup state**
    - product decision: chat replay now comes from ACP `session/load`
+   - `fromSequence` reconnect/replay behavior has now been removed
    - keep environment decision persistence; it is separate
-   - remaining likely targets: `fromSequence` reconnect/replay behavior and replay-oriented helpers that only exist for the old path
 2. **Do the ACP-only cleanup sweep now that Pi is entering through ACP**
    - verify deprecated Pi-RPC code is actually deleted
    - verify there is no compatibility-only launch/config path left behind
    - verify there is no compatibility-only replay path left behind
-3. **Resume the internal migration checklist**
-   - next most likely work is UI/client-state cleanup
-4. **Before the farthest-out UI work, we're going to have a conversation about it**
+3. **Add non-native ACP adapters for Cursor and Claude Code before the client-state/UI mismatch work**
+   - model them like `PiAgent`: thin runtime-specific adapters that enter Rookery through ACP
+   - use them as richer behavioral test cases than Pi
+4. **Resume the internal migration checklist**
+   - next most likely work after those adapters is UI/client-state cleanup
+5. **Before the farthest-out UI work, we're going to have a conversation about it**
 
 Recently completed cleanup:
 
@@ -23,6 +26,7 @@ Recently completed cleanup:
 - added a thin `PiAgent` subclass for Pi-specific launch shaping
 - removed the checked-in `scripts/pi-with-rookery-profile.mjs` wrapper in favor of an internally generated Pi launcher
 - moved the checked-in Pi profile back toward the earlier Pi-shaped config
+- removed the remaining `fromSequence` / websocket replay compatibility path
 
 Completed:
 
@@ -48,7 +52,8 @@ Validated at this checkpoint with:
 
 Next up:
 
-- **Immediate priority:** finish the replay/deprecated-code deletion sweep and ACP-only verification
+- **Immediate priority:** browser-check the cleanup checkpoint and finish ACP-only verification
+- **Then:** add Cursor and Claude Code adapters
 - **Then:** ACP-friendly UI/client-state work
 
 Open questions to keep in mind when resuming:
@@ -56,7 +61,7 @@ Open questions to keep in mind when resuming:
 - is `pi-acp` maintained enough for us to keep as a direct dependency?
 - if we later vendor it, where should it live and how tightly should it integrate with repo tooling/tests?
 - do we persist raw ACP messages, normalized ACP updates, or a narrowed internal ACP log?
-- how do we want replay/start payloads to evolve once the legacy `SessionEvent` store is removed?
+- after Cursor and Claude Code adapters land, what common non-native-ACP adapter shape do we want to standardize around?
 - what temporary translation layers can be deleted immediately after Phase 2 lands?
 
 This is a high-level implementation checklist for the ACP migration.
@@ -161,7 +166,7 @@ Use it early and often before validating changes in the browser UI.
 - `agent-server-client/src/server/realtime/RoomEventStream.ts`
 - `agent-server-client/src/server/realtime/SessionRoom.ts`
 - `agent-server-client/src/server/realtime/SessionRoomManager.ts`
-- `agent-server-client/src/server/sessionEvents.ts`
+- `agent-server-client/src/server/routes/websocketRoute.ts`
 - `agent-server-client/src/server/agents/sessionLog.ts`
 - websocket replay logic in server route/bootstrap files
 
@@ -186,6 +191,36 @@ Use it early and often before validating changes in the browser UI.
 ### Reevaluation note
 
 After this phase, pause and reassess before reshaping the UI reducer. By then we should know more about what an ACP-friendly client state really needs.
+
+---
+
+## Phase 2.5 — non-native ACP adapters for richer runtimes
+
+### Goals
+
+- add Cursor and Claude Code adapters before the client-state refactor
+- validate that the ACP-only architecture works for richer, non-Pi interaction models
+- use those adapters to pressure-test our current ACP boundary assumptions before touching the reducer
+
+### Likely files/areas
+
+- `agent-server-client/src/server/agents/*`
+- `agent-server-client/src/server/config/agentProfiles.ts`
+- `agent-server-client/config/agent-profiles.example.json`
+- helper/debug scripts under `scripts/`
+- Product docs in `PRODUCT/`
+
+### Validation
+
+- `scripts/interact-with-remote-agent.sh`
+- targeted adapter tests
+- manual inspection of raw ACP traces
+
+### Exit criteria
+
+- Cursor and Claude Code can enter Rookery through ACP-oriented adapters
+- we have richer non-Pi traces to inform the client-state refactor
+- adapter structure is simple enough to reuse without reintroducing protocol sprawl
 
 ---
 
