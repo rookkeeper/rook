@@ -14,7 +14,7 @@
  * starts a local Fastify server on a random port and streams session events.
  *
  * Options:
- *   --agent <id>           Agent backend (default: MyPiAgent). Use MockAgent for a quick test.
+ *   --agent <id>           Agent backend (default: MyPiAgent). Use PiAgent for a quick direct test.
  *   --session '<json>'     Continue an existing session record (AgentSessionSummary JSON).
  *   --restart              Restart the existing session in place.
  *   --replay               Include HTTP replay events on start (also needs --no-replay off).
@@ -23,6 +23,7 @@
  *   --only <types>         Whitelist: only print these SessionEvent types.
  *   --no-session           Do not print the session record line.
  *   --no-replay            Do not print replay lines even when --replay is set.
+ *   --raw-acp              Print raw ACP JSON-RPC traffic instead of translated SessionEvents.
  *   -h, --help             Print usage (same event types as below).
  *
  * SessionEvent types (for --omit / --only; --omit-deltas hides the four *delta types):
@@ -52,7 +53,7 @@
  *   { "type": "session_event", "event": ... }     live/replayed SessionEvent payloads
  *
  * Quick:
- *   ./scripts/interact-with-remote-agent.sh --agent MockAgent --omit-deltas "hello"
+ *   ./scripts/interact-with-remote-agent.sh --agent PiAgent --omit-deltas "hello"
  *
  * Full example (resume a session, restart its runtime, replay prior events, filter noisy types):
  *
@@ -77,6 +78,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { AgentSessionSummary } from "../agent-server-client/src/shared/agent.js";
 import type { SessionEvent, SessionEventType } from "../agent-server-client/src/shared/realtime.js";
 import { SESSION_EVENT_TYPES } from "../agent-server-client/src/shared/realtime.js";
+import type { AcpServerMessage, JsonRpcMessage } from "../agent-server-client/src/shared/acp.js";
 import { RemoteAgent } from "../agent-server-client/src/client/remoteAgent.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -112,12 +114,14 @@ Options:
   --only <types>         Comma-separated event types to show (hides all others)
   --no-session           Do not print the session record line
   --no-replay            Do not print replay lines (even with --replay)
+  --raw-acp              Print raw ACP JSON-RPC traffic
   -h, --help
 
 Event types: ${SESSION_EVENT_TYPES.join(", ")}
 
 Output is JSONL on stdout. Examples:
-  ./scripts/interact-with-remote-agent.sh --agent MockAgent --omit-deltas "hello"
+  ./scripts/interact-with-remote-agent.sh --agent PiAgent --omit-deltas "hello"
+  ./scripts/interact-with-remote-agent.sh --raw-acp --agent PiAgent "hello"
   ./scripts/interact-with-remote-agent.sh --only run_completed,run_failed,protocol_error "hello"`);
   process.exit(2);
 }
@@ -139,6 +143,7 @@ function parseArgs(argv: string[]): {
   restart: boolean;
   replay: boolean;
   filter: EventFilter;
+  rawAcp: boolean;
 } {
   let agent = "MyPiAgent";
   let session: AgentSessionSummary | undefined;
@@ -149,6 +154,7 @@ function parseArgs(argv: string[]): {
   let only: Set<SessionEventType> | undefined;
   let showSession = true;
   let showReplay = true;
+  let rawAcp = false;
   const promptParts: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
@@ -179,6 +185,8 @@ function parseArgs(argv: string[]): {
       showSession = false;
     } else if (arg === "--no-replay") {
       showReplay = false;
+    } else if (arg === "--raw-acp") {
+      rawAcp = true;
     } else if (arg === "--help" || arg === "-h") {
       usage();
     } else {
@@ -200,6 +208,7 @@ function parseArgs(argv: string[]): {
     restart,
     replay,
     filter: { only, omit, showSession, showReplay },
+    rawAcp,
   };
 }
 
@@ -215,8 +224,65 @@ function createEventLogger(filter: EventFilter) {
   };
 }
 
+async function printRawAcpSession(baseUrl: string, options: {
+  agent: string;
+  session?: AgentSessionSummary;
+  restart: boolean;
+  replay: boolean;
+  prompt: string;
+  filter: EventFilter;
+}): Promise<void> {
+  const startResponse = await fetch(`${baseUrl}/api/agent/start`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      agent: options.agent,
+      ...(options.session ? { session: options.session } : {}),
+      ...(options.restart ? { restartExisting: true } : {}),
+      ...(options.replay ? { includeReplayEvents: true } : {}),
+    }),
+  });
+  const startResult = await startResponse.json() as { session: AgentSessionSummary; replayMessages?: AcpServerMessage[] };
+  if (options.filter.showSession) {
+    console.log(JSON.stringify({ type: "session", event: startResult.session }));
+  }
+  if (options.filter.showReplay && startResult.replayMessages) {
+    for (const message of startResult.replayMessages) {
+      console.log(JSON.stringify({ type: "replay_acp", event: message }));
+    }
+  }
+
+  const ws = new WebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=${encodeURIComponent(startResult.session.id)}`);
+  await new Promise<void>((resolve, reject) => {
+    ws.addEventListener("open", () => resolve(), { once: true });
+    ws.addEventListener("error", () => reject(new Error("WebSocket failed to open")), { once: true });
+  });
+
+  const done = new Promise<void>((resolve, reject) => {
+    ws.addEventListener("message", (event) => {
+      const message = JSON.parse(String(event.data)) as JsonRpcMessage;
+      console.log(JSON.stringify({ type: "acp_message", event: message }));
+      if ("id" in message && message.id === "prompt-1" && (("result" in message) || ("error" in message))) {
+        if ("error" in message) reject(new Error(message.error.message));
+        else resolve();
+      }
+    });
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+
+  ws.send(JSON.stringify({
+    jsonrpc: "2.0",
+    id: "prompt-1",
+    method: "session/prompt",
+    params: { sessionId: startResult.session.id, prompt: [{ type: "text", text: options.prompt }] },
+  }));
+
+  await done;
+  ws.close();
+}
+
 async function main() {
-  const { agent, session, prompt, restart, replay, filter } = parseArgs(process.argv.slice(2));
+  const { agent, session, prompt, restart, replay, filter, rawAcp } = parseArgs(process.argv.slice(2));
 
   const serverEntry = pathToFileURL(path.join(CLIENT_ROOT, "src/server/index.js")).href;
   const { buildServer } = await import(serverEntry);
@@ -226,6 +292,11 @@ async function main() {
     const address = app.server.address();
     if (!address || typeof address === "string") throw new Error("Could not determine server address.");
     const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    if (rawAcp) {
+      await printRawAcpSession(baseUrl, { agent, session, restart, replay, prompt, filter });
+      return;
+    }
 
     const logSessionEvent = createEventLogger(filter);
 
@@ -250,6 +321,7 @@ async function main() {
       }
     }
     await remoteAgent.run(prompt);
+    remoteAgent.close();
   } finally {
     await app.close();
   }

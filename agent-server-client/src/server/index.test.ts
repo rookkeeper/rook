@@ -1,11 +1,8 @@
 // @vitest-environment node
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mockSession = { id: "s-mock", agent: "MockAgent", createdAt: "now", restart: {} };
-const olderSession = { id: "s-old", agent: "MockAgent", createdAt: "2025-12-31T00:00:00.000Z", restart: {} };
+const mockSession = { id: "s-mock", agent: "PiAgent", createdAt: "now", restart: {} };
+const olderSession = { id: "s-old", agent: "PiAgent", createdAt: "2025-12-31T00:00:00.000Z", restart: {} };
 const myPiSession = { id: "s1", agent: "MyPiAgent", createdAt: "2026-01-01T00:00:00.000Z", restart: { sessionId: "abc" } };
 
 const agentDiscoveryMock = vi.hoisted(() => ({
@@ -14,18 +11,23 @@ const agentDiscoveryMock = vi.hoisted(() => ({
 
 vi.mock("./agents/agentDiscovery.js", () => ({
   getAgentDefinitions: () => [],
-  isKnownAgent: (id: string) => id === "MockAgent" || id === "MyPiAgent" || id === "PiAgent",
+  isKnownAgent: (id: string) => id === "PiAgent" || id === "MyPiAgent" || id === "PiAgent",
   createAgent: agentDiscoveryMock.createAgentMock.mockImplementation((id: string, restart?: Record<string, unknown>) => {
     let eventSink: ((event: Record<string, unknown>) => void) | undefined;
 
     return {
       get record() {
-        return id === "MockAgent" ? mockSession : { ...myPiSession, agent: id, restart: restart ?? myPiSession.restart };
+        return id === "PiAgent" ? mockSession : { ...myPiSession, agent: id, restart: restart ?? myPiSession.restart };
       },
       setEventSink(nextEventSink: ((event: Record<string, unknown>) => void) | undefined) {
         eventSink = nextEventSink;
       },
       async ensureStarted() {
+        if (restart?.sessionId) {
+          eventSink?.({ type: "user_message", text: "earlier question", queued: false });
+          eventSink?.({ type: "text_delta", delta: "earlier answer" });
+          eventSink?.({ type: "run_completed" });
+        }
         return undefined;
       },
       async stop() {
@@ -49,7 +51,6 @@ vi.mock("./agents/sessionLog.js", async (importOriginal) => {
 });
 
 const { buildServer } = await import("./index");
-const { setSessionEventsRoot } = await import("./sessionEvents");
 
 async function listen(app: Awaited<ReturnType<typeof buildServer>>): Promise<string> {
   await app.listen({ host: "127.0.0.1", port: 0 });
@@ -88,17 +89,9 @@ async function delay(ms: number): Promise<void> {
 }
 
 describe("server", () => {
-  let sessionEventsRoot = "";
-
-  beforeEach(async () => {
-    sessionEventsRoot = await mkdtemp(path.join(os.tmpdir(), "agent-station-session-events-"));
-    setSessionEventsRoot(sessionEventsRoot);
-  });
-
   afterEach(async () => {
     agentDiscoveryMock.createAgentMock.mockClear();
     vi.restoreAllMocks();
-    if (sessionEventsRoot) await rm(sessionEventsRoot, { recursive: true, force: true });
   });
 
   it("serves health status", async () => {
@@ -112,11 +105,11 @@ describe("server", () => {
 
   it("starts the selected agent and returns its session", async () => {
     const app = await buildServer({ enableClient: false });
-    const response = await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MockAgent" } });
+    const response = await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "PiAgent" } });
     await app.close();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true, agent: "MockAgent", session: mockSession });
+    expect(response.json()).toEqual({ ok: true, agent: "PiAgent", session: mockSession });
   });
 
   it("starts from a provided session bolus", async () => {
@@ -203,50 +196,31 @@ describe("server", () => {
     expect(response.json()).toEqual(expect.objectContaining({ ok: true, agent: "MyPiAgent", session: myPiSession }));
   });
 
-  it("returns replay events on restart when requested", async () => {
+  it("does not return replay events from start for restored sessions", async () => {
     const app = await buildServer({ enableClient: false });
-    const baseUrl = await listen(app);
-    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MyPiAgent", session: myPiSession } });
-
-    const socket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=${myPiSession.id}`);
-    const eventsPromise = collectJsonMessages(socket, 4);
-    socket.send(JSON.stringify({ type: "user_event", event: { kind: "text_message", text: "hello" } }));
-    await eventsPromise;
-    socket.close();
-
-    const response = await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MyPiAgent", session: myPiSession, restartExisting: true, includeReplayEvents: true } });
+    const response = await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MyPiAgent", session: myPiSession, restartExisting: true } });
     await app.close();
 
     expect(response.statusCode).toBe(200);
-    const body = response.json() as { replayEvents?: Array<{ type: string }> };
-    expect(body.replayEvents).toEqual(expect.arrayContaining([
-      { type: "user_message", text: "hello", queued: false },
-      { type: "text_delta", delta: "ok" },
-      { type: "run_completed" },
-    ]));
+    expect(response.json()).toEqual(expect.objectContaining({ ok: true, agent: "MyPiAgent", session: myPiSession }));
+    expect(response.json()).not.toHaveProperty("replayMessages");
   });
 
-  it("automatically returns replay events when a session is provided", async () => {
+  it("streams restored session history over the websocket", async () => {
     const app = await buildServer({ enableClient: false });
     const baseUrl = await listen(app);
-    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MyPiAgent", session: myPiSession } });
+    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MyPiAgent", session: myPiSession, restartExisting: true } });
 
     const socket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=${myPiSession.id}`);
-    const eventsPromise = collectJsonMessages(socket, 4);
-    socket.send(JSON.stringify({ type: "user_event", event: { kind: "text_message", text: "hello" } }));
-    await eventsPromise;
+    const replayed = await collectJsonMessages(socket, 3);
     socket.close();
-
-    const response = await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MyPiAgent", session: myPiSession } });
     await app.close();
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json() as { replayEvents?: Array<{ type: string }> };
-    expect(body.replayEvents).toEqual(expect.arrayContaining([
-      { type: "user_message", text: "hello", queued: false },
-      { type: "text_delta", delta: "ok" },
-      { type: "run_completed" },
-    ]));
+    expect(replayed).toEqual([
+      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "user_message_chunk", content: { type: "text", text: "earlier question" } }) }) }),
+      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "earlier answer" } }) }) }),
+      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "_rookery_run_completed" }) }) }),
+    ]);
   });
 
   it("rejects unknown agents", async () => {
@@ -261,17 +235,23 @@ describe("server", () => {
   it("pushes an environment offer over the websocket and resolves it on decision", async () => {
     const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:" });
     const baseUrl = await listen(app);
-    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MockAgent" } });
+    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "PiAgent" } });
     const socket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=s-mock`);
 
     const offerPromise = collectJsonMessages(socket, 1);
     const register = await app.inject({ method: "POST", url: "/api/environments/register", payload: { id: "demo:demo", sourceName: "Demo" } });
     expect(register.json()).toEqual({ ok: true, id: "demo:demo" });
     const [offer] = await offerPromise;
-    expect(offer.event).toMatchObject({
-      type: "environment_event",
-      kind: "environment_offer_available",
-      payload: { environmentId: "demo:demo", sourceName: "Demo" },
+    expect(offer).toMatchObject({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: {
+        update: {
+          sessionUpdate: "_rookery_environment_event",
+          kind: "environment_offer_available",
+          payload: { environmentId: "demo:demo", sourceName: "Demo" },
+        },
+      },
     });
 
     // Accepting enters the env (entered event) and resolves the offer (resolved event).
@@ -279,7 +259,7 @@ describe("server", () => {
     const decision = await app.inject({ method: "POST", url: "/api/environments/decision", payload: { environmentId: "demo:demo", decision: "accept" } });
     expect(decision.statusCode).toBe(200);
     const messages = await resolvedPromise;
-    expect(messages.some((m) => m.event?.kind === "environment_offer_resolved" && m.event?.payload?.decision === "approved")).toBe(true);
+    expect(messages.some((m) => m.params?.update?.sessionUpdate === "_rookery_environment_event" && m.params?.update?.kind === "environment_offer_resolved" && m.params?.update?.payload?.decision === "approved")).toBe(true);
 
     socket.close();
     await app.close();
@@ -353,27 +333,33 @@ describe("server", () => {
   it("broadcasts websocket session events to all subscribers", async () => {
     const app = await buildServer({ enableClient: false });
     const baseUrl = await listen(app);
-    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MyPiAgent", session: myPiSession } });
+    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "PiAgent" } });
 
-    const wsUrl = `${baseUrl.replace("http", "ws")}/api/ws?sessionId=${myPiSession.id}`;
+    const wsUrl = `${baseUrl.replace("http", "ws")}/api/ws?sessionId=${mockSession.id}`;
     const socketA = await openWebSocket(wsUrl);
     const socketB = await openWebSocket(wsUrl);
     const messagesA = collectJsonMessages(socketA, 4);
     const messagesB = collectJsonMessages(socketB, 3);
+    await delay(20);
 
-    socketA.send(JSON.stringify({ type: "user_event", requestId: "req-1", event: { kind: "text_message", text: "hello" } }));
+    socketA.send(JSON.stringify({
+      jsonrpc: "2.0",
+      id: "prompt-1",
+      method: "session/prompt",
+      params: { sessionId: mockSession.id, prompt: [{ type: "text", text: "hello" }] },
+    }));
 
     const [eventsA, eventsB] = await Promise.all([messagesA, messagesB]);
     socketA.close();
     socketB.close();
     await app.close();
 
-    expect(eventsA).toContainEqual({ type: "ack", requestId: "req-1" });
-    expect(eventsA.filter((event) => event.type === "session_event")).toEqual(eventsB);
+    expect(eventsA).toContainEqual({ jsonrpc: "2.0", id: "prompt-1", result: { stopReason: "end_turn" } });
+    expect(eventsA.filter((event) => event.method === "session/update")).toEqual(eventsB);
     expect(eventsB).toEqual([
-      { type: "session_event", sessionId: "s1", sequence: 1, event: { type: "user_message", text: "hello", queued: false } },
-      { type: "session_event", sessionId: "s1", sequence: 2, event: { type: "text_delta", delta: "ok" } },
-      { type: "session_event", sessionId: "s1", sequence: 3, event: { type: "run_completed" } },
+      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "user_message_chunk", content: { type: "text", text: "hello" } }) }) }),
+      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } }) }) }),
+      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "_rookery_run_completed" }) }) }),
     ]);
   });
 
@@ -383,19 +369,25 @@ describe("server", () => {
     await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "MyPiAgent", session: myPiSession } });
 
     const firstSocket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=${myPiSession.id}`);
-    const firstMessages = collectJsonMessages(firstSocket, 4);
-    firstSocket.send(JSON.stringify({ type: "user_event", event: { kind: "text_message", text: "hello" } }));
+    const firstMessages = collectJsonMessages(firstSocket, 7);
+    firstSocket.send(JSON.stringify({
+      jsonrpc: "2.0",
+      id: "prompt-1",
+      method: "session/prompt",
+      params: { sessionId: myPiSession.id, prompt: [{ type: "text", text: "hello" }] },
+    }));
     await firstMessages;
     firstSocket.close();
 
-    const replaySocket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=${myPiSession.id}&fromSequence=1`);
-    const replayed = await collectJsonMessages(replaySocket, 2);
+    const replaySocket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=${myPiSession.id}&fromSequence=3`);
+    const replayed = await collectJsonMessages(replaySocket, 3);
     replaySocket.close();
     await app.close();
 
     expect(replayed).toEqual([
-      { type: "session_event", sessionId: "s1", sequence: 2, event: { type: "text_delta", delta: "ok" } },
-      { type: "session_event", sessionId: "s1", sequence: 3, event: { type: "run_completed" } },
+      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "user_message_chunk", content: { type: "text", text: "hello" } }) }) }),
+      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } }) }) }),
+      expect.objectContaining({ method: "session/update", params: expect.objectContaining({ update: expect.objectContaining({ sessionUpdate: "_rookery_run_completed" }) }) }),
     ]);
   });
 });

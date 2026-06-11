@@ -1,5 +1,64 @@
 # Moving to Agent Client Protocol
 
+## Current checkpoint
+
+## Immediate next to-dos
+
+These are the next things we should do, in order:
+
+1. **Finish deleting the remaining Rookery-owned replay scaffolding.**
+   - Product decision stands: chat replay comes from ACP (`session/load`), not from Rookery transcript persistence.
+   - Keep environment decision persistence; it is separate.
+   - Remaining likely targets: `fromSequence` reconnect/replay behavior and any replay-oriented helpers that only exist for the old path.
+2. **Finish the ACP-only cleanup pass.**
+   - Confirm deprecated Pi-RPC-era code is actually gone.
+   - Confirm there is no compatibility-only replay path left behind.
+3. **Then continue with client-state/UI follow-through.**
+4. **Before the farthest-out UI changes, we're going to have a conversation about it.**
+
+Recently completed cleanup:
+
+- removed `MockAgent`
+- collapsed `AcpAgent` into `BaseAgent`
+- reintroduced a thin `PiAgent` subclass for Pi-specific launch shaping
+- removed the checked-in `scripts/pi-with-rookery-profile.mjs` wrapper and generate the Pi launch helper internally at runtime instead
+- updated `agent-server-client/config/agent-profiles.json` back to a Pi-shaped profile (`type: "pi"`, `args: ["-e", "../my-agent"]`)
+
+This changes the migration emphasis slightly:
+
+- before continuing deep internal cleanup, we should first make sure our main real agent path (`pi`) actually enters the system as ACP
+- once that works, we can simplify much more aggressively because the product no longer needs a Pi-specific runtime protocol path
+
+Last completed checkpoints:
+
+- **Phase 1 / boundary migration checkpoint** is in place.
+- The **server/client websocket boundary speaks ACP-shaped JSON-RPC**.
+- `pi-acp` worked as a real Pi ACP adapter in this repo.
+- Rookery now has a generic **`BaseAgent` ACP stdio subprocess bridge**.
+- The built-in `PiAgent` path and `agent-server-client/config/agent-profiles.json` now launch **ACP** instead of Pi RPC directly.
+- The old dedicated `PiAgent.ts` Pi-RPC bridge has been removed.
+- We validated this with:
+  - `scripts/interact-with-remote-agent.sh --agent PiAgent --omit-deltas "hello"`
+  - `scripts/interact-with-remote-agent.sh --raw-acp --agent PiAgent "hello"`
+  - `scripts/interact-with-remote-agent.sh --agent MyPiAgent --omit-deltas "Reply with the single word ok."`
+  - `scripts/interact-with-remote-agent.sh --raw-acp --agent MyPiAgent "Reply with the single word ok."`
+  - `cd agent-server-client && npm test && npm run typecheck`
+
+Where we are leaving off now:
+
+- **Boundary protocol:** ACP-shaped
+- **Pi subprocess boundary:** ACP-shaped through `pi-acp`
+- **Server runtime bridge:** generic `BaseAgent`
+- **UI state/reducer:** still legacy `SessionEvent`-driven via translation
+- **Transcript persistence:** Rookery-owned durable transcript persistence has been removed from the intended replay path; the remaining server event store is now in-memory scaffolding only
+
+So the next major steps are now:
+
+- **Immediate priority:** finish deleting the remaining replay scaffolding and double-check nothing deprecated remains
+- **Then:** continue with the ACP-friendly UI state work
+
+When resuming work, start by re-running the helper script commands above to confirm both PiAgent and MyPiAgent still behave correctly over ACP.
+
 ## Why do this
 
 Rookery's current runtime protocol was designed before we knew about ACP. It solves many of the same problems, but it does so with a custom wire format and a custom event vocabulary.
@@ -353,7 +412,7 @@ First implementation step:
 
 This adapter can live on either side of the boundary, but server-side is probably cleaner because:
 
-- agent runtimes are already protocol adapters (`PiAgent`, `MockAgent`)
+- agent runtimes are already protocol adapters (`PiAgent` and generic ACP subprocesses)
 - replay/logging can become ACP-shaped earlier
 - we avoid carrying custom event semantics out over the wire
 

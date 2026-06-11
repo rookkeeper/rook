@@ -1,33 +1,37 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { BaseAgent } from "../agents/BaseAgent.js";
 import type { AgentSessionRecord } from "../agents/sessionLog.js";
-import { getSessionEventsRoot, SessionEventStore, setSessionEventsRoot } from "../sessionEvents.js";
+import { SessionEventStore } from "../sessionEvents.js";
 import { SessionRoom } from "./SessionRoom.js";
 import { ENVIRONMENT_OFFER_AVAILABLE_KIND } from "../../shared/environment.js";
 
 class TestAgent extends BaseAgent {
-  protected async start(): Promise<void> {}
-  protected async restart(): Promise<void> {}
-  protected async registerSession(): Promise<AgentSessionRecord> {
-    return {
+  constructor() {
+    super({ command: "node", args: ["noop"], cwd: process.cwd(), sessionCwd: process.cwd(), agentName: "TestAgent" });
+  }
+
+  override async ensureStarted(): Promise<void> {
+    this.started = true;
+    this.sessionRecord ??= {
       id: "s1",
       agent: "TestAgent",
       name: "default",
       createdAt: "2026-01-01T00:00:00.000Z",
       restart: {},
-    };
+    } satisfies AgentSessionRecord;
   }
-  protected async runImpl(): Promise<void> {}
-  protected async stopImpl(): Promise<void> {}
+
+  override async run(_userMessage: string): Promise<void> {
+    await this.ensureStarted();
+    await this.runImpl();
+  }
+
+  override async stop(): Promise<void> {}
+
+  protected override async runImpl(): Promise<void> {}
 }
 
 describe("SessionRoom", () => {
-  let sessionEventsRoot = "";
-  const originalSessionEventsRoot = getSessionEventsRoot();
-
   function createRoom(agent: BaseAgent) {
     const room = new SessionRoom("s1", {
       session: {
@@ -44,16 +48,7 @@ describe("SessionRoom", () => {
     return room;
   }
 
-  afterEach(async () => {
-    setSessionEventsRoot(originalSessionEventsRoot);
-    if (sessionEventsRoot) await rm(sessionEventsRoot, { recursive: true, force: true });
-    sessionEventsRoot = "";
-  });
-
   it("does not miss events published while a subscriber is joining with replay", async () => {
-    sessionEventsRoot = await mkdtemp(path.join(os.tmpdir(), "agent-station-session-room-"));
-    setSessionEventsRoot(sessionEventsRoot);
-
     const room = createRoom(new TestAgent());
 
     await room.publishEnvironmentEvent({ kind: "replay" });
@@ -79,9 +74,6 @@ describe("SessionRoom", () => {
   });
 
   it("replays unresolved environment offers to late-joining subscribers", async () => {
-    sessionEventsRoot = await mkdtemp(path.join(os.tmpdir(), "agent-station-session-room-"));
-    setSessionEventsRoot(sessionEventsRoot);
-
     const room = createRoom(new TestAgent());
     room.onEnvironmentOffered("web:wikipedia", { sourceName: "Wikipedia" });
 
@@ -105,9 +97,6 @@ describe("SessionRoom", () => {
   });
 
   it("does not replay environment offers after they are resolved", async () => {
-    sessionEventsRoot = await mkdtemp(path.join(os.tmpdir(), "agent-station-session-room-"));
-    setSessionEventsRoot(sessionEventsRoot);
-
     const room = createRoom(new TestAgent());
     room.onEnvironmentOffered("web:wikipedia", { sourceName: "Wikipedia" });
     room.onEnvironmentResolved("web:wikipedia", "approved");
@@ -126,9 +115,6 @@ describe("SessionRoom", () => {
   });
 
   it("publishes run_failed directly when an agent run rejects", async () => {
-    sessionEventsRoot = await mkdtemp(path.join(os.tmpdir(), "agent-station-session-room-"));
-    setSessionEventsRoot(sessionEventsRoot);
-
     class RejectingAgent extends TestAgent {
       protected override async runImpl(): Promise<void> {
         throw new Error("boom");

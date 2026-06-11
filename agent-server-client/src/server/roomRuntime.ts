@@ -3,6 +3,7 @@ import type { AgentSessionRecord } from "./agents/sessionLog.js";
 import type { EnvironmentManager } from "./environment/EnvironmentManager.js";
 import { SessionRoom } from "./realtime/SessionRoom.js";
 import type { SessionRoomManager } from "./realtime/SessionRoomManager.js";
+import type { SessionEventStore } from "./sessionEvents.js";
 import { parentMessageToolExtensionPath } from "./serverPaths.js";
 
 function mergeRestartSkillPaths(restart: Record<string, unknown>, skillPaths: string[]): Record<string, unknown> {
@@ -36,6 +37,7 @@ export async function createOrReuseRoom(params: {
   agentId: string;
   roomManager: SessionRoomManager;
   environmentManager: EnvironmentManager;
+  sessionEventStore: SessionEventStore;
   session?: AgentSessionRecord;
   sessionName?: string;
   restartExisting?: boolean;
@@ -56,11 +58,14 @@ export async function createOrReuseRoom(params: {
     extensionPaths: effectiveSkillPaths.length > 0 ? [parentMessageToolExtensionPath] : [],
   });
   if (params.sessionName) agent.setSessionName(params.sessionName);
-  await agent.ensureStarted();
+
+  const isRestoredSession = Boolean(params.session);
+  if (!isRestoredSession) await agent.ensureStarted();
   const session = params.session ? { ...params.session, restart: restartMetadata ?? params.session.restart } : agent.record;
   if (!session) throw new Error("Agent did not register a session.");
 
   if (existingRoom) await existingRoom.runtime.agent.stop();
+  if (isRestoredSession) await params.sessionEventStore.reset(session.id);
   const room = await params.roomManager.upsert({ session, agentId: params.agentId, agent });
   attachRoomToEnvironments(room, params.environmentManager, effectiveSkillPaths);
   return room;

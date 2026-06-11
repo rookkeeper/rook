@@ -45,7 +45,7 @@ describe("ChatPanel", () => {
   });
 
   it("submits a message through RemoteAgent and renders the streamed response", async () => {
-    render(<ChatPanel agentBackend="MockAgent" initialSession={{ id: "s1", agent: "MockAgent", createdAt: "now", restart: {} }} />);
+    render(<ChatPanel agentBackend="PiAgent" initialSession={{ id: "s1", agent: "PiAgent", createdAt: "now", restart: {} }} />);
 
     expect(screen.getByText("No messages yet.")).toBeInTheDocument();
     await userEvent.type(screen.getByPlaceholderText("Type a message..."), "Hello");
@@ -58,7 +58,7 @@ describe("ChatPanel", () => {
   });
 
   it("does not submit messages while disabled", async () => {
-    render(<ChatPanel agentBackend="MockAgent" initialSession={{ id: "s1", agent: "MockAgent", createdAt: "now", restart: {} }} disabled />);
+    render(<ChatPanel agentBackend="PiAgent" initialSession={{ id: "s1", agent: "PiAgent", createdAt: "now", restart: {} }} disabled />);
 
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     expect(screen.getByPlaceholderText("Type a message...")).toBeDisabled();
@@ -77,8 +77,8 @@ describe("ChatPanel", () => {
 
     render(
       <ChatPanel
-        agentBackend="MockAgent"
-        initialSession={{ id: "s1", agent: "MockAgent", createdAt: "now", restart: {} }}
+        agentBackend="PiAgent"
+        initialSession={{ id: "s1", agent: "PiAgent", createdAt: "now", restart: {} }}
         onParentMessage={(message) => postMessage(message, "https://parent.example")}
       />,
     );
@@ -92,8 +92,8 @@ describe("ChatPanel", () => {
   it("rebuilds prior conversation from replayed session events", () => {
     render(
       <ChatPanel
-        agentBackend="MockAgent"
-        initialSession={{ id: "s1", agent: "MockAgent", createdAt: "now", restart: {} }}
+        agentBackend="PiAgent"
+        initialSession={{ id: "s1", agent: "PiAgent", createdAt: "now", restart: {} }}
         replayEvents={[
           { type: "user_message", text: "Earlier question", queued: false },
           { type: "text_delta", delta: "Earlier answer" },
@@ -111,8 +111,8 @@ describe("ChatPanel", () => {
   it("rebuilds prior tool activity from replayed session events", () => {
     render(
       <ChatPanel
-        agentBackend="MockAgent"
-        initialSession={{ id: "s1", agent: "MockAgent", createdAt: "now", restart: {} }}
+        agentBackend="PiAgent"
+        initialSession={{ id: "s1", agent: "PiAgent", createdAt: "now", restart: {} }}
         replayEvents={[
           { type: "tool_call_started", toolCallId: "tool-1", toolName: "search_docs", rawInput: "{\"q\":\"agent\"}" },
           { type: "tool_completed", toolCallId: "tool-1", toolName: "search_docs", output: "Found docs" },
@@ -129,8 +129,8 @@ describe("ChatPanel", () => {
   it("ignores replayed environment session events without breaking chat replay", () => {
     render(
       <ChatPanel
-        agentBackend="MockAgent"
-        initialSession={{ id: "s1", agent: "MockAgent", createdAt: "now", restart: {} }}
+        agentBackend="PiAgent"
+        initialSession={{ id: "s1", agent: "PiAgent", createdAt: "now", restart: {} }}
         replayEvents={[
           { type: "environment_event", kind: "environment_entered", payload: { environmentId: "browser" } },
           { type: "user_message", text: "Earlier question", queued: false },
@@ -148,8 +148,8 @@ describe("ChatPanel", () => {
     const onEnvironmentOfferResolved = vi.fn();
     render(
       <ChatPanel
-        agentBackend="MockAgent"
-        initialSession={{ id: "s1", agent: "MockAgent", createdAt: "now", restart: {} }}
+        agentBackend="PiAgent"
+        initialSession={{ id: "s1", agent: "PiAgent", createdAt: "now", restart: {} }}
         onEnvironmentOfferResolved={onEnvironmentOfferResolved}
       />,
     );
@@ -172,8 +172,8 @@ describe("ChatPanel", () => {
     const onEnvironmentOfferAvailable = vi.fn();
     render(
       <ChatPanel
-        agentBackend="MockAgent"
-        initialSession={{ id: "s1", agent: "MockAgent", createdAt: "now", restart: {} }}
+        agentBackend="PiAgent"
+        initialSession={{ id: "s1", agent: "PiAgent", createdAt: "now", restart: {} }}
         onEnvironmentOfferAvailable={onEnvironmentOfferAvailable}
       />,
     );
@@ -194,7 +194,7 @@ describe("ChatPanel", () => {
       remoteAgentMock.lastOnSessionEvent?.({ type: "user_message", text: message, queued: false });
       remoteAgentMock.lastOnSessionEvent?.({ type: "run_failed", error: "Network down" });
     });
-    render(<ChatPanel agentBackend="MockAgent" initialSession={{ id: "s1", agent: "MockAgent", createdAt: "now", restart: {} }} />);
+    render(<ChatPanel agentBackend="PiAgent" initialSession={{ id: "s1", agent: "PiAgent", createdAt: "now", restart: {} }} />);
 
     await userEvent.type(screen.getByPlaceholderText("Type a message..."), "Hello");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));

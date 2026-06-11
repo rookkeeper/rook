@@ -3,7 +3,7 @@ import type { AgentSessionSummary } from "./agent";
 import type { SessionEvent } from "../shared/realtime";
 import { fetchAgentDefinitions, fetchAgentSessions, fetchMostRecentSession, RemoteAgent } from "./remoteAgent";
 
-const session: AgentSessionSummary = { id: "s1", agent: "MockAgent", createdAt: "now", restart: {} };
+const session: AgentSessionSummary = { id: "s1", agent: "PiAgent", createdAt: "now", restart: {} };
 
 const websocketMock = vi.hoisted(() => {
   class MockWebSocket {
@@ -78,7 +78,7 @@ describe("RemoteAgent", () => {
   it("sends user messages over websocket and surfaces session events", async () => {
     vi.stubGlobal("WebSocket", websocketMock.MockWebSocket);
     const events: SessionEvent[] = [];
-    const agent = new RemoteAgent({ wsEndpoint: "/custom-ws", backend: "MockAgent", session, onSessionEvent: (event) => events.push(event) });
+    const agent = new RemoteAgent({ wsEndpoint: "/custom-ws", backend: "PiAgent", session, onSessionEvent: (event) => events.push(event) });
 
     const runPromise = agent.run("hello");
     const socket = websocketMock.MockWebSocket.instances[0]!;
@@ -89,18 +89,27 @@ describe("RemoteAgent", () => {
     await waitForCondition(() => expect(socket.sent).toHaveLength(1));
 
     expect(JSON.parse(socket.sent[0]!)).toEqual({
-      type: "user_event",
-      requestId: "user-event-1",
-      event: { kind: "text_message", text: "hello" },
+      jsonrpc: "2.0",
+      id: "prompt-1",
+      method: "session/prompt",
+      params: { sessionId: "s1", prompt: [{ type: "text", text: "hello" }] },
     });
 
-    socket.emitMessage({ type: "session_event", sessionId: "s1", sequence: 1, event: { type: "status_changed", status: "busy", message: "Working" } });
-    socket.emitMessage({ type: "session_event", sessionId: "s1", sequence: 2, event: { type: "text_delta", delta: "Hi" } });
-    socket.emitMessage({ type: "session_event", sessionId: "s1", sequence: 3, event: { type: "run_completed" } });
+    socket.emitMessage({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: {
+        sessionId: "s1",
+        _meta: { rookery: { sequence: 1 } },
+        update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Hi" } },
+      },
+    });
+    socket.emitMessage({ jsonrpc: "2.0", id: "prompt-1", result: { stopReason: "end_turn" } });
 
     await runPromise;
     expect(events).toEqual([
-      { type: "status_changed", status: "busy", message: "Working" },
+      { type: "user_message", text: "hello", queued: false },
+      { type: "status_changed", status: "busy", message: "Agent is working" },
       { type: "text_delta", delta: "Hi" },
       { type: "run_completed" },
     ]);
@@ -108,22 +117,22 @@ describe("RemoteAgent", () => {
 
   it("starts the selected remote agent and then connects with its returned session", async () => {
     vi.stubGlobal("WebSocket", websocketMock.MockWebSocket);
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ ok: true, agent: "MockAgent", session }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ ok: true, agent: "PiAgent", session }));
 
-    const agent = new RemoteAgent({ backend: "MockAgent", startEndpoint: "/start" });
-    await expect(agent.start()).resolves.toEqual({ ok: true, agent: "MockAgent", session });
+    const agent = new RemoteAgent({ backend: "PiAgent", startEndpoint: "/start" });
+    await expect(agent.start()).resolves.toEqual({ ok: true, agent: "PiAgent", session });
 
     const runPromise = agent.run("hello");
     const socket = websocketMock.MockWebSocket.instances[0]!;
     socket.emitOpen();
     await waitForCondition(() => expect(socket.sent).toHaveLength(1));
-    socket.emitMessage({ type: "session_event", sessionId: "s1", sequence: 1, event: { type: "run_completed" } });
+    socket.emitMessage({ jsonrpc: "2.0", id: "prompt-1", result: { stopReason: "end_turn" } });
     await runPromise;
 
     expect(fetchMock).toHaveBeenCalledWith("/start", expect.objectContaining({
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ agent: "MockAgent" }),
+      body: JSON.stringify({ agent: "PiAgent" }),
     }));
   });
 
@@ -145,12 +154,12 @@ describe("RemoteAgent", () => {
 
   it("loads agent definitions and sessions", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(Response.json({ agents: [{ id: "MockAgent", parentId: null }] }))
+      .mockResolvedValueOnce(Response.json({ agents: [{ id: "PiAgent", parentId: null }] }))
       .mockResolvedValueOnce(Response.json({ sessions: [session] }));
 
-    await expect(fetchAgentDefinitions()).resolves.toEqual([{ id: "MockAgent", parentId: null }]);
-    await expect(fetchAgentSessions("MockAgent")).resolves.toEqual([session]);
-    expect(fetchMock).toHaveBeenLastCalledWith("/api/agent/sessions?agent=MockAgent");
+    await expect(fetchAgentDefinitions()).resolves.toEqual([{ id: "PiAgent", parentId: null }]);
+    await expect(fetchAgentSessions("PiAgent")).resolves.toEqual([session]);
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/agent/sessions?agent=PiAgent");
   });
 
   it("reports websocket error messages as connection_error session events", async () => {
@@ -162,7 +171,7 @@ describe("RemoteAgent", () => {
     const socket = websocketMock.MockWebSocket.instances[0]!;
     socket.emitOpen();
     await waitForCondition(() => expect(socket.sent).toHaveLength(1));
-    socket.emitMessage({ type: "error", error: "Remote exploded" });
+    socket.emitMessage({ jsonrpc: "2.0", id: "prompt-1", error: { code: -32000, message: "Remote exploded" } });
 
     await expect(runPromise).rejects.toThrow("Remote exploded");
     expect(events).toContainEqual({ type: "connection_error", error: "Remote exploded" });
@@ -176,7 +185,15 @@ describe("RemoteAgent", () => {
     const firstSocket = websocketMock.MockWebSocket.instances[0]!;
     firstSocket.emitOpen();
     await Promise.resolve();
-    firstSocket.emitMessage({ type: "session_event", sessionId: "s1", sequence: 3, event: { type: "text_delta", delta: "Earlier" } });
+    firstSocket.emitMessage({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: {
+        sessionId: "s1",
+        _meta: { rookery: { sequence: 3 } },
+        update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Earlier" } },
+      },
+    });
     firstSocket.close();
 
     void agent.connect();

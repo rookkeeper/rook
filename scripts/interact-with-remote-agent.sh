@@ -6,8 +6,8 @@
 #
 # Setup once: cd agent-server-client && npm install
 #
-# Common flags: --agent MockAgent | MyPiAgent  --omit-deltas  --only <types>  --omit <types>
-#               --session '<json>'  --restart  --replay  --no-session  --no-replay  --help
+# Common flags: --agent PiAgent | MyPiAgent  --omit-deltas  --only <types>  --omit <types>
+#               --session '<json>'  --restart  --replay  --no-session  --no-replay  --raw-acp  --help
 #
 # SessionEvent types (--omit-deltas hides text_delta, thinking_delta, tool_input_delta, tool_output_delta):
 #   status_changed  user_message  assistant_message_started  assistant_message_completed
@@ -28,12 +28,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CLIENT_ROOT="$REPO_ROOT/agent-server-client"
-TSX="$CLIENT_ROOT/node_modules/.bin/tsx"
+TSX="$CLIENT_ROOT/node_modules/tsx/dist/cli.mjs"
 
-if [[ ! -x "$TSX" ]]; then
+if [[ ! -f "$TSX" ]]; then
   echo "Missing tsx. Install deps once:" >&2
   echo "  cd \"$CLIENT_ROOT\" && npm install" >&2
   exit 1
 fi
 
-exec "$TSX" --tsconfig "$CLIENT_ROOT/tsconfig.json" "$SCRIPT_DIR/interact-with-remote-agent.ts" "$@"
+exec node "$TSX" --tsconfig "$CLIENT_ROOT/tsconfig.json" "$SCRIPT_DIR/interact-with-remote-agent.ts" "$@"

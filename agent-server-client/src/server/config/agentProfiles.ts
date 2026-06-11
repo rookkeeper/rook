@@ -4,12 +4,15 @@ import { AGENT_CLIENT_ROOT } from "../paths.js";
 
 export interface AgentProfile {
   id: string;
-  type: "pi";
+  type: "acp" | "pi";
   parentId?: string | null;
+  command?: string;
   args?: string[];
+  env?: Record<string, string>;
   cwd?: string;
   skillPaths?: string[];
   extensionPaths?: string[];
+  startupTimeoutMs?: number;
 }
 
 type AgentProfilesFile = {
@@ -24,11 +27,18 @@ export function loadAgentProfiles(): AgentProfile[] {
   const parsed = JSON.parse(raw) as AgentProfilesFile;
   if (!Array.isArray(parsed.profiles)) return [];
 
-  return parsed.profiles.filter((profile): profile is AgentProfile => (
-    typeof profile?.id === "string"
-    && profile.id.length > 0
-    && profile.type === "pi"
-  ));
+  return parsed.profiles.filter((profile): profile is AgentProfile => {
+    if (typeof profile?.id !== "string" || profile.id.length === 0) return false;
+    if (profile.type !== "acp" && profile.type !== "pi") return false;
+    if (profile.command !== undefined && typeof profile.command !== "string") return false;
+    if (profile.args !== undefined && (!Array.isArray(profile.args) || profile.args.some((value) => typeof value !== "string"))) return false;
+    if (profile.env !== undefined) {
+      if (typeof profile.env !== "object" || profile.env === null || Array.isArray(profile.env)) return false;
+      if (Object.values(profile.env).some((value) => typeof value !== "string")) return false;
+    }
+    if (profile.startupTimeoutMs !== undefined && typeof profile.startupTimeoutMs !== "number") return false;
+    return true;
+  });
 }
 
 export const AGENT_PROFILES = loadAgentProfiles();

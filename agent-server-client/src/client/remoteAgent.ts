@@ -1,5 +1,7 @@
 import { AgentBackend, AgentDefinition, AgentSessionSummary } from "./agent";
-import type { SessionEvent, OutboundRealtimeMessage } from "../shared/realtime";
+import type { SessionEvent } from "../shared/realtime";
+import type { AcpPromptResponse, AcpServerMessage, JsonRpcMessage } from "../shared/acp";
+import { acpServerMessageToSessionEvents, getSequenceFromAcpMessage, isJsonRpcFailure, isJsonRpcNotification, isJsonRpcSuccess } from "./acpToSessionEvent";
 
 export type RemoteSessionEvent = SessionEvent;
 
@@ -60,10 +62,15 @@ export interface RemoteAgentStartResult {
   ok: boolean;
   agent: AgentBackend;
   session: AgentSessionSummary;
-  replayEvents?: RemoteSessionEvent[];
 }
 
-type PendingRun = { resolve: () => void; reject: (error: Error) => void };
+interface RemoteAgentStartPayload {
+  ok: boolean;
+  agent: AgentBackend;
+  session: AgentSessionSummary;
+}
+
+type PendingRun = { requestId: string; promptText: string; resolve: () => void; reject: (error: Error) => void };
 
 function websocketUrl(endpoint: string, sessionId: string, fromSequence?: number): string {
   const base = endpoint.includes("://")
@@ -110,7 +117,6 @@ export class RemoteAgent {
         agent: this.backend,
         ...(this.session ? { session: this.session } : {}),
         ...(this.sessionName ? { sessionName: this.sessionName } : {}),
-        ...(this.includeReplayEvents ? { includeReplayEvents: true } : {}),
         ...(this.restartExisting ? { restartExisting: true } : {}),
       }),
     });
@@ -121,9 +127,9 @@ export class RemoteAgent {
       throw new Error(error);
     }
 
-    const result = await response.json() as RemoteAgentStartResult;
+    const result = await response.json() as RemoteAgentStartPayload;
     this.session = result.session;
-    return result;
+    return { ok: result.ok, agent: result.agent, session: result.session };
   }
 
   async connect(): Promise<void> {
@@ -146,7 +152,7 @@ export class RemoteAgent {
 
       socket.addEventListener("message", (event) => {
         try {
-          this.handleMessage(JSON.parse(String(event.data)) as OutboundRealtimeMessage);
+          this.handleMessage(JSON.parse(String(event.data)) as JsonRpcMessage);
         } catch (error) {
           this.emitLocalEvent({ type: "protocol_error", error: `Failed to parse websocket payload: ${String(error)}` });
         }
@@ -194,15 +200,22 @@ export class RemoteAgent {
       throw error;
     }
 
-    const requestId = `user-event-${++this.requestCounter}`;
+    const requestId = `prompt-${++this.requestCounter}`;
     const run = new Promise<void>((resolve, reject) => {
-      this.pendingRuns.push({ resolve, reject });
+      this.pendingRuns.push({ requestId, promptText: userMessage, resolve, reject });
     });
 
+    this.emitLocalEvent({ type: "user_message", text: userMessage, queued: false });
+    this.emitLocalEvent({ type: "status_changed", status: "busy", message: "Agent is working" });
+
     socket.send(JSON.stringify({
-      type: "user_event",
-      requestId,
-      event: { kind: "text_message", text: userMessage },
+      jsonrpc: "2.0",
+      id: requestId,
+      method: "session/prompt",
+      params: {
+        sessionId: this.session!.id,
+        prompt: [{ type: "text", text: userMessage }],
+      },
     }));
 
     return run;
@@ -212,31 +225,58 @@ export class RemoteAgent {
     this.onSessionEvent?.(event);
   }
 
-  private resolvePendingRun(): void {
-    this.pendingRuns.shift()?.resolve();
+  private resolvePendingRun(requestId: string): void {
+    const index = this.pendingRuns.findIndex((pending) => pending.requestId === requestId);
+    if (index === -1) return;
+    this.pendingRuns.splice(index, 1)[0]?.resolve();
   }
 
-  private rejectPendingRun(error: string): void {
-    const pending = this.pendingRuns.shift();
+  private rejectPendingRun(error: string, requestId?: string): void {
+    const index = requestId
+      ? this.pendingRuns.findIndex((pending) => pending.requestId === requestId)
+      : 0;
+    if (index === -1) return;
+    const pending = this.pendingRuns.splice(index, 1)[0];
     if (!pending) return;
     pending.reject(new Error(error));
   }
 
-  private handleMessage(message: OutboundRealtimeMessage): void {
-    switch (message.type) {
-      case "session_event":
-        this.lastSequence = Math.max(this.lastSequence, message.sequence);
-        this.onSessionEvent?.(message.event);
-        if (message.event.type === "run_completed" || message.event.type === "run_failed") {
-          this.resolvePendingRun();
+  private handlePromptResponse(message: AcpPromptResponse): void {
+    const stopReason = message.result?.stopReason ?? "end_turn";
+    if (stopReason === "cancelled") {
+      this.emitLocalEvent({ type: "run_failed", error: "Run cancelled" });
+      this.rejectPendingRun("Run cancelled", String(message.id));
+      return;
+    }
+    this.emitLocalEvent({ type: "run_completed" });
+    this.resolvePendingRun(String(message.id));
+  }
+
+  private handleMessage(message: JsonRpcMessage): void {
+    const sequence = getSequenceFromAcpMessage(message);
+    if (typeof sequence === "number") this.lastSequence = Math.max(this.lastSequence, sequence);
+
+    if (isJsonRpcNotification(message)) {
+      for (const event of acpServerMessageToSessionEvents(message as AcpServerMessage)) {
+        if (event.type === "user_message") {
+          const matchingPendingRun = this.pendingRuns.find((pending) => pending.promptText === event.text);
+          if (matchingPendingRun) continue;
         }
-        break;
-      case "ack":
-        break;
-      case "error":
-        this.emitLocalEvent({ type: "connection_error", error: message.error });
-        this.rejectPendingRun(message.error);
-        break;
+        if (event.type === "run_completed" || event.type === "run_failed") continue;
+        if (event.type === "status_changed" && event.status === "busy" && event.message === "Agent is working") continue;
+        this.onSessionEvent?.(event);
+      }
+      return;
+    }
+
+    if (isJsonRpcFailure(message)) {
+      this.emitLocalEvent({ type: "connection_error", error: message.error.message });
+      this.rejectPendingRun(message.error.message, message.id === null ? undefined : String(message.id));
+      return;
+    }
+
+    if (isJsonRpcSuccess(message)) {
+      this.handlePromptResponse(message as AcpPromptResponse);
     }
   }
 }

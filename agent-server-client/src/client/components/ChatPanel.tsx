@@ -104,7 +104,7 @@ function reducer(state: State, action: Action): State {
 
     case "USER_MESSAGE_ACCEPTED": {
       const block: UserMessageBlock = { type: "text", role: "user", text: action.event.text, isStreaming: false };
-      return { ...state, blocks: [...state.blocks, block] };
+      return { ...state, blocks: [...finalizeStreamingBlocks(state.blocks), block] };
     }
 
     case "ASSISTANT_MESSAGE_COMPLETED":

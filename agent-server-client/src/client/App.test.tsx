@@ -9,8 +9,8 @@ import type { EnvironmentPreview } from "../shared/environment";
 const remoteAgentMock = vi.hoisted(() => ({
   startMock: vi.fn(async (options?: { backend?: string; session?: AgentSessionSummary; sessionName?: string; restartExisting?: boolean; includeReplayEvents?: boolean }) => ({
     ok: true,
-    agent: options?.backend ?? "MockAgent",
-    session: options?.session ?? { id: "s-start", agent: options?.backend ?? "MockAgent", name: options?.sessionName ?? "default", createdAt: "now", restart: {} },
+    agent: options?.backend ?? "PiAgent",
+    session: options?.session ?? { id: "s-start", agent: options?.backend ?? "PiAgent", name: options?.sessionName ?? "default", createdAt: "now", restart: {} },
     replayEvents: options?.restartExisting ? [{ type: "run_completed" }] : undefined,
   })),
   fetchEnvironmentPreviewMock: vi.fn(async (): Promise<EnvironmentPreview> => ({
@@ -19,7 +19,6 @@ const remoteAgentMock = vi.hoisted(() => ({
   })),
   decideEnvironmentMock: vi.fn(async () => undefined),
   fetchAgentDefinitionsMock: vi.fn(async () => [
-    { id: "MockAgent", parentId: null },
     { id: "PiAgent", parentId: null },
     { id: "MyPiAgent", parentId: "PiAgent" },
   ]),
@@ -118,7 +117,7 @@ describe("App", () => {
   it("shows nested agent choices before chat starts", async () => {
     render(<App />);
 
-    expect(await screen.findByText("MockAgent")).toBeInTheDocument();
+    expect(await screen.findByText("PiAgent")).toBeInTheDocument();
     expect(screen.getByText("PiAgent")).toBeInTheDocument();
     expect(screen.getByText("MyPiAgent")).toBeInTheDocument();
     expect(screen.getByText("Choose agent")).toBeInTheDocument();
@@ -127,17 +126,17 @@ describe("App", () => {
   it("asks for a session name before starting a new selected agent", async () => {
     render(<App />);
 
-    await startNewAgent("MockAgent", "Planning");
+    await startNewAgent("PiAgent", "Planning");
 
     await waitFor(() => expect(remoteAgentMock.startMock).toHaveBeenCalledWith(expect.objectContaining({ sessionName: "Planning" })));
-    expect(await screen.findByText("Chat for MockAgent")).toBeInTheDocument();
-    expect(screen.getByText("MockAgent · Planning")).toBeInTheDocument();
+    expect(await screen.findByText("Chat for PiAgent")).toBeInTheDocument();
+    expect(screen.getByText("PiAgent · Planning")).toBeInTheDocument();
   });
 
   it("uses the default session name when creating with return", async () => {
     render(<App />);
 
-    const row = (await screen.findByText("MockAgent")).closest(".cwa-agent-row");
+    const row = (await screen.findByText("PiAgent")).closest(".cwa-agent-row");
     await userEvent.click(row!.querySelector("button")!);
     await userEvent.keyboard("{Enter}");
 
@@ -206,14 +205,14 @@ describe("App", () => {
   it("returns from chat to agent selection via the sessions button", async () => {
     render(<App />);
 
-    await startNewAgent("MockAgent");
-    await screen.findByText("Chat for MockAgent");
+    await startNewAgent("PiAgent");
+    await screen.findByText("Chat for PiAgent");
 
     await userEvent.click(screen.getByRole("button", { name: "Sessions" }));
 
-    expect(await screen.findByText("MockAgent")).toBeInTheDocument();
+    expect(await screen.findByText("PiAgent")).toBeInTheDocument();
     expect(screen.getByText("Choose agent")).toBeInTheDocument();
-    expect(screen.queryByText("Chat for MockAgent")).not.toBeInTheDocument();
+    expect(screen.queryByText("Chat for PiAgent")).not.toBeInTheDocument();
   });
 
   it("shows connected client counts for live sessions in the session list", async () => {
@@ -234,7 +233,7 @@ describe("App", () => {
     remoteAgentMock.startMock.mockRejectedValueOnce(new Error("Could not start"));
     render(<App />);
 
-    await startNewAgent("MockAgent");
+    await startNewAgent("PiAgent");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not start");
   });
@@ -245,8 +244,8 @@ describe("App", () => {
       skills: [{ id: "wikipedia-discovery", name: "wikipedia-discovery", files: { "wikipedia-discovery/SKILL.md": "# Wikipedia" } }],
     });
     render(<App />);
-    await startNewAgent("MockAgent");
-    await screen.findByText("Chat for MockAgent");
+    await startNewAgent("PiAgent");
+    await screen.findByText("Chat for PiAgent");
 
     await act(async () => {
       chatPanel.props?.onEnvironmentOfferAvailable?.({ environmentId: "web:wikipedia", sourceName: "Wikipedia skills" });
@@ -259,8 +258,8 @@ describe("App", () => {
 
   it("records a decision and closes the modal on the resolved event", async () => {
     render(<App />);
-    await startNewAgent("MockAgent");
-    await screen.findByText("Chat for MockAgent");
+    await startNewAgent("PiAgent");
+    await screen.findByText("Chat for PiAgent");
 
     await act(async () => {
       chatPanel.props?.onEnvironmentOfferAvailable?.({ environmentId: "web:wikipedia", sourceName: "Wikipedia skills" });
@@ -275,8 +274,8 @@ describe("App", () => {
 
   it("closes the modal when another client resolves the offer", async () => {
     render(<App />);
-    await startNewAgent("MockAgent");
-    await screen.findByText("Chat for MockAgent");
+    await startNewAgent("PiAgent");
+    await screen.findByText("Chat for PiAgent");
 
     await act(async () => {
       chatPanel.props?.onEnvironmentOfferAvailable?.({ environmentId: "web:wikipedia", sourceName: "Wikipedia skills" });

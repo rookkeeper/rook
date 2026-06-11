@@ -36,6 +36,8 @@ export class SessionRoom implements EnvironmentEventListener {
   private queue: Promise<void> = Promise.resolve();
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  private started = false;
+  private startPromise: Promise<void> | null = null;
 
   constructor(
     readonly sessionId: string,
@@ -61,6 +63,10 @@ export class SessionRoom implements EnvironmentEventListener {
 
   get subscriberCount(): number {
     return this.events.subscriberCount;
+  }
+
+  get hasStarted(): boolean {
+    return this.started;
   }
 
   setRuntime(runtime: RoomRuntime): void {
@@ -105,6 +111,7 @@ export class SessionRoom implements EnvironmentEventListener {
         await previousAgent.stop();
         this.setRuntime(nextRuntime);
         this.attachRuntimeEventSink();
+        this.started = true;
         await this.broadcastEnvironmentEvent({ kind, payload: { environmentId } });
       } catch (error) {
         await this.broadcastEnvironmentEvent({
@@ -130,20 +137,39 @@ export class SessionRoom implements EnvironmentEventListener {
     return () => this.removeSubscriber(unsubscribe);
   }
 
+  async ensureStarted(): Promise<void> {
+    if (this.started) return;
+    if (!this.startPromise) {
+      this.startPromise = this.currentRuntime.agent.ensureStarted()
+        .then(() => {
+          this.started = true;
+        })
+        .finally(() => {
+          this.startPromise = null;
+        });
+    }
+    await this.startPromise;
+  }
+
   async replay(fromSequence = 0): Promise<OutboundRealtimeMessage[]> {
     return this.events.replay(fromSequence);
   }
 
-  async run(message: string): Promise<void> {
+  async run(message: string): Promise<{ ok: true } | { ok: false; error: string }> {
     const run = async () => {
       try {
+        await this.ensureStarted();
         await this.currentRuntime.agent.run(message);
+        return { ok: true } as const;
       } catch (error) {
-        await this.publishSessionEvent({ type: "run_failed", error: errorMessage(error) });
+        const message = errorMessage(error);
+        await this.publishSessionEvent({ type: "run_failed", error: message });
+        return { ok: false, error: message } as const;
       }
     };
-    this.queue = this.queue.then(run, run);
-    await this.queue;
+    const pending = this.queue.then(run, run);
+    this.queue = pending.then(() => undefined, () => undefined);
+    return await pending;
   }
 
   async stop(): Promise<void> {

@@ -61,12 +61,11 @@ export async function registerAgentRoutes(app: FastifyInstance, deps: {
       agentId,
       roomManager: deps.roomManager,
       environmentManager: deps.environmentManager,
+      sessionEventStore: deps.sessionEventStore,
       session,
       sessionName,
       restartExisting,
     });
-    const includeReplayEvents = request.body?.includeReplayEvents === true || session !== undefined;
-    const replayEvents = includeReplayEvents ? await deps.sessionEventStore.readSessionEvents(room.session.id) : undefined;
-    return { ok: true, agent: agentId, session: room.session, ...(includeReplayEvents ? { replayEvents } : {}) };
+    return { ok: true, agent: agentId, session: room.session };
   });
 }

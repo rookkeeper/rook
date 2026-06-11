@@ -1,5 +1,64 @@
 # Moving to Agent Client Protocol — Engineering Checklist
 
+## Current checkpoint
+
+## Immediate next to-dos
+
+1. **Finish deleting the remaining Rookery-owned replay scaffolding**
+   - product decision: chat replay now comes from ACP `session/load`
+   - keep environment decision persistence; it is separate
+   - remaining likely targets: `fromSequence` reconnect/replay behavior and replay-oriented helpers that only exist for the old path
+2. **Do the ACP-only cleanup sweep now that Pi is entering through ACP**
+   - verify deprecated Pi-RPC code is actually deleted
+   - verify there is no compatibility-only launch/config path left behind
+   - verify there is no compatibility-only replay path left behind
+3. **Resume the internal migration checklist**
+   - next most likely work is UI/client-state cleanup
+4. **Before the farthest-out UI work, we're going to have a conversation about it**
+
+Recently completed cleanup:
+
+- removed `MockAgent`
+- collapsed `AcpAgent` into `BaseAgent`
+- added a thin `PiAgent` subclass for Pi-specific launch shaping
+- removed the checked-in `scripts/pi-with-rookery-profile.mjs` wrapper in favor of an internally generated Pi launcher
+- moved the checked-in Pi profile back toward the earlier Pi-shaped config
+
+Completed:
+
+- **Phase 1 boundary migration checkpoint**
+  - websocket boundary now uses ACP-shaped JSON-RPC
+  - `RemoteAgent` speaks ACP on the wire
+  - a temporary ACP -> `SessionEvent` client adapter still exists
+  - helper script supports both translated and raw ACP inspection
+- **Pi ACP subprocess checkpoint**
+  - evaluated `pi-acp` successfully
+  - added generic `BaseAgent` ACP stdio subprocess bridge
+  - switched `agent-server-client/config/agent-profiles.json` to ACP launch mode
+  - built-in Pi runtime path now launches `pi-acp` without a checked-in wrapper script instead of Pi RPC directly
+  - removed the old dedicated `PiAgent.ts` Pi-RPC bridge
+
+Validated at this checkpoint with:
+
+- `./scripts/interact-with-remote-agent.sh --agent PiAgent --omit-deltas "hello"`
+- `./scripts/interact-with-remote-agent.sh --raw-acp --agent PiAgent "hello"`
+- `./scripts/interact-with-remote-agent.sh --agent MyPiAgent --omit-deltas "Reply with the single word ok."`
+- `./scripts/interact-with-remote-agent.sh --raw-acp --agent MyPiAgent "Reply with the single word ok."`
+- `cd agent-server-client && npm test && npm run typecheck`
+
+Next up:
+
+- **Immediate priority:** finish the replay/deprecated-code deletion sweep and ACP-only verification
+- **Then:** ACP-friendly UI/client-state work
+
+Open questions to keep in mind when resuming:
+
+- is `pi-acp` maintained enough for us to keep as a direct dependency?
+- if we later vendor it, where should it live and how tightly should it integrate with repo tooling/tests?
+- do we persist raw ACP messages, normalized ACP updates, or a narrowed internal ACP log?
+- how do we want replay/start payloads to evolve once the legacy `SessionEvent` store is removed?
+- what temporary translation layers can be deleted immediately after Phase 2 lands?
+
 This is a high-level implementation checklist for the ACP migration.
 
 It is intentionally more concrete for near-term steps and less prescriptive for later steps. As we get further into the migration, we should reevaluate based on what we learn from real traces, replay behavior, and actual agent integrations.
@@ -25,8 +84,8 @@ Use it early and often before validating changes in the browser UI.
 - `agent-server-client/src/shared/realtime.ts`
 - `agent-server-client/src/shared/agent.ts`
 - `agent-server-client/src/server/agents/BaseAgent.ts`
+- `agent-server-client/src/server/agents/BaseAgent.ts`
 - `agent-server-client/src/server/agents/PiAgent.ts`
-- `agent-server-client/src/server/agents/MockAgent.ts`
 - `agent-server-client/src/server/realtime/*`
 - `agent-server-client/src/server/routes/*`
 - `agent-server-client/src/client/remoteAgent.ts`
@@ -242,7 +301,7 @@ Throughout all phases, keep checking:
 - reconnect behavior
 - session restart behavior
 - error handling semantics
-- MockAgent parity for tests
+- PiAgent-backed test/runtime parity
 - PiAgent parity for real usage
 - whether the browser client still needs any legacy concepts
 - whether docs and debug scripts still describe reality

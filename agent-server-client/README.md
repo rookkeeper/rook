@@ -1,6 +1,6 @@
 # Agent Station (agent-server-client)
 
-Web UI, Fastify API, and Pi bridge. Part of the [Agent Station](../README.md) monorepo. Product/architecture notes: [PRODUCT/](../PRODUCT/).
+Web UI, Fastify API, and ACP-backed Pi adapter/runtime. Part of the [Agent Station](../README.md) monorepo. Product/architecture notes: [PRODUCT/](../PRODUCT/).
 
 ## Quick start
 
@@ -25,7 +25,7 @@ That starts the main app/server on `http://127.0.0.1:3000`.
 
 ## Pi agent configuration
 
-Agent Station loads Pi-backed profiles from:
+Agent Station loads ACP-backed agent profiles from:
 - `config/agent-profiles.json`
 
 Default example:
@@ -35,19 +35,20 @@ Default example:
   "id": "MyPiAgent",
   "type": "pi",
   "parentId": "PiAgent",
-  "args": ["-e", "../my-agent", "--mode", "rpc"]
+  "args": ["-e", "../my-agent"]
 }
 ```
 
 Field meanings:
 - `id`: label shown in the UI
-- `type`: runtime type; use `pi` for Pi-backed agents
-- `parentId`: inherit the built-in Pi bridge agent
-- `args`: CLI args passed through when Agent Station launches Pi
+- `type`: runtime type; use `pi` for the built-in Pi ACP launcher, `acp` for a generic ACP subprocess
+- `parentId`: inherit the built-in Pi ACP defaults/grouping
+- `args`: extra arguments passed to `pi` before `pi-acp` adds its RPC/session flags
 
 Important defaults:
-- `-e ../my-agent` points Pi at the sibling agent package directory
-- `--mode rpc` enables the RPC transport Agent Station expects
+- `agent-server-client/node_modules/pi-acp/dist/index.js` is the ACP adapter we launch
+- `PiAgent` generates a tiny launcher internally at runtime instead of relying on a checked-in wrapper script
+- `args: ["-e", "../my-agent"]` still points Pi at `../my-agent`
 
 ## About `../my-agent/`
 
@@ -63,6 +64,8 @@ Use this repo for the launcher-side configuration, mainly:
 
 If your Pi package lives somewhere else, update the `args` path in `config/agent-profiles.json`.
 
+Generated Pi launch helpers are written under `.var/agent-station/generated/pi-launchers/`.
+
 Terse map of `src/`:
 
 ## `src/client` (web UI)
@@ -71,7 +74,7 @@ Terse map of `src/`:
   - `RemoteAgent` uses **HTTP for session control** and **WebSocket for in-session events**.
   - `POST /api/agent/start` creates/reuses/restarts a session runtime.
   - `GET /api/ws?sessionId=...&fromSequence=...` replays persisted events, then subscribes to live session events.
-  - Live and replayed client updates flow through the shared **`SessionEvent`** model (`session_event` on the wire).
+  - The websocket boundary now carries **ACP-shaped JSON-RPC messages**; the current browser client still reduces them into the existing `SessionEvent`/UI view-model as a migration step.
   - Session runtimes are automatically stopped after the last websocket client leaves and the room stays idle past a short grace period.
 - **Screens (`src/client/screens`)**:
   - `AgentSelectionScreen.tsx`: choose an agent; start new session or continue.
@@ -132,9 +135,8 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
   - `EnvironmentManager.ts`: global coordinator for environment availability and the 2×2 decision model; pushes offer/enter/exit/resolution events into subscribed rooms.
   - `types.ts`: `EnvironmentRecord`, `EnvironmentEventListener`, decision/helper types.
 - **Agent runtime layer (`src/server/agents`)**:
-  - `BaseAgent.ts`: shared lifecycle contract for start/restart/run/stop + session registration.
-  - `PiAgent.ts`: real Pi RPC bridge (spawn process, translate Pi events to unified session events).
-  - `MockAgent.ts`: deterministic fake agent for UI/testing flows.
+  - `BaseAgent.ts`: the generic ACP stdio subprocess runtime and lifecycle implementation.
+  - `PiAgent.ts`: thin Pi-specific adapter that launches `pi-acp` with Pi-oriented defaults and arguments.
   - `agentDiscovery.ts`: registry/factory for known agents + parent/child metadata.
   - `config/agentProfiles.ts`: loads configured agent profiles from `config/agent-profiles.json`.
   - `sessionLog.ts`: JSONL persistence for session records used to resume provider sessions.
@@ -144,7 +146,7 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
 - `EnvironmentDecisionStore.ts`: SQLite-backed store for persistent `approve` / `reject` decisions.
   - Current DB location: `.var/agent-station/environment-decisions.sqlite`
   - Drop it with `../scripts/drop-database.sh --yes`
-- `sessionEvents.ts`: persists sequenced per-session events under `.var/agent-station/session-events` and serves replay.
+- `sessionEvents.ts`: in-memory session event scaffolding for live fan-out while ACP-native replay cleanup is still being finished.
 - `sessionLog.ts`: stores provider/session restart metadata used to recreate stopped rooms.
 
 ### Other server pieces
@@ -201,6 +203,18 @@ The **`EnvironmentManager`** sits alongside the room manager. When a room is cre
 
 ## `src/test`
 - **Global test setup**: `test/setup.ts`
+
+## Debugging the bridge
+
+From the repo root:
+
+```bash
+./scripts/interact-with-remote-agent.sh --agent PiAgent --omit-deltas "hello"
+./scripts/interact-with-remote-agent.sh --raw-acp --agent PiAgent "hello"
+```
+
+- default mode prints the translated `SessionEvent` stream the current UI consumes
+- `--raw-acp` prints the raw ACP JSON-RPC messages on the boundary
 
 ## Commands
 

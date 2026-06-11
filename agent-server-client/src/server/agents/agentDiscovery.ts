@@ -1,9 +1,8 @@
 import { REPO_ROOT } from "../paths.js";
 import { AGENT_PROFILES } from "../config/agentProfiles.js";
-import { BaseAgent } from "./BaseAgent.js";
-import { MockAgent } from "./MockAgent.js";
-import { PiAgent, PiAgentOptions } from "./PiAgent.js";
-import { AgentRestartMetadata } from "./sessionLog.js";
+import { BaseAgent, type BaseAgentOptions } from "./BaseAgent.js";
+import { PiAgent, type PiAgentOptions } from "./PiAgent.js";
+import type { AgentRestartMetadata } from "./sessionLog.js";
 
 export interface AgentDefinition {
   id: string;
@@ -31,12 +30,11 @@ function createPiAgent(restartMetadata: AgentRestartMetadata | undefined, option
   return new PiAgent(options, restartMetadata);
 }
 
+function createGenericAcpAgent(restartMetadata: AgentRestartMetadata | undefined, options: BaseAgentOptions): BaseAgent {
+  return new BaseAgent(options, restartMetadata);
+}
+
 const AGENT_REGISTRY: AgentRegistryEntry[] = [
-  {
-    id: "MockAgent",
-    parentId: null,
-    create: (restartMetadata) => new MockAgent(restartMetadata),
-  },
   {
     id: "PiAgent",
     parentId: null,
@@ -45,19 +43,39 @@ const AGENT_REGISTRY: AgentRegistryEntry[] = [
       agentName: "PiAgent",
       skillPaths: uniqueNonEmpty(options?.skillPaths),
       extensionPaths: uniqueNonEmpty(options?.extensionPaths),
-    } satisfies PiAgentOptions),
+    }),
   },
-  ...AGENT_PROFILES.map((profile): AgentRegistryEntry => ({
-    id: profile.id,
-    parentId: profile.parentId ?? "PiAgent",
-    create: (restartMetadata, options) => createPiAgent(restartMetadata, {
-      cwd: profile.cwd ?? REPO_ROOT,
-      args: profile.args,
-      agentName: profile.id,
-      skillPaths: uniqueNonEmpty([...(profile.skillPaths ?? []), ...(options?.skillPaths ?? [])]),
-      extensionPaths: uniqueNonEmpty([...(profile.extensionPaths ?? []), ...(options?.extensionPaths ?? [])]),
-    } satisfies PiAgentOptions),
-  })),
+  ...AGENT_PROFILES.map((profile): AgentRegistryEntry => {
+    if (profile.type === "pi") {
+      return {
+        id: profile.id,
+        parentId: profile.parentId ?? "PiAgent",
+        create: (restartMetadata, options) => createPiAgent(restartMetadata, {
+          command: profile.command,
+          cwd: profile.cwd ?? REPO_ROOT,
+          args: profile.args,
+          agentName: profile.id,
+          skillPaths: uniqueNonEmpty([...(profile.skillPaths ?? []), ...(options?.skillPaths ?? [])]),
+          extensionPaths: uniqueNonEmpty([...(profile.extensionPaths ?? []), ...(options?.extensionPaths ?? [])]),
+          startupTimeoutMs: profile.startupTimeoutMs,
+        }),
+      };
+    }
+
+    return {
+      id: profile.id,
+      parentId: profile.parentId ?? null,
+      create: (restartMetadata) => createGenericAcpAgent(restartMetadata, {
+        command: profile.command ?? "node",
+        args: profile.args,
+        env: profile.env,
+        cwd: profile.cwd ?? REPO_ROOT,
+        sessionCwd: typeof restartMetadata?.cwd === "string" ? restartMetadata.cwd : (profile.cwd ?? REPO_ROOT),
+        agentName: profile.id,
+        startupTimeoutMs: profile.startupTimeoutMs,
+      }),
+    };
+  }),
 ];
 
 function findAgentEntry(id: string): AgentRegistryEntry | undefined {

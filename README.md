@@ -1,12 +1,12 @@
 # Agent Station
 
-Monorepo for local Pi agents, an event-native chat runtime, and host clients/providers.
+Monorepo for local Pi agents, an ACP-oriented chat runtime, and host clients/providers.
 
 ## Top-level packages
 
 | Package | Role |
 |---------|------|
-| [agent-server-client](agent-server-client/) | Main app at `:3000`: React UI, Fastify API, session/runtime orchestration, environment manager, and Pi bridge |
+| [agent-server-client](agent-server-client/) | Main app at `:3000`: React UI, Fastify API, session/runtime orchestration, environment manager, and ACP-backed Pi adapter |
 | [agent-station-chrome-extension](agent-station-chrome-extension/) | Chrome MV3 environment provider: recognizes supported sites, opens the localhost pane, and directly registers environment availability with Agent Station |
 | [agent-station-obsidian-extension](agent-station-obsidian-extension/) | Obsidian sidebar host for the `agent-server-client` app |
 | [dummy-client](dummy-client/) | Port-3000 postMessage debug stub |
@@ -17,7 +17,7 @@ Use the package READMEs above as the main lookup docs for each area.
 
 ## Quick start
 1. Install **pi.dev / Pi** first, and make sure the `pi` CLI is on your `PATH`.
-   Agent Station's default Pi-backed profile shells out to Pi directly; without that install, Pi agents will not start.
+   Agent Station's ACP-backed Pi adapter still shells out to `pi`; without that install, Pi agents will not start.
 2. Make sure the sibling agent package exists at `../my-agent/`.
    This repo expects that path relative to `agent-server-client/`, so the default profile resolves it as `rookery_ai/agent-server-client/../my-agent`.
 3. Install the main app deps:
@@ -44,19 +44,20 @@ Current default profile:
   "id": "MyPiAgent",
   "type": "pi",
   "parentId": "PiAgent",
-  "args": ["-e", "../my-agent", "--mode", "rpc"]
+  "args": ["-e", "../my-agent"]
 }
 ```
 
 What that means:
 - `id`: the agent name shown in Agent Station
-- `type: "pi"`: use the Pi bridge/runtime
-- `parentId: "PiAgent"`: inherit the built-in Pi-backed agent behavior
-- `args`: extra CLI args passed to Pi when Agent Station launches it
+- `type: "pi"`: use the built-in Pi-flavored ACP launcher
+- `parentId: "PiAgent"`: group this profile under the built-in Pi agent
+- `args`: extra arguments passed to `pi` before `pi-acp` adds its RPC/session flags
 
 The important bit is:
-- `-e ../my-agent` points Pi at the sibling agent package directory
-- `--mode rpc` tells Pi to run in RPC mode so Agent Station can talk to it
+- Rookery now talks to Pi through **ACP**, not Pi RPC directly
+- `-e ../my-agent` still points Pi at the sibling agent package directory
+- the Pi launch helper is now generated internally at runtime; there is no checked-in wrapper script to maintain
 
 ## `../my-agent/` layout
 `../my-agent/` is a separate sibling package, not part of this repo. Agent Station expects it to be your Pi agent/skills workspace.
@@ -74,6 +75,8 @@ In short:
 If you move or rename the sibling package, update `args` in `agent-profiles.json` accordingly.
 
 ## Helpful scripts
+- `./scripts/interact-with-remote-agent.sh --agent PiAgent --omit-deltas "hello"` — exercise the server/client bridge without the web UI
+- `./scripts/interact-with-remote-agent.sh --raw-acp --agent PiAgent "hello"` — inspect raw ACP JSON-RPC traffic on the bridge
 - `./scripts/inject-environment.sh demo:demo` — manually register an environment
 - `./scripts/drop-database.sh --yes` — drop the current Agent Station SQLite database
 
