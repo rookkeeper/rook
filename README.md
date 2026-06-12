@@ -9,6 +9,7 @@ Monorepo for local Pi agents, an ACP-oriented chat runtime, and host clients/pro
 | [agent-server-client](agent-server-client/) | Main app at `:3000`: React UI, Fastify API, session/runtime orchestration, environment manager, and ACP-backed Pi adapter |
 | [agent-station-chrome-extension](agent-station-chrome-extension/) | Chrome MV3 environment provider: recognizes supported sites, opens the localhost pane, and directly registers environment availability with Agent Station |
 | [agent-station-obsidian-extension](agent-station-obsidian-extension/) | Obsidian sidebar host for the `agent-server-client` app |
+| [agent-station-menu-bar-app-mac](agent-station-menu-bar-app-mac/) | Native SwiftUI macOS menu bar client with the full Agent Station feature set (agents, sessions, streaming chat, environment approvals) talking REST + ACP JSON-RPC to `:3000`; doubles as an environment provider that registers `app:<slug>` environments based on which Mac app is frontmost |
 | [dummy-client](dummy-client/) | Port-3000 postMessage debug stub |
 
 External dependency: a sibling Pi agent package at `../my-agent/` (not checked into this repo) provides the agent/skill environment referenced by the default Pi profile.
@@ -88,6 +89,7 @@ If you move or rename the sibling package, update `args` in `agent-profiles.json
 ## Monorepo notes
 - `agent-server-client/` owns the main npm deps and lockfile for the web app/server
 - `agent-station-obsidian-extension/` is a separate npm package
-- `environment-repository/` holds local environment-linked skill bundles
+- `agent-station-menu-bar-app-mac/` is a Swift/xcodegen package (not npm); build it with `xcodegen generate` + `xcodebuild` — see its [README](agent-station-menu-bar-app-mac/README.md) for exact run steps and menu-bar troubleshooting
+- `environment-repository/` holds local environment-linked skill bundles, keyed `<kind>/<path>` (`web/wikipedia`, `demo/demo`, and `app/<slug>` for Mac apps fronted by the menu bar provider)
 - `scripts/` holds repo-level utilities
 - `PRODUCT/` holds product notes and evolving architecture docs
