@@ -1,0 +1,32 @@
+name: AgentStationMenuBar
+options:
+  bundleIdPrefix: com.rookery
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGN_IDENTITY: "-"
+    SWIFT_VERSION: "5.9"
+    SWIFT_STRICT_CONCURRENCY: minimal
+targets:
+  AgentStationMenuBar:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rookery.AgentStationMenuBar
+        PRODUCT_NAME: AgentStationMenuBar
+        INFOPLIST_FILE: Sources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/AgentStationMenuBar.entitlements
+        ENABLE_HARDENED_RUNTIME: "NO"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+schemes:
+  AgentStationMenuBar:
+    build:
+      targets:
+        AgentStationMenuBar: all
+    run:
+      config: Debug
