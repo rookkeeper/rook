@@ -59,6 +59,8 @@ final class AgentStationModel: ObservableObject {
     @Published var foregroundAppName: String?
     @Published var foregroundWindowTitle: String?
     @Published var accessibilityTrusted = false
+    @Published var screenRecordingTrusted = false
+    @Published var computerControlEnabled = false
     @Published var bridgePort: UInt16 = 0
 
     let api = AgentStationAPI()
@@ -109,9 +111,11 @@ final class AgentStationModel: ObservableObject {
         foregroundMonitor.onContextRefresh = { [weak self] app, title in
             self?.handleContextRefresh(app: app, title: title)
         }
+        computerControlEnabled = UserDefaults.standard.bool(forKey: "EnableComputerControl")
         startBridge()
         foregroundMonitor.start()
         accessibilityTrusted = AXReader.isTrusted()
+        screenRecordingTrusted = ScreenCapturer.hasPermission()
         Task {
             await refreshHealth()
         }
@@ -812,7 +816,44 @@ final class AgentStationModel: ObservableObject {
                 return AXReader.focusedWindowText(pid: front.processIdentifier)
             }
         }
+        bridge.readAxElements = {
+            DispatchQueue.main.sync {
+                guard let front = NSWorkspace.shared.frontmostApplication,
+                      let elements = AXReader.actionableElements(pid: front.processIdentifier) else {
+                    return nil
+                }
+                return elements.enumerated().map { index, element in
+                    [
+                        "id": index,
+                        "role": element.role,
+                        "label": element.label,
+                        "x": element.x, "y": element.y,
+                        "width": element.width, "height": element.height,
+                        "centerX": element.x + element.width / 2,
+                        "centerY": element.y + element.height / 2,
+                    ]
+                }
+            }
+        }
+        bridge.captureScreenshot = {
+            guard let capture = ScreenCapturer.captureFrontmostWindow() else {
+                return nil
+            }
+            return [
+                "ok": true,
+                "png_base64": capture.pngBase64,
+                "pixelWidth": capture.pixelWidth,
+                "pixelHeight": capture.pixelHeight,
+                "originX": capture.originX,
+                "originY": capture.originY,
+                "scale": capture.scale,
+            ]
+        }
+        bridge.performInput = { object in
+            Self.performInput(object)
+        }
         bridge.start(port: chosen, token: token)
+        bridge.setControlEnabled(computerControlEnabled)
         bridgePort = chosen
         writeBridgeHandshake(port: chosen, token: token)
     }
@@ -875,6 +916,63 @@ final class AgentStationModel: ObservableObject {
                     foregroundMonitor.refreshTitleNow()
                     return
                 }
+            }
+        }
+    }
+
+    func requestScreenRecording() {
+        ScreenCapturer.requestPermission()
+        Task {
+            for _ in 0..<60 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if ScreenCapturer.hasPermission() {
+                    screenRecordingTrusted = true
+                    return
+                }
+            }
+        }
+    }
+
+    func setComputerControlEnabled(_ enabled: Bool) {
+        computerControlEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "EnableComputerControl")
+        bridge.setControlEnabled(enabled)
+        providerLog("computer control \(enabled ? "ENABLED" : "disabled")")
+    }
+
+    /// Translate an /input payload into a synthesized event. Runs the actual
+    /// posting on the main thread (NSScreen / event posting).
+    private static func performInput(_ object: [String: Any]) -> (ok: Bool, output: String) {
+        let action = (object["action"] as? String ?? "").lowercased()
+        return DispatchQueue.main.sync {
+            switch action {
+            case "move", "click", "doubleclick":
+                guard let x = (object["x"] as? NSNumber)?.doubleValue,
+                      let y = (object["y"] as? NSNumber)?.doubleValue else {
+                    return (false, "click/move requires numeric x,y")
+                }
+                let point = CGPoint(x: x, y: y)
+                switch action {
+                case "move": InputSynthesizer.move(to: point)
+                case "click": InputSynthesizer.click(at: point)
+                default: InputSynthesizer.click(at: point, double: true)
+                }
+                return (true, "\(action) at \(Int(x)),\(Int(y))")
+            case "type":
+                guard let text = object["text"] as? String else {
+                    return (false, "type requires 'text'")
+                }
+                InputSynthesizer.type(text)
+                return (true, "typed \(text.count) chars")
+            case "key":
+                guard let name = object["key"] as? String else {
+                    return (false, "key requires 'key'")
+                }
+                let modifiers = object["modifiers"] as? [String] ?? []
+                let ok = InputSynthesizer.key(name, modifiers: modifiers)
+                return (ok, ok ? "pressed \(name)" : "unknown key '\(name)'")
+            default:
+                return (false, "unknown action '\(action)' (use move|click|doubleClick|type|key)")
             }
         }
     }

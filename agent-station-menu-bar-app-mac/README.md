@@ -93,8 +93,44 @@ so an app's skill bundle simply documents these endpoints and the agent calls
 them. `POST /applescript` targeting another app triggers a one-time macOS
 Automation consent prompt (declared via `NSAppleEventsUsageDescription`).
 Centralizing these grants in one user-visible app is the point — Accessibility,
-Automation, and (later) Screen Recording are approved once here instead of
-being attributed to the node server's subprocesses.
+Automation, and Screen Recording are approved once here instead of being
+attributed to the node server's subprocesses.
+
+### Tier 4 — computer use (perception + control)
+
+For driving apps the way a person does. Two grounding strategies share one set
+of primitives:
+
+| Route | Body | Returns | Gate |
+|-------|------|---------|------|
+| `GET /ax-elements` | — | `{ ok, elements: [{ id, role, label, x, y, width, height, centerX, centerY }] }` | Accessibility |
+| `GET /screenshot` | — | `{ ok, png_base64, pixelWidth, pixelHeight, originX, originY, scale }` | Screen Recording |
+| `POST /input` | `{ action, … }` | `{ ok, output }` | **Computer Control toggle** + Accessibility |
+
+`/input` actions (coordinates are global top-left screen space, matching
+`/ax-elements` frames): `move`/`click`/`doubleClick` `{x,y}`, `type` `{text}`,
+`key` `{key, modifiers?}` (e.g. `{"key":"return","modifiers":["cmd"]}`).
+
+Two paths, by app:
+
+- **AX-driven control** (native apps, text-only models like DeepSeek V4 Pro):
+  read `/ax-elements`, pick one by `id`, `POST /input {action:"click", x:centerX,
+  y:centerY}`. No screenshot or vision model needed — the model reasons over the
+  element list as text.
+- **Pixel-vision control** (opaque apps with no useful AX tree, e.g. CapCut):
+  `GET /screenshot`, send the image to a vision-grounding model (e.g. DeepSeek
+  V4 Vision), map its chosen pixel back to screen coords via the returned
+  `originX/originY/scale`, then `POST /input`. *Sending the screenshot into the
+  model's context requires image content blocks in the ACP layer (the server
+  protocol is currently text-only); that's the remaining server-side change for
+  this path.*
+
+**Safety.** `/input` is gated behind an explicit **Computer Control** toggle in
+the panel, off by default and persisted (`EnableComputerControl`). Input
+coordinates are clamped to the union of screen frames. The agent already has
+shell access (so it could `osascript`/`cliclick` regardless), but routing
+control through this one toggle gives a single, visible kill switch. Turn it off
+when you're not actively supervising.
 
 The shipped `environment-repository/app/slack/` bundle is a worked example:
 focusing Slack offers a skill that reads `/context` to learn the current

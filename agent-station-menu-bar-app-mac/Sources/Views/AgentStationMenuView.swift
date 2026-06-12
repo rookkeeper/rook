@@ -100,6 +100,7 @@ private struct HomeContent: View {
                 foregroundEnvironmentCard
             }
             awarenessCard
+            computerControlCard
             if model.currentSession != nil {
                 currentChatCard
             }
@@ -307,6 +308,60 @@ private struct HomeContent: View {
                     }
                     .buttonStyle(.plain)
                     .help("Open System Settings → Privacy → Accessibility")
+                    .pointingHandOnHover()
+                }
+            }
+        }
+    }
+
+    private var computerControlCard: some View {
+        PanelCard {
+            HStack(spacing: 8) {
+                Label("Computer Control", systemImage: "cursorarrow.rays")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { model.computerControlEnabled },
+                    set: { model.setComputerControlEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(PanelPalette.accent)
+            }
+
+            Text(model.computerControlEnabled
+                 ? "The agent can move the mouse, click, and type in the frontmost app."
+                 : "Off — the agent can read context but cannot drive the mouse/keyboard.")
+                .font(.caption)
+                .foregroundStyle(model.computerControlEnabled ? PanelPalette.warning : PanelPalette.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Image(systemName: model.screenRecordingTrusted ? "checkmark.shield.fill" : "exclamationmark.shield")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(model.screenRecordingTrusted ? PanelPalette.success : PanelPalette.warning)
+                Text(model.screenRecordingTrusted
+                     ? "Screen Recording granted — screenshots available"
+                     : "Screen Recording needed for screenshot (vision) grounding")
+                    .font(.caption)
+                    .foregroundStyle(PanelPalette.textMuted)
+                    .lineLimit(2)
+                Spacer(minLength: 4)
+                if !model.screenRecordingTrusted {
+                    Button {
+                        model.requestScreenRecording()
+                    } label: {
+                        Text("Grant")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(PanelPalette.accent))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open System Settings → Privacy → Screen Recording")
                     .pointingHandOnHover()
                 }
             }

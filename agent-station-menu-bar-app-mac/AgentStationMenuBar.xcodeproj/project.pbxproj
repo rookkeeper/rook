@@ -11,6 +11,7 @@
 		0525A743E9AC784FDBB588A7 /* EnvironmentOfferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */; };
 		0B134C58418DD780F5A12153 /* ChatBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA9F4DC6F40FA54C493ECBA /* ChatBlocks.swift */; };
 		148A0D946E42C6C58EF97504 /* ForegroundAppMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */; };
+		22D62BE8921A8A1065BB3036 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */; };
 		303C7501116183288AFFA73F /* AcpSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA5FC0B16784438A04FCC858 /* AcpSocket.swift */; };
 		4A2797C6E10B77C5D352C1A0 /* MacBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A57F522CD72686189387921 /* MacBridge.swift */; };
 		5013FB73E8873725D7C8ED04 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29D631BD7FB343852A8868D /* ChatView.swift */; };
@@ -18,6 +19,7 @@
 		75361889F735548AF074EB40 /* AgentStationAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F8489536E42DE01CDB2AD0 /* AgentStationAPI.swift */; };
 		7BCFCDD5525379A1346E0D06 /* AgentStationMenuBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85789DA4FC9AF18BF856AC0 /* AgentStationMenuBarApp.swift */; };
 		84563F332409FEE03AC989EF /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 213CD39046566E5774D58FD5 /* JSONValue.swift */; };
+		84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */; };
 		A08FF032D5689105E28BC656 /* ServerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */; };
 		BC54469993F0E265DF2FF83A /* AXReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666566F6A2304DA00C88DEB8 /* AXReader.swift */; };
 		D19B28ED4EA03FC306847F74 /* PanelComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E81B5AF9FD7C49311CD9F8D /* PanelComponents.swift */; };
@@ -30,7 +32,9 @@
 		250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
 		2A57F522CD72686189387921 /* MacBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBridge.swift; sourceTree = "<group>"; };
 		33D7EC80FA5DF7CCDEEC7EE1 /* ApiTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiTypes.swift; sourceTree = "<group>"; };
+		3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapturer.swift; sourceTree = "<group>"; };
 		56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundAppMonitor.swift; sourceTree = "<group>"; };
+		58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSynthesizer.swift; sourceTree = "<group>"; };
 		666566F6A2304DA00C88DEB8 /* AXReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXReader.swift; sourceTree = "<group>"; };
 		8DA9F4DC6F40FA54C493ECBA /* ChatBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBlocks.swift; sourceTree = "<group>"; };
 		8E81B5AF9FD7C49311CD9F8D /* PanelComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelComponents.swift; sourceTree = "<group>"; };
@@ -69,7 +73,9 @@
 				F8F8489536E42DE01CDB2AD0 /* AgentStationAPI.swift */,
 				666566F6A2304DA00C88DEB8 /* AXReader.swift */,
 				56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */,
+				58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */,
 				2A57F522CD72686189387921 /* MacBridge.swift */,
+				3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */,
 				12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */,
 			);
 			path = Services;
@@ -174,9 +180,11 @@
 				5013FB73E8873725D7C8ED04 /* ChatView.swift in Sources */,
 				0525A743E9AC784FDBB588A7 /* EnvironmentOfferView.swift in Sources */,
 				148A0D946E42C6C58EF97504 /* ForegroundAppMonitor.swift in Sources */,
+				22D62BE8921A8A1065BB3036 /* InputSynthesizer.swift in Sources */,
 				84563F332409FEE03AC989EF /* JSONValue.swift in Sources */,
 				4A2797C6E10B77C5D352C1A0 /* MacBridge.swift in Sources */,
 				D19B28ED4EA03FC306847F74 /* PanelComponents.swift in Sources */,
+				84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */,
 				A08FF032D5689105E28BC656 /* ServerController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

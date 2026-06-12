@@ -16,13 +16,26 @@ final class MacBridge {
     var runAppleScript: ((String) -> (ok: Bool, output: String))?
     var openURL: ((String) -> Bool)?
     var readWindowText: (() -> String?)?
+    var readAxElements: (() -> [[String: Any]]?)?
+    var captureScreenshot: (() -> [String: Any]?)?
+    var performInput: (([String: Any]) -> (ok: Bool, output: String))?
 
     private let queue = DispatchQueue(label: "com.rookery.mac-bridge")
     private var listener: NWListener?
     private let lock = NSLock()
     private var contextJSON = Data("{}".utf8)
+    private var controlEnabled = false
     private(set) var port: UInt16 = 0
     private var token = ""
+
+    /// Gates the mutating /input route. Off by default; the user flips it from
+    /// the panel. Perception routes (/screenshot, /ax-elements) are not gated by
+    /// this — only by their own OS permission.
+    func setControlEnabled(_ enabled: Bool) {
+        lock.lock()
+        controlEnabled = enabled
+        lock.unlock()
+    }
 
     /// `token` gates every route except /health. It is shared with the agent
     /// out-of-band via a 0600 file (see AgentStationModel.writeBridgeHandshake),
@@ -176,6 +189,29 @@ final class MacBridge {
         case ("GET", "/window-text"):
             let text = readWindowText?() ?? nil
             return response(body: jsonData(["ok": text != nil, "text": text ?? ""]))
+
+        case ("GET", "/ax-elements"):
+            let elements = readAxElements?() ?? nil
+            return response(body: jsonData(["ok": elements != nil, "elements": elements ?? []]))
+
+        case ("GET", "/screenshot"):
+            guard let capture = captureScreenshot?() ?? nil else {
+                return response(status: "403 Forbidden", body: jsonData(["ok": false, "error": "screen recording not permitted"]))
+            }
+            return response(body: jsonData(capture))
+
+        case ("POST", "/input"):
+            lock.lock()
+            let enabled = controlEnabled
+            lock.unlock()
+            guard enabled else {
+                return response(status: "403 Forbidden", body: jsonData(["ok": false, "error": "computer control disabled — enable it in the menu bar app"]))
+            }
+            guard let object = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any] else {
+                return response(status: "400 Bad Request", body: jsonData(["ok": false, "error": "invalid JSON"]))
+            }
+            let result = performInput?(object) ?? (ok: false, output: "input handler not ready")
+            return response(body: jsonData(["ok": result.ok, "output": result.output]))
 
         case ("POST", "/applescript"):
             guard let script = stringField("script", in: request.body) else {

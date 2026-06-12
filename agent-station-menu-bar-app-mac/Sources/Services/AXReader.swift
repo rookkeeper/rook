@@ -63,6 +63,108 @@ enum AXReader {
         return text.isEmpty ? nil : text
     }
 
+    struct ActionableElement {
+        let role: String
+        let label: String
+        let x: Int
+        let y: Int
+        let width: Int
+        let height: Int
+    }
+
+    /// Actionable UI elements of the focused window with their on-screen frames,
+    /// for the AX-driven control path: a text-only model (e.g. DeepSeek V4 Pro)
+    /// reads this list and picks one to click — no screenshot/vision needed.
+    /// Coordinates are global top-left screen space, matching CGEvent input.
+    static func actionableElements(pid: pid_t, maxElements: Int = 250, maxNodes: Int = 8_000) -> [ActionableElement]? {
+        guard isTrusted() else {
+            return nil
+        }
+        let appElement = AXUIElementCreateApplication(pid)
+        var windowRef: AnyObject?
+        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
+            if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+                return nil
+            }
+        }
+        guard let windowRef else {
+            return nil
+        }
+        var elements: [ActionableElement] = []
+        var nodeBudget = maxNodes
+        collectActionable(windowRef as! AXUIElement, into: &elements, max: maxElements, nodeBudget: &nodeBudget)
+        return elements
+    }
+
+    private static let actionableRoles: Set<String> = [
+        "AXButton", "AXLink", "AXTextField", "AXTextArea", "AXCheckBox",
+        "AXRadioButton", "AXMenuItem", "AXMenuButton", "AXPopUpButton",
+        "AXTabButton", "AXTab", "AXComboBox", "AXSlider", "AXDisclosureTriangle",
+    ]
+
+    private static func supportsPress(_ element: AXUIElement) -> Bool {
+        var actions: CFArray?
+        guard AXUIElementCopyActionNames(element, &actions) == .success,
+              let names = actions as? [String] else {
+            return false
+        }
+        return names.contains(kAXPressAction as String)
+    }
+
+    private static func frame(of element: AXUIElement) -> CGRect? {
+        var positionRef: AnyObject?
+        var sizeRef: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &positionRef) == .success,
+              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeRef) == .success else {
+            return nil
+        }
+        var point = CGPoint.zero
+        var size = CGSize.zero
+        AXValueGetValue(positionRef as! AXValue, .cgPoint, &point)
+        AXValueGetValue(sizeRef as! AXValue, .cgSize, &size)
+        guard size.width > 1, size.height > 1 else {
+            return nil
+        }
+        return CGRect(origin: point, size: size)
+    }
+
+    private static func collectActionable(
+        _ element: AXUIElement,
+        into elements: inout [ActionableElement],
+        max: Int,
+        nodeBudget: inout Int
+    ) {
+        guard nodeBudget > 0, elements.count < max else {
+            return
+        }
+        nodeBudget -= 1
+
+        let role = stringAttribute(element, kAXRoleAttribute as String) ?? ""
+        if (actionableRoles.contains(role) || supportsPress(element)), let rect = frame(of: element) {
+            let label = stringAttribute(element, kAXTitleAttribute as String)
+                ?? stringAttribute(element, kAXDescriptionAttribute as String)
+                ?? stringAttribute(element, kAXValueAttribute as String)
+                ?? ""
+            elements.append(ActionableElement(
+                role: role,
+                label: String(label.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120)),
+                x: Int(rect.origin.x),
+                y: Int(rect.origin.y),
+                width: Int(rect.size.width),
+                height: Int(rect.size.height)
+            ))
+        }
+
+        var childrenRef: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+              let children = childrenRef as? [AXUIElement] else {
+            return
+        }
+        for child in children {
+            collectActionable(child, into: &elements, max: max, nodeBudget: &nodeBudget)
+        }
+    }
+
     private static func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
         var value: AnyObject?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
