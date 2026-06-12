@@ -340,9 +340,7 @@ final class AgentStationModel: ObservableObject {
     func openAgentSessions(_ agentId: String) {
         sessions = []
         sessionsError = ""
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .sessions(agentId: agentId)
-        }
+        panelMode = .sessions(agentId: agentId)
         Task {
             await loadSessions(agentId: agentId)
         }
@@ -413,25 +411,19 @@ final class AgentStationModel: ObservableObject {
         }
         socket.connect(sessionId: session.id, webSocketURL: api.webSocketURL)
         if switchToChat {
-            withAnimation(.easeInOut(duration: 0.16)) {
-                panelMode = .chat
-            }
+            panelMode = .chat
         }
     }
 
     func goHome() {
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .home
-        }
+        panelMode = .home
     }
 
     func openChat() {
         guard currentSession != nil else {
             return
         }
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .chat
-        }
+        panelMode = .chat
     }
 
     // MARK: - Chat
@@ -1142,9 +1134,7 @@ final class AgentStationModel: ObservableObject {
             }
             offerLoading = false
         }
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .environmentOffer
-        }
+        panelMode = .environmentOffer
     }
 
     private func handleEnvironmentOfferResolved(_ environmentId: String) {
@@ -1158,9 +1148,7 @@ final class AgentStationModel: ObservableObject {
         guard pendingOffer != nil else {
             return
         }
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .environmentOffer
-        }
+        panelMode = .environmentOffer
     }
 
     func decideEnvironment(_ decision: String) {
@@ -1182,9 +1170,7 @@ final class AgentStationModel: ObservableObject {
     }
 
     func dismissOfferView() {
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = currentSession != nil ? .chat : .home
-        }
+        panelMode = currentSession != nil ? .chat : .home
     }
 
     private func clearOfferAndReturn() {
