@@ -16,6 +16,7 @@ final class MacBridge {
     var runAppleScript: ((String) -> (ok: Bool, output: String))?
     var openURL: ((String) -> Bool)?
     var readWindowText: (() -> String?)?
+    var readScreenText: (() -> String?)?
     var readAxElements: (() -> [[String: Any]]?)?
     var captureScreenshot: (() -> [String: Any]?)?
     var performInput: (([String: Any]) -> (ok: Bool, output: String))?
@@ -188,6 +189,10 @@ final class MacBridge {
 
         case ("GET", "/window-text"):
             let text = readWindowText?() ?? nil
+            return response(body: jsonData(["ok": text != nil, "text": text ?? ""]))
+
+        case ("GET", "/screen-text"):
+            let text = readScreenText?() ?? nil
             return response(body: jsonData(["ok": text != nil, "text": text ?? ""]))
 
         case ("GET", "/ax-elements"):

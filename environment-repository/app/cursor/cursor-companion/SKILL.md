@@ -53,6 +53,13 @@ If the result looks like only toolbar/menu labels, wait ~1s and read again.
 For the exact contents of a large document, reading the file from disk is still
 more reliable than the AX tree.
 
+If `/window-text` stays sparse, fall back to OCR of the rendered screenshot —
+request-free, reads whatever is visible (needs Screen Recording granted):
+
+```bash
+curl -s http://127.0.0.1:8765/screen-text -H "Authorization: Bearer $TOKEN"
+```
+
 ## Driving Cursor (computer use, AX-driven)
 
 When the user asks you to *click* or *operate* Cursor's UI, use the

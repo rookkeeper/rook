@@ -836,6 +836,9 @@ final class AgentStationModel: ObservableObject {
                 }
             }
         }
+        bridge.readScreenText = {
+            ScreenCapturer.captureFrontmostWindowText()
+        }
         bridge.captureScreenshot = {
             guard let capture = ScreenCapturer.captureFrontmostWindow() else {
                 return nil

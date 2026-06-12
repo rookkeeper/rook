@@ -33,14 +33,49 @@ enum ScreenCapturer {
         let semaphore = DispatchSemaphore(value: 0)
         var result: Capture?
         Task {
-            result = await capture(maxLongSide: maxLongSide)
+            guard let (image, meta) = await captureImage(maxLongSide: maxLongSide) else {
+                semaphore.signal()
+                return
+            }
+            let bitmap = NSBitmapImageRep(cgImage: image)
+            if let png = bitmap.representation(using: .png, properties: [:]) {
+                result = Capture(
+                    pngBase64: png.base64EncodedString(),
+                    pixelWidth: image.width,
+                    pixelHeight: image.height,
+                    originX: meta.originX,
+                    originY: meta.originY,
+                    scale: meta.scale
+                )
+            }
             semaphore.signal()
         }
         semaphore.wait()
         return result
     }
 
-    private static func capture(maxLongSide: CGFloat) async -> Capture? {
+    /// Capture + on-device OCR of the frontmost window. Request-free screen
+    /// reading that survives bot detection and Chromium renderer limits.
+    static func captureFrontmostWindowText(maxLongSide: CGFloat = 2400) -> String? {
+        let semaphore = DispatchSemaphore(value: 0)
+        var text: String?
+        Task {
+            if let (image, _) = await captureImage(maxLongSide: maxLongSide) {
+                text = ScreenOCR.recognizeText(in: image)
+            }
+            semaphore.signal()
+        }
+        semaphore.wait()
+        return text
+    }
+
+    private struct CaptureMeta {
+        let originX: Int
+        let originY: Int
+        let scale: Double
+    }
+
+    private static func captureImage(maxLongSide: CGFloat) async -> (CGImage, CaptureMeta)? {
         guard hasPermission(),
               let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true) else {
             return nil
@@ -78,17 +113,10 @@ enum ScreenCapturer {
         guard let image = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config) else {
             return nil
         }
-        let bitmap = NSBitmapImageRep(cgImage: image)
-        guard let png = bitmap.representation(using: .png, properties: [:]) else {
-            return nil
-        }
-        return Capture(
-            pngBase64: png.base64EncodedString(),
-            pixelWidth: image.width,
-            pixelHeight: image.height,
+        return (image, CaptureMeta(
             originX: Int(originPoint.x),
             originY: Int(originPoint.y),
             scale: nativeScale * Double(fit)
-        )
+        ))
     }
 }

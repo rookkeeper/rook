@@ -20,6 +20,7 @@
 		7BCFCDD5525379A1346E0D06 /* AgentStationMenuBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85789DA4FC9AF18BF856AC0 /* AgentStationMenuBarApp.swift */; };
 		84563F332409FEE03AC989EF /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 213CD39046566E5774D58FD5 /* JSONValue.swift */; };
 		84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */; };
+		89F7CFCF7CC7ADB692165339 /* ScreenOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D6061688BD621BFB9EE467 /* ScreenOCR.swift */; };
 		A08FF032D5689105E28BC656 /* ServerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */; };
 		BC54469993F0E265DF2FF83A /* AXReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666566F6A2304DA00C88DEB8 /* AXReader.swift */; };
 		D19B28ED4EA03FC306847F74 /* PanelComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E81B5AF9FD7C49311CD9F8D /* PanelComponents.swift */; };
@@ -28,6 +29,7 @@
 
 /* Begin PBXFileReference section */
 		12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerController.swift; sourceTree = "<group>"; };
+		12D6061688BD621BFB9EE467 /* ScreenOCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenOCR.swift; sourceTree = "<group>"; };
 		213CD39046566E5774D58FD5 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
 		250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
 		2A57F522CD72686189387921 /* MacBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBridge.swift; sourceTree = "<group>"; };
@@ -76,6 +78,7 @@
 				58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */,
 				2A57F522CD72686189387921 /* MacBridge.swift */,
 				3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */,
+				12D6061688BD621BFB9EE467 /* ScreenOCR.swift */,
 				12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */,
 			);
 			path = Services;
@@ -185,6 +188,7 @@
 				4A2797C6E10B77C5D352C1A0 /* MacBridge.swift in Sources */,
 				D19B28ED4EA03FC306847F74 /* PanelComponents.swift in Sources */,
 				84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */,
+				89F7CFCF7CC7ADB692165339 /* ScreenOCR.swift in Sources */,
 				A08FF032D5689105E28BC656 /* ServerController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
