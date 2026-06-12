@@ -37,12 +37,12 @@ Prerequisites: Xcode, [xcodegen](https://github.com/yonaskolb/XcodeGen)
 
 ```zsh
 # 1. Start the Agent Station server (skip if it's already running)
-cd /Users/gdc/rookery
+cd <path-to-rookery>   # the repo root
 npm run dev
 # verify: curl http://127.0.0.1:3000/api/health  ->  {"ok":true,...}
 
 # 2. Generate the Xcode project and build the app
-cd /Users/gdc/rookery/agent-station-menu-bar-app-mac
+cd agent-station-menu-bar-app-mac
 xcodegen generate
 xcodebuild -project AgentStationMenuBar.xcodeproj \
   -scheme AgentStationMenuBar -configuration Debug build
