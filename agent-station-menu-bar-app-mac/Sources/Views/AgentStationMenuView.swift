@@ -96,6 +96,9 @@ private struct HomeContent: View {
             if model.pendingOffer != nil {
                 pendingOfferCard
             }
+            if model.foregroundEnvironmentId != nil {
+                foregroundEnvironmentCard
+            }
             if model.currentSession != nil {
                 currentChatCard
             }
@@ -224,6 +227,32 @@ private struct HomeContent: View {
         .buttonStyle(.plain)
         .help("Review environment offer")
         .pointingHandOnHover()
+    }
+
+    private var foregroundEnvironmentCard: some View {
+        PanelCard {
+            HStack(spacing: 9) {
+                Image(systemName: "macwindow.on.rectangle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(PanelPalette.accentHover)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle()
+                            .fill(PanelPalette.accent.opacity(0.18))
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(model.foregroundAppName ?? "App") environment")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text(model.foregroundEnvironmentId ?? "")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(PanelPalette.textMuted)
+                        .lineLimit(1)
+                }
+                Spacer()
+                StatusDot(tint: PanelPalette.success)
+            }
+        }
     }
 
     private var currentChatCard: some View {

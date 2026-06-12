@@ -29,6 +29,35 @@ WebSocket protocol.
 - **Server supervision** — health polling; if the server is down the panel can
   launch `npm run dev` for the repo and tail its log
   (`~/Library/Logs/AgentStationMenuBar/server.log`).
+- **Foreground-app environment provider** — the app is a third environment
+  provider alongside the Chrome extension and Obsidian plugin: it watches
+  which Mac app is frontmost (NSWorkspace activation notifications — no
+  Accessibility permission needed) and registers/unregisters `app:<slug>`
+  environments as you switch apps.
+
+## Foreground-app environments
+
+The on-disk repository is the registry: a foreground app maps to environment
+`app:<slug>` iff `environment-repository/app/<slug>/` exists at the repo root.
+Directory names are matched against the slugified app name ("Visual Studio
+Code" → `visual-studio-code`) and the app's bundle id (full, or its last
+component). To make a new app contextual, just add a skill bundle:
+
+```
+environment-repository/app/cursor/cursor-companion/SKILL.md
+```
+
+Switching to that app registers the environment (`POST
+/api/environments/register`); switching away ends the episode (`POST
+/api/environments/unavailable`), so "Allow this visit" naturally means "while
+this app stays in the foreground area of my work". Activations are debounced
+(700 ms) so ⌘-Tab flicker doesn't churn registrations, the app ignores its own
+activations (opening the panel doesn't end the episode), and the current
+environment is re-announced if the server restarts. Offers arrive over the
+session websocket like any other environment — the menu bar bird fills amber
+and the native approval view shows the skill files before anything loads.
+
+Provider activity is traced to `/tmp/agent-station-menubar.log` for debugging.
 
 ## Getting it running — exact steps
 

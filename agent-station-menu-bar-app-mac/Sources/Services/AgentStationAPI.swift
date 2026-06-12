@@ -93,6 +93,24 @@ struct AgentStationAPI {
         return body.skills
     }
 
+    func registerEnvironment(id: String, sourceName: String, metadata: [String: JSONValue]) async throws {
+        _ = try await postJSON(
+            path: "api/environments/register",
+            payload: .object([
+                "id": .string(id),
+                "sourceName": .string(sourceName),
+                "metadata": .object(metadata),
+            ])
+        )
+    }
+
+    func markEnvironmentUnavailable(id: String) async throws {
+        _ = try await postJSON(
+            path: "api/environments/unavailable",
+            payload: .object(["id": .string(id)])
+        )
+    }
+
     func decideEnvironment(environmentId: String, decision: String) async throws {
         _ = try await postJSON(
             path: "api/environments/decision",

@@ -53,9 +53,14 @@ final class AgentStationModel: ObservableObject {
     @Published var offerLoading = false
     @Published var offerError = ""
 
+    // Foreground-app environment provider
+    @Published var foregroundEnvironmentId: String?
+    @Published var foregroundAppName: String?
+
     let api = AgentStationAPI()
     private let socket = AcpSocket()
     private let serverController = ServerController()
+    private let foregroundMonitor = ForegroundAppMonitor()
     private var healthTimer: Timer?
     private var blockCounter = 0
     private var enteredEnvironments: Set<String> = []
@@ -93,6 +98,10 @@ final class AgentStationModel: ObservableObject {
                 await self?.refreshHealth()
             }
         }
+        foregroundMonitor.onForegroundChange = { [weak self] app in
+            self?.handleForegroundApp(app)
+        }
+        foregroundMonitor.start()
         Task {
             await refreshHealth()
         }
@@ -194,6 +203,7 @@ final class AgentStationModel: ObservableObject {
             serverState = .online
             if !wasOnline {
                 await loadAgents()
+                reannounceForegroundEnvironment()
                 await autoResumeRecentSessionIfNeeded()
             }
         } else if serverState != .starting || !managedServerRunning {
@@ -260,10 +270,19 @@ final class AgentStationModel: ObservableObject {
 
     func quitApp() {
         socket.disconnect()
-        if managedServerRunning {
-            serverController.stop()
+        foregroundMonitor.stop()
+        let environmentToRelease = foregroundEnvironmentId
+        Task {
+            // Best-effort: end the foreground episode so the server doesn't
+            // keep a stale availability after we're gone.
+            if let environmentToRelease {
+                try? await api.markEnvironmentUnavailable(id: environmentToRelease)
+            }
+            if managedServerRunning {
+                serverController.stop()
+            }
+            NSApplication.shared.terminate(nil)
         }
-        NSApplication.shared.terminate(nil)
     }
 
     // MARK: - Agents & sessions
@@ -663,6 +682,87 @@ final class AgentStationModel: ObservableObject {
             }
         }
         appendBlock(.plan(entries: entries))
+    }
+
+    // MARK: - Foreground-app environment provider
+
+    /// The on-disk repository is the registry: a foreground app maps to
+    /// environment `app:<slug>` iff `environment-repository/app/<slug>/`
+    /// exists. Matches the directory name against the slugified app name and
+    /// the (full or last-component) bundle id.
+    private func knownAppEnvironmentSlug(for app: ForegroundApp) -> String? {
+        let appKindRoot = ServerController.repoRoot
+            .appending(path: "environment-repository/app")
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: appKindRoot,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ) else {
+            return nil
+        }
+        let candidates = Set([
+            Self.slugify(app.name),
+            app.bundleId.lowercased(),
+            app.bundleId.components(separatedBy: ".").last?.lowercased() ?? "",
+        ])
+        for entry in entries where (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            if candidates.contains(entry.lastPathComponent.lowercased()) {
+                return entry.lastPathComponent
+            }
+        }
+        return nil
+    }
+
+    static func slugify(_ name: String) -> String {
+        name.lowercased()
+            .map { $0.isLetter || $0.isNumber ? String($0) : "-" }
+            .joined()
+            .split(separator: "-")
+            .joined(separator: "-")
+    }
+
+    private func handleForegroundApp(_ app: ForegroundApp) {
+        foregroundAppName = app.name
+        let environmentId = knownAppEnvironmentSlug(for: app).map { "app:\($0)" }
+        providerLog("foreground: \(app.name) [\(app.bundleId)] -> \(environmentId ?? "no environment")")
+        guard environmentId != foregroundEnvironmentId else {
+            return
+        }
+        let previous = foregroundEnvironmentId
+        foregroundEnvironmentId = environmentId
+        Task {
+            do {
+                if let previous {
+                    try await api.markEnvironmentUnavailable(id: previous)
+                    providerLog("unavailable ok: \(previous)")
+                }
+                if let environmentId {
+                    try await api.registerEnvironment(
+                        id: environmentId,
+                        sourceName: app.name,
+                        metadata: ["bundleId": .string(app.bundleId)]
+                    )
+                    providerLog("register ok: \(environmentId)")
+                }
+            } catch {
+                providerLog("provider error: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Re-announce the current foreground environment after the server comes
+    /// (back) up — registrations are in-memory server state and die with it.
+    private func reannounceForegroundEnvironment() {
+        guard let environmentId = foregroundEnvironmentId,
+              let app = foregroundMonitor.current else {
+            return
+        }
+        Task {
+            try? await api.registerEnvironment(
+                id: environmentId,
+                sourceName: app.name,
+                metadata: ["bundleId": .string(app.bundleId)]
+            )
+        }
     }
 
     // MARK: - Environment offers
