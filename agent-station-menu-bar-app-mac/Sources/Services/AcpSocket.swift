@@ -39,6 +39,24 @@ final class AcpSocket {
         teardown()
     }
 
+    /// Cancel the in-flight turn (ACP `session/cancel` notification). The
+    /// pending prompt then resolves with a cancellation error.
+    func sendCancel() {
+        guard let task, let sessionId else {
+            return
+        }
+        let frame: [String: Any] = [
+            "jsonrpc": "2.0",
+            "method": "session/cancel",
+            "params": ["sessionId": sessionId],
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: frame),
+              let json = String(data: data, encoding: .utf8) else {
+            return
+        }
+        task.send(.string(json)) { _ in }
+    }
+
     /// Intentional teardown is silent: `onConnectionChange(false)` is reserved
     /// for genuine transport failures, so replacing the socket (e.g. switching
     /// sessions) never looks like a connection loss to the model.

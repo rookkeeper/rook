@@ -139,6 +139,21 @@ export class BaseAgent {
     await this.stopImpl();
   }
 
+  /**
+   * Cancel the in-flight turn without tearing down the session: send the ACP
+   * `session/cancel` notification so the subprocess aborts and resolves the
+   * pending `session/prompt` with `stopReason: "cancelled"` (handled in
+   * `runImpl`). The process stays alive for the next prompt.
+   */
+  async cancel(): Promise<void> {
+    if (!this.process || !this.sessionIdValue) return;
+    try {
+      this.notify("session/cancel", { sessionId: this.sessionIdValue });
+    } catch {
+      // Best-effort cancellation.
+    }
+  }
+
   protected async start(): Promise<void> {
     await this.startProcess();
     await this.initialize();

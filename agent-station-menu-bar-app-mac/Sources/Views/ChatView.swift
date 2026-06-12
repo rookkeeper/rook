@@ -139,6 +139,23 @@ struct ChatDetail: View {
                 .foregroundStyle(statusTint)
                 .lineLimit(1)
             Spacer(minLength: 0)
+            if model.isRunning {
+                Button {
+                    model.stopAgent()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(PanelPalette.danger))
+                }
+                .buttonStyle(.plain)
+                .help("Stop the agent (⌘.)")
+                .keyboardShortcut(".", modifiers: .command)
+                .pointingHandOnHover()
+            }
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 2)

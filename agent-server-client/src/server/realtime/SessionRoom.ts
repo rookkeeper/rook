@@ -169,6 +169,11 @@ export class SessionRoom implements EnvironmentEventListener {
     await this.currentRuntime.agent.stop();
   }
 
+  /** Cancel the current turn but keep the session (subprocess) alive. */
+  async cancel(): Promise<void> {
+    await this.currentRuntime.agent.cancel();
+  }
+
   async publishEnvironmentEvent(event: EnvironmentEventPayload): Promise<void> {
     await this.publishSessionEvent(environmentPayloadToSessionEvent(event));
     await this.emitAcpEnvironmentEvent(event);

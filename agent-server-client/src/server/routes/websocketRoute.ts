@@ -24,6 +24,10 @@ function isPromptRequest(message: JsonRpcMessage): message is AcpPromptRequest {
   return "id" in message && "method" in message && message.method === "session/prompt";
 }
 
+function isCancelMessage(message: JsonRpcMessage): boolean {
+  return "method" in message && message.method === "session/cancel";
+}
+
 export async function registerWebsocketRoute(app: FastifyInstance, roomManager: SessionRoomManager): Promise<void> {
   app.get<{ Querystring: { sessionId?: string } }>("/api/ws", { websocket: true }, (socket, request) => {
     const sessionId = typeof request.query.sessionId === "string" ? request.query.sessionId.trim() : "";
@@ -78,6 +82,14 @@ export async function registerWebsocketRoute(app: FastifyInstance, roomManager: 
         message = JSON.parse(String(raw)) as JsonRpcMessage;
       } catch (error) {
         send(jsonRpcError(`Invalid websocket payload: ${errorMessage(error)}`));
+        return;
+      }
+
+      if (isCancelMessage(message)) {
+        // Cancel the in-flight turn; the pending prompt resolves with a
+        // "cancelled" error, keeping the session alive. No response (it's a
+        // JSON-RPC notification).
+        void room.cancel().catch(() => {});
         return;
       }
 

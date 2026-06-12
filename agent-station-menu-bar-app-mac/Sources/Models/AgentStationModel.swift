@@ -81,6 +81,7 @@ final class AgentStationModel: ObservableObject {
     private var blockCounter = 0
     private var enteredEnvironments: Set<String> = []
     private var spokenTurnBuffer = ""
+    private var userCancelledRun = false
     private var autoResumeAttempted = false
     private var reconnectTask: Task<Void, Never>?
     private var panelWindow: NSWindow?
@@ -450,6 +451,20 @@ final class AgentStationModel: ObservableObject {
         deliver(trimmed)
     }
 
+    /// Cancel the in-flight agent turn (keeps the session alive). The pending
+    /// prompt resolves with a cancellation error, which we render as a clean
+    /// "Stopped" rather than a failure.
+    func stopAgent() {
+        guard isRunning else {
+            return
+        }
+        userCancelledRun = true
+        statusLine = "Stopping…"
+        voice.stopSpeaking()
+        spokenTurnBuffer = ""
+        socket.sendCancel()
+    }
+
     func removeQueuedMessage(at index: Int) {
         guard queuedMessages.indices.contains(index) else {
             return
@@ -605,6 +620,7 @@ final class AgentStationModel: ObservableObject {
             finalizeStreamingBlocks()
             isRunning = false
             statusLine = ""
+            userCancelledRun = false
             // Speak the whole response once, only after the turn is done and the
             // text has rendered — not streamed sentence-by-sentence.
             if voiceModeEnabled, !spokenTurnBuffer.isEmpty {
@@ -617,7 +633,12 @@ final class AgentStationModel: ObservableObject {
             isRunning = false
             statusLine = ""
             spokenTurnBuffer = ""
-            appendErrorBlock(source: "run", message: message)
+            if userCancelledRun {
+                userCancelledRun = false
+                appendBlock(.system(text: "Stopped."))
+            } else {
+                appendErrorBlock(source: "run", message: message)
+            }
             deliverNextQueuedIfIdle()
         case .protocolError(let message):
             appendErrorBlock(source: "protocol", message: message)
