@@ -31,5 +31,9 @@
 	<string>Copyright © 2026 Rookery</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Agent Station drives other apps (e.g. opening a Slack channel) on your behalf when you approve an app environment.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Agent Station listens to your voice so you can talk to your agent hands-free.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Agent Station transcribes your speech on-device to send to your agent.</string>
 </dict>
 </plist>

@@ -16,8 +16,10 @@
 		4A2797C6E10B77C5D352C1A0 /* MacBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A57F522CD72686189387921 /* MacBridge.swift */; };
 		5013FB73E8873725D7C8ED04 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29D631BD7FB343852A8868D /* ChatView.swift */; };
 		62F792A4BB11B1532FC83A92 /* AgentStationMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFC502CF4A2C236C14ED9699 /* AgentStationMenuView.swift */; };
+		70870F01E8243EDFBB3969AE /* HotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8D23EC102A118F55B2C3B6 /* HotKey.swift */; };
 		75361889F735548AF074EB40 /* AgentStationAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F8489536E42DE01CDB2AD0 /* AgentStationAPI.swift */; };
 		7BCFCDD5525379A1346E0D06 /* AgentStationMenuBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85789DA4FC9AF18BF856AC0 /* AgentStationMenuBarApp.swift */; };
+		8238B67CD800928945EDBCAA /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E653A9EE4D362F78F1994C /* VoiceController.swift */; };
 		84563F332409FEE03AC989EF /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 213CD39046566E5774D58FD5 /* JSONValue.swift */; };
 		84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */; };
 		89F7CFCF7CC7ADB692165339 /* ScreenOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D6061688BD621BFB9EE467 /* ScreenOCR.swift */; };
@@ -45,9 +47,11 @@
 		C70105DE8F79656AA46C1D8D /* AgentStationMenuBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentStationMenuBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E85789DA4FC9AF18BF856AC0 /* AgentStationMenuBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationMenuBarApp.swift; sourceTree = "<group>"; };
 		EA5FC0B16784438A04FCC858 /* AcpSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcpSocket.swift; sourceTree = "<group>"; };
+		F1E653A9EE4D362F78F1994C /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
 		F3623927C6A687804E503EBD /* AgentStationMenuBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgentStationMenuBar.entitlements; sourceTree = "<group>"; };
 		F8F8489536E42DE01CDB2AD0 /* AgentStationAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationAPI.swift; sourceTree = "<group>"; };
 		F986D20F42993AC8162A32D1 /* AgentStationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationModel.swift; sourceTree = "<group>"; };
+		FF8D23EC102A118F55B2C3B6 /* HotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKey.swift; sourceTree = "<group>"; };
 		FFC502CF4A2C236C14ED9699 /* AgentStationMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationMenuView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -75,11 +79,13 @@
 				F8F8489536E42DE01CDB2AD0 /* AgentStationAPI.swift */,
 				666566F6A2304DA00C88DEB8 /* AXReader.swift */,
 				56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */,
+				FF8D23EC102A118F55B2C3B6 /* HotKey.swift */,
 				58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */,
 				2A57F522CD72686189387921 /* MacBridge.swift */,
 				3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */,
 				12D6061688BD621BFB9EE467 /* ScreenOCR.swift */,
 				12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */,
+				F1E653A9EE4D362F78F1994C /* VoiceController.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -183,6 +189,7 @@
 				5013FB73E8873725D7C8ED04 /* ChatView.swift in Sources */,
 				0525A743E9AC784FDBB588A7 /* EnvironmentOfferView.swift in Sources */,
 				148A0D946E42C6C58EF97504 /* ForegroundAppMonitor.swift in Sources */,
+				70870F01E8243EDFBB3969AE /* HotKey.swift in Sources */,
 				22D62BE8921A8A1065BB3036 /* InputSynthesizer.swift in Sources */,
 				84563F332409FEE03AC989EF /* JSONValue.swift in Sources */,
 				4A2797C6E10B77C5D352C1A0 /* MacBridge.swift in Sources */,
@@ -190,6 +197,7 @@
 				84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */,
 				89F7CFCF7CC7ADB692165339 /* ScreenOCR.swift in Sources */,
 				A08FF032D5689105E28BC656 /* ServerController.swift in Sources */,
+				8238B67CD800928945EDBCAA /* VoiceController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

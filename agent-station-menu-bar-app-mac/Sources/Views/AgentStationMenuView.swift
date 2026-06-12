@@ -100,6 +100,7 @@ private struct HomeContent: View {
                 foregroundEnvironmentCard
             }
             awarenessCard
+            voiceCard
             computerControlCard
             if model.currentSession != nil {
                 currentChatCard
@@ -312,6 +313,78 @@ private struct HomeContent: View {
                 }
             }
         }
+    }
+
+    private var voiceCard: some View {
+        PanelCard {
+            HStack(spacing: 8) {
+                Label("Voice", systemImage: "mic.fill")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { model.voiceModeEnabled },
+                    set: { model.setVoiceMode($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(PanelPalette.accent)
+            }
+
+            if model.voiceModeEnabled {
+                Button {
+                    model.toggleVoiceListening()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: model.voiceListening ? "waveform.circle.fill" : "mic.circle")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(model.voiceListening ? PanelPalette.danger : PanelPalette.accent)
+                            .symbolEffect(.pulse, isActive: model.voiceListening)
+                        Text(voiceStatusText)
+                            .font(.caption)
+                            .foregroundStyle(model.voiceListening ? PanelPalette.textNormal : PanelPalette.textMuted)
+                            .lineLimit(2)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(model.voiceListening ? PanelPalette.danger.opacity(0.14) : PanelPalette.backgroundPrimary.opacity(0.5))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(model.voiceListening ? PanelPalette.danger.opacity(0.5) : PanelPalette.border)
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("Press to talk (or ⌃⌥Space anywhere)")
+                .pointingHandOnHover()
+
+                Text(model.voiceAuthorized
+                     ? "Press to talk, or hit ⌃⌥Space from any app. Speak, pause, and the agent replies aloud."
+                     : "Voice needs Microphone + Speech Recognition permission.")
+                    .font(.caption2)
+                    .foregroundStyle(PanelPalette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Talk to your agent hands-free — speak and hear replies aloud.")
+                    .font(.caption)
+                    .foregroundStyle(PanelPalette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var voiceStatusText: String {
+        if model.voiceListening {
+            return model.voicePartial.isEmpty ? "Listening…" : model.voicePartial
+        }
+        if model.voiceSpeaking {
+            return "Speaking…"
+        }
+        return "Press to talk"
     }
 
     private var computerControlCard: some View {

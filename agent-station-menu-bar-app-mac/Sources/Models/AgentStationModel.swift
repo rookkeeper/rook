@@ -63,11 +63,20 @@ final class AgentStationModel: ObservableObject {
     @Published var computerControlEnabled = false
     @Published var bridgePort: UInt16 = 0
 
+    // Voice
+    @Published var voiceModeEnabled = false
+    @Published var voiceAuthorized = false
+    @Published var voiceListening = false
+    @Published var voiceSpeaking = false
+    @Published var voicePartial = ""
+
     let api = AgentStationAPI()
     private let socket = AcpSocket()
     private let serverController = ServerController()
     private let foregroundMonitor = ForegroundAppMonitor()
     private let bridge = MacBridge()
+    private let voice = VoiceController()
+    private let hotKey = HotKey()
     private var healthTimer: Timer?
     private var blockCounter = 0
     private var enteredEnvironments: Set<String> = []
@@ -112,6 +121,8 @@ final class AgentStationModel: ObservableObject {
             self?.handleContextRefresh(app: app, title: title)
         }
         computerControlEnabled = UserDefaults.standard.bool(forKey: "EnableComputerControl")
+        voiceModeEnabled = UserDefaults.standard.bool(forKey: "EnableVoiceMode")
+        setupVoice()
         startBridge()
         foregroundMonitor.start()
         accessibilityTrusted = AXReader.isTrusted()
@@ -286,6 +297,8 @@ final class AgentStationModel: ObservableObject {
         socket.disconnect()
         foregroundMonitor.stop()
         bridge.stop()
+        hotKey.stop()
+        voice.stopSpeaking()
         let environmentToRelease = foregroundEnvironmentId
         Task {
             // Best-effort: end the foreground episode so the server doesn't
@@ -522,6 +535,9 @@ final class AgentStationModel: ObservableObject {
         case .agentMessageChunk(let text):
             statusLine = "Responding…"
             appendStreamingText(text, isThinking: false)
+            if voiceModeEnabled {
+                voice.appendAssistantText(text)
+            }
         case .agentThoughtChunk(let text):
             statusLine = "Thinking…"
             appendStreamingText(text, isThinking: true)
@@ -587,6 +603,9 @@ final class AgentStationModel: ObservableObject {
             finalizeStreamingBlocks()
             isRunning = false
             statusLine = ""
+            if voiceModeEnabled {
+                voice.flushRemainder()
+            }
             deliverNextQueuedIfIdle()
         case .runFailed(let message):
             finalizeStreamingBlocks()
@@ -933,6 +952,79 @@ final class AgentStationModel: ObservableObject {
                     screenRecordingTrusted = true
                     return
                 }
+            }
+        }
+    }
+
+    // MARK: - Voice
+
+    private func setupVoice() {
+        voiceAuthorized = voice.authorized()
+        voice.onTranscript = { [weak self] text in
+            self?.handleVoiceTranscript(text)
+        }
+        voice.onListeningChanged = { [weak self] listening in
+            self?.voiceListening = listening
+            if !listening {
+                self?.voicePartial = ""
+            }
+        }
+        voice.onSpeakingChanged = { [weak self] speaking in
+            self?.voiceSpeaking = speaking
+        }
+        voice.onPartial = { [weak self] partial in
+            self?.voicePartial = partial
+        }
+        voice.onError = { [weak self] message in
+            self?.voicePartial = ""
+            self?.appendBlock(.system(text: "Voice: \(message)"))
+        }
+        hotKey.onTrigger = { [weak self] in
+            self?.toggleVoiceListening()
+        }
+        hotKey.start()
+    }
+
+    private func handleVoiceTranscript(_ text: String) {
+        // Show the spoken text as a user turn and route it to the agent.
+        if currentSession != nil {
+            send(text)
+        } else {
+            appendBlock(.system(text: "Heard \"\(text)\" — start a session first."))
+        }
+    }
+
+    func toggleVoiceListening() {
+        guard voiceModeEnabled else {
+            return
+        }
+        if !voice.authorized() {
+            requestVoicePermissions()
+            return
+        }
+        voice.toggleListening()
+    }
+
+    func setVoiceMode(_ enabled: Bool) {
+        voiceModeEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "EnableVoiceMode")
+        if enabled {
+            if !voice.authorized() {
+                requestVoicePermissions()
+            }
+        } else {
+            voice.stopSpeaking()
+            if voiceListening {
+                voice.stopListening(send: false)
+            }
+        }
+    }
+
+    func requestVoicePermissions() {
+        voice.requestPermissions { [weak self] granted in
+            self?.voiceAuthorized = granted
+            if !granted {
+                self?.appendBlock(.system(text: "Voice needs Microphone + Speech Recognition permission (System Settings → Privacy)."))
             }
         }
     }

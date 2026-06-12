@@ -35,6 +35,29 @@ WebSocket protocol.
   Accessibility permission needed) and registers/unregisters `app:<slug>`
   environments as you switch apps.
 
+## Voice (hands-free)
+
+Talk to your agent and hear it reply, without the input box. The loop runs
+locally in the menu bar app and reuses the existing agent websocket:
+
+1. **Speech → text** — Apple Speech (`SFSpeechRecognizer`), on-device on Apple
+   Silicon. Press-to-talk; a ~1.4 s pause ends your turn.
+2. The transcript is sent to the current session like any typed message.
+3. **Text → speech** — `AVSpeechSynthesizer` speaks the streamed reply
+   sentence-by-sentence (markdown/code stripped) as it arrives.
+
+Enable it on the **Voice** card, then **press to talk** there or hit
+**⌃⌥Space from any app** (global hotkey; uses the Accessibility grant). First
+use prompts for Microphone + Speech Recognition. Combined with Computer
+Control, you can speak a request and have the agent act on your screen and
+report back aloud — no typing.
+
+This is the local-first tier (free, private, no API). The quality knobs are
+swappable without touching the agent: drop in a cloud STT (Deepgram, Whisper)
+or a natural TTS (ElevenLabs, Cartesia) behind `VoiceController`, or front the
+whole thing with a realtime speech-to-speech model (OpenAI Realtime, Gemini
+Live) as an I/O layer that forwards to Agent Station as the brain.
+
 ## Foreground-app environments
 
 The on-disk repository is the registry: a foreground app maps to environment
