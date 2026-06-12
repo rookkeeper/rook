@@ -15,6 +15,7 @@ final class MacBridge {
     // Injected by the model; run on the bridge queue, hop to main themselves.
     var runAppleScript: ((String) -> (ok: Bool, output: String))?
     var openURL: ((String) -> Bool)?
+    var readWindowText: (() -> String?)?
 
     private let queue = DispatchQueue(label: "com.rookery.mac-bridge")
     private var listener: NWListener?
@@ -171,6 +172,10 @@ final class MacBridge {
             let data = contextJSON
             lock.unlock()
             return response(body: data)
+
+        case ("GET", "/window-text"):
+            let text = readWindowText?() ?? nil
+            return response(body: jsonData(["ok": text != nil, "text": text ?? ""]))
 
         case ("POST", "/applescript"):
             guard let script = stringField("script", in: request.body) else {

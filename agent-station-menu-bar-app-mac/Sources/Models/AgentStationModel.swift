@@ -804,6 +804,14 @@ final class AgentStationModel: ObservableObject {
                 NSWorkspace.shared.open(url)
             }
         }
+        bridge.readWindowText = {
+            DispatchQueue.main.sync {
+                guard let front = NSWorkspace.shared.frontmostApplication else {
+                    return nil
+                }
+                return AXReader.focusedWindowText(pid: front.processIdentifier)
+            }
+        }
         bridge.start(port: chosen, token: token)
         bridgePort = chosen
         writeBridgeHandshake(port: chosen, token: token)

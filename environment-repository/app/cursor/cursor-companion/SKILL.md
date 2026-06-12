@@ -19,3 +19,32 @@ When answering:
   Cmd+Shift+P (command palette), `.cursor/rules` for project AI rules.
 - If asked what app they're in, say Cursor — and mention the environment was
   provided by the foreground-app watcher, so they know the plumbing works.
+
+## Seeing what's on screen (Mac bridge)
+
+The menu bar app runs a local **authenticated** bridge so you can read what the
+user is currently looking at. Read the port + token once (a `0600` file your
+shell can read; a webpage cannot):
+
+```bash
+cat ~/.agent-station/mac-bridge.json   # { "port": 8765, "token": "<hex>", ... }
+```
+
+Send `Authorization: Bearer <token>` on every call. Two reads:
+
+```bash
+# Frontmost app + focused window title (e.g. the open file name)
+curl -s http://127.0.0.1:8765/context -H "Authorization: Bearer $TOKEN"
+
+# Visible text of the focused window via the Accessibility tree — the editor
+# contents, panel labels, open file, etc.
+curl -s http://127.0.0.1:8765/window-text -H "Authorization: Bearer $TOKEN"
+```
+
+When the user asks "what am I looking at?" or "what's on my screen?", call
+`/window-text` and answer from its `text`. If `text` is empty or `ok` is false,
+Accessibility isn't granted (ask them to click **Grant** on the Context Bridge
+card) — and note that Electron apps like Cursor expose their accessibility tree
+only partially, so you may see the open file name and UI chrome but not every
+character of a large document. For the exact file contents, just read the file
+from disk with your normal tools.

@@ -37,6 +37,17 @@ Always re-fetch `/context` before acting — the user may have switched channels
 If `windowTitle` is null, Accessibility isn't granted yet; ask the user to
 click **Grant** on the Context Bridge card in the menu bar app.
 
+To read the **messages currently on screen** (not just the channel name), pull
+the focused window's visible text from the Accessibility tree:
+
+```bash
+curl -s http://127.0.0.1:8765/window-text -H "Authorization: Bearer $TOKEN"
+# { "ok": true, "text": "<visible messages, sender names, timestamps, …>" }
+```
+
+Use this to summarize the conversation or draft a contextual reply. If `text`
+is empty, Accessibility isn't granted yet.
+
 ## Act: navigate Slack
 
 Open a channel or DM by deep link:
