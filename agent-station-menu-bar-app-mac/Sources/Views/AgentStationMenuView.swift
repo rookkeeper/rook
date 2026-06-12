@@ -588,6 +588,12 @@ private struct HomeContent: View {
             FooterIconButton(title: "Refresh", systemImage: "arrow.clockwise") {
                 model.refreshNow()
             }
+            FooterIconButton(
+                title: model.windowIsPinned ? "Close Companion Window" : "Keep Open as Companion",
+                systemImage: model.windowIsPinned ? "pin.slash" : "pin"
+            ) {
+                model.togglePinnedWindow()
+            }
             Spacer(minLength: 0)
             FooterIconButton(title: "Quit", systemImage: "xmark.circle") {
                 model.quitApp()

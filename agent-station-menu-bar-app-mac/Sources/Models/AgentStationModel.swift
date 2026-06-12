@@ -25,6 +25,12 @@ final class AgentStationModel: ObservableObject {
     // where the user left off after the MenuBarExtra window closes.
     @Published var panelMode: PanelMode = .home
 
+    // When pinned, the panel is detached into a floating companion window that
+    // stays over whatever app you're working in until you close it. The
+    // MenuBarExtra dropdown can't do that (AppKit dismisses it on focus loss),
+    // so "keep open" means promoting it to a real window.
+    @Published var windowIsPinned = false
+
     // Server / control plane
     @Published var serverState: ServerState = .unknown
     @Published var managedServerRunning = false
@@ -85,6 +91,7 @@ final class AgentStationModel: ObservableObject {
     private var autoResumeAttempted = false
     private var reconnectTask: Task<Void, Never>?
     private var panelWindow: NSWindow?
+    private let panelWindowDelegate = PanelWindowDelegate()
 
     init() {
         AgentStationModel.shared = self
@@ -275,24 +282,54 @@ final class AgentStationModel: ObservableObject {
         }
     }
 
+    /// Pin → detach the panel into a floating companion window; unpin → close it.
+    func togglePinnedWindow() {
+        if let panelWindow {
+            panelWindow.close()
+        } else {
+            openPanelWindow()
+        }
+    }
+
     func openPanelWindow() {
         if let panelWindow {
             panelWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            windowIsPinned = true
             return
         }
         let controller = NSHostingController(rootView: AgentStationMenuView(model: self))
         controller.sizingOptions = [.preferredContentSize]
-        let window = NSWindow(contentViewController: controller)
-        window.title = "Agent Station"
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
-        window.isReleasedWhenClosed = false
-        window.center()
-        window.makeKeyAndOrderFront(nil)
+        // A non-activating floating panel stays above other apps and is visible
+        // on every Space, so it can ride along as a companion while you work —
+        // and clicking into it (e.g. the chat composer) won't yank focus away
+        // from the app you're in.
+        let panel = NSPanel(contentViewController: controller)
+        panel.styleMask = [.titled, .closable, .fullSizeContentView, .nonactivatingPanel]
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        // .canJoinAllSpaces and .moveToActiveSpace are mutually exclusive —
+        // setting both makes NSWindow throw in _validateCollectionBehavior:.
+        // A companion panel should be visible on every Space, so keep the former.
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.hidesOnDeactivate = false
+        panel.title = "Agent Station"
+        panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .hidden
+        panel.isMovableByWindowBackground = true
+        panel.isReleasedWhenClosed = false
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
+        panelWindowDelegate.onClose = { [weak self] in
+            self?.panelWindow = nil
+            self?.windowIsPinned = false
+        }
+        panel.delegate = panelWindowDelegate
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        panelWindow = window
+        panelWindow = panel
+        windowIsPinned = true
     }
 
     func quitApp() {
