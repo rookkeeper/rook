@@ -21,11 +21,17 @@ final class MacBridge {
     private let lock = NSLock()
     private var contextJSON = Data("{}".utf8)
     private(set) var port: UInt16 = 0
+    private var token = ""
 
-    func start(port: UInt16) {
+    /// `token` gates every route except /health. It is shared with the agent
+    /// out-of-band via a 0600 file (see AgentStationModel.writeBridgeHandshake),
+    /// which a webpage cannot read — so DNS-rebinding/CSRF callers can't
+    /// authenticate even though they can reach the TCP port.
+    func start(port: UInt16, token: String) {
         guard listener == nil else {
             return
         }
+        self.token = token
         let params = NWParameters.tcp
         params.allowLocalEndpointReuse = true
         params.requiredLocalEndpoint = NWEndpoint.hostPort(
@@ -96,6 +102,7 @@ final class MacBridge {
     private struct ParsedRequest {
         let method: String
         let path: String
+        let headers: [String: String]   // keys lowercased
         let body: Data
     }
 
@@ -114,11 +121,16 @@ final class MacBridge {
         guard parts.count >= 2 else {
             return nil
         }
-        var contentLength = 0
-        for line in lines.dropFirst() where line.lowercased().hasPrefix("content-length:") {
-            let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
-            contentLength = Int(value) ?? 0
+        var headers: [String: String] = [:]
+        for line in lines.dropFirst() {
+            guard let colon = line.firstIndex(of: ":") else {
+                continue
+            }
+            let key = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            headers[key] = value
         }
+        let contentLength = Int(headers["content-length"] ?? "") ?? 0
         let bodyStart = headerEnd.upperBound
         let available = buffer.distance(from: bodyStart, to: buffer.endIndex)
         guard available >= contentLength else {
@@ -126,20 +138,39 @@ final class MacBridge {
         }
         let bodyEnd = buffer.index(bodyStart, offsetBy: contentLength)
         let body = buffer.subdata(in: bodyStart..<bodyEnd)
-        return ParsedRequest(method: parts[0], path: parts[1], body: body)
+        return ParsedRequest(method: parts[0], path: parts[1], headers: headers, body: body)
     }
 
     private func route(_ request: ParsedRequest) -> Data {
         let path = request.path.components(separatedBy: "?").first ?? request.path
+
+        // Liveness check — unauthenticated, leaks nothing sensitive.
+        if request.method == "GET", path == "/health" {
+            return response(body: jsonData(["ok": true, "service": "mac-bridge"]))
+        }
+
+        // DNS-rebinding guard: a rebound attacker domain leaves its own name in
+        // the Host header, not 127.0.0.1:<port>.
+        let allowedHosts: Set<String> = ["127.0.0.1:\(port)", "localhost:\(port)"]
+        guard let host = request.headers["host"], allowedHosts.contains(host) else {
+            return response(status: "403 Forbidden", body: jsonData(["error": "bad host"]))
+        }
+        // Browsers attach Origin to cross-origin requests; a legitimate local
+        // client (curl from the agent's shell) does not.
+        if request.headers["origin"] != nil {
+            return response(status: "403 Forbidden", body: jsonData(["error": "origin not allowed"]))
+        }
+        // Bearer token gates everything else.
+        guard Self.constantTimeEquals(request.headers["authorization"], "Bearer \(token)") else {
+            return response(status: "401 Unauthorized", body: jsonData(["error": "unauthorized"]))
+        }
+
         switch (request.method, path) {
         case ("GET", "/context"), ("GET", "/"):
             lock.lock()
             let data = contextJSON
             lock.unlock()
             return response(body: data)
-
-        case ("GET", "/health"):
-            return response(body: jsonData(["ok": true, "service": "mac-bridge"]))
 
         case ("POST", "/applescript"):
             guard let script = stringField("script", in: request.body) else {
@@ -165,6 +196,22 @@ final class MacBridge {
     private func stringField(_ key: String, in body: Data) -> String? {
         let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
         return object?[key] as? String
+    }
+
+    private static func constantTimeEquals(_ lhs: String?, _ rhs: String) -> Bool {
+        guard let lhs else {
+            return false
+        }
+        let a = Array(lhs.utf8)
+        let b = Array(rhs.utf8)
+        guard a.count == b.count else {
+            return false
+        }
+        var diff: UInt8 = 0
+        for i in 0..<a.count {
+            diff |= a[i] ^ b[i]
+        }
+        return diff == 0
     }
 
     private func jsonData(_ object: [String: Any]) -> Data {

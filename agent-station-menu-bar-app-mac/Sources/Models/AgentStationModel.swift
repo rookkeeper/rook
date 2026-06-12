@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Security
 import SwiftUI
 
 enum PanelMode: Equatable {
@@ -779,6 +780,7 @@ final class AgentStationModel: ObservableObject {
     private func startBridge() {
         let port = UInt16(UserDefaults.standard.integer(forKey: "MacBridgePort"))
         let chosen = port == 0 ? 8765 : port
+        let token = Self.randomToken()
         bridge.runAppleScript = { script in
             DispatchQueue.main.sync {
                 var error: NSDictionary?
@@ -790,15 +792,54 @@ final class AgentStationModel: ObservableObject {
             }
         }
         bridge.openURL = { urlString in
-            guard let url = URL(string: urlString) else {
+            // Deny schemes that can read local files or run script in other
+            // contexts; app deep links (https, slack, zoommtg, …) stay allowed.
+            let denied: Set<String> = ["file", "javascript", "data", "vbscript"]
+            guard let url = URL(string: urlString),
+                  let scheme = url.scheme?.lowercased(),
+                  !denied.contains(scheme) else {
                 return false
             }
             return DispatchQueue.main.sync {
                 NSWorkspace.shared.open(url)
             }
         }
-        bridge.start(port: chosen)
+        bridge.start(port: chosen, token: token)
         bridgePort = chosen
+        writeBridgeHandshake(port: chosen, token: token)
+    }
+
+    /// Share the port + bearer token with the agent out-of-band via a 0600 file
+    /// in the user's home dir. The agent's shell can read it; a webpage hitting
+    /// the loopback port cannot, so CSRF/DNS-rebinding callers can't authenticate.
+    private func writeBridgeHandshake(port: UInt16, token: String) {
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".agent-station")
+        let file = dir.appending(path: "mac-bridge.json")
+        do {
+            try FileManager.default.createDirectory(
+                at: dir,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+            let payload: [String: Any] = [
+                "port": Int(port),
+                "token": token,
+                "baseUrl": "http://127.0.0.1:\(port)",
+            ]
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
+            try data.write(to: file, options: [.atomic])
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        } catch {
+            providerLog("bridge handshake write failed: \(error.localizedDescription)")
+        }
+    }
+
+    private static func randomToken() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        if SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) != errSecSuccess {
+            bytes = (0..<32).map { _ in UInt8(truncatingIfNeeded: Int.random(in: 0...255)) }
+        }
+        return bytes.map { String(format: "%02x", $0) }.joined()
     }
 
     private func updateBridgeContext(app: ForegroundApp, title: String?, environmentId: String?) {

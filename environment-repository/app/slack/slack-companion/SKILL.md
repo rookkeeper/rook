@@ -6,16 +6,29 @@ description: Perceive and drive Slack while the user has it in the foreground. U
 # Slack Companion
 
 The user has **Slack** frontmost on their Mac. The Agent Station menu bar app
-exposes a local **Mac bridge** so you can perceive what they're looking at and
-drive the app. The bridge listens on `http://127.0.0.1:8765` (loopback only).
+exposes a local, **authenticated** Mac bridge so you can perceive what they're
+looking at and drive the app.
+
+## Authenticate first
+
+The bridge requires a per-launch bearer token, shared via a `0600` file only
+your shell (not a webpage) can read. Read the port and token once:
+
+```bash
+cat ~/.agent-station/mac-bridge.json
+# { "port": 8765, "token": "<hex>", "baseUrl": "http://127.0.0.1:8765" }
+```
+
+Send the token as `Authorization: Bearer <token>` on every request (all routes
+except `/health` require it). Requests must target `127.0.0.1`/`localhost` and
+must not carry an `Origin` header — plain `curl` satisfies both.
 
 ## Perceive: what is the user looking at?
 
-Call the bridge for live foreground context — the focused window title tells
-you the current channel/DM and workspace:
+The focused window title tells you the current channel/DM and workspace:
 
 ```bash
-curl -s http://127.0.0.1:8765/context
+curl -s http://127.0.0.1:8765/context -H "Authorization: Bearer $TOKEN"
 # {"frontmostApp":"Slack","bundleId":"com.tinyspeck.slackmacgap",
 #  "windowTitle":"#releases (SpecStory) - Slack","environmentId":"app:slack", ...}
 ```
@@ -30,7 +43,7 @@ Open a channel or DM by deep link:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8765/open-url \
-  -H 'content-type: application/json' \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"url":"slack://channel?team=TXXXX&id=CXXXX"}'
 ```
 
@@ -39,7 +52,7 @@ Automation consent prompt the user must approve):
 
 ```bash
 curl -s -X POST http://127.0.0.1:8765/applescript \
-  -H 'content-type: application/json' \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"script":"tell application \"Slack\" to activate"}'
 ```
 
