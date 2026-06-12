@@ -63,10 +63,26 @@ so you can cut it off and respond.
 
 **Better voice.** The app auto-selects the best installed English voice
 (premium → enhanced → default). macOS ships only low-quality voices by default
-(you'll get "Samantha"), so for a natural voice download a **Premium** one:
-System Settings → Accessibility → Spoken Content → System Voice → *Manage
-Voices…* → English → pick a *(Premium)* or Siri voice. The app uses it
-automatically; pin a specific one with `defaults write
+(you'll get "Samantha"), so for a natural voice download a **Premium** one.
+
+Downloading a Premium voice (macOS Sequoia / 15):
+
+1. **System Settings → Accessibility → Spoken Content.**
+2. On the **System Voice** row, click the **ⓘ info button** to the *right* of
+   the voice dropdown. (The dropdown itself only lists already-installed voices
+   and has **no** "Manage Voices…" entry in Sequoia — the ⓘ is the only path to
+   downloads.)
+3. In the sheet, expand **English (US)** and find a voice marked **(Premium)** —
+   e.g. **Ava, Zoe, Evan, Nathan**. Click the **cloud download icon ☁️**
+   (~100–500 MB each).
+4. That's it — you don't need to set it as the System Voice. The app re-picks
+   the best voice on every spoken reply, so the next reply uses it (no relaunch).
+
+> Older macOS (Ventura/Sonoma) had a "Manage Voices…" item at the bottom of the
+> System Voice dropdown; Sequoia replaced it with the ⓘ button.
+
+Premium voices are the neural, Siri-quality tier — a large step up from the
+default Samantha. Pin a specific one with `defaults write
 com.rookery.AgentStationMenuBar VoiceIdentifier <voice-id>`. For studio-quality
 voices, swap `VoiceController`'s synthesizer for a cloud TTS (ElevenLabs,
 Cartesia, OpenAI).
