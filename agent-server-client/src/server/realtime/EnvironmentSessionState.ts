@@ -2,11 +2,9 @@ import {
   ENVIRONMENT_OFFER_AVAILABLE_KIND,
   ENVIRONMENT_OFFER_RESOLVED_KIND,
 } from "../../shared/environment.js";
-import {
-  type EnvironmentEventPayload,
-  environmentPayloadToSessionEvent,
-  type OutboundRealtimeMessage,
-} from "../../shared/realtime.js";
+import type { EnvironmentEventPayload } from "../../shared/realtime.js";
+import type { AcpUpdateMessage } from "../../shared/realtime.js";
+import type { AcpSessionUpdateNotification } from "../../shared/acp.js";
 import type { EnvironmentOfferInfo, EnvironmentResolution } from "../environment/types.js";
 import type { RuntimeRebuilder, RoomRuntime } from "./SessionRoom.js";
 
@@ -60,15 +58,21 @@ export class EnvironmentSessionState {
     return [...new Set([...this.baseSkillPaths, ...[...this.environmentSkillPaths.values()].flat()])];
   }
 
-  pendingOfferMessages(sessionId: string, sequence: number): OutboundRealtimeMessage[] {
-    return [...this.pendingEnvironmentOffers.entries()].map(([environmentId, info]) => ({
-      type: "session_event",
-      sessionId,
-      sequence,
-      event: environmentPayloadToSessionEvent({
-        kind: ENVIRONMENT_OFFER_AVAILABLE_KIND,
-        payload: { environmentId, ...info },
-      }),
-    }));
+  pendingOfferMessages(sessionId: string): AcpUpdateMessage[] {
+    return [...this.pendingEnvironmentOffers.entries()].map(([environmentId, info]) => {
+      const notification: AcpSessionUpdateNotification = {
+        jsonrpc: "2.0",
+        method: "session/update",
+        params: {
+          sessionId,
+          update: {
+            sessionUpdate: "_rookery_environment_event",
+            kind: ENVIRONMENT_OFFER_AVAILABLE_KIND,
+            payload: { environmentId, ...info },
+          },
+        },
+      };
+      return { type: "acp_update", notification } as AcpUpdateMessage;
+    });
   }
 }

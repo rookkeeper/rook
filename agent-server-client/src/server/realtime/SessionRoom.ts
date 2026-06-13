@@ -1,10 +1,5 @@
-import {
-  type EnvironmentEventPayload,
-  type SessionEvent,
-  environmentPayloadToSessionEvent,
-  type OutboundRealtimeMessage,
-} from "../../shared/realtime.js";
-import type { AcpSessionUpdateNotification } from "../../shared/acp.js";
+import type { EnvironmentEventPayload } from "../../shared/realtime.js";
+import type { AcpUpdateMessage } from "../../shared/realtime.js";
 import {
   ENVIRONMENT_ENTERED_KIND,
   ENVIRONMENT_EXITED_KIND,
@@ -13,12 +8,12 @@ import type { EnvironmentEventListener, EnvironmentOfferInfo, EnvironmentResolut
 import type { BaseAgent } from "../agents/BaseAgent.js";
 import type { AgentSessionRecord } from "../agents/sessionLog.js";
 import { EnvironmentSessionState } from "./EnvironmentSessionState.js";
-import { RoomEventStream } from "./RoomEventStream.js";
+import { RoomEventStream, type RoomSubscriber } from "./RoomEventStream.js";
 
 /** Builds a fresh runtime for this session with the given skill paths (used for env restarts). */
 export type RuntimeRebuilder = (skillPaths: string[]) => Promise<RoomRuntime>;
 
-export type RoomSubscriber = (event: OutboundRealtimeMessage) => void;
+export type { RoomSubscriber };
 
 export interface RoomRuntime {
   session: AgentSessionRecord;
@@ -73,9 +68,6 @@ export class SessionRoom implements EnvironmentEventListener {
   }
 
   attachRuntimeEventSink(): void {
-    this.currentRuntime.agent.setEventSink((event) => {
-      void this.publishSessionEvent(event);
-    });
     this.currentRuntime.agent.setAcpEventSink((notification) => {
       void this.events.publishAcpUpdate(notification);
     });
@@ -153,9 +145,16 @@ export class SessionRoom implements EnvironmentEventListener {
         await this.currentRuntime.agent.run(message);
         return { ok: true } as const;
       } catch (error) {
-        const message = errorMessage(error);
-        await this.publishSessionEvent({ type: "run_failed", error: message });
-        return { ok: false, error: message } as const;
+        const errorMsg = errorMessage(error);
+        void this.events.publishAcpUpdate({
+          jsonrpc: "2.0",
+          method: "session/update",
+          params: {
+            sessionId: this.sessionId,
+            update: { sessionUpdate: "_rookery_run_failed", error: errorMsg },
+          },
+        } as never);
+        return { ok: false, error: errorMsg } as const;
       }
     };
     const pending = this.queue.then(run, run);
@@ -174,17 +173,7 @@ export class SessionRoom implements EnvironmentEventListener {
     await this.currentRuntime.agent.cancel();
   }
 
-  async publishEnvironmentEvent(event: EnvironmentEventPayload): Promise<void> {
-    await this.publishSessionEvent(environmentPayloadToSessionEvent(event));
-    await this.emitAcpEnvironmentEvent(event);
-  }
-
   async broadcastEnvironmentEvent(event: EnvironmentEventPayload): Promise<void> {
-    await this.events.broadcast(environmentPayloadToSessionEvent(event));
-    await this.emitAcpEnvironmentEvent(event);
-  }
-
-  private async emitAcpEnvironmentEvent(event: EnvironmentEventPayload): Promise<void> {
     await this.events.publishAcpUpdate({
       jsonrpc: "2.0",
       method: "session/update",
@@ -196,13 +185,9 @@ export class SessionRoom implements EnvironmentEventListener {
   }
 
   private emitPendingEnvironmentOffers(subscriber: RoomSubscriber): void {
-    for (const event of this.environmentState.pendingOfferMessages(this.sessionId, this.events.currentSequence)) {
-      subscriber(event);
+    for (const message of this.environmentState.pendingOfferMessages(this.sessionId)) {
+      subscriber(message);
     }
-  }
-
-  private async publishSessionEvent(sessionEvent: SessionEvent): Promise<void> {
-    await this.events.publish(sessionEvent);
   }
 
   private removeSubscriber(unsubscribe: () => void): void {

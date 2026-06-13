@@ -217,3 +217,15 @@ export interface AcpPermissionResponseResult {
 export type AcpPermissionResponse = JsonRpcSuccess<AcpPermissionResponseResult>;
 
 export type AcpServerMessage = AcpSessionUpdateNotification | AcpPromptResponse | AcpPermissionRequest | JsonRpcFailure;
+
+export function isJsonRpcSuccess(message: JsonRpcMessage): message is JsonRpcSuccess {
+  return "id" in message && "result" in message;
+}
+
+export function isJsonRpcFailure(message: JsonRpcMessage): message is JsonRpcFailure {
+  return "error" in message;
+}
+
+export function isJsonRpcNotification(message: JsonRpcMessage): message is JsonRpcNotification {
+  return "method" in message && !("id" in message);
+}

@@ -1,6 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
-import type { SessionEvent } from "../../shared/realtime.js";
 import type { AcpSessionUpdateNotification, JsonRpcFailure, JsonRpcId, JsonRpcMessage, JsonRpcRequest, JsonRpcSuccess } from "../../shared/acp.js";
 import { appendSessionRecord, createSessionRecord, type AgentRestartMetadata, type AgentSessionRecord } from "./sessionLog.js";
 
@@ -51,7 +50,6 @@ export class BaseAgent {
 
   private activeRunReject?: (error: Error) => void;
   private sessionName = "default";
-  private eventSink?: (event: SessionEvent) => void;
   private acpEventSink?: (notification: AcpSessionUpdateNotification) => void;
   private process: ChildProcessWithoutNullStreams | null = null;
   private startPromise: Promise<void> | null = null;
@@ -67,11 +65,6 @@ export class BaseAgent {
     this.restartMetadata = restartMetadata;
   }
 
-  setEventSink(eventSink: ((event: SessionEvent) => void) | undefined): void {
-    this.eventSink = eventSink;
-  }
-
-  /** Raw ACP session/update notifications bypass the SessionEvent translation layer. */
   setAcpEventSink(sink: ((notification: AcpSessionUpdateNotification) => void) | undefined): void {
     this.acpEventSink = sink;
   }
@@ -94,10 +87,6 @@ export class BaseAgent {
 
   protected createSessionRecord(restart: AgentRestartMetadata): AgentSessionRecord {
     return createSessionRecord({ agent: this.agentName, name: this.sessionName, restart });
-  }
-
-  protected emitSessionEvent(event: SessionEvent): void {
-    this.eventSink?.(event);
   }
 
   async run(userMessage: string): Promise<void> {
@@ -174,7 +163,6 @@ export class BaseAgent {
       this.isReplayingSessionLoad = false;
     }
     this.emitAcpUpdate({ sessionUpdate: "_rookery_assistant_message_completed" });
-    this.emitSessionEvent({ type: "assistant_message_completed" });
   }
 
   protected async registerSession(): Promise<AgentSessionRecord> {
@@ -203,7 +191,6 @@ export class BaseAgent {
 
     this.suppressUserMessageText = userMessage;
     this.emitAcpUpdate({ sessionUpdate: "user_message_chunk", content: { type: "text", text: userMessage } });
-    this.emitSessionEvent({ type: "user_message", text: userMessage, queued: false });
 
     const result = await this.sendRequest("session/prompt", {
       sessionId: this.sessionIdValue,
@@ -213,12 +200,10 @@ export class BaseAgent {
     const stopReason = isObject(result) && typeof result.stopReason === "string" ? result.stopReason : "end_turn";
     if (stopReason === "cancelled") {
       this.emitAcpUpdate({ sessionUpdate: "_rookery_run_failed", error: "ACP prompt was cancelled." });
-      this.emitSessionEvent({ type: "run_failed", error: "ACP prompt was cancelled." });
       throw new Error("ACP prompt was cancelled.");
     }
 
     this.emitAcpUpdate({ sessionUpdate: "_rookery_run_completed" });
-    this.emitSessionEvent({ type: "run_completed" });
   }
 
   protected async stopImpl(): Promise<void> {
@@ -261,7 +246,6 @@ export class BaseAgent {
       child.once("spawn", () => resolve());
       child.once("error", (error) => {
         this.emitAcpUpdate({ sessionUpdate: "_rookery_connection_error", error: error.message });
-        this.emitSessionEvent({ type: "connection_error", error: error.message });
         reject(error);
       });
 
@@ -271,7 +255,6 @@ export class BaseAgent {
         for (const pending of this.pendingRequests.values()) pending.reject(new Error(message));
         this.pendingRequests.clear();
         this.emitAcpUpdate({ sessionUpdate: "_rookery_connection_error", error: message });
-        this.emitSessionEvent({ type: "connection_error", error: message });
       });
     });
 
@@ -330,7 +313,6 @@ export class BaseAgent {
       message = JSON.parse(line) as JsonRpcMessage;
     } catch {
       this.emitAcpUpdate({ sessionUpdate: "_rookery_protocol_error", error: `ACP agent emitted non-JSON line: ${line}` });
-      this.emitSessionEvent({ type: "protocol_error", error: `ACP agent emitted non-JSON line: ${line}` });
       return;
     }
 
@@ -347,7 +329,7 @@ export class BaseAgent {
     if ("method" in message && message.method === "session/update") {
       if (this.shouldIgnoreServerMessage(message)) return;
 
-      // Forward raw ACP notification — subprocess content bypasses SessionEvent.
+      // Forward raw ACP notification directly.
       if (this.acpEventSink) {
         const update = (message as AcpSessionUpdateNotification).params?.update;
         const isOwnUserEcho =
@@ -362,7 +344,6 @@ export class BaseAgent {
 
     if ("method" in message && id !== undefined) {
       this.emitAcpUpdate({ sessionUpdate: "_rookery_protocol_error", error: `Unsupported ACP server request: ${message.method}` });
-      this.emitSessionEvent({ type: "protocol_error", error: `Unsupported ACP server request: ${message.method}` });
       if (this.process?.stdin.writable) {
         const response: JsonRpcFailure = {
           jsonrpc: "2.0",
@@ -378,7 +359,6 @@ export class BaseAgent {
     const trimmed = line.trim();
     if (!trimmed) return;
     this.emitAcpUpdate({ sessionUpdate: "_rookery_status_changed", status: "busy", message: trimmed });
-    this.emitSessionEvent({ type: "status_changed", status: "busy", message: trimmed });
   }
 
   protected attachJsonlReader(stream: NodeJS.ReadableStream, onLine: (line: string) => void): void {
@@ -399,7 +379,7 @@ export class BaseAgent {
       if (trailing) onLine(trailing);
     });
     stream.on("error", (error) => {
-      this.emitSessionEvent({ type: "connection_error", error: errorMessage(error) });
+      this.emitAcpUpdate({ sessionUpdate: "_rookery_connection_error", error: errorMessage(error) });
     });
   }
 

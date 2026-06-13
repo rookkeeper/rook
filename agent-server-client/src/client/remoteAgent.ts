@@ -1,7 +1,7 @@
 import { AgentBackend, AgentDefinition, AgentSessionSummary } from "./agent";
 import type { AcpClientEvent } from "./acpClientTypes";
 import type { AcpPromptResponse, AcpSessionUpdate, JsonRpcMessage } from "../shared/acp";
-import { isJsonRpcFailure, isJsonRpcNotification, isJsonRpcSuccess } from "./acpToSessionEvent";
+import { isJsonRpcFailure, isJsonRpcNotification, isJsonRpcSuccess } from "../shared/acp";
 
 export type RemoteSessionEvent = AcpClientEvent;
 

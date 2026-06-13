@@ -1,16 +1,9 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { SessionEvent } from "../../shared/realtime";
 import type { AcpSessionUpdateNotification } from "../../shared/acp";
 import { BaseAgent } from "./BaseAgent";
 
 const FIXTURE = path.resolve("src/server/agents/test-fixtures/mockAcpServer.mjs");
-
-function attachEventCollector(agent: BaseAgent): SessionEvent[] {
-  const events: SessionEvent[] = [];
-  agent.setEventSink((event) => events.push(event));
-  return events;
-}
 
 function collectAcp(agent: BaseAgent): AcpSessionUpdateNotification[] {
   const notifications: AcpSessionUpdateNotification[] = [];
@@ -19,7 +12,7 @@ function collectAcp(agent: BaseAgent): AcpSessionUpdateNotification[] {
 }
 
 describe("BaseAgent", () => {
-  it("starts a new ACP session and routes subprocess output through ACP passthrough", async () => {
+  it("starts a new ACP session and routes all events through ACP passthrough", async () => {
     const agent = new BaseAgent({
       command: "node",
       args: [FIXTURE],
@@ -27,17 +20,34 @@ describe("BaseAgent", () => {
       sessionCwd: path.resolve("."),
       agentName: "TestAcpAgent",
     });
-    const events = attachEventCollector(agent);
     const acp = collectAcp(agent);
 
     await agent.ensureStarted();
     await agent.run("hello");
 
     expect(agent.record?.restart).toEqual({ sessionId: "acp-session-1", cwd: path.resolve(".") });
-    // Server-synthesized events still go through SessionEvent
-    expect(events).toContainEqual({ type: "user_message", text: "hello", queued: false });
-    expect(events).toContainEqual({ type: "run_completed" });
-    // Subprocess content goes through ACP passthrough, not SessionEvent
+    // Server-synthesized user_message_chunk
+    expect(acp).toContainEqual(
+      expect.objectContaining({
+        method: "session/update",
+        params: expect.objectContaining({
+          update: expect.objectContaining({
+            sessionUpdate: "user_message_chunk",
+            content: { type: "text", text: "hello" },
+          }),
+        }),
+      }),
+    );
+    // Server-synthesized run_completed
+    expect(acp).toContainEqual(
+      expect.objectContaining({
+        method: "session/update",
+        params: expect.objectContaining({
+          update: expect.objectContaining({ sessionUpdate: "_rookery_run_completed" }),
+        }),
+      }),
+    );
+    // Subprocess agent_message_chunk
     const agentChunks = acp.filter((n) => {
       const u = n.params?.update as { sessionUpdate?: string };
       return u?.sessionUpdate === "agent_message_chunk";
@@ -90,7 +100,6 @@ describe("BaseAgent", () => {
       sessionId: "restored-session",
       cwd: path.resolve("."),
     });
-    const events = attachEventCollector(agent);
     const acp = collectAcp(agent);
 
     await agent.ensureStarted();

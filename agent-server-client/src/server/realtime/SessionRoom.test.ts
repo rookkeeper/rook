@@ -3,6 +3,7 @@ import { BaseAgent } from "../agents/BaseAgent.js";
 import type { AgentSessionRecord } from "../agents/sessionLog.js";
 import { SessionRoom } from "./SessionRoom.js";
 import { ENVIRONMENT_OFFER_AVAILABLE_KIND } from "../../shared/environment.js";
+import type { AcpUpdateMessage } from "../../shared/realtime.js";
 
 class TestAgent extends BaseAgent {
   constructor() {
@@ -51,21 +52,25 @@ describe("SessionRoom", () => {
     const room = createRoom(new TestAgent());
     room.onEnvironmentOffered("web:wikipedia", { sourceName: "Wikipedia" });
 
-    const seen: Array<{ type: string; sequence?: number; event?: unknown }> = [];
+    const seen: AcpUpdateMessage[] = [];
     const unsubscribe = room.subscribe((event) => {
-      seen.push({
-        type: event.type,
-        ...(typeof (event as { sequence?: number }).sequence === "number" ? { sequence: (event as { sequence: number }).sequence } : {}),
-        ...("event" in event ? { event: event.event } : {}),
-      });
+      seen.push(event);
     });
     unsubscribe();
 
     expect(seen).toEqual([
       {
-        type: "session_event",
-        sequence: 0,
-        event: { type: "environment_event", kind: ENVIRONMENT_OFFER_AVAILABLE_KIND, payload: { environmentId: "web:wikipedia", sourceName: "Wikipedia" } },
+        type: "acp_update",
+        notification: expect.objectContaining({
+          method: "session/update",
+          params: expect.objectContaining({
+            update: expect.objectContaining({
+              sessionUpdate: "_rookery_environment_event",
+              kind: ENVIRONMENT_OFFER_AVAILABLE_KIND,
+              payload: { environmentId: "web:wikipedia", sourceName: "Wikipedia" },
+            }),
+          }),
+        }),
       },
     ]);
   });
@@ -75,20 +80,16 @@ describe("SessionRoom", () => {
     room.onEnvironmentOffered("web:wikipedia", { sourceName: "Wikipedia" });
     room.onEnvironmentResolved("web:wikipedia", "approved");
 
-    const seen: Array<{ type: string; sequence?: number; event?: unknown }> = [];
+    const seen: AcpUpdateMessage[] = [];
     const unsubscribe = room.subscribe((event) => {
-      seen.push({
-        type: event.type,
-        ...(typeof (event as { sequence?: number }).sequence === "number" ? { sequence: (event as { sequence: number }).sequence } : {}),
-        ...("event" in event ? { event: event.event } : {}),
-      });
+      seen.push(event);
     });
     unsubscribe();
 
     expect(seen).toEqual([]);
   });
 
-  it("publishes run_failed directly to current subscribers when an agent run rejects", async () => {
+  it("publishes run_failed to current subscribers when an agent run rejects", async () => {
     class RejectingAgent extends TestAgent {
       protected override async runImpl(): Promise<void> {
         throw new Error("boom");
@@ -96,20 +97,28 @@ describe("SessionRoom", () => {
     }
 
     const room = createRoom(new RejectingAgent());
-    const seen: Array<{ type: string; sequence?: number; event?: unknown }> = [];
+    const seen: AcpUpdateMessage[] = [];
     const unsubscribe = room.subscribe((event) => {
-      seen.push({
-        type: event.type,
-        ...(typeof (event as { sequence?: number }).sequence === "number" ? { sequence: (event as { sequence: number }).sequence } : {}),
-        ...("event" in event ? { event: event.event } : {}),
-      });
+      seen.push(event);
     });
 
     await room.run("hello");
     unsubscribe();
 
     expect(seen).toEqual([
-      { type: "session_event", sequence: 1, event: { type: "run_failed", error: "boom" } },
+      {
+        type: "acp_update",
+        notification: expect.objectContaining({
+          method: "session/update",
+          params: expect.objectContaining({
+            sessionId: "s1",
+            update: expect.objectContaining({
+              sessionUpdate: "_rookery_run_failed",
+              error: "boom",
+            }),
+          }),
+        }),
+      },
     ]);
   });
 });

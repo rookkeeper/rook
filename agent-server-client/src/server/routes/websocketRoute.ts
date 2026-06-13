@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AcpPromptRequest, JsonRpcFailure, JsonRpcMessage, JsonRpcSuccess } from "../../shared/acp.js";
 import type { SessionRoomManager } from "../realtime/SessionRoomManager.js";
-import { translateSessionEventMessageToAcp } from "../realtime/sessionEventToAcp.js";
 import { errorMessage } from "../serverHelpers.js";
 
 function jsonRpcError(message: string, id: string | number | null = null, code = -32000): JsonRpcFailure {
@@ -57,8 +56,6 @@ export async function registerWebsocketRoute(app: FastifyInstance, roomManager: 
           send(event.notification);
           return;
         }
-        if (event.type !== "session_event") return;
-        for (const message of translateSessionEventMessageToAcp(event as never)) send(message);
       } catch {
         unsubscribe();
         socket.close();

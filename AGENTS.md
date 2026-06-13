@@ -59,5 +59,5 @@ Register an environment as available (while dev server is running):
 
 - Prints filtered lines to stdout as JSONL.
 - The session record is `{ "type": "session", "event": ... }` unless `--no-session`.
-- Session events are `{ "type": "session_event", "event": { "type": "...", ... } }`.
+- ACP messages are `{ "type": "acp_message", "event": ... }`.
 - HTTP replay (with `--replay`) is `{ "type": "replay", "event": ... }` unless `--no-replay`.

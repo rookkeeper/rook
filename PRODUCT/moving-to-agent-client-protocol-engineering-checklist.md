@@ -1,14 +1,15 @@
 # Moving to Agent Client Protocol — Engineering Checklist
 
-## Current checkpoint — Phase 3 complete
+## Current checkpoint — Phase 4 complete
 
-Client boundary is now ACP-native. The temporary ACP→SessionEvent translation layer
-on the client side has been removed. The reducer speaks ACP concepts directly
-(`agent_message_chunk`, `tool_call`, `tool_call_update`, etc.).
+Server-internal `SessionEvent` double-translation has been removed. Every event now
+flows through ACP directly from subprocess to WebSocket:
 
-`SessionEvent` still exists server-internally (BaseAgent → SessionRoom → WebSocket
-pipeline), creating a server-side double-translation (ACP→SE→ACP). That is Phase 4
-territory.
+- `BaseAgent` emits only via `emitAcpUpdate()` → `acpEventSink` → `RoomEventStream.publishAcpUpdate()`
+- `SessionRoom` no longer touches `SessionEvent` at all
+- `websocketRoute` only handles `acp_update` messages
+- Deleted: `sessionEventToAcp.ts`, `acpToSessionEvent.ts`, `SessionEvent` union,
+  `SessionEventMessage` type, `RoomEventStream.publish()`/`broadcast()`
 
 ## Immediate next to-dos
 
@@ -16,12 +17,7 @@ territory.
 2. ~~Do the ACP-only cleanup sweep~~ (zero legacy Pi-RPC / compatibility paths found)
 3. ~~Finish the non-native ACP adapter pass~~ (CursorAgent + CursorAutoAgent done)
 4. ~~Resume the internal migration checklist — UI/client-state cleanup~~ (Phase 3 client refactor complete)
-5. **Phase 4: remove server-internal SessionEvent double-translation**
-   - Currently: ACP subprocess → BaseAgent (ACP→SessionEvent) → SessionRoom →
-     `session_event` → `sessionEventToAcp.ts` (SessionEvent→ACP) → WebSocket
-   - Target: ACP subprocess → BaseAgent → ACP passthrough → WebSocket
-   - Remove `SessionEvent`, `RoomEventStream.session_event` envelope,
-     `sessionEventToAcp.ts` translation, `acpToSessionEvent.ts` server-side usage
+5. ~~Phase 4: remove server-internal SessionEvent double-translation~~ (complete)
 6. **Phase 5: richer ACP-native UI/UX** (conversation first)
    - permission prompts from `session/request_permission`
    - plans, usage/cost/context window display
@@ -29,6 +25,18 @@ territory.
    - stop-reason handling
 
 ## Recently completed
+
+- **Phase 4 — Server-internal SessionEvent removal**
+  - Removed `SessionEvent` union, `SessionEventMessage`, `session_event` envelope
+  - Deleted `sessionEventToAcp.ts` and `acpToSessionEvent.ts`
+  - Moved JSON-RPC utilities (`isJsonRpcSuccess`, `isJsonRpcFailure`, `isJsonRpcNotification`) to `shared/acp.ts`
+  - `BaseAgent` emits only via `emitAcpUpdate()` → `acpEventSink` → `RoomEventStream.publishAcpUpdate()`
+  - `SessionRoom` no longer wires `setEventSink` or publishes `SessionEvent`
+  - `websocketRoute` only handles `acp_update` messages
+  - Simplified `shared/realtime.ts` to just `EnvironmentEventPayload` + `AcpUpdateMessage`
+  - Cleaned up `RoomEventStream`: removed `publish()`, `broadcast()`, `sequence`
+  - Updated `pendingOfferMessages` to emit ACP notifications directly
+  - All 94 tests pass, TypeScript clean
 
 - **Phase 3 — ACP-native client reducer** (commit `2e1a445`)
   - Created `AcpClientEvent` union replacing `SessionEvent` on the client side

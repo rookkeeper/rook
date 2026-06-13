@@ -13,23 +13,28 @@ vi.mock("./agents/agentDiscovery.js", () => ({
   getAgentDefinitions: () => [],
   isKnownAgent: (id: string) => id === "PiAgent" || id === "MyPiOpenAiAgent" || id === "PiAgent",
   createAgent: agentDiscoveryMock.createAgentMock.mockImplementation((id: string, restart?: Record<string, unknown>) => {
-    let eventSink: ((event: Record<string, unknown>) => void) | undefined;
+    let acpEventSink: ((notification: Record<string, unknown>) => void) | undefined;
+
+    const emitAcp = (update: Record<string, unknown>) => {
+      acpEventSink?.({
+        jsonrpc: "2.0",
+        method: "session/update",
+        params: { sessionId: (id === "PiAgent" ? mockSession : myPiOpenAiSession).id, update },
+      });
+    };
 
     return {
       get record() {
         return id === "PiAgent" ? mockSession : { ...myPiOpenAiSession, agent: id, restart: restart ?? myPiOpenAiSession.restart };
       },
-      setEventSink(nextEventSink: ((event: Record<string, unknown>) => void) | undefined) {
-        eventSink = nextEventSink;
-      },
-      setAcpEventSink(_sink: ((_notification: unknown) => void) | undefined) {
-        // ACP passthrough — no-op in mock; SessionEvent path covers test needs.
+      setAcpEventSink(nextSink: ((_notification: unknown) => void) | undefined) {
+        acpEventSink = nextSink;
       },
       async ensureStarted() {
         if (restart?.sessionId) {
-          eventSink?.({ type: "user_message", text: "earlier question", queued: false });
-          eventSink?.({ type: "text_delta", delta: "earlier answer" });
-          eventSink?.({ type: "run_completed" });
+          emitAcp({ sessionUpdate: "user_message_chunk", content: { type: "text", text: "earlier question" } });
+          emitAcp({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "earlier answer" } });
+          emitAcp({ sessionUpdate: "_rookery_run_completed" });
         }
         return undefined;
       },
@@ -37,9 +42,9 @@ vi.mock("./agents/agentDiscovery.js", () => ({
         return undefined;
       },
       async run(message: string) {
-        eventSink?.({ type: "user_message", text: message, queued: false });
-        eventSink?.({ type: "text_delta", delta: "ok" });
-        eventSink?.({ type: "run_completed" });
+        emitAcp({ sessionUpdate: "user_message_chunk", content: { type: "text", text: message } });
+        emitAcp({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } });
+        emitAcp({ sessionUpdate: "_rookery_run_completed" });
       },
     };
   }),
