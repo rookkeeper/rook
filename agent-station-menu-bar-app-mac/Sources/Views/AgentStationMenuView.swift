@@ -11,34 +11,30 @@ struct AgentStationMenuView: View {
             switch model.panelMode {
             case .home:
                 HomeContent(model: model)
-                    .transition(detailTransition(edge: .leading))
             case .sessions(let agentId):
                 SessionsDetail(model: model, agentId: agentId)
-                    .transition(detailTransition(edge: .trailing))
             case .chat:
                 ChatDetail(model: model)
-                    .transition(detailTransition(edge: .trailing))
             case .environmentOffer:
                 EnvironmentOfferDetail(model: model)
-                    .transition(detailTransition(edge: .trailing))
             }
         }
         .padding(12)
         .frame(width: panelWidth, alignment: .topLeading)
         .background(PanelBackground())
         .environment(\.colorScheme, .dark)
-        .animation(.easeInOut(duration: 0.18), value: model.panelMode)
         .onAppear {
             model.refreshNow()
         }
     }
 
+    // Panel size is applied WITHOUT animation. Animating the hosting view's
+    // content size (here, the 372↔460 width on mode switches) makes AppKit
+    // resize the window mid–constraint-pass and trap inside
+    // NSHostingView.updateWindowContentSizeExtremaIfNecessary — crashing the
+    // app, including on launch when hosted in the companion NSPanel.
     private var panelWidth: CGFloat {
         model.panelMode == .home ? homePanelWidth : detailPanelWidth
-    }
-
-    private func detailTransition(edge: Edge) -> AnyTransition {
-        .move(edge: edge).combined(with: .opacity)
     }
 }
 
@@ -591,6 +587,12 @@ private struct HomeContent: View {
             }
             FooterIconButton(title: "Refresh", systemImage: "arrow.clockwise") {
                 model.refreshNow()
+            }
+            FooterIconButton(
+                title: model.windowIsPinned ? "Close Companion Window" : "Keep Open as Companion",
+                systemImage: model.windowIsPinned ? "pin.slash" : "pin"
+            ) {
+                model.togglePinnedWindow()
             }
             Spacer(minLength: 0)
             FooterIconButton(title: "Quit", systemImage: "xmark.circle") {

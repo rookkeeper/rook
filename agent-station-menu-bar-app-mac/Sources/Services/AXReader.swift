@@ -56,6 +56,55 @@ enum AXReader {
         return (title?.isEmpty == false) ? title : nil
     }
 
+    /// The active tab's URL for a Chromium/WebKit browser owning `pid`, read from
+    /// the focused window's AXWebArea (AXURL). Relies on the web-content tree, so
+    /// the browser should have been primed (it comes forward → primeAccessibility).
+    /// Returns nil for non-browsers or before the URL is exposed.
+    static func activeTabURL(pid: pid_t, maxNodes: Int = 600) -> String? {
+        guard isTrusted() else {
+            return nil
+        }
+        let appElement = AXUIElementCreateApplication(pid)
+        enableWebContentAccessibility(appElement)
+        var windowRef: AnyObject?
+        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
+            if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+                return nil
+            }
+        }
+        guard let windowRef else {
+            return nil
+        }
+        // Breadth-first: the web area sits near the top of the window subtree.
+        var queue: [AXUIElement] = [windowRef as! AXUIElement]
+        var budget = maxNodes
+        while !queue.isEmpty, budget > 0 {
+            let element = queue.removeFirst()
+            budget -= 1
+            if stringAttribute(element, kAXRoleAttribute as String) == "AXWebArea",
+               let url = urlAttribute(element, "AXURL") {
+                return url
+            }
+            var childrenRef: AnyObject?
+            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+               let children = childrenRef as? [AXUIElement] {
+                queue.append(contentsOf: children)
+            }
+        }
+        return nil
+    }
+
+    private static func urlAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
+        var value: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success, let value else {
+            return nil
+        }
+        if let url = value as? NSURL {
+            return url.absoluteString
+        }
+        return value as? String
+    }
+
     /// Visible text of the focused window, extracted by walking the
     /// Accessibility tree (value/title/description of each element). Gives the
     /// agent on-screen *content* — editor text, chat messages, labels — for

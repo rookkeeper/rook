@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		03BD5C7FA0B15F77C932DE37 /* ApiTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D7EC80FA5DF7CCDEEC7EE1 /* ApiTypes.swift */; };
 		0525A743E9AC784FDBB588A7 /* EnvironmentOfferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */; };
+		0A0B574B5D1329B7F84E21D0 /* SiteRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7C7467689A6968FCF1CD78 /* SiteRegistry.swift */; };
 		0B134C58418DD780F5A12153 /* ChatBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA9F4DC6F40FA54C493ECBA /* ChatBlocks.swift */; };
 		148A0D946E42C6C58EF97504 /* ForegroundAppMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */; };
 		22D62BE8921A8A1065BB3036 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */; };
@@ -40,6 +41,7 @@
 		56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundAppMonitor.swift; sourceTree = "<group>"; };
 		58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSynthesizer.swift; sourceTree = "<group>"; };
 		666566F6A2304DA00C88DEB8 /* AXReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXReader.swift; sourceTree = "<group>"; };
+		7B7C7467689A6968FCF1CD78 /* SiteRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteRegistry.swift; sourceTree = "<group>"; };
 		8DA9F4DC6F40FA54C493ECBA /* ChatBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBlocks.swift; sourceTree = "<group>"; };
 		8E81B5AF9FD7C49311CD9F8D /* PanelComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelComponents.swift; sourceTree = "<group>"; };
 		A069F1000D2ABAA2A0A5BB2A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -85,6 +87,7 @@
 				3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */,
 				12D6061688BD621BFB9EE467 /* ScreenOCR.swift */,
 				12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */,
+				7B7C7467689A6968FCF1CD78 /* SiteRegistry.swift */,
 				F1E653A9EE4D362F78F1994C /* VoiceController.swift */,
 			);
 			path = Services;
@@ -153,9 +156,10 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = AA1E49DB37EE969F7ED96AF6 /* Build configuration list for PBXProject "AgentStationMenuBar" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -165,6 +169,7 @@
 			mainGroup = 120304F0E89A7A3A55E77DC8;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 6531BA041A16E45440F35492 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -197,6 +202,7 @@
 				84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */,
 				89F7CFCF7CC7ADB692165339 /* ScreenOCR.swift in Sources */,
 				A08FF032D5689105E28BC656 /* ServerController.swift in Sources */,
+				0A0B574B5D1329B7F84E21D0 /* SiteRegistry.swift in Sources */,
 				8238B67CD800928945EDBCAA /* VoiceController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

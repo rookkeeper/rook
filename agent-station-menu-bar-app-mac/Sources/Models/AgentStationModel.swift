@@ -25,6 +25,12 @@ final class AgentStationModel: ObservableObject {
     // where the user left off after the MenuBarExtra window closes.
     @Published var panelMode: PanelMode = .home
 
+    // When pinned, the panel is detached into a floating companion window that
+    // stays over whatever app you're working in until you close it. The
+    // MenuBarExtra dropdown can't do that (AppKit dismisses it on focus loss),
+    // so "keep open" means promoting it to a real window.
+    @Published var windowIsPinned = false
+
     // Server / control plane
     @Published var serverState: ServerState = .unknown
     @Published var managedServerRunning = false
@@ -56,6 +62,10 @@ final class AgentStationModel: ObservableObject {
 
     // Foreground-app environment provider + Mac bridge (Tier 1/2)
     @Published var foregroundEnvironmentId: String?
+    // Per-site environment when a browser is frontmost on a recognized site
+    // (e.g. web:wikipedia), tracked independently of the per-app environment so
+    // both can be active at once.
+    @Published var foregroundSiteEnvironmentId: String?
     @Published var foregroundAppName: String?
     @Published var foregroundWindowTitle: String?
     @Published var accessibilityTrusted = false
@@ -85,6 +95,7 @@ final class AgentStationModel: ObservableObject {
     private var autoResumeAttempted = false
     private var reconnectTask: Task<Void, Never>?
     private var panelWindow: NSWindow?
+    private let panelWindowDelegate = PanelWindowDelegate()
 
     init() {
         AgentStationModel.shared = self
@@ -275,24 +286,54 @@ final class AgentStationModel: ObservableObject {
         }
     }
 
+    /// Pin → detach the panel into a floating companion window; unpin → close it.
+    func togglePinnedWindow() {
+        if let panelWindow {
+            panelWindow.close()
+        } else {
+            openPanelWindow()
+        }
+    }
+
     func openPanelWindow() {
         if let panelWindow {
             panelWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            windowIsPinned = true
             return
         }
         let controller = NSHostingController(rootView: AgentStationMenuView(model: self))
         controller.sizingOptions = [.preferredContentSize]
-        let window = NSWindow(contentViewController: controller)
-        window.title = "Agent Station"
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
-        window.isReleasedWhenClosed = false
-        window.center()
-        window.makeKeyAndOrderFront(nil)
+        // A non-activating floating panel stays above other apps and is visible
+        // on every Space, so it can ride along as a companion while you work —
+        // and clicking into it (e.g. the chat composer) won't yank focus away
+        // from the app you're in.
+        let panel = NSPanel(contentViewController: controller)
+        panel.styleMask = [.titled, .closable, .fullSizeContentView, .nonactivatingPanel]
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        // .canJoinAllSpaces and .moveToActiveSpace are mutually exclusive —
+        // setting both makes NSWindow throw in _validateCollectionBehavior:.
+        // A companion panel should be visible on every Space, so keep the former.
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.hidesOnDeactivate = false
+        panel.title = "Agent Station"
+        panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .hidden
+        panel.isMovableByWindowBackground = true
+        panel.isReleasedWhenClosed = false
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
+        panelWindowDelegate.onClose = { [weak self] in
+            self?.panelWindow = nil
+            self?.windowIsPinned = false
+        }
+        panel.delegate = panelWindowDelegate
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        panelWindow = window
+        panelWindow = panel
+        windowIsPinned = true
     }
 
     func quitApp() {
@@ -301,12 +342,12 @@ final class AgentStationModel: ObservableObject {
         bridge.stop()
         hotKey.stop()
         voice.stopSpeaking()
-        let environmentToRelease = foregroundEnvironmentId
+        let environmentsToRelease = [foregroundEnvironmentId, foregroundSiteEnvironmentId].compactMap { $0 }
         Task {
-            // Best-effort: end the foreground episode so the server doesn't
+            // Best-effort: end the foreground/site episodes so the server doesn't
             // keep a stale availability after we're gone.
-            if let environmentToRelease {
-                try? await api.markEnvironmentUnavailable(id: environmentToRelease)
+            for environmentId in environmentsToRelease {
+                try? await api.markEnvironmentUnavailable(id: environmentId)
             }
             if managedServerRunning {
                 serverController.stop()
@@ -340,9 +381,7 @@ final class AgentStationModel: ObservableObject {
     func openAgentSessions(_ agentId: String) {
         sessions = []
         sessionsError = ""
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .sessions(agentId: agentId)
-        }
+        panelMode = .sessions(agentId: agentId)
         Task {
             await loadSessions(agentId: agentId)
         }
@@ -413,25 +452,19 @@ final class AgentStationModel: ObservableObject {
         }
         socket.connect(sessionId: session.id, webSocketURL: api.webSocketURL)
         if switchToChat {
-            withAnimation(.easeInOut(duration: 0.16)) {
-                panelMode = .chat
-            }
+            panelMode = .chat
         }
     }
 
     func goHome() {
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .home
-        }
+        panelMode = .home
     }
 
     func openChat() {
         guard currentSession != nil else {
             return
         }
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .chat
-        }
+        panelMode = .chat
     }
 
     // MARK: - Chat
@@ -789,6 +822,7 @@ final class AgentStationModel: ObservableObject {
         let environmentId = knownAppEnvironmentSlug(for: app).map { "app:\($0)" }
         providerLog("foreground: \(app.name) [\(app.bundleId)] title=\(title ?? "nil") -> \(environmentId ?? "no environment")")
         updateBridgeContext(app: app, title: title, environmentId: environmentId)
+        reconcileSiteEnvironment(for: app)
         guard environmentId != foregroundEnvironmentId else {
             return
         }
@@ -818,12 +852,61 @@ final class AgentStationModel: ObservableObject {
         }
     }
 
-    /// In-app context change (e.g. switching Slack channels) — refresh the
-    /// bridge's live /context without re-registering the environment.
+    /// In-app context change (e.g. switching Slack channels, or navigating to a
+    /// new page/tab in a browser) — refresh the bridge's live /context and, for
+    /// browsers, re-resolve the per-site environment.
     private func handleContextRefresh(app: ForegroundApp, title: String?) {
         foregroundAppName = app.name
         foregroundWindowTitle = title
         updateBridgeContext(app: app, title: title, environmentId: foregroundEnvironmentId)
+        reconcileSiteEnvironment(for: app)
+    }
+
+    // MARK: - Per-site environment provider
+
+    /// Browsers whose active-tab URL we resolve to a per-site environment.
+    private static let browserBundleIds: Set<String> = [
+        "com.google.Chrome", "com.google.Chrome.beta", "com.google.Chrome.canary", "com.google.Chrome.dev",
+        "com.apple.Safari", "com.apple.SafariTechnologyPreview",
+        "company.thebrowser.Browser",
+        "com.brave.Browser", "com.brave.Browser.beta", "com.brave.Browser.nightly",
+        "com.microsoft.edgemac", "com.microsoft.edgemac.Beta",
+        "com.vivaldi.Vivaldi", "com.operasoftware.Opera",
+    ]
+
+    /// When a browser is frontmost on a recognized site, register `web:<slug>`
+    /// alongside the per-app environment; clear it when leaving the site/browser.
+    private func reconcileSiteEnvironment(for app: ForegroundApp) {
+        var match: SiteRegistry.Match?
+        if Self.browserBundleIds.contains(app.bundleId),
+           let url = AXReader.activeTabURL(pid: app.pid) {
+            match = SiteRegistry.match(url: url, repoRoot: ServerController.repoRoot)
+        }
+        let newSiteEnv = match?.environmentId
+        guard newSiteEnv != foregroundSiteEnvironmentId else {
+            return
+        }
+        let previous = foregroundSiteEnvironmentId
+        foregroundSiteEnvironmentId = newSiteEnv
+        providerLog("site: \(app.bundleId) -> \(newSiteEnv ?? "no site environment")")
+        Task {
+            do {
+                if let previous {
+                    try await api.markEnvironmentUnavailable(id: previous)
+                    providerLog("site unavailable ok: \(previous)")
+                }
+                if let newSiteEnv, let match {
+                    try await api.registerEnvironment(
+                        id: newSiteEnv,
+                        sourceName: match.sourceName,
+                        metadata: ["bundleId": .string(app.bundleId)]
+                    )
+                    providerLog("site register ok: \(newSiteEnv)")
+                }
+            } catch {
+                providerLog("site provider error: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Mac bridge (Tier 2)
@@ -1111,16 +1194,26 @@ final class AgentStationModel: ObservableObject {
     /// Re-announce the current foreground environment after the server comes
     /// (back) up — registrations are in-memory server state and die with it.
     private func reannounceForegroundEnvironment() {
-        guard let environmentId = foregroundEnvironmentId,
-              let app = foregroundMonitor.current else {
+        guard let app = foregroundMonitor.current else {
             return
         }
+        let environmentId = foregroundEnvironmentId
+        let siteEnvironmentId = foregroundSiteEnvironmentId
         Task {
-            try? await api.registerEnvironment(
-                id: environmentId,
-                sourceName: app.name,
-                metadata: ["bundleId": .string(app.bundleId)]
-            )
+            if let environmentId {
+                try? await api.registerEnvironment(
+                    id: environmentId,
+                    sourceName: app.name,
+                    metadata: ["bundleId": .string(app.bundleId)]
+                )
+            }
+            if let siteEnvironmentId {
+                try? await api.registerEnvironment(
+                    id: siteEnvironmentId,
+                    sourceName: siteEnvironmentId,
+                    metadata: ["bundleId": .string(app.bundleId)]
+                )
+            }
         }
     }
 
@@ -1142,9 +1235,7 @@ final class AgentStationModel: ObservableObject {
             }
             offerLoading = false
         }
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .environmentOffer
-        }
+        panelMode = .environmentOffer
     }
 
     private func handleEnvironmentOfferResolved(_ environmentId: String) {
@@ -1158,9 +1249,7 @@ final class AgentStationModel: ObservableObject {
         guard pendingOffer != nil else {
             return
         }
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = .environmentOffer
-        }
+        panelMode = .environmentOffer
     }
 
     func decideEnvironment(_ decision: String) {
@@ -1182,9 +1271,7 @@ final class AgentStationModel: ObservableObject {
     }
 
     func dismissOfferView() {
-        withAnimation(.easeInOut(duration: 0.16)) {
-            panelMode = currentSession != nil ? .chat : .home
-        }
+        panelMode = currentSession != nil ? .chat : .home
     }
 
     private func clearOfferAndReturn() {
@@ -1194,5 +1281,17 @@ final class AgentStationModel: ObservableObject {
         if panelMode == .environmentOffer {
             dismissOfferView()
         }
+    }
+}
+
+/// Forwards the companion panel's close (red button or unpin) back to the model
+/// so pin state stays in sync. A standalone NSObject because the model itself
+/// isn't NSObject-rooted and so can't be an NSWindowDelegate directly.
+@MainActor
+final class PanelWindowDelegate: NSObject, NSWindowDelegate {
+    var onClose: () -> Void = {}
+
+    func windowWillClose(_ notification: Notification) {
+        onClose()
     }
 }
