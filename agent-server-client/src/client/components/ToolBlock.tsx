@@ -37,9 +37,9 @@ export function ToolBlock({ block, forceExpanded = false, onOpenBlock }: Props) 
 
       {expanded && (
         <div className="cwa-tool-block__body">
-          {block.arguments.trim().length > 0 && (
+          {(block.arguments.length > 0 || (block.status !== "completed" && block.status !== "error")) && (
             <div className="cwa-tool-block__call">
-              <pre className="cwa-tool-block__args">{block.arguments}</pre>
+              <pre className="cwa-tool-block__args">{block.arguments || "(no input provided)"}</pre>
             </div>
           )}
           <div className={`cwa-tool-block__result${block.isError ? " cwa-tool-block__result--error" : ""}`}>

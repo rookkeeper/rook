@@ -150,6 +150,8 @@ function reducer(state: State, action: Action): State {
       const exists = state.blocks.some((b) => b.type === "toolBlock" && b.id === action.toolCallId);
       if (exists) return state;
 
+      // Normalize empty‑placeholder rawInput (legacy replay may still carry "{}").
+      const normalizedInput = (action.rawInput && action.rawInput !== "{}") ? action.rawInput : undefined;
       return {
         ...state,
         blocks: [
@@ -158,8 +160,8 @@ function reducer(state: State, action: Action): State {
             type: "toolBlock",
             id: action.toolCallId,
             name: action.toolName,
-            status: action.rawInput ? "input_streaming" : "ready",
-            arguments: action.rawInput ?? "",
+            status: normalizedInput ? "input_streaming" : "ready",
+            arguments: normalizedInput ?? "",
             argumentsStreaming: false,
             result: null,
             isError: false,
