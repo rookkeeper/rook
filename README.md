@@ -1,6 +1,8 @@
 # Agent Station
 
-Monorepo for local Pi agents, an ACP-oriented chat runtime, and host clients/providers.
+Monorepo for local Pi agents, an [Agent Client Protocol (ACP)](https://agentclientprotocol.com/get-started/introduction)-oriented chat runtime, and host clients/providers.
+
+ACP standardizes JSON-RPC between editors/clients and coding agents. Here, the browser (and macOS menu bar client) talk ACP over WebSocket to `:3000`; each agent runtime is an ACP stdio subprocess (`pi-acp`, Claude's `claude-agent-acp`, Cursor's `agent acp`, etc.). Product notes: [`PRODUCT/agent-client-protocol.md`](PRODUCT/agent-client-protocol.md).
 
 ## Top-level packages
 
