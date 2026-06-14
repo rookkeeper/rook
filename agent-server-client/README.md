@@ -1,6 +1,6 @@
 # Agent Station (agent-server-client)
 
-Web UI, Fastify API, and ACP-backed Pi adapter/runtime. Part of the [Agent Station](../README.md) monorepo. Product/architecture notes: [PRODUCT/](../PRODUCT/).
+Fastify API, runtime orchestration, and dev/static hosting for the new shared client. Part of the [Agent Station](../README.md) monorepo. Product/architecture notes: [PRODUCT/](../PRODUCT/).
 
 ## Quick start
 
@@ -15,13 +15,19 @@ npm install
 npm run dev
 ```
 
+Also install the new root client package once:
+
+```bash
+cd ../client && npm install
+```
+
 Or from the repo root:
 
 ```bash
 npm run dev
 ```
 
-That starts the main app/server on `http://127.0.0.1:3000`.
+That starts the backend and serves the new shared client on `http://127.0.0.1:3000`.
 
 ## Pi agent configuration
 
@@ -82,7 +88,7 @@ Generated Pi launch helpers are written under `.var/agent-station/generated/pi-l
 
 Terse map of `src/`:
 
-## `src/client` (web UI)
+## Legacy `src/client` (old web UI)
 - **App shell & entry**: `main.tsx`, `App.tsx`
 - **Transport layer**: `remoteAgent.ts`, `agent.ts`
   - `RemoteAgent` uses **HTTP for session control** and **WebSocket for in-session events**.
@@ -114,6 +120,8 @@ Terse map of `src/`:
   - `skillFiles.ts`: tree/file helpers for environment skill previews.
 - **Styling**: `styles/*`
 - **Client tests**: `*.test.ts(x)` files in `src/client`
+
+This UI is being replaced by the new root-level [`../client`](../client/) package. During this migration phase, this package still contains the older browser client source for reference and tests, but the Fastify app now prefers serving the new root `client/` package when it exists.
 
 ## `src/server` (Fastify backend)
 

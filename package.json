@@ -2,13 +2,13 @@
   "name": "agent-station",
   "version": "0.1.0",
   "private": true,
-  "description": "Agent Station monorepo orchestrator (scripts only; install deps in agent-server-client).",
+  "description": "Agent Station monorepo orchestrator (install deps in agent-server-client and client).",
   "scripts": {
     "dev": "npm run dev --prefix agent-server-client",
     "dev:dummy": "npm run dev:dummy --prefix agent-server-client",
-    "build": "npm run build --prefix agent-server-client",
+    "build": "npm run build --prefix client && npm run build --prefix agent-server-client",
     "start": "npm run start --prefix agent-server-client",
-    "typecheck": "npm run typecheck --prefix agent-server-client",
+    "typecheck": "npm run typecheck --prefix client && npm run typecheck --prefix agent-server-client",
     "test": "npm run test --prefix agent-server-client",
     "test:watch": "npm run test:watch --prefix agent-server-client",
     "agent:cli": "bash scripts/interact-with-remote-agent.sh"

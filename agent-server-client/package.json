@@ -6,7 +6,7 @@
   "description": "Agent Station web service with Fastify, Vite, and React.",
   "scripts": {
     "dev": "node ./node_modules/tsx/dist/cli.mjs src/server/index.ts",
-    "build": "node ./node_modules/typescript/bin/tsc --noEmit && node ./node_modules/vite/bin/vite.js build && node ./node_modules/typescript/bin/tsc -p tsconfig.server.json",
+    "build": "node ./node_modules/typescript/bin/tsc --noEmit && node ./node_modules/typescript/bin/tsc -p tsconfig.server.json",
     "start": "NODE_ENV=production node dist/server/server/index.js",
     "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit",
     "test": "node ./node_modules/vitest/vitest.mjs run",
