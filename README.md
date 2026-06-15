@@ -8,11 +8,12 @@ ACP standardizes JSON-RPC between editors/clients and coding agents. Here, the b
 
 | Package | Role |
 |---------|------|
-| [client](client/) | New shared client prototype at `:3000`: React Native-style UI on `react-native-web`, served by the existing Fastify backend; first step toward a shared web/iPhone/Android client |
-| [agent-server-client](agent-server-client/) | Current backend/runtime package: Fastify API, session/runtime orchestration, environment manager, ACP-backed Pi adapter, and static/dev hosting for the new shared client |
-| [agent-station-chrome-extension](agent-station-chrome-extension/) | Chrome MV3 environment provider: recognizes supported sites, opens the localhost pane, and directly registers environment availability with Agent Station |
-| [agent-station-obsidian-extension](agent-station-obsidian-extension/) | Obsidian sidebar host for the `agent-server-client` app |
-| [agent-station-menu-bar-app-mac](agent-station-menu-bar-app-mac/) | Native SwiftUI macOS menu bar client with the full Agent Station feature set (agents, sessions, streaming chat, environment approvals) talking REST + ACP JSON-RPC to `:3000`; doubles as an environment provider that registers `app:<slug>` environments based on which Mac app is frontmost |
+| [client](client/) | New shared client prototype at `:3000`: React Native-style UI on `react-native-web`, served by the existing Fastify backend; first step toward a shared web/iPhone client |
+| [shared](shared/) | Root shared contracts package for ACP/JSON-RPC types, environment DTOs, and agent/session DTOs used during the client migration |
+| [server](server/) | Backend/runtime package: Fastify API, session/runtime orchestration, environment manager, ACP-backed Pi adapter, and static/dev hosting for the client UI |
+| [agent-station-chrome-extension](agent-station-chrome-extension/) | Chrome MV3 environment provider: recognizes supported sites, opens the localhost pane, and directly registers environment availability with the rook server |
+| [agent-station-obsidian-extension](agent-station-obsidian-extension/) | Obsidian sidebar host for the client app
+| [agent-station-menu-bar-app-mac](agent-station-menu-bar-app-mac/) | Native SwiftUI macOS menu bar client with the full feature set (agents, sessions, streaming chat, environment approvals) talking REST + ACP JSON-RPC to `:3000`; doubles as an environment provider that registers `app:<slug>` environments based on which Mac app is frontmost |
 | [dummy-client](dummy-client/) | Port-3000 postMessage debug stub |
 
 External dependency: a sibling Pi agent package at `../my-agent/` (not checked into this repo) provides the agent/skill environment referenced by the default Pi profile.
@@ -23,10 +24,10 @@ Use the package READMEs above as the main lookup docs for each area.
 1. Install **pi.dev / Pi** first, and make sure the `pi` CLI is on your `PATH`.
    Agent Station's ACP-backed Pi adapter still shells out to `pi`; without that install, Pi agents will not start.
 2. Make sure the sibling agent package exists at `../my-agent/`.
-   This repo expects that path relative to `agent-server-client/`, so the default profile resolves it as `rookery_ai/agent-server-client/../my-agent`.
+   This repo expects that path relative to `server/`, so the default profile resolves it as `rookery_ai/server/../my-agent`.
 3. Install the backend deps:
    ```bash
-   cd agent-server-client && npm install
+   cd server && npm install
    ```
 4. Install the new shared client deps:
    ```bash
@@ -44,7 +45,7 @@ Use the package READMEs above as the main lookup docs for each area.
 
 ## Pi agent configuration
 Default Pi agent profiles live in:
-- `agent-server-client/config/agent-profiles.json`
+- `server/config/agent-profiles.json`
 
 Current default profile:
 ```json
@@ -82,7 +83,7 @@ Typical responsibilities there:
 - any Pi-specific config that belongs to the agent package itself
 
 In short:
-- configure **which Pi agent package to launch** in `agent-server-client/config/agent-profiles.json`
+- configure **which Pi agent package to launch** in `server/config/agent-profiles.json`
 - configure **the contents of that agent package** inside `../my-agent/`
 
 If you move or rename the sibling package, update `args` in `agent-profiles.json` accordingly.
@@ -94,8 +95,9 @@ If you move or rename the sibling package, update `args` in `agent-profiles.json
 - `./scripts/drop-database.sh --yes` — drop the current Agent Station SQLite database
 
 ## Monorepo notes
-- `agent-server-client/` currently owns the backend npm deps and lockfile
+- `server/` currently owns the backend npm deps and lockfile
 - `client/` is the new shared UI package and currently has its own npm deps
+- `shared/` holds cross-package protocol/domain contracts being extracted out of the old/new client split
 - `agent-station-obsidian-extension/` is a separate npm package
 - `agent-station-menu-bar-app-mac/` is a Swift/xcodegen package (not npm); build it with `xcodegen generate` + `xcodebuild` — see its [README](agent-station-menu-bar-app-mac/README.md) for exact run steps and menu-bar troubleshooting
 - `environment-repository/` holds local environment-linked skill bundles, keyed `<kind>/<path>` (`web/wikipedia`, `demo/demo`, and `app/<slug>` for Mac apps fronted by the menu bar provider)
