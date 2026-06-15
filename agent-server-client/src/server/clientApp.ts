@@ -3,12 +3,12 @@ import middie from "@fastify/middie";
 import fastifyStatic from "@fastify/static";
 import { createServer as createViteServer } from "vite";
 import path from "node:path";
-import { AGENT_CLIENT_ROOT } from "./paths.js";
+import { CLIENT_ROOT } from "./paths.js";
 import { isProduction } from "./serverPaths.js";
 
 export async function registerClientApp(app: FastifyInstance): Promise<void> {
   if (isProduction) {
-    const clientDist = path.join(AGENT_CLIENT_ROOT, "dist/client");
+    const clientDist = path.join(CLIENT_ROOT, "dist");
     await app.register(fastifyStatic, {
       root: clientDist,
       prefix: "/",
@@ -25,8 +25,8 @@ export async function registerClientApp(app: FastifyInstance): Promise<void> {
 
   await app.register(middie);
   const vite = await createViteServer({
-    root: AGENT_CLIENT_ROOT,
-    configFile: path.join(AGENT_CLIENT_ROOT, "vite.config.ts"),
+    root: CLIENT_ROOT,
+    configFile: path.join(CLIENT_ROOT, "vite.config.ts"),
     server: { middlewareMode: true },
     appType: "spa",
   });

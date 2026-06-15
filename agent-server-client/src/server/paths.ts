@@ -28,3 +28,10 @@ export const AGENT_CLIENT_ROOT = findAgentClientRoot(serverDir);
 
 /** Monorepo root (parent of `agent-server-client/`). */
 export const REPO_ROOT = path.resolve(AGENT_CLIENT_ROOT, "..");
+
+const preferredClientRoot = path.join(REPO_ROOT, "client");
+
+/** Preferred shared web client package root. Falls back to `agent-server-client/`. */
+export const CLIENT_ROOT = existsSync(path.join(preferredClientRoot, "package.json"))
+  ? preferredClientRoot
+  : AGENT_CLIENT_ROOT;
