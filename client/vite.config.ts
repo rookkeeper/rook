@@ -8,6 +8,11 @@ export default defineConfig({
       "react-native": "react-native-web",
     },
   },
+  server: {
+    fs: {
+      allow: [".."],
+    },
+  },
   build: {
     outDir: "dist",
     emptyOutDir: true,
