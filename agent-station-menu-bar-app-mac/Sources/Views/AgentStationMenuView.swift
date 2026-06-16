@@ -95,7 +95,7 @@ private struct HomeContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             identityRow
-            if model.foregroundEnvironmentId != nil {
+            if model.foregroundAppName != nil {
                 foregroundCaption
             }
             if model.pendingOffer != nil {
@@ -145,15 +145,25 @@ private struct HomeContent: View {
     }
 
     private var foregroundCaption: some View {
-        HStack(spacing: 6) {
+        let hasSkills = model.foregroundEnvironmentId != nil
+        return HStack(spacing: 6) {
             Image(systemName: "macwindow")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(PanelPalette.accentHover)
-            Text("In \(model.foregroundAppName ?? "app") — skills active")
+                .foregroundStyle(hasSkills ? PanelPalette.accentHover : PanelPalette.textMuted)
+            Text("In \(model.foregroundAppName ?? "app")")
                 .font(.caption2)
-                .foregroundStyle(PanelPalette.textMuted)
+                .fontWeight(.medium)
+                .foregroundStyle(PanelPalette.textNormal)
                 .lineLimit(1)
                 .truncationMode(.tail)
+            // Small dot + label distinguishing "skills loaded for this app" from
+            // "tracking it, but no skills defined".
+            Circle()
+                .fill(hasSkills ? PanelPalette.success : PanelPalette.textMuted.opacity(0.6))
+                .frame(width: 5, height: 5)
+            Text(hasSkills ? "skills active" : "no skills")
+                .font(.caption2)
+                .foregroundStyle(hasSkills ? PanelPalette.success : PanelPalette.textMuted)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
