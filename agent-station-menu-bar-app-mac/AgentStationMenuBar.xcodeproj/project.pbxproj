@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		03BD5C7FA0B15F77C932DE37 /* ApiTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D7EC80FA5DF7CCDEEC7EE1 /* ApiTypes.swift */; };
 		0525A743E9AC784FDBB588A7 /* EnvironmentOfferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */; };
+		08FC09CECF45795C522F9738 /* CapabilitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B62C4626ECA71521C6662C1 /* CapabilitiesView.swift */; };
 		0A0B574B5D1329B7F84E21D0 /* SiteRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7C7467689A6968FCF1CD78 /* SiteRegistry.swift */; };
 		0B134C58418DD780F5A12153 /* ChatBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA9F4DC6F40FA54C493ECBA /* ChatBlocks.swift */; };
 		148A0D946E42C6C58EF97504 /* ForegroundAppMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */; };
@@ -31,6 +32,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0B62C4626ECA71521C6662C1 /* CapabilitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilitiesView.swift; sourceTree = "<group>"; };
 		12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerController.swift; sourceTree = "<group>"; };
 		12D6061688BD621BFB9EE467 /* ScreenOCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenOCR.swift; sourceTree = "<group>"; };
 		213CD39046566E5774D58FD5 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
@@ -121,6 +123,7 @@
 			isa = PBXGroup;
 			children = (
 				FFC502CF4A2C236C14ED9699 /* AgentStationMenuView.swift */,
+				0B62C4626ECA71521C6662C1 /* CapabilitiesView.swift */,
 				B29D631BD7FB343852A8868D /* ChatView.swift */,
 				250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */,
 				8E81B5AF9FD7C49311CD9F8D /* PanelComponents.swift */,
@@ -156,10 +159,9 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = AA1E49DB37EE969F7ED96AF6 /* Build configuration list for PBXProject "AgentStationMenuBar" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -169,7 +171,6 @@
 			mainGroup = 120304F0E89A7A3A55E77DC8;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 6531BA041A16E45440F35492 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -190,6 +191,7 @@
 				62F792A4BB11B1532FC83A92 /* AgentStationMenuView.swift in Sources */,
 				F1F491C946F6945B8B5A623E /* AgentStationModel.swift in Sources */,
 				03BD5C7FA0B15F77C932DE37 /* ApiTypes.swift in Sources */,
+				08FC09CECF45795C522F9738 /* CapabilitiesView.swift in Sources */,
 				0B134C58418DD780F5A12153 /* ChatBlocks.swift in Sources */,
 				5013FB73E8873725D7C8ED04 /* ChatView.swift in Sources */,
 				0525A743E9AC784FDBB588A7 /* EnvironmentOfferView.swift in Sources */,

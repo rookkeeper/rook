@@ -8,6 +8,7 @@ enum PanelMode: Equatable {
     case sessions(agentId: String)
     case chat
     case environmentOffer
+    case capabilities
 }
 
 enum ServerState: Equatable {
@@ -103,7 +104,10 @@ final class AgentStationModel: ObservableObject {
         // items behind the notch): `defaults write com.rookery.AgentStationMenuBar
         // ShowPanelWindow -bool true` opens the panel as a regular window.
         if UserDefaults.standard.bool(forKey: "ShowPanelWindow") {
-            DispatchQueue.main.async { [weak self] in
+            // Defer past launch: opening the NSHostingController-backed panel
+            // during init (before AppKit's first layout pass is ready) traps in
+            // NSHostingView. The user-triggered pin works because it runs later.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 self?.openPanelWindow()
             }
         }
@@ -458,6 +462,10 @@ final class AgentStationModel: ObservableObject {
 
     func goHome() {
         panelMode = .home
+    }
+
+    func openCapabilities() {
+        panelMode = .capabilities
     }
 
     func openChat() {

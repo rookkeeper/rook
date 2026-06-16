@@ -17,6 +17,8 @@ struct AgentStationMenuView: View {
                 ChatDetail(model: model)
             case .environmentOffer:
                 EnvironmentOfferDetail(model: model)
+            case .capabilities:
+                CapabilitiesDetail(model: model)
             }
         }
         .padding(12)
@@ -88,108 +90,174 @@ private struct HomeContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            header
+            identityRow
+            if model.foregroundEnvironmentId != nil {
+                foregroundCaption
+            }
             if model.pendingOffer != nil {
                 pendingOfferCard
             }
-            if model.foregroundEnvironmentId != nil {
-                foregroundEnvironmentCard
-            }
-            awarenessCard
-            voiceCard
-            computerControlCard
             if model.currentSession != nil {
-                currentChatCard
+                resumeRow
             }
             if model.serverState == .online {
                 agentsCard
             } else {
                 serverOfflineCard
             }
+            capabilitiesStrip
             footerActions
         }
     }
 
-    private var header: some View {
-        Group {
-            if model.currentSession != nil {
-                Button {
-                    model.openChat()
-                } label: {
-                    headerCard(showChevron: true)
-                }
-                .buttonStyle(.plain)
-                .help("Open current chat")
-                .pointingHandOnHover()
-            } else {
-                headerCard(showChevron: false)
+    // MARK: - Identity (slim, one line)
+
+    private var identityRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "bird.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(PanelPalette.accent)
+            Text("Agent Station")
+                .font(.headline)
+            Spacer(minLength: 0)
+            HStack(spacing: 6) {
+                Text(serverStateLabel)
+                    .font(.caption)
+                    .foregroundStyle(PanelPalette.textMuted)
+                StatusDot(tint: model.serverStatusTint)
             }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+    }
+
+    private var serverStateLabel: String {
+        switch model.serverState {
+        case .online: return model.isRunning ? "working" : "online"
+        case .starting: return "starting…"
+        case .offline: return "offline"
+        case .unknown: return "checking…"
         }
     }
 
-    private func headerCard(showChevron: Bool) -> some View {
-        PanelCard {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(spacing: 7) {
-                    StatusGlyph(systemImage: "bird", tint: PanelPalette.accent, size: 34)
+    private var foregroundCaption: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "macwindow")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(PanelPalette.accentHover)
+            Text("In \(model.foregroundAppName ?? "app") — skills active")
+                .font(.caption2)
+                .foregroundStyle(PanelPalette.textMuted)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+    }
 
-                    Text(statusBadge)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(model.serverStatusTint.opacity(0.34))
-                        )
-                        .foregroundColor(.white.opacity(0.96))
-                }
-                .frame(width: 70)
+    // MARK: - Resume (primary affordance)
 
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 6) {
-                        Text("Agent Station")
-                            .font(.headline)
-                        StatusDot(tint: model.serverStatusTint)
-                    }
-
-                    Text(model.serverPrimaryLine)
+    private var resumeRow: some View {
+        Button {
+            model.openChat()
+        } label: {
+            HStack(spacing: 11) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(PanelPalette.accent))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Resume chat")
                         .font(.subheadline)
-                        .fontWeight(.medium)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(PanelPalette.textNormal)
+                    Text(currentChatLine)
+                        .font(.caption)
+                        .foregroundStyle(PanelPalette.textMuted)
                         .lineLimit(1)
                         .truncationMode(.tail)
-
-                    Text(model.serverSecondaryLine)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
                 }
-                .layoutPriority(1)
-
-                Spacer(minLength: 0)
-
-                if showChevron {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 5)
+                Spacer(minLength: 4)
+                if model.isRunning {
+                    StatusDot(tint: PanelPalette.warning)
                 }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(PanelPalette.accent.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(PanelPalette.accent.opacity(0.4))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+        .buttonStyle(.plain)
+        .help("Resume the current chat")
+        .pointingHandOnHover()
     }
 
-    private var statusBadge: String {
-        switch model.serverState {
-        case .online:
-            return model.isRunning ? "Working" : "Online"
-        case .starting:
-            return "Starting"
-        case .offline:
-            return "Offline"
-        case .unknown:
-            return "…"
+    // MARK: - Capabilities strip (entry to settings)
+
+    private var capabilitiesStrip: some View {
+        Button {
+            model.openCapabilities()
+        } label: {
+            HStack(spacing: 12) {
+                capGlyph("mic.fill", on: model.voiceModeEnabled, attention: model.voiceModeEnabled && !model.voiceAuthorized)
+                capGlyph("cursorarrow.rays", on: model.computerControlEnabled, attention: model.computerControlEnabled && !model.screenRecordingTrusted)
+                capGlyph("antenna.radiowaves.left.and.right", on: model.bridgePort > 0, attention: !model.accessibilityTrusted)
+                Text("Capabilities")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(PanelPalette.textNormal)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(PanelPalette.backgroundSecondary.opacity(0.6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(PanelPalette.border)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+        .buttonStyle(.plain)
+        .help("Voice, Computer Control, and Context Bridge settings")
+        .pointingHandOnHover()
+    }
+
+    private func capGlyph(_ systemImage: String, on: Bool, attention: Bool) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(on ? PanelPalette.accent : PanelPalette.textMuted.opacity(0.6))
+            .frame(width: 26, height: 26)
+            .background(
+                Circle().fill(on ? PanelPalette.accent.opacity(0.16) : Color.white.opacity(0.04))
+            )
+            .overlay(alignment: .topTrailing) {
+                if attention {
+                    Circle()
+                        .fill(PanelPalette.warning)
+                        .frame(width: 7, height: 7)
+                        .overlay(Circle().strokeBorder(PanelPalette.backgroundPrimary, lineWidth: 1.5))
+                        .offset(x: 1, y: -1)
+                }
+            }
     }
 
     private var pendingOfferCard: some View {
@@ -228,259 +296,6 @@ private struct HomeContent: View {
         .pointingHandOnHover()
     }
 
-    private var foregroundEnvironmentCard: some View {
-        PanelCard {
-            HStack(spacing: 9) {
-                Image(systemName: "macwindow.on.rectangle")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(PanelPalette.accentHover)
-                    .frame(width: 24, height: 24)
-                    .background(
-                        Circle()
-                            .fill(PanelPalette.accent.opacity(0.18))
-                    )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(model.foregroundAppName ?? "App") environment")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    Text(model.foregroundEnvironmentId ?? "")
-                        .font(.caption.monospaced())
-                        .foregroundStyle(PanelPalette.textMuted)
-                        .lineLimit(1)
-                }
-                Spacer()
-                StatusDot(tint: PanelPalette.success)
-            }
-
-            if let title = model.foregroundWindowTitle, !title.isEmpty {
-                HStack(spacing: 6) {
-                    Image(systemName: "text.window")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(PanelPalette.textMuted)
-                    Text(title)
-                        .font(.caption)
-                        .foregroundStyle(PanelPalette.textNormal)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-        }
-    }
-
-    private var awarenessCard: some View {
-        PanelCard {
-            HStack(spacing: 8) {
-                Label("Context Bridge", systemImage: "antenna.radiowaves.left.and.right")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-                Text(model.bridgePort > 0 ? ":\(String(model.bridgePort))" : "off")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(PanelPalette.textMuted)
-                StatusDot(tint: model.bridgePort > 0 ? PanelPalette.success : PanelPalette.danger)
-            }
-
-            HStack(spacing: 8) {
-                Image(systemName: model.accessibilityTrusted ? "checkmark.shield.fill" : "exclamationmark.shield")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(model.accessibilityTrusted ? PanelPalette.success : PanelPalette.warning)
-                Text(model.accessibilityTrusted
-                     ? "Accessibility granted — window titles visible"
-                     : "Grant Accessibility to read window titles")
-                    .font(.caption)
-                    .foregroundStyle(PanelPalette.textMuted)
-                    .lineLimit(2)
-                Spacer(minLength: 4)
-                if !model.accessibilityTrusted {
-                    Button {
-                        model.requestAccessibility()
-                    } label: {
-                        Text("Grant")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(PanelPalette.accent))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Open System Settings → Privacy → Accessibility")
-                    .pointingHandOnHover()
-                }
-            }
-        }
-    }
-
-    private var voiceCard: some View {
-        PanelCard {
-            HStack(spacing: 8) {
-                Label("Voice", systemImage: "mic.fill")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { model.voiceModeEnabled },
-                    set: { model.setVoiceMode($0) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(PanelPalette.accent)
-            }
-
-            if model.voiceModeEnabled {
-                HStack(spacing: 8) {
-                    Button {
-                        model.toggleVoiceListening()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: model.voiceListening ? "waveform.circle.fill" : "mic.circle")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(model.voiceListening ? PanelPalette.danger : PanelPalette.accent)
-                                .symbolEffect(.pulse, isActive: model.voiceListening)
-                            Text(voiceStatusText)
-                                .font(.caption)
-                                .foregroundStyle(model.voiceListening ? PanelPalette.textNormal : PanelPalette.textMuted)
-                                .lineLimit(2)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(model.voiceListening ? PanelPalette.danger.opacity(0.14) : PanelPalette.backgroundPrimary.opacity(0.5))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(model.voiceListening ? PanelPalette.danger.opacity(0.5) : PanelPalette.border)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .help("Press to talk (or ⌃⌥Space anywhere)")
-                    .pointingHandOnHover()
-
-                    if model.voiceSpeaking {
-                        Button {
-                            model.stopSpeaking()
-                        } label: {
-                            Image(systemName: "stop.fill")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 34, height: 34)
-                                .background(Circle().fill(PanelPalette.danger))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Stop speaking")
-                        .pointingHandOnHover()
-                    }
-                }
-
-                Text(model.voiceAuthorized
-                     ? "Press to talk or ⌃⌥Space from any app. Voice: \(model.voiceName). Talking interrupts playback."
-                     : "Voice needs Microphone + Speech Recognition permission.")
-                    .font(.caption2)
-                    .foregroundStyle(PanelPalette.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("Talk to your agent hands-free — speak and hear replies aloud.")
-                    .font(.caption)
-                    .foregroundStyle(PanelPalette.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var voiceStatusText: String {
-        if model.voiceListening {
-            return model.voicePartial.isEmpty ? "Listening…" : model.voicePartial
-        }
-        if model.voiceSpeaking {
-            return "Speaking…"
-        }
-        return "Press to talk"
-    }
-
-    private var computerControlCard: some View {
-        PanelCard {
-            HStack(spacing: 8) {
-                Label("Computer Control", systemImage: "cursorarrow.rays")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { model.computerControlEnabled },
-                    set: { model.setComputerControlEnabled($0) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(PanelPalette.accent)
-            }
-
-            Text(model.computerControlEnabled
-                 ? "The agent can move the mouse, click, and type in the frontmost app."
-                 : "Off — the agent can read context but cannot drive the mouse/keyboard.")
-                .font(.caption)
-                .foregroundStyle(model.computerControlEnabled ? PanelPalette.warning : PanelPalette.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 8) {
-                Image(systemName: model.screenRecordingTrusted ? "checkmark.shield.fill" : "exclamationmark.shield")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(model.screenRecordingTrusted ? PanelPalette.success : PanelPalette.warning)
-                Text(model.screenRecordingTrusted
-                     ? "Screen Recording granted — screenshots available"
-                     : "Screen Recording needed for screenshot (vision) grounding")
-                    .font(.caption)
-                    .foregroundStyle(PanelPalette.textMuted)
-                    .lineLimit(2)
-                Spacer(minLength: 4)
-                if !model.screenRecordingTrusted {
-                    Button {
-                        model.requestScreenRecording()
-                    } label: {
-                        Text("Grant")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(PanelPalette.accent))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Open System Settings → Privacy → Screen Recording")
-                    .pointingHandOnHover()
-                }
-            }
-        }
-    }
-
-    private var currentChatCard: some View {
-        Button {
-            model.openChat()
-        } label: {
-            PanelCard {
-                HStack(spacing: 8) {
-                    Label("Current Chat", systemImage: "bubble.left.and.bubble.right")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    Spacer()
-                    Text(currentChatLine)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .help("Open current chat")
-        .pointingHandOnHover()
-    }
-
     private var currentChatLine: String {
         guard let session = model.currentSession else {
             return ""
@@ -491,15 +306,10 @@ private struct HomeContent: View {
 
     private var agentsCard: some View {
         PanelCard {
-            HStack(spacing: 8) {
-                Label("Agents", systemImage: "cpu")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-                Text("\(model.agents.count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Text("CHAT WITH")
+                .font(.system(size: 10, weight: .semibold))
+                .kerning(0.6)
+                .foregroundStyle(PanelPalette.textMuted)
 
             if !model.agentsError.isEmpty {
                 PanelMessageView(
