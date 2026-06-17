@@ -90,6 +90,19 @@ struct ChatScreen: View {
                 .foregroundStyle(statusTint)
                 .lineLimit(1)
             Spacer(minLength: 0)
+            if model.voiceSpeaking {
+                Button {
+                    model.stopSpeaking()
+                } label: {
+                    Label("Mute", systemImage: "speaker.slash.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(PanelPalette.accent))
+                }
+                .buttonStyle(.plain)
+            }
             if model.isRunning {
                 Button {
                     model.stopAgent()
@@ -110,7 +123,20 @@ struct ChatScreen: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message \(model.currentSession?.agent ?? "agent")…", text: $draft, axis: .vertical)
+            // Mic / tap-to-talk
+            Button {
+                model.toggleVoiceListening()
+            } label: {
+                Image(systemName: model.voiceListening ? "waveform" : "mic.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(model.voiceListening ? .white : PanelPalette.accent)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(model.voiceListening ? PanelPalette.danger : PanelPalette.backgroundPrimary.opacity(0.8)))
+                    .overlay(Circle().strokeBorder(model.voiceListening ? PanelPalette.danger : PanelPalette.border))
+                    .symbolEffect(.variableColor, isActive: model.voiceListening)
+            }
+
+            TextField(composerPlaceholder, text: $draft, axis: .vertical)
                 .lineLimit(1...5)
                 .focused($composerFocused)
                 .foregroundStyle(PanelPalette.textNormal)
@@ -122,7 +148,7 @@ struct ChatScreen: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(PanelPalette.border)
+                        .strokeBorder(model.voiceListening ? PanelPalette.danger.opacity(0.6) : PanelPalette.border)
                 )
 
             Button {
@@ -139,6 +165,13 @@ struct ChatScreen: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var composerPlaceholder: String {
+        if model.voiceListening {
+            return model.voicePartial.isEmpty ? "Listening…" : model.voicePartial
+        }
+        return "Message \(model.currentSession?.agent ?? "agent")…"
     }
 
     private var statusTint: Color {
@@ -158,7 +191,7 @@ struct ChatScreen: View {
     private func submit() {
         let text = draft
         draft = ""
-        model.send(text)
+        model.sendTyped(text)
     }
 
     private func compact(_ value: Int) -> String {

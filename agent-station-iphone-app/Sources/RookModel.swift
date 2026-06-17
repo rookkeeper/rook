@@ -47,6 +47,15 @@ final class RookModel: ObservableObject {
     @Published var placeEnvironmentId: String?
     @Published var currentPlaceName: String?
 
+    // Voice
+    private let voice = VoiceController()
+    @Published var voiceAuthorized = false
+    @Published var voiceListening = false
+    @Published var voiceSpeaking = false
+    @Published var voicePartial = ""
+    private var voiceModeEnabled = false   // speak the reply when the prompt came by voice
+    private var spokenTurnBuffer = ""
+
     // Server address (configurable for a physical device on the LAN; the
     // simulator reaches the Mac's localhost directly).
     @Published var baseURLString: String
@@ -81,9 +90,61 @@ final class RookModel: ObservableObject {
             self?.handlePlace(place)
         }
         locationProvider.updateMonitoredPlaces(placeStore.places)
+        setupVoice()
         Task {
             await refreshHealth()
         }
+    }
+
+    // MARK: - Voice
+
+    private func setupVoice() {
+        voiceAuthorized = voice.authorized()
+        voice.onTranscript = { [weak self] text in
+            guard let self else { return }
+            self.voicePartial = ""
+            self.voiceModeEnabled = true   // spoke the prompt → speak the reply
+            self.send(text)
+        }
+        voice.onListeningChanged = { [weak self] listening in
+            self?.voiceListening = listening
+            if !listening { self?.voicePartial = "" }
+        }
+        voice.onSpeakingChanged = { [weak self] speaking in
+            self?.voiceSpeaking = speaking
+        }
+        voice.onPartial = { [weak self] partial in
+            self?.voicePartial = partial
+        }
+        voice.onError = { [weak self] message in
+            self?.voicePartial = ""
+            self?.appendBlock(.system(text: "Voice: \(message)"))
+        }
+    }
+
+    func toggleVoiceListening() {
+        if !voice.authorized() {
+            voice.requestPermissions { [weak self] granted in
+                self?.voiceAuthorized = granted
+                if granted {
+                    self?.voice.startListening()
+                } else {
+                    self?.appendBlock(.system(text: "Voice needs Microphone + Speech Recognition permission (Settings → Rook)."))
+                }
+            }
+            return
+        }
+        voice.toggleListening()
+    }
+
+    func stopSpeaking() {
+        voice.stopSpeaking()
+    }
+
+    /// Typed messages should not be spoken back.
+    func sendTyped(_ text: String) {
+        voiceModeEnabled = false
+        send(text)
     }
 
     // MARK: - Location → place environment
@@ -322,6 +383,8 @@ final class RookModel: ObservableObject {
         }
         userCancelledRun = true
         statusLine = "Stopping…"
+        voice.stopSpeaking()
+        spokenTurnBuffer = ""
         socket.sendCancel()
     }
 
@@ -337,6 +400,7 @@ final class RookModel: ObservableObject {
         appendBlock(.user(text: text))
         isRunning = true
         statusLine = "Agent is working…"
+        spokenTurnBuffer = ""
         socket.sendPrompt(text: text)
     }
 
@@ -408,6 +472,9 @@ final class RookModel: ObservableObject {
         case .agentMessageChunk(let text):
             statusLine = "Responding…"
             appendStreamingText(text, isThinking: false)
+            if voiceModeEnabled {
+                spokenTurnBuffer += text
+            }
         case .agentThoughtChunk(let text):
             statusLine = "Thinking…"
             appendStreamingText(text, isThinking: true)
@@ -465,11 +532,16 @@ final class RookModel: ObservableObject {
             isRunning = false
             statusLine = ""
             userCancelledRun = false
+            if voiceModeEnabled, !spokenTurnBuffer.isEmpty {
+                voice.speak(spokenTurnBuffer)
+            }
+            spokenTurnBuffer = ""
             deliverNextQueuedIfIdle()
         case .runFailed(let message):
             finalizeStreamingBlocks()
             isRunning = false
             statusLine = ""
+            spokenTurnBuffer = ""
             if userCancelledRun {
                 userCancelledRun = false
                 appendBlock(.system(text: "Stopped."))
