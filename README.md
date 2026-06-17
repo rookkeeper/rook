@@ -14,6 +14,8 @@ ACP standardizes JSON-RPC between editors/clients and coding agents. Here, the b
 | [agent-station-chrome-extension](agent-station-chrome-extension/) | Chrome MV3 environment provider: recognizes supported sites, opens the localhost pane, and directly registers environment availability with the rook server |
 | [agent-station-obsidian-extension](agent-station-obsidian-extension/) | Obsidian sidebar host for the client app
 | [agent-station-menu-bar-app-mac](agent-station-menu-bar-app-mac/) | Native SwiftUI macOS menu bar client with the full feature set (agents, sessions, streaming chat, environment approvals) talking REST + ACP JSON-RPC to `:3000`; doubles as an environment provider that registers `app:<slug>` environments based on which Mac app is frontmost |
+| [agent-station-iphone-app](agent-station-iphone-app/) | Native SwiftUI **iPhone** client that makes Rook location-aware: defining a place and entering its geofence registers a `place:<slug>` environment, so the agent gains that place's skills. Adds Live Activity / Dynamic Island presence, on-device voice, and `CLVisit` place auto-detection |
+| [RookKit](RookKit/) | Shared cross-platform Swift package (iOS + macOS): models, REST/ACP-WebSocket clients, the design system + chat-block views, voice, and Live Activity attributes. One source of truth for the Mac and iPhone Swift clients |
 | [dummy-client](dummy-client/) | Port-3000 postMessage debug stub |
 
 External dependency: a sibling Pi agent package at `../my-agent/` (not checked into this repo) provides the agent/skill environment referenced by the default Pi profile.
@@ -100,6 +102,8 @@ If you move or rename the sibling package, update `args` in `agent-profiles.json
 - `shared/` holds cross-package protocol/domain contracts being extracted out of the old/new client split
 - `agent-station-obsidian-extension/` is a separate npm package
 - `agent-station-menu-bar-app-mac/` is a Swift/xcodegen package (not npm); build it with `xcodegen generate` + `xcodebuild` — see its [README](agent-station-menu-bar-app-mac/README.md) for exact run steps and menu-bar troubleshooting
-- `environment-repository/` holds local environment-linked skill bundles, keyed `<kind>/<path>` (`web/wikipedia`, `demo/demo`, and `app/<slug>` for Mac apps fronted by the menu bar provider)
+- `agent-station-iphone-app/` is a Swift/xcodegen package (not npm); it depends on the shared `RookKit/` package and adds a Widget extension for the Live Activity — see its [README](agent-station-iphone-app/README.md) for run steps and simulator location-testing
+- `RookKit/` is a local Swift Package (iOS + macOS) holding the cross-platform layer shared by both Swift clients (models, REST/ACP clients, design system, voice, Live Activity attributes); build-check it with `cd RookKit && swift build`
+- `environment-repository/` holds local environment-linked skill bundles, keyed `<kind>/<path>` (`web/wikipedia`, `demo/demo`, `app/<slug>` for Mac apps fronted by the menu bar provider, and `place/<slug>` for physical locations fronted by the iPhone provider)
 - `scripts/` holds repo-level utilities
 - `PRODUCT/` holds product notes and evolving architecture docs

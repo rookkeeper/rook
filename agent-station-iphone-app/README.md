@@ -1,0 +1,176 @@
+# Rook for iPhone (native SwiftUI)
+
+A native iOS app that makes [Agent Station](../README.md) **location-aware**: as
+you arrive at a place you've defined, Rook registers `place:<slug>` with the
+server and the agent gains that place's skills — the physical-location analog of
+the Chrome extension's `web:<slug>` and the Mac menu bar app's `app:<slug>`.
+
+The iPhone is a **fourth environment provider**. Its signal is GPS/geofence
+instead of a frontmost app or a browser tab, but it speaks the same REST + ACP
+contract to `:3000` and needs **zero server changes** — `place:office` resolves
+to `environment-repository/place/office/` exactly the way `web:wikipedia`
+resolves to `environment-repository/web/wikipedia/`.
+
+UI, networking, models, chat rendering, and voice are shared with the macOS menu
+bar app through the [`RookKit`](../RookKit/) Swift package, so the two clients
+share one look and one protocol layer.
+
+## What it does
+
+- **Location → skills (the core loop).** Define places (name + GPS center +
+  radius). `LocationProvider` monitors each as a `CLCircularRegion`. Entering a
+  region builds `place:<slug>`, pre-checks the server for matching skills
+  (`GET /api/environments/preview`), and if any exist registers the environment
+  (`POST /api/environments/register`) with `latitude`/`longitude`/`regionId`
+  metadata. The server pushes an offer over the session websocket; you approve
+  with the same 2×2 decisions as every other client; the place's skills load
+  into the agent. Leaving the region marks it unavailable
+  (`POST /api/environments/unavailable`).
+- **Full chat parity.** Agent picker, session start/resume, streaming ACP chat
+  (text, thinking, tool calls, plans, errors, context usage) — all rendered by
+  RookKit's shared chat views, the same code the Mac app uses.
+- **Voice (hands-free).** Tap-to-talk in the chat screen: on-device speech
+  recognition (`SFSpeechRecognizer`) sends your words as the prompt;
+  `AVSpeechSynthesizer` speaks the reply once the turn completes. The shared
+  `VoiceController` adds an iOS `AVAudioSession` (`.playAndRecord`,
+  `.spokenAudio`) so capture and playback coexist.
+- **Live Activity / Dynamic Island.** While a session is active the lock screen
+  and Dynamic Island show the current place, whether skills are loaded, and the
+  agent's status (idle/working). Implemented natively with ActivityKit + a
+  `RookWidgets` app-extension target.
+- **Auto-detect frequented places.** `CLVisit` monitoring suggests places you
+  spend time at but haven't named; the Places screen lets you promote a
+  suggestion into a real geofenced place.
+
+## Why native (vs. an Expo / React-Native app)
+
+The MVP deliberately leans on iPhone capabilities an Expo app can't match well:
+
+- **Reliable background & terminated-app geofencing** via CoreLocation region
+  monitoring (the OS relaunches the app on region entry under Always auth).
+  Expo's `expo-location` background geofencing is best-effort and weak on
+  terminated-app relaunch.
+- **Live Activities / Dynamic Island** via first-class ActivityKit + a Widget
+  extension. Expo support is experimental community config-plugins.
+- **`CLVisit` "where you spend time" detection** — not surfaced by Expo.
+- **On-device Speech + `AVSpeechSynthesizer` with `AVAudioSession` control.**
+- **1:1 SwiftUI design reuse** with the Mac app through RookKit, instead of
+  re-implementing the design in RN.
+
+Honest counterpoint: Expo can do foreground location, basic push, and a chat UI
+fine. The native wins are background/terminated reliability, Live Activity
+maturity, latest-API access, design parity, and `CLVisit`.
+
+## Architecture
+
+```text
+Rook (iOS app target)                         RookWidgets (app-extension)
+  ├─ RookApp.swift        @main App             └─ RookLiveActivity   Dynamic Island / Lock Screen
+  ├─ RookModel.swift      chat/session/offer reducer + place + voice + Live Activity
+  ├─ Location/
+  │   ├─ Place.swift          Place + PlaceStore (UserDefaults) + CLVisit suggestions
+  │   └─ LocationProvider.swift   CLCircularRegion monitoring, CLVisit, Always auth
+  └─ Views/               RootView · AgentPickerScreen · ChatScreen · PlacesScreen · EnvironmentOfferSheet
+            │
+            ▼ depends on
+        RookKit  ──── Models · Net (AgentStationAPI/AcpSocket) · Design · Voice · LiveActivity
+            │
+            ▼ REST + ACP JSON-RPC over WebSocket
+        Agent Station server @ 127.0.0.1:3000
+```
+
+`RookModel` is the iOS counterpart of the Mac app's `AgentStationModel`: it
+reuses the same socket/offer/chat reducer and substitutes `LocationProvider`
+(place) for `ForegroundAppMonitor` (app). Every macOS-only service (the Mac
+bridge, Accessibility/AX, screen capture, hotkeys, server supervision) is
+dropped.
+
+### The location → skill loop
+
+Mirrors `AgentStationModel.handleForegroundApp`, with place in place of app:
+
+1. You define places → `PlaceStore`; `LocationProvider` monitors their regions
+   (Always auth recommended for background entry).
+2. **Region enter** (foreground, background, or on relaunch): build
+   `place:<slug>`, pre-check skills via `GET /api/environments/preview`. If
+   non-empty, `register`; if empty, skip (no empty offer).
+3. Server pushes `environment_offer_available` → `EnvironmentOfferSheet` → you
+   approve → `POST /api/environments/decision` → skills load into the session.
+4. **Region exit**: `markEnvironmentUnavailable`.
+5. **Reconnect / relaunch**: re-announce the current place. **Background**:
+   released on `scenePhase == .background`.
+
+## Place skill bundles
+
+A place maps to skills iff `environment-repository/place/<slug>/<skill>/SKILL.md`
+exists at the repo root — no server code involved. The shipped example:
+
+```
+environment-repository/place/office/office-companion/SKILL.md
+```
+
+Define a place named "Office" (slug `office`) and entering its geofence offers
+that bundle.
+
+## Getting it running
+
+Prerequisites: Xcode, [xcodegen](https://github.com/yonaskolb/XcodeGen)
+(`brew install xcodegen`), and Node (for the Agent Station server). The iOS
+**Simulator shares the Mac's network**, so the default
+`http://127.0.0.1:3000` works unchanged from the simulator.
+
+```zsh
+# 1. Start the Agent Station server (skip if already running)
+cd <path-to-rookery>        # the repo root
+npm run dev
+# verify: curl http://127.0.0.1:3000/api/health  ->  {"ok":true,...}
+
+# 2. Generate the Xcode project and build for a simulator
+cd agent-station-iphone-app
+xcodegen generate
+xcodebuild -project Rook.xcodeproj -scheme Rook \
+  -configuration Debug -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
+
+# 3. Open Rook.xcodeproj in Xcode and Run on a simulator (or boot + install the
+#    built .app with simctl). For Live Activity / Dynamic Island, pick an
+#    iPhone 14 Pro or newer simulator.
+```
+
+For a **physical device** on the LAN, set the base URL to the Mac's LAN IP. The
+base URL is stored in `UserDefaults` (`RookModel.baseURLString`); the
+`NSAllowsLocalNetworking` ATS exception in `Info.plist` permits the cleartext
+LAN connection.
+
+### Verifying location → skills on the simulator
+
+1. In the app, add a place (e.g. "Office") at a coordinate of your choice.
+2. In the simulator: **Features → Location → Custom Location** (or a GPX route),
+   set a coordinate **inside** that geofence → the offer sheet appears → approve.
+3. Ask the agent something the office skill covers → it answers using the place
+   skill. Move the simulated location away → `unavailable` fires.
+
+Test hooks for scripted verification (set as `SIMCTL_CHILD_*` env vars):
+
+- `ROOK_SEED_PLACE="Office,37.33,-122.03,150"` — seed a place on launch.
+- `ROOK_SEED_VISIT="37.33,-122.03,4"` — seed a `CLVisit` suggestion.
+- `ROOK_SHOW_PLACES=1` — open the Places screen on launch.
+
+## Capabilities & Info.plist
+
+- **Background Modes → Location updates** (`UIBackgroundModes: location`).
+- Usage strings: `NSLocationWhenInUseUsageDescription`,
+  `NSLocationAlwaysAndWhenInUseUsageDescription` (Always is required for
+  background region relaunch), `NSMicrophoneUsageDescription`,
+  `NSSpeechRecognitionUsageDescription`.
+- `NSSupportsLiveActivities = YES`.
+- `NSAppTransportSecurity → NSAllowsLocalNetworking = YES` for the localhost/LAN
+  dev server.
+
+## Out of scope (follow-ups)
+
+The MVP targets the local Mac dev server, unauthenticated, on the LAN. True
+away-from-home presence (push-to-start Live Activities and remote updates while
+the app is closed) needs a hosted server + APNs + Sign in with Apple — see
+[`PRODUCT/research/rook-on-iphone.md`](../PRODUCT/research/rook-on-iphone.md)
+Phase 3.

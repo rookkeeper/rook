@@ -1,6 +1,6 @@
 # Rookery - As-Built Architecture
 
-**Last Updated**: 2026-06-15
+**Last Updated**: 2026-06-16
 
 This document is the short, current architecture description for the repo as it exists today. It intentionally avoids historical detail and low-level implementation notes.
 
@@ -18,11 +18,12 @@ The repo is organized into focused top-level packages: `client/`, `server/`, `sh
 ## 2. Top-level shape
 
 ```text
-Host clients / providers
+Host clients / providers                         registers environment kind
   ├─ Browser at :3000
-  ├─ Chrome extension
+  ├─ Chrome extension                            web:<slug>
   ├─ Obsidian plugin
-  └─ macOS menu bar app
+  ├─ macOS menu bar app (native Swift)           app:<slug>   (frontmost Mac app)
+  └─ iPhone app (native Swift)                   place:<slug> (GPS geofence)
             │
             ▼
 server/ (Fastify)
@@ -37,7 +38,8 @@ server/ (Fastify)
         └─ generic ACP agent
 
 shared/  ← cross-package contracts: ACP types, environment DTOs, agent/session DTOs
-client/  ← React Native web UI, shared UI base for future iPhone client
+client/  ← React Native web UI
+RookKit/ ← shared Swift package (iOS + macOS) backing the two native Swift clients
 ```
 
 ## 3. Core architectural idea
@@ -63,11 +65,13 @@ See also: [`PRODUCT/agent-client-protocol.md`](./agent-client-protocol.md)
 | Package | Current role |
 |---|---|
 | `server/` | Main backend at `:3000`; server, runtime orchestration, environment approvals |
-| `client/` | React Native web UI; shared UI base for future iPhone (Expo) client |
+| `client/` | React Native web UI |
 | `shared/` | Cross-package ACP types, environment DTOs, agent/session contracts |
-| `agent-station-chrome-extension/` | Chrome MV3 environment provider |
+| `agent-station-chrome-extension/` | Chrome MV3 environment provider (`web:<slug>`) |
 | `agent-station-obsidian-extension/` | Obsidian host embedding the main app |
-| `agent-station-menu-bar-app-mac/` | Native macOS client and environment provider |
+| `agent-station-menu-bar-app-mac/` | Native macOS client and environment provider (`app:<slug>`) |
+| `agent-station-iphone-app/` | Native iOS client and location environment provider (`place:<slug>`) |
+| `RookKit/` | Shared Swift package (iOS + macOS) backing both native Swift clients |
 | `environment-repository/` | Local environment skill bundles keyed by `<kind>/<path>` |
 | `PRODUCT/` | Product and architecture notes |
 
@@ -160,11 +164,12 @@ An **environment** is a context the user is currently "in", identified as:
 
 Examples:
 
-- `web:wikipedia`
+- `web:wikipedia` (Chrome extension — current site)
 - `demo:demo`
-- `app:<slug>`
+- `app:<slug>` (macOS menu bar app — frontmost Mac app)
+- `place:<slug>` (iPhone app — current GPS geofence)
 
-An environment maps to a directory in `environment-repository/` and provides one or more skill bundles.
+An environment maps to a directory in `environment-repository/` and provides one or more skill bundles. The kind (`web`, `app`, `place`, …) is just the part before the first colon; `LocalEnvironmentRepository` splits on it and resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new skill content on disk.
 
 ### 6.2 Environment repository
 
@@ -241,9 +246,12 @@ The client is structured around:
 
 Current ecosystem around `:3000`:
 
-- **Chrome extension**: detects supported web contexts and registers environments
+- **Chrome extension**: detects supported web contexts and registers `web:<slug>` environments
 - **Obsidian plugin**: embeds the app in a sidebar view
-- **macOS menu bar app**: native client with the same backend, and can also register app-based environments
+- **macOS menu bar app**: native SwiftUI client with the same backend; also registers `app:<slug>` environments for the frontmost Mac app
+- **iPhone app**: native SwiftUI client that registers `place:<slug>` environments from GPS geofences, making the agent location-aware (skills load as you arrive at a defined place). Adds Live Activity / Dynamic Island presence and on-device voice. See [`PRODUCT/research/rook-on-iphone.md`](./research/rook-on-iphone.md) for the iOS sandbox constraints and the hosted-server/APNs follow-up.
+
+The two native Swift clients share one cross-platform layer — models, the REST/ACP-WebSocket clients, the design system and chat-block views, voice, and Live Activity attributes — through the `RookKit` Swift package, so they stay protocol- and design-consistent with a single source of truth.
 
 ## 8. Live message flow
 
