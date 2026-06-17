@@ -83,10 +83,10 @@
 
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { AgentSessionSummary } from "../shared/src/agent.js";
-import type { AcpServerMessage, JsonRpcMessage } from "../shared/src/acp.js";
-import type { AcpClientEvent } from "../clients/web-client/src/lib/acpClientTypes.js";
-import { RemoteAgent } from "../clients/web-client/src/lib/remoteAgent.js";
+import type { AgentSessionSummary } from "../server/src/shared/agent.js";
+import type { AcpServerMessage, JsonRpcMessage } from "../server/src/shared/acp.js";
+import type { AcpClientEvent } from "./lib/acpClientTypes.js";
+import { RemoteAgent } from "./lib/remoteAgent.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");

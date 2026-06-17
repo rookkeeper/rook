@@ -1,8 +1,8 @@
 import Foundation
 
 /// Resolves a browser URL to a per-site environment (`web:<slug>`) using the
-/// Chrome extension's `site-registry.json` as the shared source of truth, so a
-/// site recognized by the extension is recognized natively too. This is the
+/// repo's shared `site-registry.json` so recognized sites map to stable web
+/// environments even without a separate browser extension package. This is the
 /// per-site companion to the foreground provider's per-app resolution: on a
 /// recognized site the agent gets the app's generic web skills *and* the
 /// site-specific skill bundle.
@@ -30,7 +30,7 @@ enum SiteRegistry {
         guard let host = URLComponents(string: url)?.host?.lowercased() else {
             return nil
         }
-        let registryURL = repoRoot.appending(path: "clients/chrome/site-registry.json")
+        let registryURL = repoRoot.appending(path: "server/config/site-registry.json")
         guard let data = try? Data(contentsOf: registryURL),
               let file = try? JSONDecoder().decode(RegistryFile.self, from: data),
               let sites = file.sites else {

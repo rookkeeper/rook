@@ -9,6 +9,6 @@
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["src/server/**/*.ts", "src/shared/**/*.ts", "../shared/src/**/*.ts"],
+  "include": ["src/server/**/*.ts", "src/shared/**/*.ts"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

@@ -11,7 +11,6 @@ import { SessionRoomManager } from "./realtime/SessionRoomManager.js";
 import { registerAgentRoutes } from "./routes/agentRoutes.js";
 import { registerEnvironmentRoutes } from "./routes/environmentRoutes.js";
 import { registerWebsocketRoute } from "./routes/websocketRoute.js";
-import { registerClientApp } from "./clientApp.js";
 
 dotenv.config({ path: path.join(REPO_ROOT, ".env") });
 
@@ -19,7 +18,7 @@ const host = process.env.HOST ?? "0.0.0.0";
 const port = Number(process.env.PORT ?? 3000);
 
 export interface BuildServerOptions {
-  enableClient?: boolean;
+  enableClient?: boolean; // legacy no-op; the server no longer hosts a web client
   logger?: Parameters<typeof fastify>[0]["logger"];
   roomIdleTimeoutMs?: number;
   /** SQLite location for persistent environment decisions; ":memory:" in tests. */
@@ -28,7 +27,6 @@ export interface BuildServerOptions {
 
 export async function buildServer(options: BuildServerOptions = {}) {
   const app = fastify({ logger: options.logger ?? true });
-  const enableClient = options.enableClient ?? true;
   const environmentRepository = new LocalEnvironmentRepository();
   const environmentDecisionStore = new EnvironmentDecisionStore(options.environmentDecisionStoreLocation);
   const environmentManager = new EnvironmentManager(environmentRepository, environmentDecisionStore);
@@ -46,10 +44,6 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerAgentRoutes(app, { roomManager, environmentManager });
   await registerEnvironmentRoutes(app, environmentManager);
   await registerWebsocketRoute(app, roomManager);
-
-  if (enableClient) {
-    await registerClientApp(app);
-  }
 
   return app;
 }

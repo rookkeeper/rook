@@ -1,5 +1,5 @@
-import type { AgentRunStatus } from "./agent";
-import type { AcpConfigOption, AcpPermissionOption, AcpPermissionToolCall, AcpPlanEntry, AcpSessionMode } from "./acp";
+import type { AgentRunStatus } from "./agent.js";
+import type { AcpConfigOption, AcpPermissionOption, AcpPermissionToolCall, AcpPlanEntry, AcpSessionMode } from "./acp.js";
 
 export type AcpClientEvent =
   | { type: "acp_status_changed"; status: AgentRunStatus; message?: string }

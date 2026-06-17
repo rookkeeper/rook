@@ -1,6 +1,6 @@
-# Agent Station (server)
+# Rook server
 
-Fastify API, runtime orchestration, and dev/static hosting for the new shared client. Part of the [Agent Station](../README.md) monorepo. Product/architecture notes: [PRODUCT/](../PRODUCT/).
+Fastify API and runtime orchestration for the Rook native clients and debug tooling. Part of the [Rook](../README.md) monorepo. Product/architecture notes: [PRODUCT/](../PRODUCT/).
 
 ## Quick start
 
@@ -15,19 +15,13 @@ npm install
 npm run dev
 ```
 
-Also install the web client package once:
-
-```bash
-cd ../clients/web-client && npm install
-```
-
 Or from the repo root:
 
 ```bash
 npm run dev
 ```
 
-That starts the backend and serves the new shared client on `http://127.0.0.1:3000`.
+That starts the backend on `http://127.0.0.1:3000`.
 
 ## Pi agent configuration
 
@@ -121,7 +115,7 @@ Terse map of `src/`:
 - **Styling**: `styles/*`
 - **Client tests**: `*.test.ts(x)` files in `src/client`
 
-This UI is being replaced by the root-level [`../clients/web-client`](../clients/web-client/) package. During this migration phase, this package still contains the older browser client source for reference and tests, but the Fastify app now prefers serving the new root `clients/web-client/` package when it exists.
+The older browser client sources in `src/client/` are now historical reference only.
 
 ## `src/server` (Fastify backend)
 
@@ -174,13 +168,12 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
 ### Other server pieces
 - **Bootstrap/wiring**:
   - `index.ts`: constructs the server and registers route groups
-  - `clientApp.ts`: prod static serving + Vite dev middleware
   - `roomRuntime.ts`: room creation/reuse and environment runtime attachment
   - `serverHelpers.ts`: shared route parsing/validation helpers
 - **Extensions/tools bridge**: `extensions/parentMessageTool.ts`
 - **Server tests**: `index.test.ts`, `agents/*.test.ts`, `environment/*.test.ts`, `realtime/*.test.ts`
 
-## `src/shared` (cross-client/server contracts)
+## `src/shared` (server-local shared contracts)
 - **Shared agent/session payload types**: `shared/agent.ts`
   - session metadata, run status, message/tool payload shapes
 - **Realtime/session event contract**: `shared/realtime.ts`

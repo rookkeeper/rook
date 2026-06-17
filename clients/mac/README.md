@@ -3,8 +3,8 @@
 A native SwiftUI menu bar client for [Rook](../../README.md) — talk to
 your Pi / Claude / Cursor agents from the macOS menu bar. The panel layout and
 interaction model (slide-in detail views, hover affordances) follow the Stoa
-Scribe menu bar app; the visual design tokens are lifted from the web client
-(`clients/web-client/`) so the two clients share one look. Functionality
+Scribe menu bar app; the visual design tokens are mirrored in the shared Swift
+layer so the native clients share one look. Functionality
 is the full Agent Station embeddable
 client, implemented natively against the server's REST + ACP JSON-RPC
 WebSocket protocol.
@@ -29,11 +29,10 @@ WebSocket protocol.
 - **Server supervision** — health polling; if the server is down the panel can
   launch `npm run dev` for the repo and tail its log
   (`~/Library/Logs/AgentStationMenuBar/server.log`).
-- **Foreground-app environment provider** — the app is a third environment
-  provider alongside the Chrome extension and Obsidian plugin: it watches
-  which Mac app is frontmost (NSWorkspace activation notifications — no
-  Accessibility permission needed) and registers/unregisters `app:<slug>`
-  environments as you switch apps.
+- **Foreground-app environment provider** — the app watches which Mac app is
+  frontmost (NSWorkspace activation notifications — no Accessibility permission
+  needed) and registers/unregisters `app:<slug>` environments as you switch
+  apps.
 
 ## Voice (hands-free)
 

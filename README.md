@@ -8,12 +8,8 @@ ACP standardizes JSON-RPC between editors/clients and coding agents. Here, the b
 
 | Package | Role |
 |---------|------|
-| [server](server/) | Backend/runtime package: Fastify API, session/runtime orchestration, environment manager, ACP-backed Pi adapter, and static/dev hosting for the client UI |
-| [shared](shared/) | Root shared TypeScript contracts package for ACP/JSON-RPC types, environment DTOs, and agent/session DTOs used by both server and web client |
-| [clients/](clients/) | Home for user-facing clients and providers |
-| [clients/web-client](clients/web-client/) | React Native-style web UI at `:3000`, served by the Fastify backend |
-| [clients/chrome](clients/chrome/) | Chrome MV3 environment provider: recognizes supported sites, opens the localhost pane, and directly registers environment availability with the rook server |
-| [clients/obsidian](clients/obsidian/) | Obsidian sidebar host for the web client |
+| [server](server/) | Backend/runtime package: Fastify API, session/runtime orchestration, environment manager, and ACP-backed agent adapters |
+| [clients/](clients/) | Home for the remaining native clients |
 | [clients/mac](clients/mac/) | Native SwiftUI macOS menu bar client with full chat/session/environment support; also registers `app:<slug>` environments based on the frontmost Mac app |
 | [clients/iphone](clients/iphone/) | Native SwiftUI iPhone client that registers `place:<slug>` environments from geofences and adds Live Activity / Dynamic Island + voice support |
 | [clients/RookKit](clients/RookKit/) | Shared cross-platform Swift package (iOS + macOS): models, REST/ACP-WebSocket clients, design system/chat views, voice, and Live Activity attributes |
@@ -32,15 +28,7 @@ Use the package READMEs above as the main lookup docs for each area.
    ```bash
    cd server && npm install
    ```
-4. Install the web client deps:
-   ```bash
-   cd clients/web-client && npm install
-   ```
-5. Install the Obsidian plugin deps if you are working on that package too:
-   ```bash
-   cd clients/obsidian && npm install
-   ```
-6. From the repo root, start the main dev stack:
+4. From the repo root, start the main dev stack:
    ```bash
    npm run dev
    ```
@@ -52,7 +40,7 @@ Use the package READMEs above as the main lookup docs for each area.
    ./scripts/run-rook.sh phone    # server + physical iPhone app
    ./scripts/run-rook.sh stop     # stop server + launched apps/simulators
    ```
-7. Open `http://127.0.0.1:3000`
+5. The server listens on `http://127.0.0.1:3000`
 
 ## Pi agent configuration
 Default Pi agent profiles live in:
@@ -112,9 +100,7 @@ If you move or rename the sibling package, update `args` in `agent-profiles.json
 
 ## Monorepo notes
 - `server/` currently owns the backend npm deps and lockfile
-- `clients/web-client/` is the web UI package and has its own npm deps
-- `shared/` holds the TypeScript protocol/domain contracts currently shared by server + web client
-- `clients/obsidian/` is a separate npm package
+- `server/src/shared/` now holds the TypeScript protocol/domain contracts used by the server and the debug bridge CLI
 - `clients/mac/` is a Swift/xcodegen package (not npm); the preferred local launcher is `./scripts/run-rook.sh mac`, though you can still build manually with `xcodegen generate` + `xcodebuild` — see its [README](clients/mac/README.md) for exact run steps and menu-bar troubleshooting
 - `clients/iphone/` is a Swift/xcodegen package (not npm); the preferred local launchers are `./scripts/run-rook.sh sim` and `./scripts/run-rook.sh phone`. It depends on `clients/RookKit/` and adds a Widget extension for the Live Activity — see its [README](clients/iphone/README.md) for device/simulator run steps and location-testing
 - `clients/RookKit/` is a local Swift Package (iOS + macOS) holding the cross-platform layer shared by both Swift clients (models, REST/ACP clients, design system, voice, Live Activity attributes); build-check it with `cd clients/RookKit && swift build`

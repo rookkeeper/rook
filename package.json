@@ -2,13 +2,13 @@
   "name": "agent-station",
   "version": "0.1.0",
   "private": true,
-  "description": "Rook monorepo orchestrator (install deps in server and clients/web-client).",
+  "description": "Rook monorepo orchestrator for the server and native clients.",
   "scripts": {
     "dev": "npm run dev --prefix server",
     "dev:dummy": "npm run dev:dummy --prefix server",
-    "build": "npm run build --prefix clients/web-client && npm run build --prefix server",
+    "build": "npm run build --prefix server",
     "start": "npm run start --prefix server",
-    "typecheck": "npm run typecheck --prefix clients/web-client && npm run typecheck --prefix server",
+    "typecheck": "npm run typecheck --prefix server",
     "test": "npm run test --prefix server",
     "test:watch": "npm run test:watch --prefix server",
     "agent:cli": "bash scripts/interact-with-remote-agent.sh"

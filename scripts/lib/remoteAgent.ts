@@ -1,5 +1,5 @@
-import type { AgentBackend, AgentDefinition, AgentSessionSummary } from "./agent";
-import type { AcpClientEvent } from "./acpClientTypes";
+import type { AgentBackend, AgentDefinition, AgentSessionSummary } from "./agent.js";
+import type { AcpClientEvent } from "./acpClientTypes.js";
 import type {
   AcpConfigOption,
   AcpPermissionRequest,
@@ -9,9 +9,9 @@ import type {
   JsonRpcFailure,
   JsonRpcMessage,
   JsonRpcRequest,
-} from "./acp";
-import { isJsonRpcFailure, isJsonRpcNotification, isJsonRpcSuccess } from "./acp";
-import type { EnvironmentDecision, EnvironmentPreview } from "./environment";
+} from "./acp.js";
+import { isJsonRpcFailure, isJsonRpcNotification, isJsonRpcSuccess } from "./acp.js";
+import type { EnvironmentDecision, EnvironmentPreview } from "./environment.js";
 
 export async function fetchAgentDefinitions(): Promise<AgentDefinition[]> {
   const response = await fetch("/api/agents");

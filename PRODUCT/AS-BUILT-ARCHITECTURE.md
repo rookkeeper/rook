@@ -13,7 +13,7 @@ Rookery is a local-first monorepo centered on one service at `127.0.0.1:3000`:
 - a **WebSocket ACP bridge** to agent runtimes
 - an **environment manager** that can hot-load environment-linked skills into a session
 
-The repo is organized into focused top-level packages: `server/`, `shared/`, and a `clients/` directory holding the web, browser/plugin, and native app packages.
+The repo is organized into focused top-level packages: `server/` and a `clients/` directory holding the remaining native app packages.
 
 ## 2. Top-level shape
 
@@ -37,8 +37,7 @@ server/ (Fastify)
         ├─ CursorAgent
         └─ generic ACP agent
 
-shared/            ← cross-package TypeScript contracts: ACP types, environment DTOs, agent/session DTOs
-clients/web-client ← React Native web UI
+server/src/shared  ← server-local TypeScript contracts: ACP types, environment DTOs, agent/session DTOs
 clients/RookKit    ← shared Swift package (iOS + macOS) backing the two native Swift clients
 ```
 
@@ -65,10 +64,7 @@ See also: [`PRODUCT/agent-client-protocol.md`](./agent-client-protocol.md)
 | Package | Current role |
 |---|---|
 | `server/` | Main backend at `:3000`; server, runtime orchestration, environment approvals |
-| `shared/` | Cross-package TypeScript ACP types, environment DTOs, agent/session contracts |
-| `clients/web-client/` | React Native web UI |
-| `clients/chrome/` | Chrome MV3 environment provider (`web:<slug>`) |
-| `clients/obsidian/` | Obsidian host embedding the main app |
+| `server/src/shared/` | Server-local ACP types, environment DTOs, agent/session contracts |
 | `clients/mac/` | Native macOS client and environment provider (`app:<slug>`) |
 | `clients/iphone/` | Native iOS client and location environment provider (`place:<slug>`) |
 | `clients/RookKit/` | Shared Swift package (iOS + macOS) backing both native Swift clients |
@@ -91,7 +87,7 @@ It wires together:
 - WebSocket ACP route
 - React app hosting
 
-In dev, Vite middleware serves the client. In prod, Fastify serves the built static app.
+The server is now API/websocket-only; native clients and debug scripts connect to it directly.
 
 ### 5.2 Session rooms
 
@@ -231,16 +227,16 @@ That remains consistent with:
 
 ### 7.1 Web client
 
-The browser app is a React Native SPA in `clients/web-client/`, served via `react-native-web` + Vite.
+The former browser app has been removed from the active architecture.
 
 Main responsibilities are unchanged: agent selection, session lifecycle, ACP websocket communication, streaming conversation rendering, tool/permission/plan/usage/mode/config handling, queued messages, and environment approval UI.
 
 The client is structured around:
-- extracted session state layer (`clients/web-client/src/session/`)
+- primary user-facing clients are now the native macOS and iPhone apps plus repo-level debug scripts
 - platform-adaptive rendering seams (markdown, controls)
-- presentational block components (`clients/web-client/src/components/blocks/`)
+- the server remains the sole TypeScript runtime package
 
-`RemoteAgent` remains the transport layer, now living under `clients/web-client/src/lib/`.
+- `clients/RookKit/` remains the shared Swift layer for the two native clients
 
 ### 7.2 Other clients/providers
 
@@ -343,15 +339,15 @@ The important architecture change versus older versions is:
 
 ## 11. Current shared contracts
 
-Shared cross-boundary types live in root `shared/`.
+TypeScript protocol/domain contracts now live directly under `server/src/shared/`.
 
 Important files:
 
-- `shared/src/acp.ts` — ACP JSON-RPC types
-- `shared/src/agent.ts` — session metadata and agent-facing shared types
-- `shared/src/environment.ts` — environment ids, decisions, and preview types
+- `server/src/shared/acp.ts` — ACP JSON-RPC types
+- `server/src/shared/agent.ts` — session metadata and agent-facing shared types
+- `server/src/shared/environment.ts` — environment ids, decisions, and preview types
 
-Both `clients/web-client/` and `server/` import from `shared/`. The `server/` package retains a few locally-scoped shared types (`realtime.ts`, `environmentSkillPreview.ts`) that carry server-side logic.
+The debug bridge CLI and the server import from `server/src/shared/`. The server also retains locally-scoped shared helpers (`realtime.ts`, `environmentSkillPreview.ts`) that carry server-side logic.
 
 ## 12. Architecture constraints that matter right now
 
