@@ -26,6 +26,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rookery.Rook
         PRODUCT_NAME: Rook
         INFOPLIST_FILE: Sources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/Rook.entitlements
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: "NO"
         ENABLE_USER_SCRIPT_SANDBOXING: "NO"

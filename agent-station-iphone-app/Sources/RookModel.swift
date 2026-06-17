@@ -52,6 +52,9 @@ final class RookModel: ObservableObject {
     let locationProvider = LocationProvider()
     @Published var placeEnvironmentId: String?
     @Published var currentPlaceName: String?
+    // slug → whether the server has a matching skill bundle (nil = not yet checked).
+    // Surfaces slug↔bundle mismatches in the Places screen.
+    @Published var placeSkillStatus: [String: Bool] = [:]
 
     // Voice
     private let voice = VoiceController()
@@ -156,6 +159,16 @@ final class RookModel: ObservableObject {
         voice.stopSpeaking()
     }
 
+    /// Best installed voice name (for the Settings screen).
+    var voiceName: String { VoiceController.preferredVoiceName() }
+
+    /// Request mic + speech permission without starting a listen (used by Settings).
+    func requestVoicePermission() {
+        voice.requestPermissions { [weak self] granted in
+            self?.voiceAuthorized = granted
+        }
+    }
+
     // MARK: - Live Activity (Dynamic Island)
 
     /// Start the activity when a session is active; update it on meaningful
@@ -166,6 +179,13 @@ final class RookModel: ObservableObject {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             return
         }
+        // Show the activity for an active chat OR an ambient place-with-skills —
+        // arriving at a place loads skills even with no chat open, and the card is
+        // exactly that "where am I / what's loaded" surface. End it when neither.
+        guard currentSession != nil || placeEnvironmentId != nil else {
+            endLiveActivity()
+            return
+        }
         let state = RookActivityAttributes.ContentState(
             placeName: currentPlaceName,
             skillsActive: placeEnvironmentId != nil,
@@ -174,7 +194,9 @@ final class RookModel: ObservableObject {
         )
         if let activity = liveActivity {
             Task { await activity.update(ActivityContent(state: state, staleDate: nil)) }
-        } else if currentSession != nil {
+        } else {
+            // Activity.request only succeeds in the foreground; a background
+            // arrival no-ops here and starts on next foreground (handleBecameActive).
             let attributes = RookActivityAttributes(agentName: currentSession?.agent ?? "Rook")
             liveActivity = try? Activity.request(attributes: attributes, content: ActivityContent(state: state, staleDate: nil))
         }
@@ -204,6 +226,23 @@ final class RookModel: ObservableObject {
         locationProvider.updateMonitoredPlaces(placeStore.places)
     }
 
+    /// Pre-check each place against the server so the Places screen can show
+    /// whether a matching `environment-repository/place/<slug>/` bundle exists —
+    /// otherwise a slug mismatch is invisible until you physically arrive.
+    func refreshPlaceSkillStatus() {
+        guard serverState == .online else {
+            return
+        }
+        Task {
+            var status: [String: Bool] = [:]
+            for place in placeStore.places {
+                let skills = (try? await api.skillPreviews(environmentId: "place:\(place.id)")) ?? []
+                status[place.id] = !skills.isEmpty
+            }
+            placeSkillStatus = status
+        }
+    }
+
     /// Mirrors `AgentStationModel.handleForegroundApp`: diff the current place
     /// against the registered environment, unavailable the old, register the new
     /// (only if the server has skills for it — the iOS analog of the Mac's
@@ -229,6 +268,7 @@ final class RookModel: ObservableObject {
                 // No skills defined for this place — don't raise an empty offer.
                 if placeEnvironmentId == envId {
                     placeEnvironmentId = nil
+                    updateLiveActivity()
                 }
                 return
             }
@@ -435,7 +475,9 @@ final class RookModel: ObservableObject {
         reconnectTask?.cancel()
         currentSession = nil
         chatVisible = false
-        endLiveActivity()
+        // Don't hard-end — if you're at a place with skills, the activity stays
+        // up as the ambient place card; updateLiveActivity ends it otherwise.
+        updateLiveActivity()
     }
 
     // MARK: - App lifecycle (scenePhase)
@@ -465,6 +507,9 @@ final class RookModel: ObservableObject {
 
     func handleBecameActive() {
         reannouncePlaceEnvironment()
+        // Start/refresh the Live Activity now that we're foreground (Activity.request
+        // is foreground-only, so a background place arrival couldn't start it).
+        updateLiveActivity()
         if pendingSocketResume, currentSession != nil, !socket.isConnected {
             pendingSocketResume = false
             scheduleReconnect(delaySeconds: 0)

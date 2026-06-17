@@ -27,7 +27,33 @@ public final class VoiceController: NSObject {
     public override init() {
         super.init()
         synthesizer.delegate = self
+        #if os(iOS)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioInterruption(_:)),
+            name: AVAudioSession.interruptionNotification,
+            object: nil
+        )
+        #endif
     }
+
+    #if os(iOS)
+    /// A phone call / Siri / other app grabbing the audio session would otherwise
+    /// leave listening "stuck on" (engine tap dead, `isListening` still true). Stop
+    /// cleanly on interruption so a single tap restarts, rather than two.
+    @objc private nonisolated func handleAudioInterruption(_ note: Notification) {
+        guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              AVAudioSession.InterruptionType(rawValue: raw) == .began else {
+            return
+        }
+        Task { @MainActor in
+            self.stopSpeaking()
+            if self.isListening {
+                self.stopListening(send: false)
+            }
+        }
+    }
+    #endif
 
     // MARK: - Permissions
 

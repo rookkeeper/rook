@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Scaffolding for device builds. APNs is what enables away-from-app Live
+	  Activity updates (ActivityKit push-to-start + remote content updates) while
+	  Rook is closed. The full pipeline — a hosted server holding push tokens, plus
+	  Sign in with Apple — is Phase 3 (see PRODUCT/research/rook-on-iphone.md); this
+	  entitlement on its own does nothing on the simulator (unsigned) build.
+	-->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

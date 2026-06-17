@@ -13,7 +13,47 @@ struct ChatScreen: View {
             Divider().overlay(PanelPalette.border)
             thread
             statusRow
+            queuedBar
             composer
+        }
+    }
+
+    @ViewBuilder
+    private var queuedBar: some View {
+        if !model.queuedMessages.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(Array(model.queuedMessages.enumerated()), id: \.offset) { index, message in
+                        HStack(spacing: 5) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(PanelPalette.textMuted)
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(PanelPalette.textNormal)
+                                .lineLimit(1)
+                            Button {
+                                model.removeQueuedMessage(at: index)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(PanelPalette.textMuted)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.leading, 9)
+                        .padding(.trailing, 6)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule().fill(PanelPalette.backgroundPrimary.opacity(0.8))
+                        )
+                        .overlay(Capsule().strokeBorder(PanelPalette.border))
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 2)
         }
     }
 

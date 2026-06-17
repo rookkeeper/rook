@@ -34,13 +34,19 @@ share one look and one protocol layer.
   `AVSpeechSynthesizer` speaks the reply once the turn completes. The shared
   `VoiceController` adds an iOS `AVAudioSession` (`.playAndRecord`,
   `.spokenAudio`) so capture and playback coexist.
-- **Live Activity / Dynamic Island.** While a session is active the lock screen
-  and Dynamic Island show the current place, whether skills are loaded, and the
-  agent's status (idle/working). Implemented natively with ActivityKit + a
-  `RookWidgets` app-extension target.
+- **Live Activity / Dynamic Island.** The lock screen and Dynamic Island show
+  the current place, whether skills are loaded, and the agent's status
+  (idle/working) — for an active chat *or* ambiently when you're at a
+  place with skills loaded (no chat needed). Implemented natively with
+  ActivityKit + a `RookWidgets` app-extension target; tapping the card
+  (`rook://open`) opens the chat.
 - **Auto-detect frequented places.** `CLVisit` monitoring suggests places you
   spend time at but haven't named; the Places screen lets you promote a
-  suggestion into a real geofenced place.
+  suggestion into a real geofenced place. Each place shows whether the server
+  has a matching `place/<slug>` skill bundle, so a slug mismatch is visible.
+- **Settings / capabilities.** The gear opens one screen to set the server
+  address, grant Voice (mic + speech), and manage Location — including the
+  "Always" upgrade that background geofencing requires.
 
 ## Why native (vs. an Expo / React-Native app)
 
@@ -156,6 +162,19 @@ Test hooks for scripted verification (set as `SIMCTL_CHILD_*` env vars):
 - `ROOK_SEED_VISIT="37.33,-122.03,4"` — seed a `CLVisit` suggestion.
 - `ROOK_SHOW_PLACES=1` — open the Places screen on launch.
 
+### Minimizing / backgrounding in the simulator
+
+iOS apps can't background themselves, so to exercise the app-lifecycle paths
+(socket reconnect, place re-announce, Live Activity start-on-foreground) use the
+helper — it foregrounds another app to push Rook to the background, the same as
+the **Device → Home** (⇧⌘H) gesture:
+
+```zsh
+./scripts/sim-rook.sh bg     # minimize Rook (scenePhase → .background)
+./scripts/sim-rook.sh fg     # bring it back (scenePhase → .active)
+./scripts/sim-rook.sh shot   # screenshot the simulator to /tmp/rook.png
+```
+
 ## Capabilities & Info.plist
 
 - **Background Modes → Location updates** (`UIBackgroundModes: location`).
@@ -173,4 +192,6 @@ The MVP targets the local Mac dev server, unauthenticated, on the LAN. True
 away-from-home presence (push-to-start Live Activities and remote updates while
 the app is closed) needs a hosted server + APNs + Sign in with Apple — see
 [`PRODUCT/research/rook-on-iphone.md`](../PRODUCT/research/rook-on-iphone.md)
-Phase 3.
+Phase 3. `Sources/Rook.entitlements` carries the `aps-environment` entitlement as
+scaffolding for that device/push work; it is inert on the unsigned simulator
+build and does nothing without the server-side push pipeline.

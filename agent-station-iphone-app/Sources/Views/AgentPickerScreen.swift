@@ -3,8 +3,7 @@ import SwiftUI
 
 struct AgentPickerScreen: View {
     @ObservedObject var model: RookModel
-    @State private var showingServerField = false
-    @State private var serverDraft = ""
+    @State private var showingSettings = false
     @State private var showingPlaces = false
 
     var body: some View {
@@ -18,8 +17,7 @@ struct AgentPickerScreen: View {
                             .foregroundStyle(PanelPalette.textMuted)
                     }
                     Button {
-                        serverDraft = model.baseURLString
-                        showingServerField = true
+                        showingSettings = true
                     } label: {
                         Image(systemName: "gearshape")
                             .foregroundStyle(PanelPalette.textMuted)
@@ -75,14 +73,8 @@ struct AgentPickerScreen: View {
                 .padding(16)
             }
         }
-        .alert("Server address", isPresented: $showingServerField) {
-            TextField("http://127.0.0.1:3000", text: $serverDraft)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Button("Save") { model.setBaseURL(serverDraft) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("On a device, use your Mac's LAN address. The simulator reaches localhost directly.")
+        .sheet(isPresented: $showingSettings) {
+            SettingsScreen(model: model)
         }
         .sheet(isPresented: $showingPlaces) {
             PlacesScreen(model: model)

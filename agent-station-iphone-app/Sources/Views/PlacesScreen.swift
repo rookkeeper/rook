@@ -36,6 +36,7 @@ struct PlacesScreen: View {
             if model.locationProvider.isAuthorized {
                 model.locationProvider.requestCurrentLocation()
             }
+            model.refreshPlaceSkillStatus()
         }
     }
 
@@ -157,13 +158,14 @@ struct PlacesScreen: View {
                         HStack(spacing: 10) {
                             Image(systemName: "mappin.circle.fill")
                                 .foregroundStyle(model.currentPlaceName == place.name ? PanelPalette.success : PanelPalette.accentHover)
-                            VStack(alignment: .leading, spacing: 1) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(place.name)
                                     .font(.body.weight(.medium))
                                     .foregroundStyle(PanelPalette.textNormal)
                                 Text("place:\(place.id) · \(Int(place.radius)) m")
                                     .font(.caption2.monospaced())
                                     .foregroundStyle(PanelPalette.textMuted)
+                                skillBadge(for: place)
                             }
                             Spacer()
                             Button {
@@ -179,6 +181,28 @@ struct PlacesScreen: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func skillBadge(for place: Place) -> some View {
+        switch model.placeSkillStatus[place.id] {
+        case .some(true):
+            badge(text: "skills available", systemImage: "checkmark.circle.fill", tint: PanelPalette.success)
+        case .some(false):
+            badge(text: "no server bundle", systemImage: "exclamationmark.circle", tint: PanelPalette.warning)
+        case .none:
+            EmptyView()
+        }
+    }
+
+    private func badge(text: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemImage)
+                .font(.system(size: 9, weight: .semibold))
+            Text(text)
+                .font(.caption2.weight(.medium))
+        }
+        .foregroundStyle(tint)
     }
 
     private func saveCurrent() {
