@@ -1,4 +1,5 @@
 import AppKit
+import RookKit
 import Foundation
 import Security
 import SwiftUI

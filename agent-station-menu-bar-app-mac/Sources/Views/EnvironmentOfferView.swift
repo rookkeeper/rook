@@ -1,4 +1,5 @@
 import Foundation
+import RookKit
 import SwiftUI
 
 /// Native counterpart of the web client's EnvironmentApprovalModal: shows the

@@ -7,27 +7,22 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		03BD5C7FA0B15F77C932DE37 /* ApiTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D7EC80FA5DF7CCDEEC7EE1 /* ApiTypes.swift */; };
 		0525A743E9AC784FDBB588A7 /* EnvironmentOfferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */; };
 		08FC09CECF45795C522F9738 /* CapabilitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B62C4626ECA71521C6662C1 /* CapabilitiesView.swift */; };
 		0A0B574B5D1329B7F84E21D0 /* SiteRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7C7467689A6968FCF1CD78 /* SiteRegistry.swift */; };
-		0B134C58418DD780F5A12153 /* ChatBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA9F4DC6F40FA54C493ECBA /* ChatBlocks.swift */; };
 		148A0D946E42C6C58EF97504 /* ForegroundAppMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */; };
 		22D62BE8921A8A1065BB3036 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */; };
-		303C7501116183288AFFA73F /* AcpSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA5FC0B16784438A04FCC858 /* AcpSocket.swift */; };
 		4A2797C6E10B77C5D352C1A0 /* MacBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A57F522CD72686189387921 /* MacBridge.swift */; };
 		5013FB73E8873725D7C8ED04 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29D631BD7FB343852A8868D /* ChatView.swift */; };
 		62F792A4BB11B1532FC83A92 /* AgentStationMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFC502CF4A2C236C14ED9699 /* AgentStationMenuView.swift */; };
 		70870F01E8243EDFBB3969AE /* HotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8D23EC102A118F55B2C3B6 /* HotKey.swift */; };
-		75361889F735548AF074EB40 /* AgentStationAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F8489536E42DE01CDB2AD0 /* AgentStationAPI.swift */; };
 		7BCFCDD5525379A1346E0D06 /* AgentStationMenuBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85789DA4FC9AF18BF856AC0 /* AgentStationMenuBarApp.swift */; };
 		8238B67CD800928945EDBCAA /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E653A9EE4D362F78F1994C /* VoiceController.swift */; };
-		84563F332409FEE03AC989EF /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 213CD39046566E5774D58FD5 /* JSONValue.swift */; };
 		84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */; };
 		89F7CFCF7CC7ADB692165339 /* ScreenOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D6061688BD621BFB9EE467 /* ScreenOCR.swift */; };
+		9C5B9AF806C990D34784B1F5 /* RookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2D5F19A409874674241A5290 /* RookKit */; };
 		A08FF032D5689105E28BC656 /* ServerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */; };
 		BC54469993F0E265DF2FF83A /* AXReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666566F6A2304DA00C88DEB8 /* AXReader.swift */; };
-		D19B28ED4EA03FC306847F74 /* PanelComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E81B5AF9FD7C49311CD9F8D /* PanelComponents.swift */; };
 		F1F491C946F6945B8B5A623E /* AgentStationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F986D20F42993AC8162A32D1 /* AgentStationModel.swift */; };
 /* End PBXBuildFile section */
 
@@ -35,34 +30,41 @@
 		0B62C4626ECA71521C6662C1 /* CapabilitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilitiesView.swift; sourceTree = "<group>"; };
 		12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerController.swift; sourceTree = "<group>"; };
 		12D6061688BD621BFB9EE467 /* ScreenOCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenOCR.swift; sourceTree = "<group>"; };
-		213CD39046566E5774D58FD5 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
+		1698ED5001755689CAFCB822 /* RookKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = RookKit; path = ../RookKit; sourceTree = SOURCE_ROOT; };
 		250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
 		2A57F522CD72686189387921 /* MacBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBridge.swift; sourceTree = "<group>"; };
-		33D7EC80FA5DF7CCDEEC7EE1 /* ApiTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiTypes.swift; sourceTree = "<group>"; };
 		3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapturer.swift; sourceTree = "<group>"; };
 		56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundAppMonitor.swift; sourceTree = "<group>"; };
 		58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSynthesizer.swift; sourceTree = "<group>"; };
 		666566F6A2304DA00C88DEB8 /* AXReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXReader.swift; sourceTree = "<group>"; };
 		7B7C7467689A6968FCF1CD78 /* SiteRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteRegistry.swift; sourceTree = "<group>"; };
-		8DA9F4DC6F40FA54C493ECBA /* ChatBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBlocks.swift; sourceTree = "<group>"; };
-		8E81B5AF9FD7C49311CD9F8D /* PanelComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelComponents.swift; sourceTree = "<group>"; };
 		A069F1000D2ABAA2A0A5BB2A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B29D631BD7FB343852A8868D /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		C70105DE8F79656AA46C1D8D /* AgentStationMenuBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentStationMenuBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E85789DA4FC9AF18BF856AC0 /* AgentStationMenuBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationMenuBarApp.swift; sourceTree = "<group>"; };
-		EA5FC0B16784438A04FCC858 /* AcpSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcpSocket.swift; sourceTree = "<group>"; };
 		F1E653A9EE4D362F78F1994C /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
 		F3623927C6A687804E503EBD /* AgentStationMenuBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgentStationMenuBar.entitlements; sourceTree = "<group>"; };
-		F8F8489536E42DE01CDB2AD0 /* AgentStationAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationAPI.swift; sourceTree = "<group>"; };
 		F986D20F42993AC8162A32D1 /* AgentStationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationModel.swift; sourceTree = "<group>"; };
 		FF8D23EC102A118F55B2C3B6 /* HotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKey.swift; sourceTree = "<group>"; };
 		FFC502CF4A2C236C14ED9699 /* AgentStationMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationMenuView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		35520EA2DA4B1F0C1AC3A443 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9C5B9AF806C990D34784B1F5 /* RookKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
 		120304F0E89A7A3A55E77DC8 = {
 			isa = PBXGroup;
 			children = (
+				A4D24DC192F367A1B84C2A96 /* Packages */,
 				6CD9511CB3C054B058DD4466 /* Sources */,
 				6531BA041A16E45440F35492 /* Products */,
 			);
@@ -79,8 +81,6 @@
 		68BD2B57E360EF39ED2722CC /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				EA5FC0B16784438A04FCC858 /* AcpSocket.swift */,
-				F8F8489536E42DE01CDB2AD0 /* AgentStationAPI.swift */,
 				666566F6A2304DA00C88DEB8 /* AXReader.swift */,
 				56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */,
 				FF8D23EC102A118F55B2C3B6 /* HotKey.swift */,
@@ -112,11 +112,16 @@
 			isa = PBXGroup;
 			children = (
 				F986D20F42993AC8162A32D1 /* AgentStationModel.swift */,
-				33D7EC80FA5DF7CCDEEC7EE1 /* ApiTypes.swift */,
-				8DA9F4DC6F40FA54C493ECBA /* ChatBlocks.swift */,
-				213CD39046566E5774D58FD5 /* JSONValue.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		A4D24DC192F367A1B84C2A96 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				1698ED5001755689CAFCB822 /* RookKit */,
+			);
+			name = Packages;
 			sourceTree = "<group>";
 		};
 		CD5F363D46BB74C5822A5408 /* Views */ = {
@@ -126,7 +131,6 @@
 				0B62C4626ECA71521C6662C1 /* CapabilitiesView.swift */,
 				B29D631BD7FB343852A8868D /* ChatView.swift */,
 				250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */,
-				8E81B5AF9FD7C49311CD9F8D /* PanelComponents.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -139,6 +143,7 @@
 			buildConfigurationList = 9A5CF0D353505D9CF01599C0 /* Build configuration list for PBXNativeTarget "AgentStationMenuBar" */;
 			buildPhases = (
 				2A4ACD3856FD49E4494E22F0 /* Sources */,
+				35520EA2DA4B1F0C1AC3A443 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -146,6 +151,7 @@
 			);
 			name = AgentStationMenuBar;
 			packageProductDependencies = (
+				2D5F19A409874674241A5290 /* RookKit */,
 			);
 			productName = AgentStationMenuBar;
 			productReference = C70105DE8F79656AA46C1D8D /* AgentStationMenuBar.app */;
@@ -170,6 +176,9 @@
 			);
 			mainGroup = 120304F0E89A7A3A55E77DC8;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				04C0B316E8632270B4044B94 /* XCLocalSwiftPackageReference "../RookKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
@@ -185,22 +194,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				BC54469993F0E265DF2FF83A /* AXReader.swift in Sources */,
-				303C7501116183288AFFA73F /* AcpSocket.swift in Sources */,
-				75361889F735548AF074EB40 /* AgentStationAPI.swift in Sources */,
 				7BCFCDD5525379A1346E0D06 /* AgentStationMenuBarApp.swift in Sources */,
 				62F792A4BB11B1532FC83A92 /* AgentStationMenuView.swift in Sources */,
 				F1F491C946F6945B8B5A623E /* AgentStationModel.swift in Sources */,
-				03BD5C7FA0B15F77C932DE37 /* ApiTypes.swift in Sources */,
 				08FC09CECF45795C522F9738 /* CapabilitiesView.swift in Sources */,
-				0B134C58418DD780F5A12153 /* ChatBlocks.swift in Sources */,
 				5013FB73E8873725D7C8ED04 /* ChatView.swift in Sources */,
 				0525A743E9AC784FDBB588A7 /* EnvironmentOfferView.swift in Sources */,
 				148A0D946E42C6C58EF97504 /* ForegroundAppMonitor.swift in Sources */,
 				70870F01E8243EDFBB3969AE /* HotKey.swift in Sources */,
 				22D62BE8921A8A1065BB3036 /* InputSynthesizer.swift in Sources */,
-				84563F332409FEE03AC989EF /* JSONValue.swift in Sources */,
 				4A2797C6E10B77C5D352C1A0 /* MacBridge.swift in Sources */,
-				D19B28ED4EA03FC306847F74 /* PanelComponents.swift in Sources */,
 				84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */,
 				89F7CFCF7CC7ADB692165339 /* ScreenOCR.swift in Sources */,
 				A08FF032D5689105E28BC656 /* ServerController.swift in Sources */,
@@ -397,6 +400,20 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		04C0B316E8632270B4044B94 /* XCLocalSwiftPackageReference "../RookKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../RookKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2D5F19A409874674241A5290 /* RookKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RookKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 28DC4212204A4F829C1E2C9D /* Project object */;
 }

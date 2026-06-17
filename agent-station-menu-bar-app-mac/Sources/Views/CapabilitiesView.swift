@@ -1,4 +1,5 @@
 import Foundation
+import RookKit
 import SwiftUI
 
 /// The configuration surface, moved off the home panel: the toggles, permission
