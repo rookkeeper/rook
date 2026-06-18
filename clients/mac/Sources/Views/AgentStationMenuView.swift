@@ -4,10 +4,75 @@ import SwiftUI
 
 struct AgentStationMenuView: View {
     @ObservedObject var model: AgentStationModel
+    @State private var measuredContentHeight: CGFloat = 420
+    @State private var hostingWindow: NSWindow?
+    @State private var hasAppliedInitialSizing = false
+
     private let homePanelWidth: CGFloat = 372
     private let detailPanelWidth: CGFloat = 460
 
     var body: some View {
+        displayedContent
+            .padding(12)
+            .frame(
+                minWidth: panelWidth,
+                idealWidth: panelWidth,
+                maxWidth: .infinity,
+                minHeight: panelHeight,
+                idealHeight: panelHeight,
+                maxHeight: .infinity,
+                alignment: .topLeading
+            )
+            .background(PanelBackground())
+            .background(measurementContent)
+        .background(WindowAccessor { window in
+            if hostingWindow !== window {
+                hostingWindow = window
+                hasAppliedInitialSizing = false
+                applyWindowSizing(window)
+            }
+        })
+        .environment(\.colorScheme, .dark)
+        .onAppear {
+            model.refreshNow()
+            applyWindowSizing(hostingWindow)
+        }
+        .onPreferenceChange(PanelContentHeightKey.self) { height in
+            let rounded = ceil(height)
+            guard abs(rounded - measuredContentHeight) > 1 else { return }
+            measuredContentHeight = rounded
+            applyWindowSizing(hostingWindow)
+        }
+        .onChange(of: model.panelMode) { _, _ in
+            applyWindowSizing(hostingWindow)
+        }
+    }
+
+    @ViewBuilder
+    private var displayedContent: some View {
+        if model.panelMode == .chat {
+            baseContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            baseContent
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var measurementContent: some View {
+        baseContent
+            .fixedSize(horizontal: false, vertical: true)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: PanelContentHeightKey.self, value: proxy.size.height + 24)
+                }
+            )
+            .hidden()
+            .allowsHitTesting(false)
+    }
+
+    private var baseContent: some View {
         ZStack(alignment: .topLeading) {
             switch model.panelMode {
             case .home:
@@ -22,13 +87,6 @@ struct AgentStationMenuView: View {
                 CapabilitiesDetail(model: model)
             }
         }
-        .padding(12)
-        .frame(width: panelWidth, alignment: .topLeading)
-        .background(PanelBackground())
-        .environment(\.colorScheme, .dark)
-        .onAppear {
-            model.refreshNow()
-        }
     }
 
     // Panel size is applied WITHOUT animation. Animating the hosting view's
@@ -38,6 +96,66 @@ struct AgentStationMenuView: View {
     // app, including on launch when hosted in the companion NSPanel.
     private var panelWidth: CGFloat {
         model.panelMode == .home ? homePanelWidth : detailPanelWidth
+    }
+
+    private var panelHeight: CGFloat {
+        max(420, measuredContentHeight)
+    }
+
+    private func applyWindowSizing(_ window: NSWindow?) {
+        guard let window else { return }
+
+        let targetContentSize = NSSize(width: panelWidth, height: panelHeight)
+        window.contentMinSize = targetContentSize
+        window.contentMaxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+
+        let currentContentRect = window.contentRect(forFrameRect: window.frame)
+        let desiredContentSize: NSSize
+        if hasAppliedInitialSizing {
+            desiredContentSize = NSSize(
+                width: max(currentContentRect.width, targetContentSize.width),
+                height: max(currentContentRect.height, targetContentSize.height)
+            )
+        } else {
+            desiredContentSize = targetContentSize
+            hasAppliedInitialSizing = true
+        }
+
+        guard abs(desiredContentSize.width - currentContentRect.width) > 1 || abs(desiredContentSize.height - currentContentRect.height) > 1 else {
+            return
+        }
+
+        let desiredFrame = window.frameRect(forContentRect: NSRect(origin: .zero, size: desiredContentSize))
+        var nextFrame = window.frame
+        nextFrame.origin.y += nextFrame.height - desiredFrame.height
+        nextFrame.size = desiredFrame.size
+        window.setFrame(nextFrame, display: true)
+    }
+}
+
+private struct PanelContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 420
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct WindowAccessor: NSViewRepresentable {
+    var onResolve: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            onResolve(view.window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            onResolve(nsView.window)
+        }
     }
 }
 

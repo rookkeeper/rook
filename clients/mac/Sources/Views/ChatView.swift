@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import RookKit
 import SwiftUI
@@ -6,6 +7,7 @@ struct ChatDetail: View {
     @ObservedObject var model: AgentStationModel
     @State private var draft = ""
     @State private var isHoveringSend = false
+    @State private var settingsExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -17,15 +19,24 @@ struct ChatDetail: View {
                 model.goHome()
             }
 
+            if let pendingPermission = model.pendingPermission {
+                permissionCard(pendingPermission)
+            }
+
             threadCard
 
             if !model.queuedMessages.isEmpty {
                 queuedCard
             }
 
+            if settingsExpanded, hasSettings {
+                settingsCard
+            }
+
             statusRow
             composeRow
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var chatTitle: String {
@@ -39,9 +50,6 @@ struct ChatDetail: View {
     }
 
     private var headerTrailing: String {
-        if let usage = model.contextUsage, usage.size > 0 {
-            return "ctx \(compactCount(usage.used))/\(compactCount(usage.size))"
-        }
         if model.reconnecting {
             return "reconnecting…"
         }
@@ -87,17 +95,26 @@ struct ChatDetail: View {
                         }
                         .padding(.trailing, 2)
                     }
+                    .background(ScrollPositionObserver { atBottom in
+                        if atBottom {
+                            model.resumeAutoScroll()
+                        } else {
+                            model.pauseAutoScroll()
+                        }
+                    })
                     .scrollIndicators(.visible)
-                    .frame(height: 340)
+                    .frame(minHeight: 260, maxHeight: .infinity)
                     .onAppear {
                         proxy.scrollTo("chat-bottom", anchor: .bottom)
                     }
                     .onChange(of: model.scrollTick) { _, _ in
+                        guard model.autoScrollEnabled else { return }
                         proxy.scrollTo("chat-bottom", anchor: .bottom)
                     }
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var queuedCard: some View {
@@ -107,31 +124,61 @@ struct ChatDetail: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(PanelPalette.secondaryText)
 
-            ForEach(Array(model.queuedMessages.enumerated()), id: \.offset) { index, message in
-                HStack(spacing: 8) {
-                    Text(message)
+            ForEach(Array(model.queuedMessages.enumerated()), id: \.element.id) { index, message in
+                if message.isEditing {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Edit queued message", text: Binding(
+                            get: { message.draftText },
+                            set: { model.updateQueuedMessageDraft(message.id, text: $0) }
+                        ), axis: .vertical)
+                        .textFieldStyle(.plain)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Spacer(minLength: 4)
-                    Button {
-                        model.removeQueuedMessage(at: index)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(PanelPalette.secondaryText)
+                        .lineLimit(2...4)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(PanelPalette.backgroundPrimary.opacity(0.75))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(PanelPalette.border)
+                        )
+
+                        HStack(spacing: 6) {
+                            queueButton("Save", systemImage: "checkmark", tint: PanelPalette.success) {
+                                model.saveQueuedMessageEdit(message.id)
+                            }
+                            queueButton("Cancel", systemImage: "xmark", tint: PanelPalette.secondaryText) {
+                                model.cancelEditingQueuedMessage(message.id)
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .help("Remove from queue")
-                    .pointingHandOnHover()
+                } else {
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(message.text)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 4)
+                        HStack(spacing: 6) {
+                            queueButton("Edit", systemImage: "pencil", tint: PanelPalette.secondaryText) {
+                                model.beginEditingQueuedMessage(message.id)
+                            }
+                            queueButton("Send now", systemImage: "paperplane.fill", tint: PanelPalette.accent) {
+                                model.sendQueuedMessageNow(message.id)
+                            }
+                            queueButton("Delete", systemImage: "trash", tint: PanelPalette.danger) {
+                                model.removeQueuedMessage(at: index)
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    /// Persistent status line, like the web client's `.cwa-status-line`:
-    /// mint "Ready" when idle, pulsing warm yellow while the agent works.
     private var statusRow: some View {
         HStack(spacing: 8) {
             StatusLineDot(tint: statusTint, pulsing: model.isRunning || model.reconnecting)
@@ -140,22 +187,43 @@ struct ChatDetail: View {
                 .foregroundStyle(statusTint)
                 .lineLimit(1)
             Spacer(minLength: 0)
-            if model.isRunning {
-                Button {
-                    model.stopAgent()
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
+            HStack(spacing: 8) {
+                if let usage = model.contextUsage, usage.size > 0 {
+                    Text(usageSummary(usage))
                         .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(PanelPalette.danger))
+                        .foregroundStyle(PanelPalette.secondaryText)
+                        .lineLimit(1)
                 }
-                .buttonStyle(.plain)
-                .help("Stop the agent (⌘.)")
-                .keyboardShortcut(".", modifiers: .command)
-                .pointingHandOnHover()
+                if hasSettings {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.14)) {
+                            settingsExpanded.toggle()
+                        }
+                    } label: {
+                        Image(systemName: settingsExpanded ? "gearshape.fill" : "gearshape")
+                            .foregroundStyle(PanelPalette.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .help("ACP settings")
+                    .pointingHandOnHover()
+                }
+                if model.isRunning {
+                    Button {
+                        model.stopAgent()
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(PanelPalette.danger))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Stop the agent (⌘.)")
+                    .keyboardShortcut(".", modifiers: .command)
+                    .pointingHandOnHover()
+                }
             }
         }
         .padding(.horizontal, 6)
@@ -178,6 +246,9 @@ struct ChatDetail: View {
         }
         if model.isRunning {
             return model.statusLine.isEmpty ? "Agent is working…" : model.statusLine
+        }
+        if model.lastStopReason == "cancelled" {
+            return "Stopped"
         }
         return "Ready"
     }
@@ -229,10 +300,167 @@ struct ChatDetail: View {
         return model.isRunning ? "Queue a message for \(session.agent)…" : "Message \(session.agent)…"
     }
 
+    private var settingsCard: some View {
+        PanelCard {
+            if let modes = model.currentModes, !modes.availableModes.isEmpty {
+                Picker("Mode", selection: Binding(
+                    get: { modes.currentModeId },
+                    set: { model.setMode($0) }
+                )) {
+                    ForEach(modes.availableModes) { mode in
+                        Text(mode.name).tag(mode.id)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            ForEach(model.configOptions) { option in
+                Picker(option.name, selection: Binding(
+                    get: { option.currentValue },
+                    set: { model.setConfigOption(option.id, value: $0) }
+                )) {
+                    ForEach(option.options) { value in
+                        Text(value.name).tag(value.value)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+        }
+    }
+
+    private func permissionCard(_ pendingPermission: PendingPermissionRequest) -> some View {
+        PanelCard {
+            Text("Permission requested")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(PanelPalette.secondaryText)
+            Text(pendingPermission.toolCall.title)
+                .font(.callout)
+                .fontWeight(.semibold)
+            Text(pendingPermission.toolCall.kind)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                ForEach(pendingPermission.options) { option in
+                    queueButton(option.name, systemImage: "checkmark.shield", tint: PanelPalette.accent) {
+                        model.decidePermission(optionId: option.optionId)
+                    }
+                }
+                queueButton("Cancel", systemImage: "xmark", tint: PanelPalette.secondaryText) {
+                    model.decidePermission(optionId: nil)
+                }
+            }
+        }
+    }
+
+    private var hasSettings: Bool {
+        model.currentModes != nil || !model.configOptions.isEmpty
+    }
+
+    private func usageSummary(_ usage: ContextUsageState) -> String {
+        let base = "ctx \(compactCount(usage.used))"
+        if let cost = usage.cost {
+            return base + " · " + String(format: "$%.3f", cost.amount)
+        }
+        return base
+    }
+
+    private func queueButton(_ title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(tint == PanelPalette.secondaryText ? PanelPalette.textNormal : .white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(tint == PanelPalette.secondaryText ? PanelPalette.backgroundPrimary.opacity(0.7) : tint)
+                )
+        }
+        .buttonStyle(.plain)
+        .pointingHandOnHover()
+    }
+
     private func submit() {
         let text = draft
         draft = ""
+        model.resumeAutoScroll()
         model.send(text)
     }
 }
 
+private struct ScrollPositionObserver: NSViewRepresentable {
+    var onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            context.coordinator.attach(to: view, onChange: onChange)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            context.coordinator.attach(to: nsView, onChange: onChange)
+            context.coordinator.report()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject {
+        private weak var scrollView: NSScrollView?
+        private var observer: NSObjectProtocol?
+        private var onChange: ((Bool) -> Void)?
+
+        func attach(to view: NSView, onChange: @escaping (Bool) -> Void) {
+            self.onChange = onChange
+            if let scrollView = view.enclosingScrollView ?? findScrollView(from: view), self.scrollView !== scrollView {
+                detach()
+                self.scrollView = scrollView
+                observer = NotificationCenter.default.addObserver(
+                    forName: NSView.boundsDidChangeNotification,
+                    object: scrollView.contentView,
+                    queue: .main
+                ) { [weak self] _ in
+                    self?.report()
+                }
+                scrollView.contentView.postsBoundsChangedNotifications = true
+            }
+            report()
+        }
+
+        private func findScrollView(from view: NSView) -> NSScrollView? {
+            var current: NSView? = view
+            while let candidate = current {
+                if let scrollView = candidate.enclosingScrollView {
+                    return scrollView
+                }
+                current = candidate.superview
+            }
+            return nil
+        }
+
+        func report() {
+            guard let scrollView, let documentView = scrollView.documentView else { return }
+            let visibleRect = documentView.visibleRect
+            let atBottom = visibleRect.maxY >= documentView.bounds.maxY - 12
+            onChange?(atBottom)
+        }
+
+        private func detach() {
+            if let observer {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            observer = nil
+            scrollView = nil
+        }
+
+        deinit {
+            detach()
+        }
+    }
+}

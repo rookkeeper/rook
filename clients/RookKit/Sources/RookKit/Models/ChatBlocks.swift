@@ -63,6 +63,98 @@ public struct PlanEntry: Equatable, Identifiable {
     }
 }
 
+public struct AcpUsageCost: Equatable {
+    public var amount: Double
+    public var currency: String
+
+    public init(amount: Double, currency: String) {
+        self.amount = amount
+        self.currency = currency
+    }
+}
+
+public struct AcpSessionMode: Equatable, Identifiable {
+    public var id: String
+    public var name: String
+    public var description: String?
+
+    public init(id: String, name: String, description: String? = nil) {
+        self.id = id
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct AcpModesState: Equatable {
+    public var currentModeId: String
+    public var availableModes: [AcpSessionMode]
+
+    public init(currentModeId: String, availableModes: [AcpSessionMode]) {
+        self.currentModeId = currentModeId
+        self.availableModes = availableModes
+    }
+}
+
+public struct AcpConfigOptionValue: Equatable, Identifiable {
+    public var id: String { value }
+    public var value: String
+    public var name: String
+    public var description: String?
+
+    public init(value: String, name: String, description: String? = nil) {
+        self.value = value
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct AcpConfigOption: Equatable, Identifiable {
+    public var id: String
+    public var name: String
+    public var description: String?
+    public var category: String?
+    public var type: String
+    public var currentValue: String
+    public var options: [AcpConfigOptionValue]
+
+    public init(id: String, name: String, description: String? = nil, category: String? = nil, type: String, currentValue: String, options: [AcpConfigOptionValue]) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.category = category
+        self.type = type
+        self.currentValue = currentValue
+        self.options = options
+    }
+}
+
+public struct AcpPermissionOption: Equatable, Identifiable {
+    public var id: String { optionId }
+    public var optionId: String
+    public var name: String
+    public var kind: String
+
+    public init(optionId: String, name: String, kind: String) {
+        self.optionId = optionId
+        self.name = name
+        self.kind = kind
+    }
+}
+
+public struct AcpPermissionToolCall: Equatable {
+    public var toolCallId: String
+    public var title: String
+    public var kind: String
+    public var status: String
+
+    public init(toolCallId: String, title: String, kind: String, status: String) {
+        self.toolCallId = toolCallId
+        self.title = title
+        self.kind = kind
+        self.status = status
+    }
+}
+
 public enum ChatBlockKind: Equatable {
     case user(text: String)
     case assistantText(text: String, streaming: Bool)
@@ -93,8 +185,12 @@ public enum AcpClientEvent {
     case toolInputDelta(toolCallId: String, toolName: String?, delta: String)
     case toolCallReady(toolCallId: String, toolName: String?)
     case toolOutputDelta(toolCallId: String, toolName: String?, delta: String)
+    case permissionRequest(requestId: String, toolCall: AcpPermissionToolCall, options: [AcpPermissionOption])
     case planUpdate(entries: [PlanEntry])
-    case usageUpdate(used: Int, size: Int)
+    case usageUpdate(used: Int, size: Int, cost: AcpUsageCost?)
+    case modesState(currentModeId: String, availableModes: [AcpSessionMode])
+    case currentModeUpdate(modeId: String)
+    case configOptionUpdate(configOptions: [AcpConfigOption])
     case runCompleted(stopReason: String)
     case runFailed(message: String)
     case protocolError(message: String)

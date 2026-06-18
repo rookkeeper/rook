@@ -1,3 +1,4 @@
+import MarkdownUI
 import SwiftUI
 
 /// Renders one `ChatBlock` from the shared chat model. Reused by the macOS
@@ -97,15 +98,12 @@ private struct AssistantTextBlockView: View {
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, paragraph in
-                    Text(inlineMarkdown(paragraph))
-                        .font(.system(size: 12.5))
-                        .lineSpacing(3)
-                        .foregroundStyle(.white)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            VStack(alignment: .leading, spacing: 6) {
+                Markdown(text)
+                    .markdownTheme(.gitHub)
+                    .foregroundStyle(.white)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if streaming {
                     StreamingIndicator()
                 }
@@ -114,12 +112,6 @@ private struct AssistantTextBlockView: View {
             .padding(.vertical, 8)
             .background(bubbleShape(tailAt: .bottomLeading).fill(PanelPalette.accent))
             Spacer(minLength: 48)
-        }
-    }
-
-    private var paragraphs: [String] {
-        text.components(separatedBy: "\n\n").filter {
-            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 }

@@ -10,7 +10,15 @@ let package = Package(
     products: [
         .library(name: "RookKit", targets: ["RookKit"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.4.1"),
+    ],
     targets: [
-        .target(name: "RookKit"),
+        .target(
+            name: "RookKit",
+            dependencies: [
+                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
+            ]
+        ),
     ]
 )

@@ -1,6 +1,6 @@
 # Agent Station Menu Bar (macOS)
 
-A native SwiftUI menu bar client for [Rook](../../README.md) — talk to
+A native SwiftUI menu bar client for [Rook](../../README.md) - talk to
 your Pi / Claude / Cursor agents from the macOS menu bar. The panel layout and
 interaction model (slide-in detail views, hover affordances) follow the Stoa
 Scribe menu bar app; the visual design tokens are mirrored in the shared Swift
@@ -11,26 +11,32 @@ WebSocket protocol.
 
 ## Features
 
-- **Agent picker** — `GET /api/agents`, rendered as a tree (profiles indented
+- **Agent picker** - `GET /api/agents`, rendered as a tree (profiles indented
   under their parent agent).
-- **Sessions** — per-agent session history with running/stopped state, resume
+- **Sessions** - per-agent session history with running/stopped state, resume
   any session, or start a named new chat (`POST /api/agent/start`).
-- **Auto-resume** — on launch the app rejoins the most recent session
+- **Auto-resume** - on launch the app rejoins the most recent session
   (`GET /api/agent/session/recent`), like the web client.
 - **Streaming chat** — `session/prompt` over `ws://127.0.0.1:3000/api/ws`;
-  renders agent text, thinking (collapsible), tool calls with live
-  input/output, plans, run errors, and context usage.
+  renders agent text, thinking (collapsible), tool calls with normalized raw
+  input/output, plans, run errors, stop/cancel semantics, context usage, and
+  optional usage cost.
+- **ACP controls** — native support for permission requests
+  (`session/request_permission`), session mode changes (`session/set_mode` /
+  `current_mode_update`), and config options
+  (`session/set_config_option` / `config_option_update`).
 - **Message queueing** — messages sent while the agent is busy queue and
-  auto-send after the current turn (120 ms gap), matching the web client.
-- **Environment offers** — `environment_offer_available` events open a native
+  auto-send after the current turn (120 ms gap), matching the web client, with
+  queue edit / delete / send-now controls (`_rookery/steering_prompt`).
+- **Environment offers** - `environment_offer_available` events open a native
   approval view with skill-file preview (`GET /api/environments/preview`) and
   the four 2×2 decisions (`POST /api/environments/decision`): allow this
   visit / always allow / not now / never.
-- **Server supervision** — health polling; if the server is down the panel can
+- **Server supervision** - health polling; if the server is down the panel can
   launch `npm run dev` for the repo and tail its log
   (`~/Library/Logs/AgentStationMenuBar/server.log`).
-- **Foreground-app environment provider** — the app watches which Mac app is
-  frontmost (NSWorkspace activation notifications — no Accessibility permission
+- **Foreground-app environment provider** - the app watches which Mac app is
+  frontmost (NSWorkspace activation notifications - no Accessibility permission
   needed) and registers/unregisters `app:<slug>` environments as you switch
   apps.
 
@@ -39,25 +45,25 @@ WebSocket protocol.
 Talk to your agent and hear it reply, without the input box. The loop runs
 locally in the menu bar app and reuses the existing agent websocket:
 
-1. **Speech → text** — Apple Speech (`SFSpeechRecognizer`), on-device on Apple
+1. **Speech → text** - Apple Speech (`SFSpeechRecognizer`), on-device on Apple
    Silicon. Press-to-talk; a ~1.4 s pause ends your turn.
 2. The transcript is sent to the current session like any typed message.
-3. **Text → speech** — `AVSpeechSynthesizer` speaks the streamed reply
+3. **Text → speech** - `AVSpeechSynthesizer` speaks the streamed reply
    sentence-by-sentence (markdown/code stripped) as it arrives.
 
 Enable it on the **Voice** card, then **press to talk** there or hit
 **⌃⌥Space from any app** (global hotkey; uses the Accessibility grant). First
 use prompts for Microphone + Speech Recognition. Combined with Computer
 Control, you can speak a request and have the agent act on your screen and
-report back aloud — no typing.
+report back aloud - no typing.
 
 **Timing.** Your speech is sent as the prompt; the agent's reply is spoken
-**once, after the full turn completes and renders** — not streamed
+**once, after the full turn completes and renders** - not streamed
 sentence-by-sentence. Thinking and tool steps are silent; only the final
 response is read.
 
 **Stopping it.** A **Stop** button appears on the Voice card while it's
-speaking. Pressing to talk (or ⌃⌥Space) also interrupts playback — barge-in —
+speaking. Pressing to talk (or ⌃⌥Space) also interrupts playback - barge-in -
 so you can cut it off and respond.
 
 **Better voice.** The app auto-selects the best installed English voice
@@ -67,20 +73,20 @@ so you can cut it off and respond.
 Downloading a Premium voice (macOS Sequoia / 15):
 
 1. **System Settings → Accessibility → Spoken Content.**
-2. On the **System Voice** row, click the **ⓘ info button** to the *right* of
+2. On the **System Voice** row, click the **i info button** to the *right* of
    the voice dropdown. (The dropdown itself only lists already-installed voices
-   and has **no** "Manage Voices…" entry in Sequoia — the ⓘ is the only path to
+   and has **no** "Manage Voices..." entry in Sequoia - the i is the only path to
    downloads.)
-3. In the sheet, expand **English (US)** and find a voice marked **(Premium)** —
+3. In the sheet, expand **English (US)** and find a voice marked **(Premium)** -
    e.g. **Ava, Zoe, Evan, Nathan**. Click the **cloud download icon ☁️**
-   (~100–500 MB each).
-4. That's it — you don't need to set it as the System Voice. The app re-picks
+   (~100-500 MB each).
+4. That's it - you don't need to set it as the System Voice. The app re-picks
    the best voice on every spoken reply, so the next reply uses it (no relaunch).
 
-> Older macOS (Ventura/Sonoma) had a "Manage Voices…" item at the bottom of the
-> System Voice dropdown; Sequoia replaced it with the ⓘ button.
+> Older macOS (Ventura/Sonoma) had a "Manage Voices..." item at the bottom of the
+> System Voice dropdown; Sequoia replaced it with the i button.
 
-Premium voices are the neural, Siri-quality tier — a large step up from the
+Premium voices are the neural, Siri-quality tier - a large step up from the
 default Samantha. Pin a specific one with `defaults write
 com.rookery.AgentStationMenuBar VoiceIdentifier <voice-id>`. For studio-quality
 voices, swap `VoiceController`'s synthesizer for a cloud TTS (ElevenLabs,
@@ -111,15 +117,15 @@ this app stays in the foreground area of my work". Activations are debounced
 (700 ms) so ⌘-Tab flicker doesn't churn registrations, the app ignores its own
 activations (opening the panel doesn't end the episode), and the current
 environment is re-announced if the server restarts. Offers arrive over the
-session websocket like any other environment — the menu bar bird fills amber
+session websocket like any other environment - the menu bar bird fills amber
 and the native approval view shows the skill files before anything loads.
 
 Provider activity is traced to `/tmp/agent-station-menubar.log` for debugging.
 
-### Tier 1 — window-title perception
+### Tier 1 - window-title perception
 
-App *identity* is free (NSWorkspace), but reading inside another app — its
-focused **window title** — needs the macOS **Accessibility** permission. Grant
+App *identity* is free (NSWorkspace), but reading inside another app - its
+focused **window title** - needs the macOS **Accessibility** permission. Grant
 it from the **Context Bridge** card in the panel (or System Settings → Privacy
 & Security → Accessibility). Once granted, the title is included in
 registration metadata and in the live bridge context. Window titles are
@@ -132,7 +138,7 @@ bridge without re-registering.
 > because TCC keys on code identity. Re-grant after a rebuild, or sign the app
 > with a stable identity.
 
-### Tier 2 — the Mac bridge
+### Tier 2 - the Mac bridge
 
 The app runs a loopback HTTP server (default `http://127.0.0.1:8765`, override
 with `defaults write com.rookery.AgentStationMenuBar MacBridgePort <n>`) that
@@ -140,29 +146,29 @@ the agent's shell tool can `curl` to perceive and drive the Mac:
 
 | Route | Body | Returns |
 |-------|------|---------|
-| `GET /context` | — | `{ frontmostApp, bundleId, windowTitle, environmentId, accessibilityTrusted }` |
-| `GET /health` | — | `{ ok, service }` |
-| `POST /applescript` | `{ "script": "…" }` | `{ ok, output }` |
-| `POST /open-url` | `{ "url": "…" }` | `{ ok }` |
+| `GET /context` | - | `{ frontmostApp, bundleId, windowTitle, environmentId, accessibilityTrusted }` |
+| `GET /health` | - | `{ ok, service }` |
+| `POST /applescript` | `{ "script": "..." }` | `{ ok, output }` |
+| `POST /open-url` | `{ "url": "..." }` | `{ ok }` |
 
 No server-side change was needed: Pi/Claude agents already have a shell tool,
 so an app's skill bundle simply documents these endpoints and the agent calls
 them. `POST /applescript` targeting another app triggers a one-time macOS
 Automation consent prompt (declared via `NSAppleEventsUsageDescription`).
-Centralizing these grants in one user-visible app is the point — Accessibility,
+Centralizing these grants in one user-visible app is the point - Accessibility,
 Automation, and Screen Recording are approved once here instead of being
 attributed to the node server's subprocesses.
 
-### Tier 4 — computer use (perception + control)
+### Tier 4 - computer use (perception + control)
 
 For driving apps the way a person does. Two grounding strategies share one set
 of primitives:
 
 | Route | Body | Returns | Gate |
 |-------|------|---------|------|
-| `GET /ax-elements` | — | `{ ok, elements: [{ id, role, label, x, y, width, height, centerX, centerY }] }` | Accessibility |
-| `GET /screenshot` | — | `{ ok, png_base64, pixelWidth, pixelHeight, originX, originY, scale }` | Screen Recording |
-| `POST /input` | `{ action, … }` | `{ ok, output }` | **Computer Control toggle** + Accessibility |
+| `GET /ax-elements` | - | `{ ok, elements: [{ id, role, label, x, y, width, height, centerX, centerY }] }` | Accessibility |
+| `GET /screenshot` | - | `{ ok, png_base64, pixelWidth, pixelHeight, originX, originY, scale }` | Screen Recording |
+| `POST /input` | `{ action, ... }` | `{ ok, output }` | **Computer Control toggle** + Accessibility |
 
 `/input` actions (coordinates are global top-left screen space, matching
 `/ax-elements` frames): `move`/`click`/`doubleClick` `{x,y}`, `type` `{text}`,
@@ -172,7 +178,7 @@ Two paths, by app:
 
 - **AX-driven control** (native apps, text-only models like DeepSeek V4 Pro):
   read `/ax-elements`, pick one by `id`, `POST /input {action:"click", x:centerX,
-  y:centerY}`. No screenshot or vision model needed — the model reasons over the
+  y:centerY}`. No screenshot or vision model needed - the model reasons over the
   element list as text.
 - **Pixel-vision control** (opaque apps with no useful AX tree, e.g. CapCut):
   `GET /screenshot`, send the image to a vision-grounding model (e.g. DeepSeek
@@ -194,7 +200,7 @@ focusing Slack offers a skill that reads `/context` to learn the current
 channel and uses `slack://` deep links + AppleScript through the bridge to
 navigate and draft messages.
 
-## Getting it running — exact steps
+## Getting it running - exact steps
 
 Prerequisites: Xcode, [xcodegen](https://github.com/yonaskolb/XcodeGen)
 (`brew install xcodegen`), and Node (for the Agent Station server).
@@ -228,10 +234,10 @@ APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData \
 open "$APP_PATH"
 ```
 
-Look for the **bird icon** in the menu bar (no Dock icon — it's an
+Look for the **bird icon** in the menu bar (no Dock icon - it's an
 `LSUIElement` app). The icon fills and turns amber when an environment offer
 is pending, and tints violet while a run is in flight. If you don't see it,
-read the troubleshooting section below — on a crowded menu bar this is
+read the troubleshooting section below - on a crowded menu bar this is
 expected, not a bug.
 
 To kill and relaunch (e.g. after a rebuild):
@@ -251,7 +257,7 @@ defaults write com.rookery.AgentStationMenuBar RookeryRepoRoot /path/to/rookery
 
 ## Troubleshooting: the icon isn't in the menu bar
 
-On notch Macs, macOS silently hides status items that don't fit — there is no
+On notch Macs, macOS silently hides status items that don't fit - there is no
 overflow indicator; they just vanish. Worse, each item's position is
 *persisted* (distance from the right screen edge) in the app's defaults, so if
 the app's first launch lands it in the hidden zone, it stays hidden on every
@@ -272,7 +278,7 @@ Once visible you can ⌘-drag the icon and macOS persists wherever you drop it.
 Long-term, a menu bar manager (e.g. Ice: `brew install --cask
 jordanbaird-ice`, or Bartender) avoids the overflow cull entirely.
 
-**Window-mode escape hatch** — run the panel as a regular floating window
+**Window-mode escape hatch** - run the panel as a regular floating window
 (works regardless of menu bar space; re-running `open` on the app brings the
 window back after closing it):
 
@@ -291,8 +297,8 @@ defaults write com.rookery.AgentStationMenuBar ShowPanelWindow -bool false  # of
 - The server replays no message history; resuming a session starts with an
   empty thread (the app notes this inline).
 - Rooms idle-stop ~15 s after their last client disconnects. The app keeps its
-  socket open while a session is current — including while the panel is
-  closed — and transparently restarts the room (re-`POST /api/agent/start`)
+  socket open while a session is current - including while the panel is
+  closed - and transparently restarts the room (re-`POST /api/agent/start`)
   when reconnecting.
 - Intentional socket teardowns (switching sessions) are silent; only genuine
   transport failures trigger the reconnect path, and a successful connection

@@ -689,10 +689,18 @@ final class RookModel: ObservableObject {
                 tool.status = .running
                 tool.output += delta
             }
+        case .permissionRequest:
+            break
         case .planUpdate(let entries):
             upsertPlanBlock(entries)
-        case .usageUpdate(let used, let size):
+        case .usageUpdate(let used, let size, _):
             contextUsage = (used, size)
+        case .modesState:
+            break
+        case .currentModeUpdate:
+            break
+        case .configOptionUpdate:
+            break
         case .runCompleted:
             finalizeStreamingBlocks()
             isRunning = false

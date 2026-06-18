@@ -19,6 +19,25 @@ enum ServerState: Equatable {
     case online
 }
 
+struct QueuedChatMessage: Identifiable, Equatable {
+    let id: String
+    var text: String
+    var draftText: String
+    var isEditing = false
+}
+
+struct PendingPermissionRequest: Equatable {
+    var requestId: String
+    var toolCall: AcpPermissionToolCall
+    var options: [AcpPermissionOption]
+}
+
+struct ContextUsageState: Equatable {
+    var used: Int
+    var size: Int
+    var cost: AcpUsageCost?
+}
+
 @MainActor
 final class AgentStationModel: ObservableObject {
     static weak var shared: AgentStationModel?
@@ -48,12 +67,17 @@ final class AgentStationModel: ObservableObject {
     // Chat
     @Published var currentSession: AgentSessionSummary?
     @Published var blocks: [ChatBlock] = []
-    @Published var queuedMessages: [String] = []
+    @Published var queuedMessages: [QueuedChatMessage] = []
     @Published var isRunning = false
     @Published var statusLine = ""
     @Published var socketConnected = false
     @Published var reconnecting = false
-    @Published var contextUsage: (used: Int, size: Int)?
+    @Published var contextUsage: ContextUsageState?
+    @Published var currentModes: AcpModesState?
+    @Published var configOptions: [AcpConfigOption] = []
+    @Published var pendingPermission: PendingPermissionRequest?
+    @Published var lastStopReason: String?
+    @Published var autoScrollEnabled = true
     @Published var scrollTick = 0
 
     // Environment offers
@@ -98,6 +122,7 @@ final class AgentStationModel: ObservableObject {
     private var reconnectTask: Task<Void, Never>?
     private var panelWindow: NSWindow?
     private let panelWindowDelegate = PanelWindowDelegate()
+    private var queuedMessageCounter = 0
 
     init() {
         AgentStationModel.shared = self
@@ -326,7 +351,7 @@ final class AgentStationModel: ObservableObject {
         // detail width (460) avoids clipping the detail screens; the home
         // screen (372) sits left-aligned within it. Chat scrolls internally.
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 640),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -467,6 +492,10 @@ final class AgentStationModel: ObservableObject {
         isRunning = false
         statusLine = ""
         contextUsage = nil
+        currentModes = nil
+        configOptions = []
+        pendingPermission = nil
+        lastStopReason = nil
         enteredEnvironments = []
         if resumed {
             appendBlock(.system(text: "Resumed session — earlier messages aren't replayed."))
@@ -500,7 +529,7 @@ final class AgentStationModel: ObservableObject {
             return
         }
         if isRunning || !socket.isConnected {
-            queuedMessages.append(trimmed)
+            queuedMessages.append(makeQueuedMessage(trimmed))
             if !socket.isConnected {
                 scheduleReconnect(delaySeconds: 0)
             }
@@ -530,11 +559,89 @@ final class AgentStationModel: ObservableObject {
         queuedMessages.remove(at: index)
     }
 
+    func beginEditingQueuedMessage(_ id: String) {
+        updateQueuedMessage(id) { message in
+            message.isEditing = true
+            message.draftText = message.text
+        }
+    }
+
+    func updateQueuedMessageDraft(_ id: String, text: String) {
+        updateQueuedMessage(id) { message in
+            message.draftText = text
+        }
+    }
+
+    func cancelEditingQueuedMessage(_ id: String) {
+        updateQueuedMessage(id) { message in
+            message.isEditing = false
+            message.draftText = message.text
+        }
+    }
+
+    func saveQueuedMessageEdit(_ id: String) {
+        updateQueuedMessage(id) { message in
+            let trimmed = message.draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+            message.text = trimmed.isEmpty ? message.text : trimmed
+            message.draftText = message.text
+            message.isEditing = false
+        }
+    }
+
+    func sendQueuedMessageNow(_ id: String) {
+        guard let index = queuedMessages.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        let message = queuedMessages.remove(at: index)
+        Task {
+            do {
+                try await socket.sendSteeringMessage(text: message.text)
+            } catch {
+                queuedMessages.insert(message, at: min(index, queuedMessages.count))
+                appendErrorBlock(source: "run", message: error.localizedDescription)
+            }
+        }
+    }
+
+    func decidePermission(optionId: String?) {
+        guard let pendingPermission else {
+            return
+        }
+        self.pendingPermission = nil
+        do {
+            try socket.respondToPermissionRequest(requestId: pendingPermission.requestId, optionId: optionId)
+        } catch {
+            appendErrorBlock(source: "protocol", message: error.localizedDescription)
+        }
+    }
+
+    func setMode(_ modeId: String) {
+        Task {
+            do {
+                try await socket.setMode(modeId)
+            } catch {
+                appendErrorBlock(source: "protocol", message: error.localizedDescription)
+            }
+        }
+    }
+
+    func setConfigOption(_ configId: String, value: String) {
+        Task {
+            do {
+                try await socket.setConfigOption(configId: configId, value: value)
+            } catch {
+                appendErrorBlock(source: "protocol", message: error.localizedDescription)
+            }
+        }
+    }
+
     private func deliver(_ text: String) {
         finalizeStreamingBlocks()
         appendBlock(.user(text: text))
         isRunning = true
         statusLine = "Agent is working…"
+        lastStopReason = nil
+        autoScrollEnabled = true
         spokenTurnBuffer = ""
         socket.sendPrompt(text: text)
     }
@@ -550,7 +657,7 @@ final class AgentStationModel: ObservableObject {
                 queuedMessages.insert(next, at: 0)
                 return
             }
-            deliver(next)
+            deliver(next.text)
         }
     }
 
@@ -670,14 +777,27 @@ final class AgentStationModel: ObservableObject {
                 tool.status = .running
                 tool.output += delta
             }
+        case .permissionRequest(let requestId, let toolCall, let options):
+            pendingPermission = PendingPermissionRequest(requestId: requestId, toolCall: toolCall, options: options)
+            statusLine = "Permission needed: \(toolCall.title)"
         case .planUpdate(let entries):
             upsertPlanBlock(entries)
-        case .usageUpdate(let used, let size):
-            contextUsage = (used, size)
-        case .runCompleted:
+        case .usageUpdate(let used, let size, let cost):
+            contextUsage = ContextUsageState(used: used, size: size, cost: cost)
+        case .modesState(let currentModeId, let availableModes):
+            currentModes = AcpModesState(currentModeId: currentModeId, availableModes: availableModes)
+        case .currentModeUpdate(let modeId):
+            if let currentModes {
+                self.currentModes = AcpModesState(currentModeId: modeId, availableModes: currentModes.availableModes)
+            }
+        case .configOptionUpdate(let configOptions):
+            self.configOptions = configOptions
+        case .runCompleted(let stopReason):
             finalizeStreamingBlocks()
             isRunning = false
             statusLine = ""
+            lastStopReason = stopReason
+            pendingPermission = nil
             userCancelledRun = false
             // Speak the whole response once, only after the turn is done and the
             // text has rendered — not streamed sentence-by-sentence.
@@ -691,10 +811,13 @@ final class AgentStationModel: ObservableObject {
             isRunning = false
             statusLine = ""
             spokenTurnBuffer = ""
-            if userCancelledRun {
+            pendingPermission = nil
+            if userCancelledRun || message.lowercased().contains("cancel") {
                 userCancelledRun = false
+                lastStopReason = "cancelled"
                 appendBlock(.system(text: "Stopped."))
             } else {
+                lastStopReason = "failed"
                 appendErrorBlock(source: "run", message: message)
             }
             deliverNextQueuedIfIdle()
@@ -717,6 +840,30 @@ final class AgentStationModel: ObservableObject {
             }
         }
         scrollTick += 1
+    }
+
+    func resumeAutoScroll() {
+        let wasEnabled = autoScrollEnabled
+        autoScrollEnabled = true
+        if !wasEnabled {
+            scrollTick += 1
+        }
+    }
+
+    func pauseAutoScroll() {
+        autoScrollEnabled = false
+    }
+
+    private func makeQueuedMessage(_ text: String) -> QueuedChatMessage {
+        queuedMessageCounter += 1
+        return QueuedChatMessage(id: "queued-\(queuedMessageCounter)", text: text, draftText: text)
+    }
+
+    private func updateQueuedMessage(_ id: String, mutate: (inout QueuedChatMessage) -> Void) {
+        guard let index = queuedMessages.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        mutate(&queuedMessages[index])
     }
 
     private func nextBlockId() -> String {
