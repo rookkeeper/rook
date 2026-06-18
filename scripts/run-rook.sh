@@ -197,6 +197,16 @@ wait_for_health() {
   return 1
 }
 
+ensure_server_deps() {
+  local server_dir="$REPO_ROOT/server"
+  if [[ -d "$server_dir/node_modules" ]] && [[ -f "$server_dir/node_modules/tsx/dist/cli.mjs" ]]; then
+    return 0
+  fi
+  need_cmd npm
+  log "installing server dependencies (npm install)"
+  (cd "$server_dir" && npm install --no-audit --no-fund)
+}
+
 start_server() {
   if (( RESTART_SERVER )); then
     kill_server_if_owned
@@ -208,6 +218,7 @@ start_server() {
     if lsof -nP -iTCP:"$SERVER_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
       die "port ${SERVER_PORT} is already in use, but /api/health is not healthy"
     fi
+    ensure_server_deps
     need_cmd npm
     log "starting server (log: $SERVER_LOG)"
     (
