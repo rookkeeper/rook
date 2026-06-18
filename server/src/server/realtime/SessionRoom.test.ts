@@ -138,4 +138,48 @@ describe("SessionRoom", () => {
       },
     ]);
   });
+
+  it("cancels an active run before rebuilding when an environment is entered", async () => {
+    class BlockingAgent extends TestAgent {
+      cancelled = 0;
+      private resolveRun?: () => void;
+      startedRun!: Promise<void>;
+      private markStarted!: () => void;
+
+      constructor() {
+        super();
+        this.startedRun = new Promise<void>((resolve) => {
+          this.markStarted = resolve;
+        });
+      }
+
+      override async cancel(): Promise<void> {
+        this.cancelled += 1;
+        this.resolveRun?.();
+      }
+
+      protected override async runImpl(): Promise<void> {
+        this.markStarted();
+        await new Promise<void>((resolve) => {
+          this.resolveRun = resolve;
+        });
+      }
+    }
+
+    const agent = new BlockingAgent();
+    const room = createRoom(agent);
+    room.configureEnvironmentRuntime([], async () => ({
+      session: room.session,
+      agentId: room.agentId,
+      agent,
+    }));
+
+    const running = room.run("hello");
+    await agent.startedRun;
+
+    room.onEnvironmentEntered("web:wikipedia", ["/repo/web/wikipedia"]);
+    await running;
+
+    expect(agent.cancelled).toBe(1);
+  });
 });
