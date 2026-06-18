@@ -223,10 +223,6 @@ struct DetailHeader: View {
 
 private struct HomeContent: View {
     @ObservedObject var model: AgentStationModel
-    // Closes the MenuBarExtra dropdown — used when detaching to the companion
-    // window so you don't see both at once (the non-activating panel otherwise
-    // leaves the dropdown's key focus intact, keeping it open).
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -547,18 +543,6 @@ private struct HomeContent: View {
             }
             FooterIconButton(title: "Refresh", systemImage: "arrow.clockwise") {
                 model.refreshNow()
-            }
-            FooterIconButton(
-                title: model.windowIsPinned ? "Close Companion Window" : "Keep Open as Companion",
-                systemImage: model.windowIsPinned ? "pin.slash" : "pin"
-            ) {
-                let wasPinned = model.windowIsPinned
-                model.togglePinnedWindow()
-                // Detaching to the companion: close this dropdown so only the
-                // floating window remains.
-                if !wasPinned {
-                    dismiss()
-                }
             }
             Spacer(minLength: 0)
             FooterIconButton(title: "Quit", systemImage: "xmark.circle") {

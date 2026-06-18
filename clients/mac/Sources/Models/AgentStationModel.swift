@@ -42,15 +42,9 @@ struct ContextUsageState: Equatable {
 final class AgentStationModel: ObservableObject {
     static weak var shared: AgentStationModel?
 
-    // Navigation lives on the model (not view @State) so the panel reopens
-    // where the user left off after the MenuBarExtra window closes.
+    // Navigation lives on the model (not view @State) so the window remembers
+    // where the user left off after reopening.
     @Published var panelMode: PanelMode = .home
-
-    // When pinned, the panel is detached into a floating companion window that
-    // stays over whatever app you're working in until you close it. The
-    // MenuBarExtra dropdown can't do that (AppKit dismisses it on focus loss),
-    // so "keep open" means promoting it to a real window.
-    @Published var windowIsPinned = false
 
     // Server / control plane
     @Published var serverState: ServerState = .unknown
@@ -120,23 +114,10 @@ final class AgentStationModel: ObservableObject {
     private var userCancelledRun = false
     private var autoResumeAttempted = false
     private var reconnectTask: Task<Void, Never>?
-    private var panelWindow: NSWindow?
-    private let panelWindowDelegate = PanelWindowDelegate()
     private var queuedMessageCounter = 0
 
     init() {
         AgentStationModel.shared = self
-        // Escape hatch for crowded menu bars (macOS hides overflow status
-        // items behind the notch): `defaults write com.rookery.AgentStationMenuBar
-        // ShowPanelWindow -bool true` opens the panel as a regular window.
-        if UserDefaults.standard.bool(forKey: "ShowPanelWindow") {
-            // Defer past launch: opening the NSHostingController-backed panel
-            // during init (before AppKit's first layout pass is ready) traps in
-            // NSHostingView. The user-triggered pin works because it runs later.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                self?.openPanelWindow()
-            }
-        }
         socket.onEvent = { [weak self] event in
             self?.handleSocketEvent(event)
         }
@@ -314,72 +295,6 @@ final class AgentStationModel: ObservableObject {
                 await loadAgents()
             }
         }
-    }
-
-    /// Pin → detach the panel into a floating companion window; unpin → close it.
-    func togglePinnedWindow() {
-        if let panelWindow {
-            panelWindow.close()
-        } else {
-            // Defer past the current event pass: creating + sizing a second
-            // NSHostingController of the live panel view synchronously (from the
-            // menu-bar dropdown's own button handler) traps in NSHostingView.
-            DispatchQueue.main.async { [weak self] in
-                self?.openPanelWindow()
-            }
-        }
-    }
-
-    func openPanelWindow() {
-        if let panelWindow {
-            panelWindow.makeKeyAndOrderFront(nil)
-            windowIsPinned = true
-            return
-        }
-        let controller = NSHostingController(rootView: AgentStationMenuView(model: self))
-        // Build the panel with its full style via the designated initializer.
-        // Mutating `styleMask` AFTER the `init(contentViewController:)`
-        // convenience initializer — and calling NSApp.activate while showing a
-        // .nonactivatingPanel — is what raised the uncaught exception during the
-        // CATransaction flush. A non-activating floating panel stays above other
-        // apps on every Space, and `becomesKeyOnlyIfNeeded` lets the chat
-        // composer take focus on click without yanking the frontmost app's.
-        //
-        // An explicit fixed, resizable size is used instead of
-        // sizingOptions=.preferredContentSize: in this NSPanel the
-        // content-size tracking resolves to 0×0 and the panel never shows. The
-        // detail width (460) avoids clipping the detail screens; the home
-        // screen (372) sits left-aligned within it. Chat scrolls internally.
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.contentViewController = controller
-        panel.isFloatingPanel = true
-        panel.becomesKeyOnlyIfNeeded = true
-        panel.level = .floating
-        // .canJoinAllSpaces and .moveToActiveSpace are mutually exclusive —
-        // setting both makes NSWindow throw in _validateCollectionBehavior:.
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.hidesOnDeactivate = false
-        panel.title = "Agent Station"
-        panel.titlebarAppearsTransparent = true
-        panel.titleVisibility = .hidden
-        panel.isMovableByWindowBackground = true
-        panel.isReleasedWhenClosed = false
-        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        panel.standardWindowButton(.zoomButton)?.isHidden = true
-        panelWindowDelegate.onClose = { [weak self] in
-            self?.panelWindow = nil
-            self?.windowIsPinned = false
-        }
-        panel.delegate = panelWindowDelegate
-        panel.center()
-        panel.makeKeyAndOrderFront(nil)
-        panelWindow = panel
-        windowIsPinned = true
     }
 
     func quitApp() {
@@ -1463,17 +1378,5 @@ final class AgentStationModel: ObservableObject {
         if panelMode == .environmentOffer {
             dismissOfferView()
         }
-    }
-}
-
-/// Forwards the companion panel's close (red button or unpin) back to the model
-/// so pin state stays in sync. A standalone NSObject because the model itself
-/// isn't NSObject-rooted and so can't be an NSWindowDelegate directly.
-@MainActor
-final class PanelWindowDelegate: NSObject, NSWindowDelegate {
-    var onClose: () -> Void = {}
-
-    func windowWillClose(_ notification: Notification) {
-        onClose()
     }
 }
