@@ -420,6 +420,7 @@ private struct ScrollPositionObserver: NSViewRepresentable {
         private weak var scrollView: NSScrollView?
         private var observer: NSObjectProtocol?
         private var onChange: ((Bool) -> Void)?
+        private var lastVisibleRect: NSRect?
 
         func attach(to view: NSView, onChange: @escaping (Bool) -> Void) {
             self.onChange = onChange
@@ -452,8 +453,13 @@ private struct ScrollPositionObserver: NSViewRepresentable {
         func report() {
             guard let scrollView, let documentView = scrollView.documentView else { return }
             let visibleRect = documentView.visibleRect
-            let atBottom = visibleRect.maxY >= documentView.bounds.maxY - 12
-            onChange?(atBottom)
+            if let lastVisibleRect, visibleRect.minY < lastVisibleRect.minY {
+                onChange?(false)
+            } else {
+                let atBottom = visibleRect.maxY >= documentView.bounds.maxY - 12
+                onChange?(atBottom)
+            }
+            lastVisibleRect = visibleRect
         }
 
         private func detach() {
@@ -462,6 +468,7 @@ private struct ScrollPositionObserver: NSViewRepresentable {
             }
             observer = nil
             scrollView = nil
+            lastVisibleRect = nil
         }
 
         deinit {

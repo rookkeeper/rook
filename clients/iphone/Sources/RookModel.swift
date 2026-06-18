@@ -675,6 +675,11 @@ final class RookModel: ObservableObject {
                 default: break
                 }
             }
+        case .toolInputSnapshot(let toolCallId, _, let text):
+            updateTool(toolCallId) { tool in
+                tool.status = .inputStreaming
+                tool.arguments = text
+            }
         case .toolInputDelta(let toolCallId, _, let delta):
             updateTool(toolCallId) { tool in
                 tool.status = .inputStreaming
@@ -683,6 +688,11 @@ final class RookModel: ObservableObject {
         case .toolCallReady(let toolCallId, _):
             updateTool(toolCallId) { tool in
                 tool.status = .ready
+            }
+        case .toolOutputSnapshot(let toolCallId, _, let text):
+            updateTool(toolCallId) { tool in
+                tool.status = .running
+                tool.output = text
             }
         case .toolOutputDelta(let toolCallId, _, let delta):
             updateTool(toolCallId) { tool in

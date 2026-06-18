@@ -265,23 +265,30 @@ public final class AcpSocket {
                 return
             }
             let meta = rookeryMeta(update)
-            if let inputText = stringifyToolPayload(update["rawInput"]),
-               let delta = snapshotDelta(for: toolCallId, next: inputText, in: &lastToolInputSnapshots) {
-                onEvent?(.toolInputDelta(
+            if let inputText = stringifyToolPayload(update["rawInput"]) {
+                lastToolInputSnapshots[toolCallId] = inputText
+                onEvent?(.toolInputSnapshot(
                     toolCallId: toolCallId,
                     toolName: meta?["toolName"] as? String,
-                    delta: delta
+                    text: inputText
                 ))
             }
             let validStatuses: Set<String> = ["pending", "in_progress", "completed", "failed", "cancelled"]
             let status = (update["status"] as? String).flatMap { validStatuses.contains($0) ? $0 : nil } ?? "in_progress"
             let outputSnapshot = contentItemsText(update["content"]) ?? stringifyToolPayload(update["rawOutput"])
-            let output = outputSnapshot.flatMap { snapshotDelta(for: toolCallId, next: $0, in: &lastToolOutputSnapshots) }
+            if let outputSnapshot {
+                lastToolOutputSnapshots[toolCallId] = outputSnapshot
+                onEvent?(.toolOutputSnapshot(
+                    toolCallId: toolCallId,
+                    toolName: meta?["toolName"] as? String,
+                    text: outputSnapshot
+                ))
+            }
             onEvent?(.toolCallUpdate(
                 toolCallId: toolCallId,
                 status: status,
                 toolName: meta?["toolName"] as? String,
-                output: output
+                output: nil
             ))
         case "_rookery_tool_input_delta":
             guard let toolCallId = update["toolCallId"] as? String,
