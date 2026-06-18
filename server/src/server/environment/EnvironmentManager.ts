@@ -198,11 +198,17 @@ export class EnvironmentManager {
     }
   }
 
-  private enterForSession(sessionId: string, environmentId: string, available: AvailableEnvironment): void {
+  private enterForSession(sessionId: string, environmentId: string, _available: AvailableEnvironment): void {
     const set = this.entered.get(sessionId)!;
     if (set.has(environmentId)) return;
     set.add(environmentId);
-    this.listeners.get(sessionId)!.onEnvironmentEntered(environmentId, available.skillPaths);
+    this.listeners.get(sessionId)!.onEnvironmentEntered(environmentId, this.inheritedSkillPaths(environmentId));
+  }
+
+  private inheritedSkillPaths(environmentId: string): string[] {
+    const paths = this.impliedEnvironmentIds(environmentId)
+      .flatMap((id) => this.available.get(id)?.skillPaths ?? []);
+    return [...new Set(paths)];
   }
 
   private exitForSession(sessionId: string, environmentId: string): void {

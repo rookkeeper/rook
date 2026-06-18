@@ -75,10 +75,18 @@ final class AgentStationModel: ObservableObject {
     @Published var scrollTick = 0
 
     // Environment offers
-    @Published var pendingOffer: EnvironmentOffer?
+    @Published var pendingOffers: [EnvironmentOffer] = []
     @Published var offerSkills: [SkillPreview] = []
     @Published var offerLoading = false
     @Published var offerError = ""
+
+    var pendingOffer: EnvironmentOffer? {
+        pendingOffers.first
+    }
+
+    var pendingOfferCount: Int {
+        pendingOffers.count
+    }
 
     // Foreground-app environment provider + Mac bridge (Tier 1/2)
     @Published var foregroundEnvironmentId: String?
@@ -1445,29 +1453,24 @@ final class AgentStationModel: ObservableObject {
     // MARK: - Environment offers
 
     private func handleEnvironmentOffered(_ offer: EnvironmentOffer) {
-        guard pendingOffer?.environmentId != offer.environmentId else {
+        guard !pendingOffers.contains(where: { $0.environmentId == offer.environmentId }) else {
             return
         }
-        pendingOffer = offer
-        offerSkills = []
-        offerError = ""
-        offerLoading = true
-        Task {
-            do {
-                offerSkills = try await api.skillPreviews(environmentId: offer.environmentId)
-            } catch {
-                offerError = error.localizedDescription
-            }
-            offerLoading = false
+        let wasEmpty = pendingOffers.isEmpty
+        pendingOffers.append(offer)
+        if wasEmpty {
+            loadCurrentOfferPreview()
+            panelMode = .environmentOffer
         }
-        panelMode = .environmentOffer
     }
 
     private func handleEnvironmentOfferResolved(_ environmentId: String) {
-        guard pendingOffer?.environmentId == environmentId else {
+        let removedHead = pendingOffer?.environmentId == environmentId
+        pendingOffers.removeAll { $0.environmentId == environmentId }
+        guard removedHead else {
             return
         }
-        clearOfferAndReturn()
+        advanceOfferQueueOrDismissIfNeeded()
     }
 
     func reviewPendingOffer() {
@@ -1485,13 +1488,18 @@ final class AgentStationModel: ObservableObject {
             do {
                 try await api.decideEnvironment(environmentId: offer.environmentId, decision: decision)
                 if decision == "accept" || decision == "approve" {
-                    appendBlock(.system(text: "Environment \(offer.environmentId) allowed — agent reloads its skills when idle."))
+                    appendBlock(.system(text: "Environment \(offer.environmentId) allowed — agent reloads its skills."))
                 }
             } catch {
                 offerError = error.localizedDescription
                 return
             }
-            clearOfferAndReturn()
+            if pendingOffer?.environmentId == offer.environmentId {
+                pendingOffers.removeFirst()
+            } else {
+                pendingOffers.removeAll { $0.environmentId == offer.environmentId }
+            }
+            advanceOfferQueueOrDismissIfNeeded()
         }
     }
 
@@ -1499,10 +1507,44 @@ final class AgentStationModel: ObservableObject {
         panelMode = currentSession != nil ? .chat : .home
     }
 
-    private func clearOfferAndReturn() {
-        pendingOffer = nil
+    private func loadCurrentOfferPreview() {
+        guard let offer = pendingOffer else {
+            offerSkills = []
+            offerError = ""
+            offerLoading = false
+            return
+        }
+        let environmentId = offer.environmentId
         offerSkills = []
         offerError = ""
+        offerLoading = true
+        Task {
+            do {
+                let skills = try await api.skillPreviews(environmentId: environmentId)
+                guard pendingOffer?.environmentId == environmentId else {
+                    return
+                }
+                offerSkills = skills
+            } catch {
+                guard pendingOffer?.environmentId == environmentId else {
+                    return
+                }
+                offerError = error.localizedDescription
+            }
+            if pendingOffer?.environmentId == environmentId {
+                offerLoading = false
+            }
+        }
+    }
+
+    private func advanceOfferQueueOrDismissIfNeeded() {
+        if pendingOffer != nil {
+            loadCurrentOfferPreview()
+            return
+        }
+        offerSkills = []
+        offerError = ""
+        offerLoading = false
         if panelMode == .environmentOffer {
             dismissOfferView()
         }

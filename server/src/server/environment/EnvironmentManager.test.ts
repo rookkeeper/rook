@@ -5,9 +5,9 @@ import { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
 import type { LocalEnvironmentRepository } from "./LocalEnvironmentRepository.js";
 import type { EnvironmentEventListener } from "./types.js";
 
-function mockRepository(skillPaths: string[]): LocalEnvironmentRepository {
+function mockRepository(skillPaths: string[] | Record<string, string[]>): LocalEnvironmentRepository {
   return {
-    getSkillPaths: vi.fn().mockResolvedValue(skillPaths),
+    getSkillPaths: vi.fn(async (environmentId: string) => Array.isArray(skillPaths) ? skillPaths : (skillPaths[environmentId] ?? [])),
     getSkillPreviews: vi.fn().mockResolvedValue([]),
   } as unknown as LocalEnvironmentRepository;
 }
@@ -32,7 +32,7 @@ describe("EnvironmentManager", () => {
     decisions.close();
   });
 
-  function newManager(skillPaths = ["/repo/web/wikipedia"]): EnvironmentManager {
+  function newManager(skillPaths: string[] | Record<string, string[]> = ["/repo/web/wikipedia"]): EnvironmentManager {
     return new EnvironmentManager(mockRepository(skillPaths), decisions);
   }
 
@@ -206,5 +206,36 @@ describe("EnvironmentManager", () => {
     expect(listener.onEnvironmentResolved).toHaveBeenCalledWith("web:en.wikipedia.org/wiki/Main_Page", "unavailable");
     expect(listener.onEnvironmentResolved).not.toHaveBeenCalledWith("web:en.wikipedia.org/wiki", "unavailable");
     expect(listener.onEnvironmentResolved).not.toHaveBeenCalledWith("web:en.wikipedia.org", "unavailable");
+  });
+
+  it("loads ancestor skills when entering a deep environment, but not child skills when entering a parent", async () => {
+    const manager = newManager({
+      "web:en.wikipedia.org": ["/repo/web/en.wikipedia.org"],
+      "web:en.wikipedia.org/wiki": ["/repo/web/en.wikipedia.org/wiki"],
+      "web:en.wikipedia.org/wiki/Main_Page": ["/repo/web/en.wikipedia.org/wiki/Main_Page"],
+    });
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:en.wikipedia.org/wiki/Main_Page", metadata: {} });
+    manager.decideEnvironment("web:en.wikipedia.org/wiki/Main_Page", "accept");
+
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith(
+      "web:en.wikipedia.org/wiki/Main_Page",
+      [
+        "/repo/web/en.wikipedia.org",
+        "/repo/web/en.wikipedia.org/wiki",
+        "/repo/web/en.wikipedia.org/wiki/Main_Page",
+      ],
+    );
+
+    const parentOnly = mockListener();
+    manager.subscribe("s2", parentOnly);
+    manager.decideEnvironment("web:en.wikipedia.org", "accept");
+
+    expect(parentOnly.onEnvironmentEntered).toHaveBeenCalledWith(
+      "web:en.wikipedia.org",
+      ["/repo/web/en.wikipedia.org"],
+    );
   });
 });
