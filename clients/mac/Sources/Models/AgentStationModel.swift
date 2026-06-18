@@ -108,6 +108,7 @@ final class AgentStationModel: ObservableObject {
     private let voice = VoiceController()
     private let hotKey = HotKey()
     private var healthTimer: Timer?
+    private var environmentExpiryTimer: Timer?
     private var blockCounter = 0
     private var enteredEnvironments: Set<String> = []
     private var spokenTurnBuffer = ""
@@ -115,6 +116,21 @@ final class AgentStationModel: ObservableObject {
     private var autoResumeAttempted = false
     private var reconnectTask: Task<Void, Never>?
     private var queuedMessageCounter = 0
+
+    private struct RegisteredEnvironmentState {
+        var sourceName: String
+        var metadata: [String: JSONValue]
+        var lastSeenAt: Date
+    }
+
+    private struct EnvironmentCandidate {
+        let id: String
+        let sourceName: String
+        let metadata: [String: JSONValue]
+    }
+
+    private var registeredEnvironmentStates: [String: RegisteredEnvironmentState] = [:]
+    private let environmentStaleAfter: TimeInterval = 5 * 60
 
     init() {
         AgentStationModel.shared = self
@@ -136,6 +152,11 @@ final class AgentStationModel: ObservableObject {
         healthTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 await self?.refreshHealth()
+            }
+        }
+        environmentExpiryTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.sweepStaleRegisteredEnvironments()
             }
         }
         foregroundMonitor.onForegroundChange = { [weak self] app in
@@ -252,7 +273,7 @@ final class AgentStationModel: ObservableObject {
             serverState = .online
             if !wasOnline {
                 await loadAgents()
-                reannounceForegroundEnvironment()
+                reannounceRegisteredEnvironments()
                 await autoResumeRecentSessionIfNeeded()
             }
         } else if serverState != .starting || !managedServerRunning {
@@ -285,8 +306,30 @@ final class AgentStationModel: ObservableObject {
     }
 
     func openServerLog() {
-        NSWorkspace.shared.open(ServerController.logFileURL)
+        if let existing = logViewerWindow {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 420),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Agent Station Log"
+        panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .hidden
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isReleasedWhenClosed = false
+        panel.contentViewController = NSHostingController(rootView: LogViewerView())
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        logViewerWindow = panel
     }
+
+    private var logViewerWindow: NSPanel?
 
     func refreshNow() {
         Task {
@@ -303,12 +346,14 @@ final class AgentStationModel: ObservableObject {
         bridge.stop()
         hotKey.stop()
         voice.stopSpeaking()
-        let environmentsToRelease = [foregroundEnvironmentId, foregroundSiteEnvironmentId].compactMap { $0 }
+        environmentExpiryTimer?.invalidate()
+        environmentExpiryTimer = nil
+        let environmentsToRelease = registeredEnvironmentStates.keys.sorted { Self.environmentDepth($0) > Self.environmentDepth($1) }
         Task {
-            // Best-effort: end the foreground/site episodes so the server doesn't
-            // keep a stale availability after we're gone.
+            // Best-effort: end the current Mac-observed episodes so the server
+            // doesn't keep stale availability after we're gone.
             for environmentId in environmentsToRelease {
-                try? await api.markEnvironmentUnavailable(id: environmentId)
+                try? await api.unregisterEnvironment(id: environmentId)
             }
             if managedServerRunning {
                 serverController.stop()
@@ -877,91 +922,6 @@ final class AgentStationModel: ObservableObject {
 
     // MARK: - Foreground-app environment provider
 
-    /// The on-disk repository is the registry: a foreground app maps to
-    /// environment `app:<slug>` iff `environment-repository/app/<slug>/`
-    /// exists. Matches the directory name against the slugified app name and
-    /// the (full or last-component) bundle id.
-    private func knownAppEnvironmentSlug(for app: ForegroundApp) -> String? {
-        let appKindRoot = ServerController.repoRoot
-            .appending(path: "environment-repository/app")
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: appKindRoot,
-            includingPropertiesForKeys: [.isDirectoryKey]
-        ) else {
-            return nil
-        }
-        let candidates = Set([
-            Self.slugify(app.name),
-            app.bundleId.lowercased(),
-            app.bundleId.components(separatedBy: ".").last?.lowercased() ?? "",
-        ])
-        for entry in entries where (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
-            if candidates.contains(entry.lastPathComponent.lowercased()) {
-                return entry.lastPathComponent
-            }
-        }
-        return nil
-    }
-
-    static func slugify(_ name: String) -> String {
-        name.lowercased()
-            .map { $0.isLetter || $0.isNumber ? String($0) : "-" }
-            .joined()
-            .split(separator: "-")
-            .joined(separator: "-")
-    }
-
-    private func handleForegroundApp(_ app: ForegroundApp) {
-        AXReader.primeAccessibility(pid: app.pid)
-        let title = AXReader.focusedWindowTitle(pid: app.pid)
-        foregroundAppName = app.name
-        foregroundWindowTitle = title
-        let environmentId = knownAppEnvironmentSlug(for: app).map { "app:\($0)" }
-        providerLog("foreground: \(app.name) [\(app.bundleId)] title=\(title ?? "nil") -> \(environmentId ?? "no environment")")
-        updateBridgeContext(app: app, title: title, environmentId: environmentId)
-        reconcileSiteEnvironment(for: app)
-        guard environmentId != foregroundEnvironmentId else {
-            return
-        }
-        let previous = foregroundEnvironmentId
-        foregroundEnvironmentId = environmentId
-        Task {
-            do {
-                if let previous {
-                    try await api.markEnvironmentUnavailable(id: previous)
-                    providerLog("unavailable ok: \(previous)")
-                }
-                if let environmentId {
-                    var metadata: [String: JSONValue] = ["bundleId": .string(app.bundleId)]
-                    if let title {
-                        metadata["windowTitle"] = .string(title)
-                    }
-                    try await api.registerEnvironment(
-                        id: environmentId,
-                        sourceName: app.name,
-                        metadata: metadata
-                    )
-                    providerLog("register ok: \(environmentId)")
-                }
-            } catch {
-                providerLog("provider error: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    /// In-app context change (e.g. switching Slack channels, or navigating to a
-    /// new page/tab in a browser) — refresh the bridge's live /context and, for
-    /// browsers, re-resolve the per-site environment.
-    private func handleContextRefresh(app: ForegroundApp, title: String?) {
-        foregroundAppName = app.name
-        foregroundWindowTitle = title
-        updateBridgeContext(app: app, title: title, environmentId: foregroundEnvironmentId)
-        reconcileSiteEnvironment(for: app)
-    }
-
-    // MARK: - Per-site environment provider
-
-    /// Browsers whose active-tab URL we resolve to a per-site environment.
     private static let browserBundleIds: Set<String> = [
         "com.google.Chrome", "com.google.Chrome.beta", "com.google.Chrome.canary", "com.google.Chrome.dev",
         "com.apple.Safari", "com.apple.SafariTechnologyPreview",
@@ -971,37 +931,215 @@ final class AgentStationModel: ObservableObject {
         "com.vivaldi.Vivaldi", "com.operasoftware.Opera",
     ]
 
-    /// When a browser is frontmost on a recognized site, register `web:<slug>`
-    /// alongside the per-app environment; clear it when leaving the site/browser.
-    private func reconcileSiteEnvironment(for app: ForegroundApp) {
-        var match: SiteRegistry.Match?
-        if Self.browserBundleIds.contains(app.bundleId),
-           let url = AXReader.activeTabURL(pid: app.pid) {
-            match = SiteRegistry.match(url: url, repoRoot: ServerController.repoRoot)
+    private var lastLoggedTitle: String?
+    private var lastLoggedURL: String?
+    private var lastLoggedBundleId: String?
+    private var hasLoggedContext = false
+
+    private static func environmentDepth(_ id: String) -> Int {
+        id.split(separator: "/").count
+    }
+
+    private static func encodeEnvironmentPathComponent(_ raw: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        return raw.addingPercentEncoding(withAllowedCharacters: allowed) ?? raw
+    }
+
+    /// Obsidian title parsing works backwards because note names may contain
+    /// dashes. Handles both `Note - Vault - Obsidian` and `Vault - Obsidian`.
+    private static func obsidianVaultName(from title: String) -> String? {
+        guard let obsidianRange = title.range(of: " - Obsidian", options: .backwards) else {
+            return nil
         }
-        let newSiteEnv = match?.environmentId
-        guard newSiteEnv != foregroundSiteEnvironmentId else {
+        let prefix = String(title[..<obsidianRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+        guard !prefix.isEmpty else {
+            return nil
+        }
+        if let split = prefix.range(of: " - ", options: .backwards) {
+            let vault = String(prefix[split.upperBound...]).trimmingCharacters(in: .whitespaces)
+            return vault.isEmpty ? nil : vault
+        }
+        return prefix
+    }
+
+    private static func webEnvironmentIds(from rawURL: String) -> [String] {
+        guard let components = URLComponents(string: rawURL),
+              let host = components.host?.lowercased(), !host.isEmpty else {
+            return []
+        }
+        let segments = components.percentEncodedPath
+            .split(separator: "/")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        var ids = ["web:\(host)"]
+        var current = host
+        for segment in segments {
+            current += "/\(segment)"
+            ids.append("web:\(current)")
+        }
+        return ids
+    }
+
+    /// Dump everything the Mac can see right now — app identity, window title,
+    /// browser URL — as a structured, filterable block. Avoids repeated dumps
+    /// of identical title+URL combos from the poll timer.
+    private func logRawContext(app: ForegroundApp, title: String?, reason: String) {
+        let isBrowser = Self.browserBundleIds.contains(app.bundleId)
+        let browserURL = isBrowser ? AXReader.activeTabURL(pid: app.pid) : nil
+
+        let appChanged = app.bundleId != lastLoggedBundleId
+        let urlChanged = browserURL != lastLoggedURL
+        let titleChanged = title != lastLoggedTitle
+        if hasLoggedContext, !appChanged, !titleChanged, !urlChanged {
             return
         }
-        let previous = foregroundSiteEnvironmentId
-        foregroundSiteEnvironmentId = newSiteEnv
-        providerLog("site: \(app.bundleId) -> \(newSiteEnv ?? "no site environment")")
-        Task {
-            do {
-                if let previous {
-                    try await api.markEnvironmentUnavailable(id: previous)
-                    providerLog("site unavailable ok: \(previous)")
-                }
-                if let newSiteEnv, let match {
+        hasLoggedContext = true
+        lastLoggedBundleId = app.bundleId
+        lastLoggedTitle = title
+        lastLoggedURL = browserURL
+
+        var lines: [String] = []
+        lines.append("[RAW-CONTEXT] reason=\(reason)")
+        lines.append("  app:          \(app.name)  bundleId=\(app.bundleId)  pid=\(app.pid)")
+        lines.append("  isBrowser:    \(isBrowser)")
+        lines.append("  windowTitle:  \(title.map { "\"\($0)\"" } ?? "(null)")")
+        if isBrowser {
+            lines.append("  browserURL:   \(browserURL ?? "(null — AX web-content tree not ready or not a browser tab)")")
+        }
+        lines.append("  trustedAX:    \(AXReader.isTrusted())")
+        lines.append("  trustedSC:    \(ScreenCapturer.hasPermission())")
+        for line in lines {
+            providerLog(line)
+        }
+    }
+
+    private func handleForegroundApp(_ app: ForegroundApp) {
+        AXReader.primeAccessibility(pid: app.pid)
+        let title = AXReader.focusedWindowTitle(pid: app.pid)
+        logRawContext(app: app, title: title, reason: "app-switch")
+        foregroundAppName = app.name
+        foregroundWindowTitle = title
+        observeCurrentEnvironments(app: app, title: title)
+    }
+
+    /// In-app context change (e.g. switching browser pages or editor tabs) —
+    /// refresh the bridge /context and update the in-memory environment cache.
+    private func handleContextRefresh(app: ForegroundApp, title: String?) {
+        logRawContext(app: app, title: title, reason: "context-refresh")
+        foregroundAppName = app.name
+        foregroundWindowTitle = title
+        observeCurrentEnvironments(app: app, title: title)
+    }
+
+    private func observeCurrentEnvironments(app: ForegroundApp, title: String?) {
+        let candidates = deriveEnvironmentCandidates(app: app, title: title)
+        let appCandidates = candidates.filter { $0.id.hasPrefix("app:") }
+        let webCandidates = candidates.filter { $0.id.hasPrefix("web:") }
+        foregroundEnvironmentId = appCandidates.last?.id
+        foregroundSiteEnvironmentId = webCandidates.last?.id
+        let bridgeEnvironmentId = webCandidates.last?.id ?? appCandidates.last?.id
+        providerLog("foreground: \(app.name) [\(app.bundleId)] title=\(title ?? "nil") -> \(candidates.map(\.id).joined(separator: ", "))")
+        updateBridgeContext(app: app, title: title, environmentId: bridgeEnvironmentId)
+        observeEnvironmentCandidates(candidates)
+    }
+
+    private func deriveEnvironmentCandidates(app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
+        var candidates: [EnvironmentCandidate] = []
+
+        var appMetadata: [String: JSONValue] = [
+            "bundleId": .string(app.bundleId),
+            "appName": .string(app.name),
+        ]
+        if let title, !title.isEmpty {
+            appMetadata["windowTitle"] = .string(title)
+        }
+
+        if app.bundleId == "md.obsidian",
+           let title,
+           let vault = Self.obsidianVaultName(from: title) {
+            var metadata = appMetadata
+            metadata["vaultName"] = .string(vault)
+            candidates.append(EnvironmentCandidate(
+                id: "app:\(app.bundleId)/\(Self.encodeEnvironmentPathComponent(vault))",
+                sourceName: "\(app.name) · \(vault)",
+                metadata: metadata
+            ))
+        } else {
+            candidates.append(EnvironmentCandidate(
+                id: "app:\(app.bundleId)",
+                sourceName: app.name,
+                metadata: appMetadata
+            ))
+        }
+
+        if Self.browserBundleIds.contains(app.bundleId),
+           let rawURL = AXReader.activeTabURL(pid: app.pid), !rawURL.isEmpty,
+           let deepestWebId = Self.webEnvironmentIds(from: rawURL).last {
+            var metadata: [String: JSONValue] = [
+                "bundleId": .string(app.bundleId),
+                "appName": .string(app.name),
+                "url": .string(rawURL),
+            ]
+            if let title, !title.isEmpty {
+                metadata["windowTitle"] = .string(title)
+            }
+            candidates.append(EnvironmentCandidate(
+                id: deepestWebId,
+                sourceName: rawURL,
+                metadata: metadata
+            ))
+        }
+
+        return candidates.sorted { Self.environmentDepth($0.id) < Self.environmentDepth($1.id) }
+    }
+
+    private func observeEnvironmentCandidates(_ candidates: [EnvironmentCandidate]) {
+        let now = Date()
+        for candidate in candidates {
+            if var state = registeredEnvironmentStates[candidate.id] {
+                state.lastSeenAt = now
+                state.sourceName = candidate.sourceName
+                state.metadata = candidate.metadata
+                registeredEnvironmentStates[candidate.id] = state
+                continue
+            }
+            registeredEnvironmentStates[candidate.id] = RegisteredEnvironmentState(
+                sourceName: candidate.sourceName,
+                metadata: candidate.metadata,
+                lastSeenAt: now
+            )
+            Task {
+                do {
                     try await api.registerEnvironment(
-                        id: newSiteEnv,
-                        sourceName: match.sourceName,
-                        metadata: ["bundleId": .string(app.bundleId)]
+                        id: candidate.id,
+                        sourceName: candidate.sourceName,
+                        metadata: candidate.metadata
                     )
-                    providerLog("site register ok: \(newSiteEnv)")
+                    providerLog("register ok: \(candidate.id)")
+                } catch {
+                    providerLog("provider error: \(error.localizedDescription)")
                 }
-            } catch {
-                providerLog("site provider error: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func sweepStaleRegisteredEnvironments() {
+        let now = Date()
+        let staleIds = registeredEnvironmentStates.compactMap { id, state in
+            now.timeIntervalSince(state.lastSeenAt) >= environmentStaleAfter ? id : nil
+        }.sorted { Self.environmentDepth($0) > Self.environmentDepth($1) }
+        guard !staleIds.isEmpty else {
+            return
+        }
+        for id in staleIds {
+            registeredEnvironmentStates.removeValue(forKey: id)
+            Task {
+                do {
+                    try await api.unregisterEnvironment(id: id)
+                    providerLog("stale unregister ok: \(id)")
+                } catch {
+                    providerLog("stale provider error: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -1288,27 +1426,17 @@ final class AgentStationModel: ObservableObject {
         }
     }
 
-    /// Re-announce the current foreground environment after the server comes
-    /// (back) up — registrations are in-memory server state and die with it.
-    private func reannounceForegroundEnvironment() {
-        guard let app = foregroundMonitor.current else {
-            return
-        }
-        let environmentId = foregroundEnvironmentId
-        let siteEnvironmentId = foregroundSiteEnvironmentId
+    /// Re-announce currently cached Mac-observed environments after the server
+    /// comes (back) up — registrations are in-memory server state and die with it.
+    private func reannounceRegisteredEnvironments() {
+        let candidates = registeredEnvironmentStates
+            .sorted { Self.environmentDepth($0.key) < Self.environmentDepth($1.key) }
         Task {
-            if let environmentId {
+            for (id, state) in candidates {
                 try? await api.registerEnvironment(
-                    id: environmentId,
-                    sourceName: app.name,
-                    metadata: ["bundleId": .string(app.bundleId)]
-                )
-            }
-            if let siteEnvironmentId {
-                try? await api.registerEnvironment(
-                    id: siteEnvironmentId,
-                    sourceName: siteEnvironmentId,
-                    metadata: ["bundleId": .string(app.bundleId)]
+                    id: id,
+                    sourceName: state.sourceName,
+                    metadata: state.metadata
                 )
             }
         }

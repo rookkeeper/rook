@@ -16,6 +16,12 @@ interface AvailableEnvironment {
   info: EnvironmentOfferInfo;
 }
 
+interface DirectEnvironmentRegistration {
+  record: EnvironmentRecord;
+  info: EnvironmentOfferInfo;
+  impliedIds: string[];
+}
+
 /**
  * Service-layer coordinator for the environment model (see the brainstorm doc).
  *
@@ -32,6 +38,8 @@ interface AvailableEnvironment {
  */
 export class EnvironmentManager {
   private readonly available = new Map<string, AvailableEnvironment>();
+  private readonly directRegistrations = new Map<string, DirectEnvironmentRegistration>();
+  private readonly availableRefCounts = new Map<string, number>();
   private readonly ephemeral = new Map<string, EphemeralDecision>();
   private readonly listeners = new Map<string, EnvironmentEventListener>();
   private readonly entered = new Map<string, Set<string>>();
@@ -45,22 +53,51 @@ export class EnvironmentManager {
 
   /** A provider reports the user is now "in" this environment. Applies to all open rooms. */
   async registerAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo = {}): Promise<void> {
-    const skillPaths = await this.repository.getSkillPaths(env.id);
-    this.available.set(env.id, { record: env, skillPaths, info });
-    for (const sessionId of this.listeners.keys()) {
-      this.applyEnvironmentToSession(sessionId, env.id);
+    const impliedIds = this.impliedEnvironmentIds(env.id);
+    const existing = this.directRegistrations.get(env.id);
+    if (existing) {
+      this.directRegistrations.set(env.id, { record: env, info, impliedIds });
+      return;
+    }
+
+    this.directRegistrations.set(env.id, { record: env, info, impliedIds });
+    for (const impliedId of impliedIds) {
+      const nextCount = (this.availableRefCounts.get(impliedId) ?? 0) + 1;
+      this.availableRefCounts.set(impliedId, nextCount);
+      if (nextCount > 1) continue;
+
+      const skillPaths = await this.repository.getSkillPaths(impliedId);
+      this.available.set(impliedId, {
+        record: { id: impliedId, metadata: env.metadata },
+        skillPaths,
+        info,
+      });
+      for (const sessionId of this.listeners.keys()) {
+        this.applyEnvironmentToSession(sessionId, impliedId);
+      }
     }
   }
 
   /** A provider reports the environment is gone (e.g. the page closed). Ends the episode. */
-  markUnavailable(environmentId: string): boolean {
-    if (!this.available.has(environmentId)) return false;
-    this.available.delete(environmentId);
-    this.ephemeral.delete(environmentId);
-    for (const sessionId of this.listeners.keys()) {
-      const listener = this.listeners.get(sessionId)!;
-      this.exitForSession(sessionId, environmentId);
-      listener.onEnvironmentResolved(environmentId, "unavailable");
+  unregister(environmentId: string): boolean {
+    const direct = this.directRegistrations.get(environmentId);
+    if (!direct) return false;
+    this.directRegistrations.delete(environmentId);
+
+    for (const impliedId of [...direct.impliedIds].reverse()) {
+      const nextCount = (this.availableRefCounts.get(impliedId) ?? 0) - 1;
+      if (nextCount > 0) {
+        this.availableRefCounts.set(impliedId, nextCount);
+        continue;
+      }
+      this.availableRefCounts.delete(impliedId);
+      this.available.delete(impliedId);
+      this.ephemeral.delete(impliedId);
+      for (const sessionId of this.listeners.keys()) {
+        const listener = this.listeners.get(sessionId)!;
+        this.exitForSession(sessionId, impliedId);
+        listener.onEnvironmentResolved(impliedId, "unavailable");
+      }
     }
     return true;
   }
@@ -120,6 +157,21 @@ export class EnvironmentManager {
   }
 
   // --- Internal ---------------------------------------------------------------
+
+  private impliedEnvironmentIds(environmentId: string): string[] {
+    const colonIndex = environmentId.indexOf(":");
+    if (colonIndex === -1) return [environmentId];
+    const kind = environmentId.slice(0, colonIndex);
+    const envPath = environmentId.slice(colonIndex + 1).replace(/\/+$/g, "");
+    if (!kind || !envPath) return [environmentId];
+    const segments = envPath.split("/").filter(Boolean);
+    if (segments.length === 0) return [environmentId];
+    const implied: string[] = [];
+    for (let i = 1; i <= segments.length; i += 1) {
+      implied.push(`${kind}:${segments.slice(0, i).join("/")}`);
+    }
+    return implied;
+  }
 
   /** Resolve what should happen for one env in one session, per its effective decision. */
   private applyEnvironmentToSession(sessionId: string, environmentId: string): void {

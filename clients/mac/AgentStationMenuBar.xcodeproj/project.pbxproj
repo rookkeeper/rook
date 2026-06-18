@@ -11,6 +11,7 @@
 		08FC09CECF45795C522F9738 /* CapabilitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B62C4626ECA71521C6662C1 /* CapabilitiesView.swift */; };
 		0A0B574B5D1329B7F84E21D0 /* SiteRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7C7467689A6968FCF1CD78 /* SiteRegistry.swift */; };
 		148A0D946E42C6C58EF97504 /* ForegroundAppMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */; };
+		1A0EBED9154C7078D95F2156 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596DA08C8103AB2CC9CB4AED /* LogViewerView.swift */; };
 		22D62BE8921A8A1065BB3036 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */; };
 		4A2797C6E10B77C5D352C1A0 /* MacBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A57F522CD72686189387921 /* MacBridge.swift */; };
 		5013FB73E8873725D7C8ED04 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29D631BD7FB343852A8868D /* ChatView.swift */; };
@@ -35,6 +36,7 @@
 		3F31550B0FC16B45A28AC6A8 /* ScreenCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapturer.swift; sourceTree = "<group>"; };
 		56E028A064E01DB239EF9BC8 /* ForegroundAppMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundAppMonitor.swift; sourceTree = "<group>"; };
 		58D3F218942BD019D3DDA6CB /* InputSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSynthesizer.swift; sourceTree = "<group>"; };
+		596DA08C8103AB2CC9CB4AED /* LogViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogViewerView.swift; sourceTree = "<group>"; };
 		666566F6A2304DA00C88DEB8 /* AXReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXReader.swift; sourceTree = "<group>"; };
 		7B7C7467689A6968FCF1CD78 /* SiteRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteRegistry.swift; sourceTree = "<group>"; };
 		A069F1000D2ABAA2A0A5BB2A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -128,6 +130,7 @@
 				0B62C4626ECA71521C6662C1 /* CapabilitiesView.swift */,
 				B29D631BD7FB343852A8868D /* ChatView.swift */,
 				250D92F99A204A2083C12D24 /* EnvironmentOfferView.swift */,
+				596DA08C8103AB2CC9CB4AED /* LogViewerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -202,6 +205,7 @@
 				148A0D946E42C6C58EF97504 /* ForegroundAppMonitor.swift in Sources */,
 				70870F01E8243EDFBB3969AE /* HotKey.swift in Sources */,
 				22D62BE8921A8A1065BB3036 /* InputSynthesizer.swift in Sources */,
+				1A0EBED9154C7078D95F2156 /* LogViewerView.swift in Sources */,
 				4A2797C6E10B77C5D352C1A0 /* MacBridge.swift in Sources */,
 				84BE433C9AF6C6B230C57083 /* ScreenCapturer.swift in Sources */,
 				89F7CFCF7CC7ADB692165339 /* ScreenOCR.swift in Sources */,
