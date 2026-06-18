@@ -10,6 +10,7 @@ struct ChatDetail: View {
     @State private var draft = ""
     @State private var isHoveringSend = false
     @State private var settingsExpanded = false
+    @State private var threadIsAtBottom = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -89,32 +90,46 @@ struct ChatDetail: View {
                 .frame(maxWidth: .infinity, minHeight: 320, alignment: .center)
             } else {
                 ScrollViewReader { proxy in
-                    ScrollView(.vertical) {
-                        LazyVStack(alignment: .leading, spacing: 10) {
-                            ForEach(model.blocks) { block in
-                                ChatBlockView(block: block)
-                            }
-                            Color.clear
+                    GeometryReader { scrollGeo in
+                        ScrollView(.vertical) {
+                            LazyVStack(alignment: .leading, spacing: 10) {
+                                ForEach(model.blocks) { block in
+                                    ChatBlockView(block: block)
+                                }
+                                GeometryReader { markerGeo in
+                                    Color.clear
+                                        .preference(
+                                            key: ThreadBottomMarkerMaxYKey.self,
+                                            value: markerGeo.frame(in: .named("thread-scroll")).maxY
+                                        )
+                                }
                                 .frame(height: 1)
                                 .id("chat-bottom")
+                            }
+                            .padding(.trailing, 2)
                         }
-                        .padding(.trailing, 2)
-                    }
-                    .background(ScrollPositionObserver { atBottom in
-                        if atBottom {
-                            model.resumeAutoScroll()
-                        } else {
-                            model.pauseAutoScroll()
+                        .coordinateSpace(name: "thread-scroll")
+                        .background(WindowScrollMonitor {
+                            DispatchQueue.main.async {
+                                if threadIsAtBottom {
+                                    model.resumeAutoScroll()
+                                } else {
+                                    model.pauseAutoScroll()
+                                }
+                            }
+                        })
+                        .onPreferenceChange(ThreadBottomMarkerMaxYKey.self) { markerMaxY in
+                            threadIsAtBottom = markerMaxY <= scrollGeo.size.height + 12
                         }
-                    })
-                    .scrollIndicators(.visible)
-                    .frame(minHeight: 260, idealHeight: 340, maxHeight: elasticThreadCard ? .infinity : 340)
-                    .onAppear {
-                        proxy.scrollTo("chat-bottom", anchor: .bottom)
-                    }
-                    .onChange(of: model.scrollTick) { _, _ in
-                        guard model.autoScrollEnabled else { return }
-                        proxy.scrollTo("chat-bottom", anchor: .bottom)
+                        .scrollIndicators(.visible)
+                        .frame(minHeight: 260, idealHeight: 340, maxHeight: elasticThreadCard ? .infinity : 340)
+                        .onAppear {
+                            proxy.scrollTo("chat-bottom", anchor: .bottom)
+                        }
+                        .onChange(of: model.scrollTick) { _, _ in
+                            guard model.autoScrollEnabled else { return }
+                            proxy.scrollTo("chat-bottom", anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -394,81 +409,71 @@ struct ChatDetail: View {
     }
 }
 
-private struct ScrollPositionObserver: NSViewRepresentable {
-    var onChange: (Bool) -> Void
+private struct ThreadBottomMarkerMaxYKey: PreferenceKey {
+    static var defaultValue: CGFloat = .greatestFiniteMagnitude
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct WindowScrollMonitor: NSViewRepresentable {
+    var onUserScroll: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onUserScroll: onUserScroll)
+    }
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
-            context.coordinator.attach(to: view, onChange: onChange)
+            context.coordinator.attach(to: view)
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onUserScroll = onUserScroll
         DispatchQueue.main.async {
-            context.coordinator.attach(to: nsView, onChange: onChange)
-            context.coordinator.report()
+            context.coordinator.attach(to: nsView)
         }
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
+    final class Coordinator {
+        var onUserScroll: () -> Void
+        private weak var window: NSWindow?
+        private var monitor: Any?
 
-    final class Coordinator: NSObject {
-        private weak var scrollView: NSScrollView?
-        private var observer: NSObjectProtocol?
-        private var onChange: ((Bool) -> Void)?
-        private var lastVisibleRect: NSRect?
-
-        func attach(to view: NSView, onChange: @escaping (Bool) -> Void) {
-            self.onChange = onChange
-            if let scrollView = view.enclosingScrollView ?? findScrollView(from: view), self.scrollView !== scrollView {
-                detach()
-                self.scrollView = scrollView
-                observer = NotificationCenter.default.addObserver(
-                    forName: NSView.boundsDidChangeNotification,
-                    object: scrollView.contentView,
-                    queue: .main
-                ) { [weak self] _ in
-                    self?.report()
-                }
-                scrollView.contentView.postsBoundsChangedNotifications = true
-            }
-            report()
+        init(onUserScroll: @escaping () -> Void) {
+            self.onUserScroll = onUserScroll
         }
 
-        private func findScrollView(from view: NSView) -> NSScrollView? {
-            var current: NSView? = view
-            while let candidate = current {
-                if let scrollView = candidate.enclosingScrollView {
-                    return scrollView
+        func attach(to view: NSView) {
+            guard let window = view.window else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self, weak view] in
+                    guard let self, let view else { return }
+                    self.attach(to: view)
                 }
-                current = candidate.superview
+                return
             }
-            return nil
-        }
-
-        func report() {
-            guard let scrollView, let documentView = scrollView.documentView else { return }
-            let visibleRect = documentView.visibleRect
-            if let lastVisibleRect, visibleRect.minY < lastVisibleRect.minY {
-                onChange?(false)
-            } else {
-                let atBottom = visibleRect.maxY >= documentView.bounds.maxY - 12
-                onChange?(atBottom)
+            guard self.window !== window else { return }
+            detach()
+            self.window = window
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self, weak window] event in
+                guard let self, let window, event.window === window else {
+                    return event
+                }
+                self.onUserScroll()
+                return event
             }
-            lastVisibleRect = visibleRect
         }
 
         private func detach() {
-            if let observer {
-                NotificationCenter.default.removeObserver(observer)
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
             }
-            observer = nil
-            scrollView = nil
-            lastVisibleRect = nil
+            monitor = nil
+            window = nil
         }
 
         deinit {

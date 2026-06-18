@@ -79,6 +79,7 @@ final class AgentStationModel: ObservableObject {
     @Published var lastStopReason: String?
     @Published var autoScrollEnabled = true
     @Published var scrollTick = 0
+    private var userScrolledAwayFromBottom = false
 
     // Environment offers
     @Published var pendingOffer: EnvironmentOffer?
@@ -641,6 +642,7 @@ final class AgentStationModel: ObservableObject {
         isRunning = true
         statusLine = "Agent is working…"
         lastStopReason = nil
+        userScrolledAwayFromBottom = false
         autoScrollEnabled = true
         spokenTurnBuffer = ""
         socket.sendPrompt(text: text)
@@ -853,6 +855,7 @@ final class AgentStationModel: ObservableObject {
     }
 
     func resumeAutoScroll() {
+        userScrolledAwayFromBottom = false
         let wasEnabled = autoScrollEnabled
         autoScrollEnabled = true
         if !wasEnabled {
@@ -861,6 +864,7 @@ final class AgentStationModel: ObservableObject {
     }
 
     func pauseAutoScroll() {
+        userScrolledAwayFromBottom = true
         autoScrollEnabled = false
     }
 
