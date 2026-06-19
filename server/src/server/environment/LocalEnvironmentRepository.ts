@@ -1,5 +1,5 @@
 import path from "node:path";
-import { access, readdir, readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import type { SkillPreview } from "../../shared/environment.js";
 import { REPO_ROOT } from "../paths.js";
 
@@ -16,20 +16,35 @@ export class LocalEnvironmentRepository {
   async getSkillPaths(environmentId: string): Promise<string[]> {
     const dir = this.resolveEnvironmentDir(environmentId);
     if (!dir) return [];
+    const skillsDir = path.join(dir, "skills");
+    let entries;
     try {
-      await access(dir);
-      return [dir];
+      entries = await readdir(skillsDir, { withFileTypes: true });
     } catch {
       return [];
     }
+
+    const skillPaths: string[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+      const skillDir = path.join(skillsDir, entry.name);
+      if (await this.isReadableSkillBundle(skillDir)) {
+        skillPaths.push(skillDir);
+      }
+    }
+    return skillPaths.sort((a, b) => a.localeCompare(b));
   }
 
   async getSkillPreviews(environmentId: string): Promise<SkillPreview[]> {
     const previews: SkillPreview[] = [];
-    for (const bundlePath of await this.getSkillPaths(environmentId)) {
-      previews.push(...await this.readSkillPreviewsFromBundle(bundlePath));
+    for (const skillPath of await this.getSkillPaths(environmentId)) {
+      try {
+        previews.push(await this.readSkillPreviewFromBundle(skillPath));
+      } catch (error) {
+        this.logRepositoryIssue(`skipping unreadable skill preview at ${skillPath}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
-    return previews;
+    return previews.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   private resolveEnvironmentDir(environmentId: string): string | null {
@@ -41,27 +56,24 @@ export class LocalEnvironmentRepository {
     return path.join(this.root, kind, envPath);
   }
 
-  private async readSkillPreviewsFromBundle(bundlePath: string): Promise<SkillPreview[]> {
-    let entries;
-    try {
-      entries = await readdir(bundlePath, { withFileTypes: true });
-    } catch {
-      return [];
-    }
+  private async readSkillPreviewFromBundle(skillDir: string): Promise<SkillPreview> {
+    const skillName = path.basename(skillDir);
+    const files = await this.readFilesUnder(skillDir, skillName);
+    return { id: skillName, name: skillName, files };
+  }
 
-    const previews: SkillPreview[] = [];
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const skillDir = path.join(bundlePath, entry.name);
-      try {
-        await access(path.join(skillDir, "SKILL.md"));
-      } catch {
-        continue;
-      }
-      const files = await this.readFilesUnder(skillDir, entry.name);
-      previews.push({ id: entry.name, name: entry.name, files });
+  private async isReadableSkillBundle(skillDir: string): Promise<boolean> {
+    try {
+      await readFile(path.join(skillDir, "SKILL.md"), "utf8");
+      return true;
+    } catch (error) {
+      this.logRepositoryIssue(`skipping invalid skill bundle at ${skillDir}: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
     }
-    return previews.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  private logRepositoryIssue(message: string): void {
+    console.warn(`[environment-repository] ${message}`);
   }
 
   private async readFilesUnder(rootDir: string, prefix: string): Promise<Record<string, string>> {

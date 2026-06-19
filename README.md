@@ -98,7 +98,7 @@ If you move or rename the sibling package, update `args` in `agent-profiles.json
 
 ## Manual environment/debugging actions
 - Register an environment: `POST /api/environments/register`
-- Mark an environment unavailable: `POST /api/environments/unavailable`
+- Mark an environment unavailable: `POST /api/environments/unregister`
 - Record an environment decision: `POST /api/environments/decision`
 - Clear remembered environment decisions: remove `.var/agent-station/environment-decisions.sqlite`
 

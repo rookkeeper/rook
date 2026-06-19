@@ -277,25 +277,23 @@ private struct HomeContent: View {
     }
 
     private var foregroundCaption: some View {
-        let hasSkills = model.foregroundEnvironmentId != nil
+        let hasEnvironment = model.foregroundEnvironmentId != nil
         return HStack(spacing: 6) {
             Image(systemName: "macwindow")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(hasSkills ? PanelPalette.accentHover : PanelPalette.textMuted)
+                .foregroundStyle(hasEnvironment ? PanelPalette.accentHover : PanelPalette.textMuted)
             Text("In \(model.foregroundAppName ?? "app")")
                 .font(.caption2)
                 .fontWeight(.medium)
                 .foregroundStyle(PanelPalette.textNormal)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            // Small dot + label distinguishing "skills loaded for this app" from
-            // "tracking it, but no skills defined".
             Circle()
-                .fill(hasSkills ? PanelPalette.success : PanelPalette.textMuted.opacity(0.6))
+                .fill(hasEnvironment ? PanelPalette.success : PanelPalette.textMuted.opacity(0.6))
                 .frame(width: 5, height: 5)
-            Text(hasSkills ? "skills active" : "no skills")
+            Text(hasEnvironment ? "environment active" : "tracking off")
                 .font(.caption2)
-                .foregroundStyle(hasSkills ? PanelPalette.success : PanelPalette.textMuted)
+                .foregroundStyle(hasEnvironment ? PanelPalette.success : PanelPalette.textMuted)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
@@ -421,13 +419,20 @@ private struct HomeContent: View {
                                 .fill(PanelPalette.warning.opacity(0.18))
                         )
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Environment available")
+                        Text(model.pendingOfferCount > 1 ? "Environments available" : "Environment available")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                        Text(model.pendingOffer?.environmentId ?? "")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(model.pendingOffer?.environmentId ?? "")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            if model.pendingOfferCount > 1 {
+                                Text("+\(model.pendingOfferCount - 1) more")
+                                    .font(.caption2)
+                                    .foregroundStyle(PanelPalette.warning)
+                            }
+                        }
                     }
                     Spacer()
                     Image(systemName: "chevron.right")

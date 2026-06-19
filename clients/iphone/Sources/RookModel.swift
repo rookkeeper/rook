@@ -252,7 +252,7 @@ final class RookModel: ObservableObject {
     }
 
     /// Mirrors `AgentStationModel.handleForegroundApp`: diff the current place
-    /// against the registered environment, unavailable the old, register the new
+    /// against the registered environment, unregister the old, register the new
     /// (only if the server has skills for it — the iOS analog of the Mac's
     /// on-disk skill-bundle guard, done via the preview endpoint).
     private func handlePlace(_ place: Place?) {
@@ -266,7 +266,7 @@ final class RookModel: ObservableObject {
         updateLiveActivity()
         Task {
             if let previous {
-                try? await api.markEnvironmentUnavailable(id: previous)
+                try? await api.unregisterEnvironment(id: previous)
             }
             guard let place, let envId else {
                 return

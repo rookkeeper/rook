@@ -162,7 +162,9 @@ Examples:
 
 - `web:wikipedia` (Chrome extension — current site)
 - `demo:demo`
-- `app:<slug>` (macOS menu bar app — frontmost Mac app)
+- `app:<bundleId>` (macOS menu bar app — frontmost Mac app identity)
+- `app:md.obsidian/<vault>` (macOS menu bar app — Obsidian vault context)
+- `web:<host>/<path>` (macOS menu bar app — active browser URL, protocol/query stripped)
 - `place:<slug>` (iPhone app — current GPS geofence)
 
 An environment maps to a directory in `environment-repository/` and provides one or more skill bundles. The kind (`web`, `app`, `place`, …) is just the part before the first colon; `LocalEnvironmentRepository` splits on it and resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new skill content on disk.
@@ -203,10 +205,11 @@ Storage model:
 When an environment becomes available:
 
 1. providers call `/api/environments/register`
-2. `EnvironmentManager` decides whether the session should be offered or entered
-3. `SessionRoom` receives the lifecycle event
-4. if entered, the room rebuilds the runtime with merged skill paths
-5. the room emits a Rookery environment event to connected clients over ACP
+2. if the id is hierarchical, `EnvironmentManager` expands it to all implied parent prefixes (for example `web:host`, `web:host/path`, `web:host/path/page`) and reference-counts them
+3. `EnvironmentManager` decides whether each resulting session environment should be offered or entered
+4. `SessionRoom` receives the lifecycle event
+5. if entered, the room rebuilds the runtime with merged skill paths
+6. the room emits a Rookery environment event to connected clients over ACP
 
 Important constraint: the manager does **not** manipulate sockets or runtimes directly. It only pushes lifecycle events into rooms.
 
@@ -302,7 +305,7 @@ Current major routes:
 - `GET /api/agent/session/recent`
 - `POST /api/agent/start`
 - `POST /api/environments/register`
-- `POST /api/environments/unavailable`
+- `POST /api/environments/unregister`
 - `POST /api/environments/decision`
 - `GET /api/environments/preview`
 

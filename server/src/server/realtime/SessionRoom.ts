@@ -90,16 +90,20 @@ export class SessionRoom implements EnvironmentEventListener {
 
   onEnvironmentEntered(environmentId: string, skillPaths: string[]): void {
     this.environmentState.enter(environmentId, skillPaths);
-    this.scheduleRuntimeRebuild(ENVIRONMENT_ENTERED_KIND, environmentId);
+    this.scheduleRuntimeRebuild(ENVIRONMENT_ENTERED_KIND, environmentId, true);
   }
 
   onEnvironmentExited(environmentId: string): void {
     if (!this.environmentState.exit(environmentId)) return;
-    this.scheduleRuntimeRebuild(ENVIRONMENT_EXITED_KIND, environmentId);
+    this.scheduleRuntimeRebuild(ENVIRONMENT_EXITED_KIND, environmentId, false);
   }
 
-  private scheduleRuntimeRebuild(kind: string, environmentId: string): void {
+  private scheduleRuntimeRebuild(kind: string, environmentId: string, interruptActiveRun: boolean): void {
     if (!this.environmentState.hasRuntimeRebuilder()) return;
+    if (interruptActiveRun) {
+      const pendingCancel = this.currentRuntime.agent.cancel?.();
+      if (pendingCancel) void pendingCancel.catch(() => {});
+    }
     const rebuild = async () => {
       if (this.stopped || !this.environmentState.hasRuntimeRebuilder()) return;
       try {

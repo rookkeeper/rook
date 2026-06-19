@@ -393,8 +393,8 @@ describe("server", () => {
     const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:" });
     const bad = await app.inject({ method: "POST", url: "/api/environments/decision", payload: { environmentId: "demo:demo", decision: "maybe" } });
     expect(bad.statusCode).toBe(400);
-    const unavailable = await app.inject({ method: "POST", url: "/api/environments/unavailable", payload: { id: "demo:demo" } });
-    expect(unavailable.statusCode).toBe(200);
+    const unreg = await app.inject({ method: "POST", url: "/api/environments/unregister", payload: { id: "demo:demo" } });
+    expect(unreg.statusCode).toBe(200);
     await app.close();
   });
 
@@ -411,7 +411,7 @@ describe("server", () => {
     expect(preview.statusCode).toBe(200);
     const body = preview.json() as { environmentId: string; skills: Array<{ id: string; files: Record<string, string> }> };
     expect(body.environmentId).toBe("demo:demo");
-    expect(body.skills.some((skill) => skill.id === "joke-telling" && skill.files["joke-telling/SKILL.md"]?.includes("pirate"))).toBe(true);
+    expect(body.skills.some((skill) => skill.id === "testing-fixture" && skill.files["testing-fixture/SKILL.md"]?.includes("testing purposes"))).toBe(true);
 
     await app.close();
   });
@@ -421,14 +421,14 @@ describe("server", () => {
     const register = await app.inject({
       method: "POST",
       url: "/api/environments/register",
-      payload: { id: "web:wikipedia" },
+      payload: { id: "web:en.wikipedia.org" },
     });
     expect(register.statusCode).toBe(200);
 
-    const preview = await app.inject({ method: "GET", url: "/api/environments/preview?environmentId=web:wikipedia" });
+    const preview = await app.inject({ method: "GET", url: "/api/environments/preview?environmentId=web:en.wikipedia.org" });
     expect(preview.statusCode).toBe(200);
     const body = preview.json() as { environmentId: string; skills: Array<{ id: string }> };
-    expect(body.environmentId).toBe("web:wikipedia");
+    expect(body.environmentId).toBe("web:en.wikipedia.org");
     expect(body.skills.some((skill) => skill.id === "wikipedia-discovery")).toBe(true);
 
     await app.close();

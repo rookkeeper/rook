@@ -108,9 +108,9 @@ public struct AgentStationAPI {
         )
     }
 
-    public func markEnvironmentUnavailable(id: String) async throws {
+    public func unregisterEnvironment(id: String) async throws {
         _ = try await postJSON(
-            path: "api/environments/unavailable",
+            path: "api/environments/unregister",
             payload: .object(["id": .string(id)])
         )
     }

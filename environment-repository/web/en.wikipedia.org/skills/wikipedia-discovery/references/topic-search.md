@@ -2,6 +2,8 @@
 
 Base URLs use the **active** wiki, e.g. `https://en.wikipedia.org`. Send a descriptive **User-Agent** on every request.
 
+When you decide to navigate to a result, just open the normal Wikipedia URL for that title in the browser — no special parent-message bridge is assumed.
+
 ## REST Core (lightweight JSON)
 
 - **`GET /w/rest.php/v1/search/page?q=...&limit=...&offset=...`** — page search with excerpts; good default for “find articles about X”. Use `offset` for paging when the wiki supports it for this endpoint.

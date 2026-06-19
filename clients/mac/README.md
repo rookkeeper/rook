@@ -37,8 +37,8 @@ WebSocket protocol.
   (`~/Library/Logs/AgentStationMenuBar/server.log`).
 - **Foreground-app environment provider** - the app watches which Mac app is
   frontmost (NSWorkspace activation notifications - no Accessibility permission
-  needed) and registers/unregisters `app:<slug>` environments as you switch
-  apps.
+  needed) and registers/unregisters derived `app:` / `web:` environments as you
+  switch apps.
 
 ## Voice (hands-free)
 
@@ -100,23 +100,34 @@ Live) as an I/O layer that forwards to Agent Station as the brain.
 
 ## Foreground-app environments
 
-The on-disk repository is the registry: a foreground app maps to environment
-`app:<slug>` iff `environment-repository/app/<slug>/` exists at the repo root.
-Directory names are matched against the slugified app name ("Visual Studio
-Code" → `visual-studio-code`) and the app's bundle id (full, or its last
-component). To make a new app contextual, just add a skill bundle:
+The Mac app now derives environment IDs directly from the observed context and
+keeps a small in-memory cache with 5-minute expiry. It registers only the
+**deepest concrete environment** it currently sees, and the server expands that
+into all implied parent paths.
 
-```
-environment-repository/app/cursor/cursor-companion/SKILL.md
-```
+Examples:
 
-Switching to that app registers the environment (`POST
-/api/environments/register`); switching away ends the episode (`POST
-/api/environments/unavailable`), so "Allow this visit" naturally means "while
-this app stays in the foreground area of my work". Activations are debounced
+- frontmost Slack → `app:com.tinyspeck.slackmacgap`
+- Obsidian in the `Peeps` vault → `app:md.obsidian/Peeps`
+- `https://en.wikipedia.org/wiki/Main_Page?foo=bar` →
+  `web:en.wikipedia.org/wiki/Main_Page`
+
+The Mac app sends only that deepest ID; the server treats it as implying:
+
+- `web:en.wikipedia.org`
+- `web:en.wikipedia.org/wiki`
+- `web:en.wikipedia.org/wiki/Main_Page`
+
+For Obsidian, vault parsing is title-based and works backwards so note names may
+contain dashes safely. For plain apps the base identity is the bundle id:
+`app:<bundleId>`.
+
+Switching to a new derived environment registers it (`POST
+/api/environments/register`); a context that has not been seen for 5 minutes is
+unregistered (`POST /api/environments/unregister`). Activations are debounced
 (700 ms) so ⌘-Tab flicker doesn't churn registrations, the app ignores its own
-activations (opening the panel doesn't end the episode), and the current
-environment is re-announced if the server restarts. Offers arrive over the
+activations (opening the panel doesn't end the episode), and currently cached
+registrations are re-announced if the server restarts. Offers arrive over the
 session websocket like any other environment - the menu bar bird fills amber
 and the native approval view shows the skill files before anything loads.
 

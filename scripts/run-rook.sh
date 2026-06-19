@@ -185,6 +185,15 @@ kill_server_if_owned() {
   fi
 }
 
+kill_server_on_port() {
+  local pids
+  pids="$(lsof -tiTCP:"$SERVER_PORT" -sTCP:LISTEN 2>/dev/null || true)"
+  [[ -n "$pids" ]] || return 0
+  log "stopping existing listener(s) on port ${SERVER_PORT}: $(echo "$pids" | tr '\n' ' ')"
+  kill $pids || true
+  sleep 1
+}
+
 wait_for_health() {
   local attempts=${1:-60}
   local i
@@ -210,6 +219,7 @@ ensure_server_deps() {
 start_server() {
   if (( RESTART_SERVER )); then
     kill_server_if_owned
+    kill_server_on_port
   fi
 
   if health_ok; then

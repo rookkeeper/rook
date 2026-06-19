@@ -2,6 +2,8 @@
 
 Assume you know **`Title`** (normalized page name) on the **current** wiki host.
 
+When you decide to open a related page, use the ordinary full Wikipedia URL for that article, optionally adding a `#Section_name` fragment or a `#:~:text=` fragment when helpful.
+
 ## Quick orientation
 
 - **`GET /w/rest.php/v1/page/summary/{Title}`** — lead extract, display title, canonical URL, sometimes thumbnail. Good before deciding to navigate.

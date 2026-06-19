@@ -25,7 +25,7 @@ share one look and one protocol layer.
   metadata. The server pushes an offer over the session websocket; you approve
   with the same 2×2 decisions as every other client; the place's skills load
   into the agent. Leaving the region marks it unavailable
-  (`POST /api/environments/unavailable`).
+  (`POST /api/environments/unregister`).
 - **Full chat parity.** Agent picker, session start/resume, streaming ACP chat
   (text, thinking, tool calls, plans, errors, context usage) — all rendered by
   RookKit's shared chat views, the same code the Mac app uses.
@@ -165,7 +165,7 @@ For a **physical device** on the LAN, the launcher script sets the base URL for 
 2. In the simulator: **Features → Location → Custom Location** (or a GPX route),
    set a coordinate **inside** that geofence → the offer sheet appears → approve.
 3. Ask the agent something the office skill covers → it answers using the place
-   skill. Move the simulated location away → `unavailable` fires.
+   skill. Move the simulated location away → `unregister` fires.
 
 Test hooks for scripted verification (set as `SIMCTL_CHILD_*` env vars):
 

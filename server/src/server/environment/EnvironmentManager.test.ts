@@ -5,9 +5,9 @@ import { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
 import type { LocalEnvironmentRepository } from "./LocalEnvironmentRepository.js";
 import type { EnvironmentEventListener } from "./types.js";
 
-function mockRepository(skillPaths: string[]): LocalEnvironmentRepository {
+function mockRepository(skillPaths: string[] | Record<string, string[]>): LocalEnvironmentRepository {
   return {
-    getSkillPaths: vi.fn().mockResolvedValue(skillPaths),
+    getSkillPaths: vi.fn(async (environmentId: string) => Array.isArray(skillPaths) ? skillPaths : (skillPaths[environmentId] ?? [])),
     getSkillPreviews: vi.fn().mockResolvedValue([]),
   } as unknown as LocalEnvironmentRepository;
 }
@@ -32,7 +32,7 @@ describe("EnvironmentManager", () => {
     decisions.close();
   });
 
-  function newManager(skillPaths = ["/repo/web/wikipedia"]): EnvironmentManager {
+  function newManager(skillPaths: string[] | Record<string, string[]> = ["/repo/web/wikipedia"]): EnvironmentManager {
     return new EnvironmentManager(mockRepository(skillPaths), decisions);
   }
 
@@ -57,10 +57,21 @@ describe("EnvironmentManager", () => {
     expect(listener.onEnvironmentOffered).toHaveBeenCalledWith("web:wikipedia", {});
   });
 
-  it("does NOT re-offer a previously-known environment once it has gone unavailable", async () => {
+  it("does not offer an environment with no skill paths", async () => {
+    const manager = newManager([]);
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} }, { sourceName: "Wikipedia" });
+
+    expect(listener.onEnvironmentOffered).not.toHaveBeenCalled();
+    expect(listener.onEnvironmentEntered).not.toHaveBeenCalled();
+  });
+
+  it("does NOT re-offer a previously-known environment once it has been unregistered", async () => {
     const manager = newManager();
     await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
-    manager.markUnavailable("web:wikipedia");
+    manager.unregister("web:wikipedia");
 
     const listener = mockListener();
     manager.subscribe("s-new", listener);
@@ -101,7 +112,7 @@ describe("EnvironmentManager", () => {
     const manager = newManager();
     await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
     manager.decideEnvironment("web:wikipedia", "approve");
-    manager.markUnavailable("web:wikipedia");
+    manager.unregister("web:wikipedia");
 
     const listener = mockListener();
     manager.subscribe("s1", listener);
@@ -120,7 +131,7 @@ describe("EnvironmentManager", () => {
     manager.decideEnvironment("web:wikipedia", "ignore");
     expect(listener.onEnvironmentEntered).not.toHaveBeenCalled();
 
-    manager.markUnavailable("web:wikipedia");
+    manager.unregister("web:wikipedia");
     await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
     expect(listener.onEnvironmentOffered).toHaveBeenLastCalledWith("web:wikipedia", {});
   });
@@ -150,7 +161,7 @@ describe("EnvironmentManager", () => {
     expect(listener.onEnvironmentExited).toHaveBeenCalledWith("web:wikipedia");
   });
 
-  it("marks entered environments as exited when they go unavailable", async () => {
+  it("marks entered environments as exited when unregistered", async () => {
     const manager = newManager();
     const listener = mockListener();
     manager.subscribe("s1", listener);
@@ -158,10 +169,73 @@ describe("EnvironmentManager", () => {
     manager.decideEnvironment("web:wikipedia", "accept");
     expect(manager.enteredEnvironments("s1")).toEqual(["web:wikipedia"]);
 
-    manager.markUnavailable("web:wikipedia");
+    manager.unregister("web:wikipedia");
 
     expect(listener.onEnvironmentExited).toHaveBeenCalledWith("web:wikipedia");
     expect(listener.onEnvironmentResolved).toHaveBeenCalledWith("web:wikipedia", "unavailable");
     expect(manager.enteredEnvironments("s1")).toEqual([]);
+  });
+
+  it("expands a deep registration into all implied parent environments", async () => {
+    const manager = newManager();
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "app:md.obsidian/Peeps", metadata: {} }, { sourceName: "Obsidian · Peeps" });
+
+    expect(listener.onEnvironmentOffered).toHaveBeenCalledWith("app:md.obsidian", { sourceName: "Obsidian · Peeps" });
+    expect(listener.onEnvironmentOffered).toHaveBeenCalledWith("app:md.obsidian/Peeps", { sourceName: "Obsidian · Peeps" });
+    expect(manager.isAvailable("app:md.obsidian")).toBe(true);
+    expect(manager.isAvailable("app:md.obsidian/Peeps")).toBe(true);
+  });
+
+  it("keeps implied parent environments available while another deep child still implies them", async () => {
+    const manager = newManager();
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:en.wikipedia.org/wiki/Main_Page", metadata: {} });
+    await manager.registerAvailableEnvironment({ id: "web:en.wikipedia.org/wiki/Other_Page", metadata: {} });
+
+    manager.unregister("web:en.wikipedia.org/wiki/Main_Page");
+
+    expect(manager.isAvailable("web:en.wikipedia.org")).toBe(true);
+    expect(manager.isAvailable("web:en.wikipedia.org/wiki")).toBe(true);
+    expect(manager.isAvailable("web:en.wikipedia.org/wiki/Main_Page")).toBe(false);
+    expect(manager.isAvailable("web:en.wikipedia.org/wiki/Other_Page")).toBe(true);
+    expect(listener.onEnvironmentResolved).toHaveBeenCalledWith("web:en.wikipedia.org/wiki/Main_Page", "unavailable");
+    expect(listener.onEnvironmentResolved).not.toHaveBeenCalledWith("web:en.wikipedia.org/wiki", "unavailable");
+    expect(listener.onEnvironmentResolved).not.toHaveBeenCalledWith("web:en.wikipedia.org", "unavailable");
+  });
+
+  it("loads ancestor skills when entering a deep environment, but not child skills when entering a parent", async () => {
+    const manager = newManager({
+      "web:en.wikipedia.org": ["/repo/web/en.wikipedia.org"],
+      "web:en.wikipedia.org/wiki": ["/repo/web/en.wikipedia.org/wiki"],
+      "web:en.wikipedia.org/wiki/Main_Page": ["/repo/web/en.wikipedia.org/wiki/Main_Page"],
+    });
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:en.wikipedia.org/wiki/Main_Page", metadata: {} });
+    manager.decideEnvironment("web:en.wikipedia.org/wiki/Main_Page", "accept");
+
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith(
+      "web:en.wikipedia.org/wiki/Main_Page",
+      [
+        "/repo/web/en.wikipedia.org",
+        "/repo/web/en.wikipedia.org/wiki",
+        "/repo/web/en.wikipedia.org/wiki/Main_Page",
+      ],
+    );
+
+    const parentOnly = mockListener();
+    manager.subscribe("s2", parentOnly);
+    manager.decideEnvironment("web:en.wikipedia.org", "accept");
+
+    expect(parentOnly.onEnvironmentEntered).toHaveBeenCalledWith(
+      "web:en.wikipedia.org",
+      ["/repo/web/en.wikipedia.org"],
+    );
   });
 });

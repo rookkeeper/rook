@@ -26,13 +26,13 @@ export async function registerEnvironmentRoutes(app: FastifyInstance, environmen
     return { ok: true, id: id.trim() };
   });
 
-  app.post<{ Body: { id?: unknown } }>("/api/environments/unavailable", async (request, reply) => {
+  app.post<{ Body: { id?: unknown } }>("/api/environments/unregister", async (request, reply) => {
     const id = request.body?.id;
     if (typeof id !== "string" || !id.trim()) {
       reply.code(400).send({ error: "Missing environment id" });
       return;
     }
-    environmentManager.markUnavailable(id.trim());
+    environmentManager.unregister(id.trim());
     return { ok: true };
   });
 
