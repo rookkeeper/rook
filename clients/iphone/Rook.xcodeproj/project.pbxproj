@@ -17,6 +17,7 @@
 		6A758CE682622466DE13275A /* EnvironmentOfferSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3750D99D34721CDF69C0308 /* EnvironmentOfferSheet.swift */; };
 		6E1F6B55A850CCDE6BD8EBBE /* SessionsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC0E6975A54FDE443878E1C /* SessionsScreen.swift */; };
 		8840E0A6C19AD35B38A0943B /* RookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 14EB51A753FB1D1C047A02B6 /* RookKit */; };
+		A8B2F835A776E831E436D046 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */; };
 		BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */; };
 		D78E9CFFE4A0752E0DC8E7CF /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B15032C32C3A8CFD7D44F9 /* Place.swift */; };
 		E392DAA1A839394313F7B082 /* AgentPickerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E79B58E5AF477E4EE3EF7A6 /* AgentPickerScreen.swift */; };
@@ -59,6 +60,7 @@
 		4AF66E11A378847455B9EB32 /* RookModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookModel.swift; sourceTree = "<group>"; };
 		4C4EF5AAEC5E22542FA87BFA /* ChatScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatScreen.swift; sourceTree = "<group>"; };
 		4E24C81A781D992BAD441884 /* RookLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookLiveActivity.swift; sourceTree = "<group>"; };
+		4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6E79B58E5AF477E4EE3EF7A6 /* AgentPickerScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPickerScreen.swift; sourceTree = "<group>"; };
 		768A82DF7FBC198B0C9B4666 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
 		B08909E5BDA34D380AF7B25F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -94,6 +96,7 @@
 		3B84888C46C0502477C50D82 = {
 			isa = PBXGroup;
 			children = (
+				4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */,
 				45470E772448A8D9AE52E08E /* Packages */,
 				AF74CA7D5CB50C3666202358 /* RookWidgets */,
 				64235206901FF0219CF88D93 /* Sources */,
@@ -191,6 +194,7 @@
 			buildConfigurationList = 1A686D95BA99B938A4E66840 /* Build configuration list for PBXNativeTarget "Rook" */;
 			buildPhases = (
 				6E9B796607D72A98BF78B29B /* Sources */,
+				33C754E912A2C26EA0AE5394 /* Resources */,
 				EBCC19E39C0CF73BF9FDA32B /* Frameworks */,
 				C04DDE75DF5233EFD6F04272 /* Embed Foundation Extensions */,
 			);
@@ -240,6 +244,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		33C754E912A2C26EA0AE5394 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A8B2F835A776E831E436D046 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		6E9B796607D72A98BF78B29B /* Sources */ = {

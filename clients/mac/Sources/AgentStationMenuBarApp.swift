@@ -56,8 +56,8 @@ struct AgentStationMenuBarApp: App {
             }
             .keyboardShortcut("q")
         } label: {
-            Image(systemName: model.menuBarSystemImage)
-                .symbolRenderingMode(.hierarchical)
+            Image("MenuBarIcon")
+                .renderingMode(.template)
                 .foregroundStyle(model.menuBarTint)
                 .accessibilityLabel("Agent Station")
                 .help(model.menuBarHelp)

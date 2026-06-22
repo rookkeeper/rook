@@ -23,6 +23,7 @@
 		9C5B9AF806C990D34784B1F5 /* RookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2D5F19A409874674241A5290 /* RookKit */; };
 		A08FF032D5689105E28BC656 /* ServerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CFA614EF2FB8F0294B9AA1 /* ServerController.swift */; };
 		BC54469993F0E265DF2FF83A /* AXReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666566F6A2304DA00C88DEB8 /* AXReader.swift */; };
+		C2C1A720704710E9065D237B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E18231B14959F9528CC06E64 /* Assets.xcassets */; };
 		F1F491C946F6945B8B5A623E /* AgentStationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F986D20F42993AC8162A32D1 /* AgentStationModel.swift */; };
 /* End PBXBuildFile section */
 
@@ -42,6 +43,7 @@
 		A069F1000D2ABAA2A0A5BB2A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B29D631BD7FB343852A8868D /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		C70105DE8F79656AA46C1D8D /* AgentStationMenuBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentStationMenuBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E18231B14959F9528CC06E64 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E85789DA4FC9AF18BF856AC0 /* AgentStationMenuBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationMenuBarApp.swift; sourceTree = "<group>"; };
 		F3623927C6A687804E503EBD /* AgentStationMenuBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgentStationMenuBar.entitlements; sourceTree = "<group>"; };
 		F986D20F42993AC8162A32D1 /* AgentStationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStationModel.swift; sourceTree = "<group>"; };
@@ -64,6 +66,7 @@
 		120304F0E89A7A3A55E77DC8 = {
 			isa = PBXGroup;
 			children = (
+				E18231B14959F9528CC06E64 /* Assets.xcassets */,
 				A4D24DC192F367A1B84C2A96 /* Packages */,
 				6CD9511CB3C054B058DD4466 /* Sources */,
 				6531BA041A16E45440F35492 /* Products */,
@@ -143,6 +146,7 @@
 			buildConfigurationList = 9A5CF0D353505D9CF01599C0 /* Build configuration list for PBXNativeTarget "AgentStationMenuBar" */;
 			buildPhases = (
 				2A4ACD3856FD49E4494E22F0 /* Sources */,
+				56DDC82B081160941E459254 /* Resources */,
 				35520EA2DA4B1F0C1AC3A443 /* Frameworks */,
 			);
 			buildRules = (
@@ -189,6 +193,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		56DDC82B081160941E459254 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C2C1A720704710E9065D237B /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		2A4ACD3856FD49E4494E22F0 /* Sources */ = {

@@ -250,7 +250,8 @@ private struct HomeContent: View {
 
     private var identityRow: some View {
         HStack(spacing: 10) {
-            Image(systemName: "bird.fill")
+            Image("MenuBarIcon")
+                .renderingMode(.template)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(PanelPalette.accent)
             Text("Agent Station")
