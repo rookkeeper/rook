@@ -223,7 +223,7 @@ Fast path from the repo root:
 ./scripts/run-rook.sh stop   # shut down server + launched app(s)
 ```
 
-`run-rook.sh mac` starts the server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, and launches the fresh app build.
+`run-rook.sh mac` starts the server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, and launches the fresh app build. On macOS the helper now starts the server in Terminal.app by default so Pi retains Terminal's Downloads/Desktop/Documents permissions instead of losing them in a detached background process.
 
 Manual steps:
 

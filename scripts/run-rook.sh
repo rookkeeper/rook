@@ -34,6 +34,9 @@ Notes:
   - mac uses localhost by default
   - sim uses http://127.0.0.1:3000 by default
   - phone uses your Mac's LAN IP by default
+  - on macOS, the server launches in Terminal.app so Pi keeps Terminal's
+    Downloads/Desktop/Documents permissions instead of losing them in a
+    detached nohup background process.
   - phone builds are intentionally NOT committed with a fixed team id;
     pass --team / ROOK_IOS_DEVELOPMENT_TEAM or let the script auto-detect
     your local Apple Development team from Keychain when possible.
@@ -262,6 +265,44 @@ wait_for_health() {
   return 1
 }
 
+start_server_in_background() {
+  need_cmd npm
+  log "starting server in background (log: $SERVER_LOG)"
+  (
+    cd "$REPO_ROOT"
+    nohup npm run dev >"$SERVER_LOG" 2>&1 &
+    echo $! >"$SERVER_PIDFILE"
+  )
+}
+
+start_server_in_terminal() {
+  need_cmd npm
+  need_cmd osascript
+  local command
+  command="$(python3 - <<'PY' "$REPO_ROOT" "$RUN_ROOT" "$SERVER_LOG" "$SERVER_PIDFILE" "$SERVER_PORT"
+import shlex, sys
+repo_root, run_root, server_log, server_pidfile, server_port = sys.argv[1:]
+parts = [
+    f'cd {shlex.quote(repo_root)}',
+    f'mkdir -p {shlex.quote(run_root)}',
+    f': > {shlex.quote(server_log)}',
+    f'export ROOK_SERVER_PORT={shlex.quote(server_port)}',
+    f'echo $$ > {shlex.quote(server_pidfile)}',
+    f'exec > >(tee -a {shlex.quote(server_log)}) 2>&1',
+    'exec npm run dev',
+]
+print('bash -lc ' + shlex.quote('; '.join(parts)))
+PY
+)"
+  log "starting server in Terminal.app (log: $SERVER_LOG)"
+  if ! osascript \
+    -e 'tell application "Terminal" to activate' \
+    -e "tell application \"Terminal\" to do script $(json_escape "$command")" >/dev/null; then
+    warn "failed to launch Terminal.app; falling back to detached background server"
+    start_server_in_background
+  fi
+}
+
 ensure_server_deps() {
   local server_dir="$REPO_ROOT/server"
   if [[ -d "$server_dir/node_modules" ]] && [[ -f "$server_dir/node_modules/tsx/dist/cli.mjs" ]]; then
@@ -280,13 +321,11 @@ start_server() {
       die "port ${SERVER_PORT} is already in use, but /api/health is not healthy"
     fi
     ensure_server_deps
-    need_cmd npm
-    log "starting server (log: $SERVER_LOG)"
-    (
-      cd "$REPO_ROOT"
-      nohup npm run dev >"$SERVER_LOG" 2>&1 &
-      echo $! >"$SERVER_PIDFILE"
-    )
+    if [[ "$(uname -s)" == "Darwin" ]] && command -v osascript >/dev/null 2>&1; then
+      start_server_in_terminal
+    else
+      start_server_in_background
+    fi
     if ! wait_for_health 90; then
       tail -n 80 "$SERVER_LOG" >&2 || true
       die "server did not become healthy"

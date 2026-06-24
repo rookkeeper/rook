@@ -40,6 +40,9 @@ Use the package READMEs above as the main lookup docs for each area.
    ./scripts/run-rook.sh phone    # server + physical iPhone app
    ./scripts/run-rook.sh stop     # stop server + launched apps/simulators
    ```
+   On macOS, `run-rook.sh` now starts the server in Terminal.app so Pi keeps
+   Terminal's Downloads/Desktop/Documents permissions instead of losing them in
+   a detached `nohup` process.
 5. The server listens on `http://127.0.0.1:3000`
 
 ## Pi agent configuration
@@ -90,7 +93,7 @@ If you move or rename the sibling package, update `args` in `agent-profiles.json
 ## Helpful scripts
 - `./scripts/interact-with-remote-agent.sh --agent PiAgent --omit-deltas "hello"` — exercise the server/client bridge without the web UI
 - `./scripts/interact-with-remote-agent.sh --raw-acp --agent PiAgent "hello"` — inspect raw ACP JSON-RPC traffic on the bridge
-- `./scripts/run-rook.sh server` — start the server only (or reuse the running one)
+- `./scripts/run-rook.sh server` — start the server only (or reuse the running one); on macOS this opens it in Terminal.app by default to preserve protected-folder access for Pi
 - `./scripts/run-rook.sh mac` — start the server if needed, rebuild, and launch the macOS menu bar app
 - `./scripts/run-rook.sh sim` — start the server if needed, rebuild, and launch the iPhone app in Simulator
 - `./scripts/run-rook.sh phone` — start the server if needed, rebuild, and launch the iPhone app on a paired device
