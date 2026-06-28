@@ -139,6 +139,18 @@ site.
   at the next grocery store" firing when the user enters or is near a grocery store.
 - **Favicon on entry (client).** Show the business's favicon (derived from its website
   domain) when entering a `loc:` business, for quick visual presence in the UI.
+- **Capability-gated skills (e.g. "look up store hours").** A *store-specific* website (a
+  deep link to this location, not a chain homepage like `kroger.com`) could drive a
+  synthesized "look up hours" skill — hours are usually a single GET away. Doing it right
+  needs two things the codebase lacks today: (a) a **per-agent capability model** —
+  `AgentDefinition` (`server/src/shared/agent.ts`) has no notion of whether the backend can
+  fetch the web (Claude agents can, via WebFetch/Bash; Pi and others may not), so it isn't
+  introspectable; and (b) **per-session/per-agent skill scoping** — environment skills
+  currently attach **globally** (`LocationRegistrar` doesn't know which agent will enter
+  them), so a skill can't be gated on the running agent. Until both exist, such a skill
+  would fire for agents that can't act on it. (Note: the website URL is already in the
+  injected context metadata, so a web-capable agent can answer "what are the hours?"
+  unprompted — see §4.)
 - **Persistent, per-user presence.** Persist availability and tie it to a user account so
   it survives restarts and a laptop session reliably shares the phone's location.
 - **iPhone candidate-picker UI.** Let the user disambiguate when arrival is ambiguous
