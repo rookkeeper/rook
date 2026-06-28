@@ -8,8 +8,9 @@ the Chrome extension's `web:<slug>` and the Mac menu bar app's `app:<slug>`.
 The iPhone is a **fourth environment provider**. Its signal is GPS/geofence
 instead of a frontmost app or a browser tab, but it speaks the same REST + ACP
 contract to `:3000` and needs **zero server changes** — `place:office` resolves
-to `environment-repository/place/office/` exactly the way `web:wikipedia`
-resolves to `environment-repository/web/wikipedia/`.
+to `environment-repository/place/office/` exactly the way
+`web:en.wikipedia.org/wiki/Main_Page` resolves to
+`environment-repository/web/en.wikipedia.org/wiki/Main_Page/`.
 
 UI, networking, models, chat rendering, and voice are shared with the macOS menu
 bar app through the [`RookKit`](../RookKit/) Swift package, so the two clients

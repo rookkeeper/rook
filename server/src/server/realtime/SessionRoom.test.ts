@@ -50,7 +50,7 @@ describe("SessionRoom", () => {
 
   it("replays unresolved environment offers to late-joining subscribers", () => {
     const room = createRoom(new TestAgent());
-    room.onEnvironmentOffered("web:wikipedia", { sourceName: "Wikipedia" });
+    room.onEnvironmentOffered("web:example.com", { sourceName: "Example" });
 
     const seen: AcpOutboundMessage[] = [];
     const unsubscribe = room.subscribe((event) => {
@@ -67,7 +67,7 @@ describe("SessionRoom", () => {
             update: expect.objectContaining({
               sessionUpdate: "_rookery_environment_event",
               kind: ENVIRONMENT_OFFER_AVAILABLE_KIND,
-              payload: { environmentId: "web:wikipedia", sourceName: "Wikipedia" },
+              payload: { environmentId: "web:example.com", sourceName: "Example" },
             }),
           }),
         }),
@@ -77,8 +77,8 @@ describe("SessionRoom", () => {
 
   it("does not replay environment offers after they are resolved", () => {
     const room = createRoom(new TestAgent());
-    room.onEnvironmentOffered("web:wikipedia", { sourceName: "Wikipedia" });
-    room.onEnvironmentResolved("web:wikipedia", "approved");
+    room.onEnvironmentOffered("web:example.com", { sourceName: "Example" });
+    room.onEnvironmentResolved("web:example.com", "approved");
 
     const seen: AcpOutboundMessage[] = [];
     const unsubscribe = room.subscribe((event) => {
@@ -177,7 +177,7 @@ describe("SessionRoom", () => {
     const running = room.run("hello");
     await agent.startedRun;
 
-    room.onEnvironmentEntered("web:wikipedia", ["/repo/web/wikipedia"]);
+    room.onEnvironmentEntered("web:example.com", ["/repo/web/example.com"]);
     await running;
 
     expect(agent.cancelled).toBe(1);

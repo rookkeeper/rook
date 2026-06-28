@@ -23,7 +23,6 @@
 		BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */; };
 		C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5143B8CA8023334102A62F2C /* InputSynthesizer.swift */; };
 		CEEBCE8607A6BCB97868C2A0 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2330969071E5BF5037823E /* ChatView.swift */; };
-		DF86CE1FB32744191B81E9DB /* SiteRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92301B690CFB1C907690046C /* SiteRegistry.swift */; };
 		EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0087B8D63F86E9DD505D802D /* LogViewerView.swift */; };
 /* End PBXBuildFile section */
 
@@ -44,7 +43,6 @@
 		7F2330969071E5BF5037823E /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		891E038256B011C6B53596BB /* HotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKey.swift; sourceTree = "<group>"; };
 		89D369786A8FE57C99D452D1 /* RookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookView.swift; sourceTree = "<group>"; };
-		92301B690CFB1C907690046C /* SiteRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteRegistry.swift; sourceTree = "<group>"; };
 		B08909E5BDA34D380AF7B25F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CAB0B5D7F3477ABBB39A0B42 /* Rook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rook.entitlements; sourceTree = "<group>"; };
 		D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
@@ -113,7 +111,6 @@
 				684A1389822C3C6175B654FC /* ScreenCapturer.swift */,
 				31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */,
 				3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */,
-				92301B690CFB1C907690046C /* SiteRegistry.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -225,7 +222,6 @@
 				64732F130DD711AA245FEE1A /* ScreenCapturer.swift in Sources */,
 				247B6E1117CD714B7D212531 /* ScreenOCR.swift in Sources */,
 				12BABD831E01470C5F12C1C9 /* ServerController.swift in Sources */,
-				DF86CE1FB32744191B81E9DB /* SiteRegistry.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

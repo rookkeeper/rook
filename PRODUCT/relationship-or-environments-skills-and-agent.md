@@ -4,7 +4,7 @@ The Rook agent is isolated from environment internals for security. It learns wh
 
 ## Environment
 
-Core object. It has a URL-like identifier: `<kind>:<unique-path>` (e.g. `web:wikipedia`, `app:obsidian.md/MyVault/Projects/Foo`, `loc:lowes.com/store-1234`, `os:macintosh`). And is associated w/ metadata (display name, provenance, other fields TBD). An environment has an arbitrary state which changes over time that we will _somehow_ communicate to the Rook agent (Also TBD). And an environment is associated with Skills that allow the agent to interact with it and draw information from it.
+Core object. It has a URL-like identifier: `<kind>:<unique-path>` (e.g. `web:en.wikipedia.org/wiki/Julius_Caesar`, `app:obsidian.md/MyVault/Projects/Foo`, `loc:lowes.com/store-1234`, `os:macintosh`). And is associated w/ metadata (display name, provenance, other fields TBD). An environment has an arbitrary state which changes over time that we will _somehow_ communicate to the Rook agent (Also TBD). And an environment is associated with Skills that allow the agent to interact with it and draw information from it.
 
 IDs are hierarchical; narrower IDs may imply broader ones (`web:reddit.com/r/foo` ⊂ `web:reddit.com`). Multiple overlapping envs can be active at once. Skills and state can be associated w/ any level of environment.
 

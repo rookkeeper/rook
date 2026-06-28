@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { AcpSessionUpdateNotification } from "../../shared/acp";
 import { BaseAgent } from "./BaseAgent";
 
+class InspectableBaseAgent extends BaseAgent {
+  inspectHandleStdoutLine(line: string): void {
+    this.handleStdoutLine(line);
+  }
+}
+
 const FIXTURE = path.resolve("src/server/agents/test-fixtures/mockAcpServer.mjs");
 
 function collectAcp(agent: BaseAgent): AcpSessionUpdateNotification[] {
@@ -158,5 +164,49 @@ describe("BaseAgent", () => {
     expect(reloadedChunks).toHaveLength(1);
 
     await agent.stop();
+  });
+
+  it("does not throw when auto-responding after stdin is destroyed", () => {
+    const agent = new InspectableBaseAgent({
+      command: "node",
+      args: [FIXTURE],
+      cwd: path.resolve("."),
+      sessionCwd: path.resolve("."),
+      agentName: "TestAcpAgent",
+    });
+    const acp = collectAcp(agent);
+
+    (agent as any).process = {
+      stdin: {
+        writable: true,
+        destroyed: true,
+        writableEnded: false,
+        write: () => {
+          throw new Error("Cannot call write after a stream was destroyed");
+        },
+      },
+    };
+    (agent as any).sessionIdValue = "session-1";
+
+    expect(() => {
+      agent.inspectHandleStdoutLine(JSON.stringify({
+        jsonrpc: "2.0",
+        id: "req-1",
+        method: "workspace/unsupported",
+        params: {},
+      }));
+    }).not.toThrow();
+
+    expect(acp).toContainEqual(
+      expect.objectContaining({
+        method: "session/update",
+        params: expect.objectContaining({
+          update: expect.objectContaining({
+            sessionUpdate: "_rookery_protocol_error",
+            error: "Unsupported ACP server request: workspace/unsupported",
+          }),
+        }),
+      }),
+    );
   });
 });

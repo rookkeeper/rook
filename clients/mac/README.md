@@ -264,6 +264,8 @@ package's source location; override it with:
 defaults write com.rookery.Rook RookeryRepoRoot /path/to/rookery
 ```
 
+Shared Rook config now lives in `~/.rook/config/`.
+
 ## Troubleshooting: the icon isn't in the menu bar
 
 On notch Macs, macOS silently hides status items that don't fit - there is no

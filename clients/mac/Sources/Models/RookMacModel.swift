@@ -90,8 +90,8 @@ final class RookMacModel: ObservableObject {
 
     // Foreground-app environment provider + Mac bridge (Tier 1/2)
     @Published var foregroundEnvironmentId: String?
-    // Per-site environment when a browser is frontmost on a recognized site
-    // (e.g. web:wikipedia), tracked independently of the per-app environment so
+    // Per-site environment when a browser is frontmost on a URL-derived web
+    // context (e.g. web:en.wikipedia.org/wiki/Main_Page), tracked independently of the per-app environment so
     // both can be active at once.
     @Published var foregroundSiteEnvironmentId: String?
     @Published var foregroundAppName: String?

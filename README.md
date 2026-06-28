@@ -17,7 +17,7 @@ ACP standardizes JSON-RPC between editors/clients and coding agents. Here, the b
 
 External dependency: a sibling Pi agent package at `../my-agent/` (not checked into this repo) provides the agent/skill environment referenced by the default Pi profile.
 
-Use the package READMEs above as the main lookup docs for each area.
+Use the package READMEs above as the main lookup docs for each area. Repo docs now live in [`docs/`](docs/), starting with [`docs/configuration.md`](docs/configuration.md).
 
 ## Quick start
 1. Install **pi.dev / Pi** first, and make sure the `pi` CLI is on your `PATH`.
@@ -83,8 +83,10 @@ Quick troubleshooting:
   device membership, or whether the server is actually running on the Mac.
 
 ## Pi agent configuration
-Default Pi agent profiles live in:
-- `server/config/agent-profiles.json`
+Default user config lives in:
+- `~/.rook/config/agent-profiles.json`
+
+More detail: [`docs/configuration.md`](docs/configuration.md)
 
 Current default profile:
 ```json
@@ -122,7 +124,7 @@ Typical responsibilities there:
 - any Pi-specific config that belongs to the agent package itself
 
 In short:
-- configure **which Pi agent package to launch** in `server/config/agent-profiles.json`
+- configure **which Pi agent package to launch** in `~/.rook/config/agent-profiles.json`
 - configure **the contents of that agent package** inside `../my-agent/`
 
 If you move or rename the sibling package, update `args` in `agent-profiles.json` accordingly.

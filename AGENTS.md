@@ -12,3 +12,6 @@ When making changes:
 # Debug scripts
 
 Use `scripts/interact-with-remote-agent.sh` to exercise the remote-agent bridge without the UI (run from repo root; needs the `server/` package deps installed — `cd server && npm install` once). Read the docs to use it.
+
+Run Rook from the repo root with:
+- `./scripts/run-rook.sh mac server`
