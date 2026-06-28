@@ -23,3 +23,43 @@ export function pointInPolygon(lat: number, lon: number, poly: number[][]): bool
   }
   return hit;
 }
+
+const METERS_PER_DEGREE = 111_320;
+
+/**
+ * Distance in meters from (lat, lon) to a polygon (`[lon, lat]` pairs): 0 when
+ * the point is inside, else the minimum distance to any edge. Uses a local
+ * equirectangular projection around the point — accurate and cheap at building
+ * scale. `dist <= buffer` is equivalent to membership in the buffer-enlarged
+ * polygon.
+ */
+export function distanceToPolygonMeters(lat: number, lon: number, poly: number[][]): number {
+  if (poly.length === 0) return Infinity;
+  if (pointInPolygon(lat, lon, poly)) return 0;
+
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  const toXY = (lo: number, la: number): [number, number] => [
+    (lo - lon) * METERS_PER_DEGREE * cosLat,
+    (la - lat) * METERS_PER_DEGREE,
+  ];
+
+  let min = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = toXY(poly[j][0], poly[j][1]);
+    const b = toXY(poly[i][0], poly[i][1]);
+    min = Math.min(min, pointToSegmentMeters(a, b));
+  }
+  return min;
+}
+
+/** Distance from the origin (0,0) to segment a-b, all in local meters. */
+function pointToSegmentMeters(a: [number, number], b: [number, number]): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const lenSq = dx * dx + dy * dy;
+  let t = lenSq === 0 ? 0 : -(a[0] * dx + a[1] * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const px = a[0] + t * dx;
+  const py = a[1] + t * dy;
+  return Math.sqrt(px * px + py * py);
+}
