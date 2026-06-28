@@ -16,8 +16,10 @@ struct RookLiveActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     HStack(spacing: 6) {
-                        Image(systemName: "bird.fill")
-                            .foregroundStyle(PanelPalette.accent)
+                        Image("RookMarkPurple")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 14, height: 14)
                         Text(context.attributes.agentName)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.white)
@@ -37,16 +39,20 @@ struct RookLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                Image(systemName: "bird.fill")
-                    .foregroundStyle(PanelPalette.accent)
+                Image("RookMarkPurple")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
             } compactTrailing: {
                 Text(context.state.placeName ?? (context.state.running ? "•" : ""))
                     .font(.caption2)
                     .foregroundStyle(context.state.skillsActive ? PanelPalette.success : .secondary)
                     .lineLimit(1)
             } minimal: {
-                Image(systemName: "bird.fill")
-                    .foregroundStyle(context.state.running ? PanelPalette.warning : PanelPalette.accent)
+                Image("RookMarkPurple")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
             }
             .widgetURL(URL(string: "rook://open"))
         }
@@ -72,9 +78,10 @@ private struct LockScreenView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "bird.fill")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(PanelPalette.accent)
+            Image("RookMarkPurple")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 22, height: 22)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(PanelPalette.accent.opacity(0.18)))
 

@@ -41,10 +41,11 @@ __pycache__/
 my-agent/skills/youtube-transcript/node_modules/
 my-agent/skills/youtube-transcript/.env
 
-# Swift package build artifacts
-RookKit/.build/
+# Swift package build artifacts (matches clients/RookKit/.build/ and any nested .build)
+.build/
 .swiftpm/
+DerivedData/
 
-# Xcode user state
+# Xcode user state (the .xcodeproj bundles themselves are tracked)
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/

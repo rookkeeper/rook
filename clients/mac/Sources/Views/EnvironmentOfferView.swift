@@ -6,7 +6,7 @@ import SwiftUI
 /// offered environment, previews the skill files that would be injected, and
 /// posts one of the four 2×2 decisions.
 struct EnvironmentOfferDetail: View {
-    @ObservedObject var model: AgentStationModel
+    @ObservedObject var model: RookMacModel
     @State private var selectedSkillId: String?
     @State private var selectedFilePath: String?
 

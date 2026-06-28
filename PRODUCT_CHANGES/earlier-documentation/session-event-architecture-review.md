@@ -10,7 +10,7 @@ This document describes the **implemented final architecture** after callback-ru
 
 ## Final mental model
 
-Agent Station is now **event-native end to end**.
+Rook is now **event-native end to end**.
 
 - agents emit `SessionEvent`
 - `SessionRoom` sequences, persists, replays, and broadcasts `SessionEvent`

@@ -20,7 +20,7 @@ export default function parentMessageToolExtension(pi: ExtensionAPI) {
     async execute() {
       // Placeholder strategy:
       // This micro extension intentionally does not deliver the message itself. The
-      // Agent Station browser client watches the pi tool-call stream for this exact
+      // Rook browser client watches the pi tool-call stream for this exact
       // tool name, extracts the JSON blob from the tool arguments, and relays it to
       // the embedding/injecting page with postMessage. The tool always reports
       // success so the model can continue without depending on browser-side relay

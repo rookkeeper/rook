@@ -68,9 +68,9 @@ Instead of just the current state.
 **Problem:** The app needed to change from a menu bar popover (`MenuBarExtra(.window)`) to a normal resizable `NSWindow`. This meant removing the pin/unpin companion window system entirely.
 
 **What changed:**
-- `AgentStationMenuBarApp.swift` — replaced `MenuBarExtra(.window)` content with dropdown menu buttons; `AppDelegate` creates a standard `NSWindow` on `applicationDidFinishLaunching`
-- `AgentStationModel.swift` — removed `windowIsPinned`, `panelWindow`, `panelWindowDelegate`, `openPanelWindow()`, `togglePinnedWindow()`, and the `PanelWindowDelegate` class (~70 lines removed)
-- `AgentStationMenuView.swift` — removed the pin/unpin footer button
+- `RookApp.swift` — replaced `MenuBarExtra(.window)` content with dropdown menu buttons; `AppDelegate` creates a standard `NSWindow` on `applicationDidFinishLaunching`
+- `RookMacModel.swift` — removed `windowIsPinned`, `panelWindow`, `panelWindowDelegate`, `openPanelWindow()`, `togglePinnedWindow()`, and the `PanelWindowDelegate` class (~70 lines removed)
+- `RookView.swift` — removed the pin/unpin footer button
 
 **Cmd-Tab / Dock issue:** After the switch, the app didn't appear in the Dock or Cmd-Tab switcher. Root cause: `LSUIElement = true` in `Info.plist` (correct for a background menu-bar-only app, but wrong for a normal window app). Changed to `false`.
 

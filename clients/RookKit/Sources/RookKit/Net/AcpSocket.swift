@@ -20,6 +20,7 @@ public final class AcpSocket {
     private var requestCounter = 0
     private var pendingPromptIds: Set<String> = []
     private var pendingRequests: [String: CheckedContinuation<[String: Any], Error>] = [:]
+    private var pendingUserMessageEchoes: [String] = []
     private var lastToolInputSnapshots: [String: String] = [:]
     private var lastToolOutputSnapshots: [String: String] = [:]
 
@@ -64,6 +65,7 @@ public final class AcpSocket {
         requestCounter += 1
         let requestId = "prompt-\(requestCounter)"
         pendingPromptIds.insert(requestId)
+        pendingUserMessageEchoes.append(text)
         sendFrame([
             "jsonrpc": "2.0",
             "id": requestId,
@@ -236,6 +238,14 @@ public final class AcpSocket {
             return
         }
         switch kind {
+        case "user_message_chunk":
+            if let text = contentText(update["content"]) {
+                if pendingUserMessageEchoes.first == text {
+                    pendingUserMessageEchoes.removeFirst()
+                } else {
+                    onEvent?(.userMessageChunk(text: text))
+                }
+            }
         case "agent_message_chunk":
             if let text = contentText(update["content"]) {
                 onEvent?(.agentMessageChunk(text: text))
@@ -395,6 +405,7 @@ public final class AcpSocket {
         pendingPromptIds.removeAll()
         let continuations = pendingRequests
         pendingRequests.removeAll()
+        pendingUserMessageEchoes.removeAll()
         lastToolInputSnapshots.removeAll()
         lastToolOutputSnapshots.removeAll()
         task?.cancel(with: .normalClosure, reason: nil)

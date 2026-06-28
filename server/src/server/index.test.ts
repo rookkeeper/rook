@@ -126,7 +126,7 @@ describe("server", () => {
     await app.close();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true, service: "agent-station" });
+    expect(response.json()).toEqual({ ok: true, service: "rook" });
   });
 
   it("starts the selected agent and returns its session", async () => {

@@ -178,6 +178,7 @@ public struct ChatBlock: Equatable, Identifiable {
 /// Flat client-side event union parsed off the ACP websocket — the Swift
 /// counterpart of the React client's `AcpClientEvent`.
 public enum AcpClientEvent {
+    case userMessageChunk(text: String)
     case agentMessageChunk(text: String)
     case agentThoughtChunk(text: String)
     case toolCallStarted(toolCallId: String, title: String, kind: String, status: String, rawInput: String?)

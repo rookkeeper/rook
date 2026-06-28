@@ -32,7 +32,7 @@ describe("EnvironmentManager", () => {
     decisions.close();
   });
 
-  function newManager(skillPaths: string[] | Record<string, string[]> = ["/repo/web/wikipedia"]): EnvironmentManager {
+  function newManager(skillPaths: string[] | Record<string, string[]> = ["/repo/web/example.com"]): EnvironmentManager {
     return new EnvironmentManager(mockRepository(skillPaths), decisions);
   }
 
@@ -41,20 +41,20 @@ describe("EnvironmentManager", () => {
     const listener = mockListener();
     manager.subscribe("s1", listener);
 
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} }, { sourceName: "Wikipedia" });
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
 
-    expect(listener.onEnvironmentOffered).toHaveBeenCalledWith("web:wikipedia", { sourceName: "Wikipedia" });
+    expect(listener.onEnvironmentOffered).toHaveBeenCalledWith("web:example.com", { sourceName: "Example" });
     expect(listener.onEnvironmentEntered).not.toHaveBeenCalled();
   });
 
   it("offers an environment that was already available when a session subscribes later", async () => {
     const manager = newManager();
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
 
     const listener = mockListener();
     manager.subscribe("s2", listener);
 
-    expect(listener.onEnvironmentOffered).toHaveBeenCalledWith("web:wikipedia", {});
+    expect(listener.onEnvironmentOffered).toHaveBeenCalledWith("web:example.com", {});
   });
 
   it("does not offer an environment with no skill paths", async () => {
@@ -62,7 +62,7 @@ describe("EnvironmentManager", () => {
     const listener = mockListener();
     manager.subscribe("s1", listener);
 
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} }, { sourceName: "Wikipedia" });
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
 
     expect(listener.onEnvironmentOffered).not.toHaveBeenCalled();
     expect(listener.onEnvironmentEntered).not.toHaveBeenCalled();
@@ -87,8 +87,8 @@ describe("EnvironmentManager", () => {
 
   it("does NOT re-offer a previously-known environment once it has been unregistered", async () => {
     const manager = newManager();
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
-    manager.unregister("web:wikipedia");
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.unregister("web:example.com");
 
     const listener = mockListener();
     manager.subscribe("s-new", listener);
@@ -102,40 +102,40 @@ describe("EnvironmentManager", () => {
     const b = mockListener();
     manager.subscribe("s1", a);
     manager.subscribe("s2", b);
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
 
-    manager.decideEnvironment("web:wikipedia", "accept");
+    manager.decideEnvironment("web:example.com", "accept");
 
-    expect(a.onEnvironmentEntered).toHaveBeenCalledWith("web:wikipedia", ["/repo/web/wikipedia"]);
-    expect(b.onEnvironmentEntered).toHaveBeenCalledWith("web:wikipedia", ["/repo/web/wikipedia"]);
-    expect(a.onEnvironmentResolved).toHaveBeenCalledWith("web:wikipedia", "approved");
-    expect(b.onEnvironmentResolved).toHaveBeenCalledWith("web:wikipedia", "approved");
+    expect(a.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", ["/repo/web/example.com"]);
+    expect(b.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", ["/repo/web/example.com"]);
+    expect(a.onEnvironmentResolved).toHaveBeenCalledWith("web:example.com", "approved");
+    expect(b.onEnvironmentResolved).toHaveBeenCalledWith("web:example.com", "approved");
   });
 
   it("approve persists, so a new session auto-enters silently (no offer)", async () => {
     const manager = newManager();
     manager.subscribe("s1", mockListener());
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
-    manager.decideEnvironment("web:wikipedia", "approve");
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.decideEnvironment("web:example.com", "approve");
 
     const fresh = mockListener();
     manager.subscribe("s2", fresh);
 
-    expect(fresh.onEnvironmentEntered).toHaveBeenCalledWith("web:wikipedia", ["/repo/web/wikipedia"]);
+    expect(fresh.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", ["/repo/web/example.com"]);
     expect(fresh.onEnvironmentOffered).not.toHaveBeenCalled();
   });
 
   it("approve survives an availability episode (re-enters next time without asking)", async () => {
     const manager = newManager();
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
-    manager.decideEnvironment("web:wikipedia", "approve");
-    manager.unregister("web:wikipedia");
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.decideEnvironment("web:example.com", "approve");
+    manager.unregister("web:example.com");
 
     const listener = mockListener();
     manager.subscribe("s1", listener);
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
 
-    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("web:wikipedia", ["/repo/web/wikipedia"]);
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", ["/repo/web/example.com"]);
     expect(listener.onEnvironmentOffered).not.toHaveBeenCalled();
   });
 
@@ -143,20 +143,20 @@ describe("EnvironmentManager", () => {
     const manager = newManager();
     const listener = mockListener();
     manager.subscribe("s1", listener);
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
 
-    manager.decideEnvironment("web:wikipedia", "ignore");
+    manager.decideEnvironment("web:example.com", "ignore");
     expect(listener.onEnvironmentEntered).not.toHaveBeenCalled();
 
-    manager.unregister("web:wikipedia");
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
-    expect(listener.onEnvironmentOffered).toHaveBeenLastCalledWith("web:wikipedia", {});
+    manager.unregister("web:example.com");
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    expect(listener.onEnvironmentOffered).toHaveBeenLastCalledWith("web:example.com", {});
   });
 
   it("reject persists: a new session is never offered the environment", async () => {
     const manager = newManager();
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
-    manager.decideEnvironment("web:wikipedia", "reject");
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.decideEnvironment("web:example.com", "reject");
 
     const listener = mockListener();
     manager.subscribe("s1", listener);
@@ -169,27 +169,27 @@ describe("EnvironmentManager", () => {
     const manager = newManager();
     const listener = mockListener();
     manager.subscribe("s1", listener);
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
-    manager.decideEnvironment("web:wikipedia", "approve");
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.decideEnvironment("web:example.com", "approve");
     expect(listener.onEnvironmentEntered).toHaveBeenCalledTimes(1);
 
-    manager.decideEnvironment("web:wikipedia", "ignore");
+    manager.decideEnvironment("web:example.com", "ignore");
 
-    expect(listener.onEnvironmentExited).toHaveBeenCalledWith("web:wikipedia");
+    expect(listener.onEnvironmentExited).toHaveBeenCalledWith("web:example.com");
   });
 
   it("marks entered environments as exited when unregistered", async () => {
     const manager = newManager();
     const listener = mockListener();
     manager.subscribe("s1", listener);
-    await manager.registerAvailableEnvironment({ id: "web:wikipedia", metadata: {} });
-    manager.decideEnvironment("web:wikipedia", "accept");
-    expect(manager.enteredEnvironments("s1")).toEqual(["web:wikipedia"]);
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.decideEnvironment("web:example.com", "accept");
+    expect(manager.enteredEnvironments("s1")).toEqual(["web:example.com"]);
 
-    manager.unregister("web:wikipedia");
+    manager.unregister("web:example.com");
 
-    expect(listener.onEnvironmentExited).toHaveBeenCalledWith("web:wikipedia");
-    expect(listener.onEnvironmentResolved).toHaveBeenCalledWith("web:wikipedia", "unavailable");
+    expect(listener.onEnvironmentExited).toHaveBeenCalledWith("web:example.com");
+    expect(listener.onEnvironmentResolved).toHaveBeenCalledWith("web:example.com", "unavailable");
     expect(manager.enteredEnvironments("s1")).toEqual([]);
   });
 

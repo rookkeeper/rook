@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Agent Station web service with Fastify, Vite, and React.",
+  "description": "Rook web service with Fastify, Vite, and React.",
   "scripts": {
     "dev": "node ./node_modules/tsx/dist/cli.mjs src/server/index.ts",
     "build": "node ./node_modules/typescript/bin/tsc --noEmit && node ./node_modules/typescript/bin/tsc -p tsconfig.server.json",

@@ -2,10 +2,10 @@ import AppKit
 import Foundation
 
 /// Lightweight debug trace for the foreground-provider path; tail
-/// /tmp/agent-station-menubar.log while testing.
+/// /tmp/rook.log while testing.
 func providerLog(_ message: String) {
     let line = "\(Date()) \(message)\n"
-    let url = URL(fileURLWithPath: "/tmp/agent-station-menubar.log")
+    let url = URL(fileURLWithPath: "/tmp/rook.log")
     if let handle = try? FileHandle(forWritingTo: url) {
         handle.seekToEndOfFile()
         handle.write(Data(line.utf8))

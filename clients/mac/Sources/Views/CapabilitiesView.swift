@@ -7,7 +7,7 @@ import SwiftUI
 /// plus the current foreground-app environment detail. Reached from the home
 /// "Capabilities" strip so the home panel stays focused on chat.
 struct CapabilitiesDetail: View {
-    @ObservedObject var model: AgentStationModel
+    @ObservedObject var model: RookMacModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

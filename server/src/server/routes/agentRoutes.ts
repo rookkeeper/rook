@@ -10,7 +10,7 @@ export async function registerAgentRoutes(app: FastifyInstance, deps: {
   roomManager: SessionRoomManager;
   environmentManager: EnvironmentManager;
 }): Promise<void> {
-  app.get("/api/health", async () => ({ ok: true, service: "agent-station" }));
+  app.get("/api/health", async () => ({ ok: true, service: "rook" }));
   app.get("/api/agents", async () => ({ agents: getAgentDefinitions() }));
 
   app.get<{ Querystring: { agent?: string } }>("/api/agent/sessions", async (request, reply) => {

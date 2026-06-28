@@ -18,7 +18,7 @@ describe("PiAgent", () => {
 
     const options = agent as unknown as { options: { args: string[]; env: Record<string, string> } };
     expect(options.options.args.at(0)).toContain("pi-acp/dist/index.js");
-    expect(options.options.env.PI_ACP_PI_COMMAND).toContain(".var/agent-station/generated/pi-launchers/");
+    expect(options.options.env.PI_ACP_PI_COMMAND).toContain(".var/rook/generated/pi-launchers/");
 
     const launcher = readFileSync(options.options.env.PI_ACP_PI_COMMAND, "utf8");
     expect(launcher).toContain(JSON.stringify("pi"));

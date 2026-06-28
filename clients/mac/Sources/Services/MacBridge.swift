@@ -39,7 +39,7 @@ final class MacBridge {
     }
 
     /// `token` gates every route except /health. It is shared with the agent
-    /// out-of-band via a 0600 file (see AgentStationModel.writeBridgeHandshake),
+    /// out-of-band via a 0600 file (see RookMacModel.writeBridgeHandshake),
     /// which a webpage cannot read — so DNS-rebinding/CSRF callers can't
     /// authenticate even though they can reach the TCP port.
     func start(port: UInt16, token: String) {

@@ -139,14 +139,14 @@ Current design:
 
 Generated Pi launch helpers are written under:
 
-- `.var/agent-station/generated/pi-launchers/`
+- `.var/rook/generated/pi-launchers/`
 
 ### 5.5 Agent discovery
 
 Agents come from two places:
 
 - built-in parents: `PiAgent`, `ClaudeAgent`, `CursorAgent`
-- configured profiles from `server/config/agent-profiles.json`
+- configured profiles from `~/.rook/config/agent-profiles.json`
 
 Profiles let the app expose multiple concrete agents while reusing the shared runtime architecture.
 
@@ -160,7 +160,7 @@ An **environment** is a context the user is currently "in", identified as:
 
 Examples:
 
-- `web:wikipedia` (Chrome extension — current site)
+- `web:<host>/<path>` (browser URL-derived site/page context)
 - `demo:demo`
 - `app:<bundleId>` (macOS menu bar app — frontmost Mac app identity)
 - `app:md.obsidian/<vault>` (macOS menu bar app — Obsidian vault context)
@@ -327,7 +327,7 @@ Supported behaviors include:
 
 ## 10. Persistence and local state
 
-Current local mutable state is under `.var/agent-station/`.
+Current local mutable state is under `.var/rook/`.
 
 Important pieces:
 

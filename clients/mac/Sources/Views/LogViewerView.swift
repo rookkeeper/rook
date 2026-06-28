@@ -1,17 +1,17 @@
 import SwiftUI
 
-/// A floating window that tails `/tmp/agent-station-menubar.log` live.
+/// A floating window that tails `/tmp/rook.log` live.
 struct LogViewerView: View {
     @State private var lines: [String] = []
     @State private var timer: Timer?
     @State private var lastSize: UInt64 = 0
-    private let logURL = URL(fileURLWithPath: "/tmp/agent-station-menubar.log")
+    private let logURL = URL(fileURLWithPath: "/tmp/rook.log")
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Label("Agent Station Log", systemImage: "doc.text.magnifyingglass")
+                Label("Rook Log", systemImage: "doc.text.magnifyingglass")
                     .font(.headline)
                     .foregroundStyle(.primary)
                 Spacer()

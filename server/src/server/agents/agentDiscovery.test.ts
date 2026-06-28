@@ -33,7 +33,7 @@ describe("agentDiscovery", () => {
       extensionPaths: ["/runtime-extension"],
     }) as unknown as { options: { env: Record<string, string> } };
     const launcherPath = piAgent.options.env.PI_ACP_PI_COMMAND;
-    expect(launcherPath).toContain(".var/agent-station/generated/pi-launchers/");
+    expect(launcherPath).toContain(".var/rook/generated/pi-launchers/");
 
     const claudeAgent = createAgent("MyClaudeAgent") as unknown as { options: { env: Record<string, string> } };
     expect(claudeAgent.options.env).toMatchObject({

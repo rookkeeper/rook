@@ -78,5 +78,5 @@ const isMain = process.argv[1] ? path.resolve(process.argv[1]) === fileURLToPath
 if (isMain) {
   const app = await buildServer();
   await app.listen({ host, port });
-  console.log(`Agent Station listening at http://${host}:${port}`);
+  console.log(`Rook listening at http://${host}:${port}`);
 }

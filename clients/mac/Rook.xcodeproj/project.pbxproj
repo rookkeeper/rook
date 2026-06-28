@@ -1,0 +1,432 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		12BABD831E01470C5F12C1C9 /* ServerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */; };
+		1D381D9C5FAF51B3E9158694 /* ForegroundAppMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FAFBA51D4CA723F49510CBA /* ForegroundAppMonitor.swift */; };
+		2133C332EBC272332F53F69E /* AXReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EF90459F4F62F45D925B32 /* AXReader.swift */; };
+		247B6E1117CD714B7D212531 /* ScreenOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */; };
+		38F4F35F3EF2EC01A5D66DE7 /* EnvironmentOfferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */; };
+		53437456FFF017B27C184447 /* CapabilitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3251190EB3275711DF69AE0E /* CapabilitiesView.swift */; };
+		64732F130DD711AA245FEE1A /* ScreenCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 684A1389822C3C6175B654FC /* ScreenCapturer.swift */; };
+		86F91627A128BBD4CBF341B2 /* MacBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCDBF5403D71795728D9928A /* MacBridge.swift */; };
+		8840E0A6C19AD35B38A0943B /* RookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 14EB51A753FB1D1C047A02B6 /* RookKit */; };
+		9E2E7BC2509E40784F0BCA14 /* RookMacModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60DF8054837AA98A422E1919 /* RookMacModel.swift */; };
+		A7CAEE1B48AC6B1F8DD26AF4 /* RookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D369786A8FE57C99D452D1 /* RookView.swift */; };
+		A8B2F835A776E831E436D046 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */; };
+		ACFC98FFE07090B9A5C95D75 /* HotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 891E038256B011C6B53596BB /* HotKey.swift */; };
+		BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */; };
+		C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5143B8CA8023334102A62F2C /* InputSynthesizer.swift */; };
+		CEEBCE8607A6BCB97868C2A0 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2330969071E5BF5037823E /* ChatView.swift */; };
+		EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0087B8D63F86E9DD505D802D /* LogViewerView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0087B8D63F86E9DD505D802D /* LogViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogViewerView.swift; sourceTree = "<group>"; };
+		08EF90459F4F62F45D925B32 /* AXReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXReader.swift; sourceTree = "<group>"; };
+		2970A475DCF3F26A17C649E2 /* Rook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenOCR.swift; sourceTree = "<group>"; };
+		3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookApp.swift; sourceTree = "<group>"; };
+		3251190EB3275711DF69AE0E /* CapabilitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilitiesView.swift; sourceTree = "<group>"; };
+		3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerController.swift; sourceTree = "<group>"; };
+		3FAFBA51D4CA723F49510CBA /* ForegroundAppMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundAppMonitor.swift; sourceTree = "<group>"; };
+		4AC9D0D68548AE9E330CAABA /* RookKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = RookKit; path = ../RookKit; sourceTree = SOURCE_ROOT; };
+		4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		5143B8CA8023334102A62F2C /* InputSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSynthesizer.swift; sourceTree = "<group>"; };
+		60DF8054837AA98A422E1919 /* RookMacModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacModel.swift; sourceTree = "<group>"; };
+		684A1389822C3C6175B654FC /* ScreenCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapturer.swift; sourceTree = "<group>"; };
+		7F2330969071E5BF5037823E /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		891E038256B011C6B53596BB /* HotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKey.swift; sourceTree = "<group>"; };
+		89D369786A8FE57C99D452D1 /* RookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookView.swift; sourceTree = "<group>"; };
+		B08909E5BDA34D380AF7B25F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		CAB0B5D7F3477ABBB39A0B42 /* Rook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rook.entitlements; sourceTree = "<group>"; };
+		D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
+		FCDBF5403D71795728D9928A /* MacBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBridge.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		EBCC19E39C0CF73BF9FDA32B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8840E0A6C19AD35B38A0943B /* RookKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3B84888C46C0502477C50D82 = {
+			isa = PBXGroup;
+			children = (
+				4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */,
+				45470E772448A8D9AE52E08E /* Packages */,
+				64235206901FF0219CF88D93 /* Sources */,
+				9BF2CF96022C225E7F35AC3D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		45470E772448A8D9AE52E08E /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				4AC9D0D68548AE9E330CAABA /* RookKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		64235206901FF0219CF88D93 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				B08909E5BDA34D380AF7B25F /* Info.plist */,
+				CAB0B5D7F3477ABBB39A0B42 /* Rook.entitlements */,
+				3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */,
+				665805576D7C265839A301AE /* Models */,
+				6916D92CEFFA4F8507F555B6 /* Services */,
+				9525B3E845F87FA8A741FEDF /* Views */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		665805576D7C265839A301AE /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				60DF8054837AA98A422E1919 /* RookMacModel.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		6916D92CEFFA4F8507F555B6 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				08EF90459F4F62F45D925B32 /* AXReader.swift */,
+				3FAFBA51D4CA723F49510CBA /* ForegroundAppMonitor.swift */,
+				891E038256B011C6B53596BB /* HotKey.swift */,
+				5143B8CA8023334102A62F2C /* InputSynthesizer.swift */,
+				FCDBF5403D71795728D9928A /* MacBridge.swift */,
+				684A1389822C3C6175B654FC /* ScreenCapturer.swift */,
+				31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */,
+				3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		9525B3E845F87FA8A741FEDF /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				3251190EB3275711DF69AE0E /* CapabilitiesView.swift */,
+				7F2330969071E5BF5037823E /* ChatView.swift */,
+				D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */,
+				0087B8D63F86E9DD505D802D /* LogViewerView.swift */,
+				89D369786A8FE57C99D452D1 /* RookView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		9BF2CF96022C225E7F35AC3D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2970A475DCF3F26A17C649E2 /* Rook.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		BECEADD2309FE9E37792DF18 /* Rook */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A686D95BA99B938A4E66840 /* Build configuration list for PBXNativeTarget "Rook" */;
+			buildPhases = (
+				6E9B796607D72A98BF78B29B /* Sources */,
+				33C754E912A2C26EA0AE5394 /* Resources */,
+				EBCC19E39C0CF73BF9FDA32B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Rook;
+			packageProductDependencies = (
+				14EB51A753FB1D1C047A02B6 /* RookKit */,
+			);
+			productName = Rook;
+			productReference = 2970A475DCF3F26A17C649E2 /* Rook.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8551ED3D5A86D0D7BBCB0C85 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 8D92C9375EB3AAE1CAF52C4A /* Build configuration list for PBXProject "Rook" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 3B84888C46C0502477C50D82;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				01A6C9AEB7EFAF3E16322253 /* XCLocalSwiftPackageReference "../RookKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9BF2CF96022C225E7F35AC3D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BECEADD2309FE9E37792DF18 /* Rook */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		33C754E912A2C26EA0AE5394 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A8B2F835A776E831E436D046 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6E9B796607D72A98BF78B29B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2133C332EBC272332F53F69E /* AXReader.swift in Sources */,
+				53437456FFF017B27C184447 /* CapabilitiesView.swift in Sources */,
+				CEEBCE8607A6BCB97868C2A0 /* ChatView.swift in Sources */,
+				38F4F35F3EF2EC01A5D66DE7 /* EnvironmentOfferView.swift in Sources */,
+				1D381D9C5FAF51B3E9158694 /* ForegroundAppMonitor.swift in Sources */,
+				ACFC98FFE07090B9A5C95D75 /* HotKey.swift in Sources */,
+				C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */,
+				EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */,
+				86F91627A128BBD4CBF341B2 /* MacBridge.swift in Sources */,
+				BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */,
+				9E2E7BC2509E40784F0BCA14 /* RookMacModel.swift in Sources */,
+				A7CAEE1B48AC6B1F8DD26AF4 /* RookView.swift in Sources */,
+				64732F130DD711AA245FEE1A /* ScreenCapturer.swift in Sources */,
+				247B6E1117CD714B7D212531 /* ScreenOCR.swift in Sources */,
+				12BABD831E01470C5F12C1C9 /* ServerController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1CBEE1668F6A0CDCC7C0F1A9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/Rook.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = Sources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook;
+				PRODUCT_NAME = Rook;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		4760CF0496E3D1CD5C5E1021 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		91441F353259EEBCD1B5DDD6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		BD54EE846FEF53D388E8ED3B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/Rook.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = Sources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook;
+				PRODUCT_NAME = Rook;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1A686D95BA99B938A4E66840 /* Build configuration list for PBXNativeTarget "Rook" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1CBEE1668F6A0CDCC7C0F1A9 /* Debug */,
+				BD54EE846FEF53D388E8ED3B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8D92C9375EB3AAE1CAF52C4A /* Build configuration list for PBXProject "Rook" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				91441F353259EEBCD1B5DDD6 /* Debug */,
+				4760CF0496E3D1CD5C5E1021 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		01A6C9AEB7EFAF3E16322253 /* XCLocalSwiftPackageReference "../RookKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../RookKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		14EB51A753FB1D1C047A02B6 /* RookKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RookKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 8551ED3D5A86D0D7BBCB0C85 /* Project object */;
+}

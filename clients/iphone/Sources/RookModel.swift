@@ -10,7 +10,7 @@ enum ServerState: Equatable {
 }
 
 /// iOS view-model: the portable chat/session/offer core of the macOS
-/// `AgentStationModel`, with macOS-only services dropped. Location (Phase B),
+/// `RookMacModel`, with macOS-only services dropped. Location (Phase B),
 /// voice (Phase C), and Live Activity (Phase D) attach here later.
 @MainActor
 final class RookModel: ObservableObject {
@@ -75,7 +75,7 @@ final class RookModel: ObservableObject {
     // simulator reaches the Mac's localhost directly).
     @Published var baseURLString: String
 
-    private(set) var api: AgentStationAPI
+    private(set) var api: RookAPI
     private let socket = AcpSocket()
     private var healthTimer: Timer?
     private var blockCounter = 0
@@ -90,13 +90,16 @@ final class RookModel: ObservableObject {
         let urlString: String
         if let env, !env.isEmpty {
             urlString = env
+            if stored != env {
+                UserDefaults.standard.set(env, forKey: "RookServerBaseURL")
+            }
         } else if let stored, !stored.isEmpty {
             urlString = stored
         } else {
             urlString = "http://127.0.0.1:3000"
         }
         baseURLString = urlString
-        api = AgentStationAPI(baseURL: URL(string: urlString) ?? URL(string: "http://127.0.0.1:3000")!)
+        api = RookAPI(baseURL: URL(string: urlString) ?? URL(string: "http://127.0.0.1:3000")!)
 
         socket.onEvent = { [weak self] event in
             self?.handleSocketEvent(event)
@@ -288,7 +291,7 @@ final class RookModel: ObservableObject {
         }
     }
 
-    /// Mirrors `AgentStationModel.handleForegroundApp`: diff the current place
+    /// Mirrors `RookMacModel.handleForegroundApp`: diff the current place
     /// against the registered environment, unregister the old, register the new
     /// (only if the server has skills for it — the iOS analog of the Mac's
     /// on-disk skill-bundle guard, done via the preview endpoint).
@@ -347,7 +350,7 @@ final class RookModel: ObservableObject {
         }
         baseURLString = trimmed
         UserDefaults.standard.set(trimmed, forKey: "RookServerBaseURL")
-        api = AgentStationAPI(baseURL: url)
+        api = RookAPI(baseURL: url)
         socket.disconnect()
         currentSession = nil
         Task { await refreshHealth() }
@@ -672,6 +675,8 @@ final class RookModel: ObservableObject {
 
     private func handleSocketEvent(_ event: AcpClientEvent) {
         switch event {
+        case .userMessageChunk(let text):
+            appendBlock(.user(text: text))
         case .agentMessageChunk(let text):
             statusLine = "Responding…"
             appendStreamingText(text, isThinking: false)

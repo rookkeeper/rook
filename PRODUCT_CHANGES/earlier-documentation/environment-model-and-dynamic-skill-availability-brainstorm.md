@@ -502,9 +502,9 @@ Keeping these separate is what makes the model easy to reason about:
 
 **Today:** skill payloads for injection often live under `.var` (gitignored runtime state).
 
-**Direction:** skills, references, and scripts belong in **environment repositories** (canonical and local). Agent Station discovers and loads them through the repository API.
+**Direction:** skills, references, and scripts belong in **environment repositories** (canonical and local). Rook discovers and loads them through the repository API.
 
-Agent Station can be configured with **multiple environment repositories**.
+Rook can be configured with **multiple environment repositories**.
 Each repository is a **set of environments** (and everything hung off them — see data model below).
 The platform merges and indexes across configured repos; precedence when the same environment ID appears in more than one repo is TBD.
 
@@ -513,7 +513,7 @@ The platform merges and indexes across configured repos; precedence when the sam
 Most installs will use **two** repositories by default:
 
 ### Canonical repository
-The **official Agent Station environment repository** — trusted, curated skills and environment definitions (partners, community contributions vetted for the catalog, etc.).
+The **official Rook environment repository** — trusted, curated skills and environment definitions (partners, community contributions vetted for the catalog, etc.).
 
 Near-term practical step: we will likely create a new root-level directory in this monorepo that holds the canonical repository contents.
 So for a while, it will simply live inside this project.
@@ -544,7 +544,7 @@ EnvironmentRepository
 
 ## Repository API
 
-Whether a repository is **local** (on disk) or **remote** (HTTP/Git-backed service), Agent Station talks to it through the **same API**. Backends differ; callers do not.
+Whether a repository is **local** (on disk) or **remote** (HTTP/Git-backed service), Rook talks to it through the **same API**. Backends differ; callers do not.
 
 Minimum surface:
 
@@ -572,7 +572,7 @@ Search should support at least:
 
 `getSkill` is how the runtime and UI **read** a skill before approval, injection, or review (prompt-injection checks, preview, etc.).
 
-A **repository registry** in Agent Station holds configured repos and can:
+A **repository registry** in Rook holds configured repos and can:
 - fan out `searchEnvironments` / `searchSkills` across all repos (merge/dedupe/rank — TBD)
 - resolve `getEnvironment` / `getSkill` using repository precedence when IDs collide
 
@@ -829,7 +829,7 @@ This last scenario is important because it means the system is not limited to pa
 - Environment-associated skills should only be loaded after the relevant approval/onboarding step.
 - When environments disappear, the skills should be removed from the session runtime and any stale capability call should fail clearly.
 - Skills today often live in `.var`; **environment repositories** are the long-term home for skill content.
-- Agent Station supports **multiple environment repositories**; by default **canonical** plus **local**.
+- Rook supports **multiple environment repositories**; by default **canonical** plus **local**.
 - Each repository is a set of **environments** → **skills** → **references** / **scripts**; tools optional/TBD.
 - **`EnvironmentRepository` API** — catalog search/read (local and remote backends).
 - **`EnvironmentManager` API** — live registration, decisions, offerings per session, enter/exit, state updates into session runtime (uses repositories for skill content).

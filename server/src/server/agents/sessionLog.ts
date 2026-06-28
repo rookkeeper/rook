@@ -12,7 +12,7 @@ export interface AgentSessionRecord {
   restart: AgentRestartMetadata;
 }
 
-export const DEFAULT_SESSION_LOG_PATH = path.resolve(REPO_ROOT, ".var", "agent-station", "agent-sessions.jsonl");
+export const DEFAULT_SESSION_LOG_PATH = path.resolve(REPO_ROOT, ".var", "rook", "agent-sessions.jsonl");
 
 let sessionLogPath = DEFAULT_SESSION_LOG_PATH;
 

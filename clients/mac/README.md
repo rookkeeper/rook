@@ -1,11 +1,11 @@
-# Agent Station Menu Bar (macOS)
+# Rook Menu Bar (macOS)
 
 A native SwiftUI menu bar client for [Rook](../../README.md) - talk to
 your Pi / Claude / Cursor agents from the macOS menu bar. The panel layout and
 interaction model (slide-in detail views, hover affordances) follow the Stoa
 Scribe menu bar app; the visual design tokens are mirrored in the shared Swift
 layer so the native clients share one look. Functionality
-is the full Agent Station embeddable
+is the full Rook embeddable
 client, implemented natively against the server's REST + ACP JSON-RPC
 WebSocket protocol.
 
@@ -34,7 +34,7 @@ WebSocket protocol.
   visit / always allow / not now / never.
 - **Server supervision** - health polling; if the server is down the panel can
   launch `npm run dev` for the repo and tail its log
-  (`~/Library/Logs/AgentStationMenuBar/server.log`).
+  (`~/Library/Logs/Rook/server.log`).
 - **Foreground-app environment provider** - the app watches which Mac app is
   frontmost (NSWorkspace activation notifications - no Accessibility permission
   needed) and registers/unregisters derived `app:` / `web:` environments as you
@@ -88,7 +88,7 @@ Downloading a Premium voice (macOS Sequoia / 15):
 
 Premium voices are the neural, Siri-quality tier - a large step up from the
 default Samantha. Pin a specific one with `defaults write
-com.rookery.AgentStationMenuBar VoiceIdentifier <voice-id>`. For studio-quality
+com.rookery.Rook VoiceIdentifier <voice-id>`. For studio-quality
 voices, swap `VoiceController`'s synthesizer for a cloud TTS (ElevenLabs,
 Cartesia, OpenAI).
 
@@ -96,7 +96,7 @@ This is the local-first tier (free, private, no API). The quality knobs are
 swappable without touching the agent: drop in a cloud STT (Deepgram, Whisper)
 or a natural TTS (ElevenLabs, Cartesia) behind `VoiceController`, or front the
 whole thing with a realtime speech-to-speech model (OpenAI Realtime, Gemini
-Live) as an I/O layer that forwards to Agent Station as the brain.
+Live) as an I/O layer that forwards to Rook as the brain.
 
 ## Foreground-app environments
 
@@ -128,10 +128,10 @@ unregistered (`POST /api/environments/unregister`). Activations are debounced
 (700 ms) so ⌘-Tab flicker doesn't churn registrations, the app ignores its own
 activations (opening the panel doesn't end the episode), and currently cached
 registrations are re-announced if the server restarts. Offers arrive over the
-session websocket like any other environment - the menu bar bird fills amber
-and the native approval view shows the skill files before anything loads.
+session websocket like any other environment, and the native approval view
+shows the skill files before anything loads.
 
-Provider activity is traced to `/tmp/agent-station-menubar.log` for debugging.
+Provider activity is traced to `/tmp/rook.log` for debugging.
 
 ### Tier 1 - window-title perception
 
@@ -152,7 +152,7 @@ bridge without re-registering.
 ### Tier 2 - the Mac bridge
 
 The app runs a loopback HTTP server (default `http://127.0.0.1:8765`, override
-with `defaults write com.rookery.AgentStationMenuBar MacBridgePort <n>`) that
+with `defaults write com.rookery.Rook MacBridgePort <n>`) that
 the agent's shell tool can `curl` to perceive and drive the Mac:
 
 | Route | Body | Returns |
@@ -214,7 +214,7 @@ navigate and draft messages.
 ## Getting it running - exact steps
 
 Prerequisites: Xcode, [xcodegen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`), and Node (for the Agent Station server).
+(`brew install xcodegen`), and Node (for the Rook server).
 
 Fast path from the repo root:
 
@@ -223,12 +223,12 @@ Fast path from the repo root:
 ./scripts/run-rook.sh stop   # shut down server + launched app(s)
 ```
 
-`run-rook.sh mac` starts the server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, and launches the fresh app build.
+`run-rook.sh mac` starts the server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, and launches the fresh app build. On macOS the helper now starts the server in Terminal.app by default so Pi retains Terminal's Downloads/Desktop/Documents permissions instead of losing them in a detached background process.
 
 Manual steps:
 
 ```zsh
-# 1. Start the Agent Station server (skip if it's already running)
+# 1. Start the Rook server (skip if it's already running)
 cd <path-to-rookery>   # the repo root
 npm run dev
 # verify: curl http://127.0.0.1:3000/api/health  ->  {"ok":true,...}
@@ -236,35 +236,35 @@ npm run dev
 # 2. Generate the Xcode project and build the app
 cd clients/mac
 xcodegen generate
-xcodebuild -project AgentStationMenuBar.xcodeproj \
-  -scheme AgentStationMenuBar -configuration Debug build
+xcodebuild -project Rook.xcodeproj \
+  -scheme Rook -configuration Debug build
 
 # 3. Launch it
 APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData \
-  -path '*/Build/Products/Debug/AgentStationMenuBar.app' -print -quit)
+  -path '*/Build/Products/Debug/Rook.app' -print -quit)
 open "$APP_PATH"
 ```
 
-Look for the **bird icon** in the menu bar (no Dock icon - it's an
-`LSUIElement` app). The icon fills and turns amber when an environment offer
-is pending, and tints violet while a run is in flight. If you don't see it,
-read the troubleshooting section below - on a crowded menu bar this is
-expected, not a bug.
+Look for the **purple rook icon** in the menu bar (no Dock icon - it's an
+`LSUIElement` app). If you don't see it, read the troubleshooting section
+below - on a crowded menu bar this is expected, not a bug.
 
 To kill and relaunch (e.g. after a rebuild):
 
 ```zsh
-pkill -f AgentStationMenuBar; sleep 1; open "$(find \
+pkill -f Rook; sleep 1; open "$(find \
   ~/Library/Developer/Xcode/DerivedData \
-  -path '*/Build/Products/Debug/AgentStationMenuBar.app' -print -quit)"
+  -path '*/Build/Products/Debug/Rook.app' -print -quit)"
 ```
 
 The repo root (used by the panel's Start Server button) is derived from this
 package's source location; override it with:
 
 ```zsh
-defaults write com.rookery.AgentStationMenuBar RookeryRepoRoot /path/to/rookery
+defaults write com.rookery.Rook RookeryRepoRoot /path/to/rookery
 ```
+
+Shared Rook config now lives in `~/.rook/config/`.
 
 ## Troubleshooting: the icon isn't in the menu bar
 
@@ -276,11 +276,11 @@ relaunch. Diagnose and fix:
 
 ```zsh
 # Is a position stored, and where? (~870+ on a 1512pt display = hidden zone)
-defaults read com.rookery.AgentStationMenuBar "NSStatusItem Preferred Position Item-0"
+defaults read com.rookery.Rook "NSStatusItem Preferred Position Item-0"
 
 # Fix: quit the app, then pin the item into the visible right-hand cluster
-pkill -f AgentStationMenuBar
-defaults write com.rookery.AgentStationMenuBar \
+pkill -f Rook
+defaults write com.rookery.Rook \
   "NSStatusItem Preferred Position Item-0" -float 400
 open "$APP_PATH"
 ```
@@ -294,8 +294,8 @@ jordanbaird-ice`, or Bartender) avoids the overflow cull entirely.
 window back after closing it):
 
 ```zsh
-defaults write com.rookery.AgentStationMenuBar ShowPanelWindow -bool true   # on
-defaults write com.rookery.AgentStationMenuBar ShowPanelWindow -bool false  # off
+defaults write com.rookery.Rook ShowPanelWindow -bool true   # on
+defaults write com.rookery.Rook ShowPanelWindow -bool false  # off
 ```
 
 ## Notes on the wire protocol

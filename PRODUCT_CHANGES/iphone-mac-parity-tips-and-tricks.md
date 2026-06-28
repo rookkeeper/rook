@@ -101,7 +101,7 @@ Notes:
 ### 12. The new `client/` package inherited this work; native clients inherited only part of it
 - **What changed:** `ca1fc9b` copied the ACP-parity work into the standalone `client/`, then the native apps consolidated on `RookKit`.
 - **Commit(s):** `ca1fc9b`, `e7a2ede`, `51733cc`
-- **Breadcrumbs:** `client/src/**`, `RookKit/Sources/RookKit/**`, `agent-station-menu-bar-app-mac/Sources/Models/AgentStationModel.swift`, `agent-station-iphone-app/Sources/RookModel.swift`
+- **Breadcrumbs:** `client/src/**`, `RookKit/Sources/RookKit/**`, `rook-mac-app/Sources/Models/RookMacModel.swift`, `rook-iphone-app/Sources/RookModel.swift`
 - **Meaning:** the next parity pass should mostly be a **shared `RookKit` pass**, then light model/view work in both native apps.
 
 ## Current native parity summary
@@ -131,8 +131,8 @@ Notes:
 1. **Shared transport/parser:** `RookKit/Sources/RookKit/Net/AcpSocket.swift`
 2. **Shared event/model surface:** `RookKit/Sources/RookKit/Models/ChatBlocks.swift`
 3. **Shared chat rendering/components:** `RookKit/Sources/RookKit/Design/*`
-4. **Mac state + UI glue:** `agent-station-menu-bar-app-mac/Sources/Models/AgentStationModel.swift`, `.../Views/ChatView.swift`
-5. **iPhone state + UI glue:** `agent-station-iphone-app/Sources/RookModel.swift`, `.../Views/ChatScreen.swift`
+4. **Mac state + UI glue:** `rook-mac-app/Sources/Models/RookMacModel.swift`, `.../Views/ChatView.swift`
+5. **iPhone state + UI glue:** `rook-iphone-app/Sources/RookModel.swift`, `.../Views/ChatScreen.swift`
 
 ## Short recommendation
 If the goal is "make iPhone and Mac app ACP-compliant in the same way the web client became ACP-compliant," the highest-leverage order is:

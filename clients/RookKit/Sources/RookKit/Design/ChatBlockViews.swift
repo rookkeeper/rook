@@ -76,18 +76,44 @@ private func bubbleShape(tailAt corner: UnitPoint) -> UnevenRoundedRectangle {
 }
 
 private struct UserBlockView: View {
+    private static let collapsedLineLimit = 5
+
     var text: String
+    @State private var expanded = false
+
+    private var isCollapsedByDefault: Bool {
+        estimatedLineCount(for: text) > Self.collapsedLineLimit
+    }
 
     var body: some View {
         HStack {
             Spacer(minLength: 48)
-            Text(text)
-                .font(.callout)
-                .foregroundStyle(.white)
-                .textSelection(.enabled)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(bubbleShape(tailAt: .bottomTrailing).fill(PanelPalette.accent))
+            VStack(alignment: .trailing, spacing: 6) {
+                if isCollapsedByDefault {
+                    disclosureHeader(
+                        title: "MESSAGE",
+                        expanded: expanded,
+                        textColor: .white,
+                        chevronColor: .white,
+                        trailingAligned: true
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.14)) {
+                            expanded.toggle()
+                        }
+                    }
+                }
+
+                Text(text)
+                    .font(.callout)
+                    .foregroundStyle(.white)
+                    .textSelection(.enabled)
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(isCollapsedByDefault && !expanded ? Self.collapsedLineLimit : nil)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(bubbleShape(tailAt: .bottomTrailing).fill(PanelPalette.accent))
         }
     }
 }
@@ -130,41 +156,93 @@ private struct AssistantTextBlockView: View {
     }
 }
 
+private func estimatedLineCount(for text: String) -> Int {
+    let explicitLines = text.split(separator: "\n", omittingEmptySubsequences: false).count
+    let wrappedLines = Int(ceil(Double(text.count) / 72.0))
+    return max(explicitLines, wrappedLines)
+}
+
+private func disclosureHeader(
+    title: String,
+    expanded: Bool,
+    textColor: Color,
+    chevronColor: Color,
+    trailingAligned: Bool,
+    action: @escaping () -> Void
+) -> some View {
+    Button(action: action) {
+        HStack(spacing: 6) {
+            if trailingAligned {
+                Spacer(minLength: 0)
+            }
+
+            Text(title)
+                .font(.system(size: 9.5, weight: .semibold))
+                .kerning(0.5)
+                .foregroundStyle(textColor)
+                .opacity(0.85)
+            Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(chevronColor)
+                .opacity(0.75)
+
+            if !trailingAligned {
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .pointingHandOnHover()
+}
+
 private struct ThinkingBlockView: View {
+    private static let collapsedLineLimit = 5
+
     var text: String
     var streaming: Bool
     @State private var expanded = false
 
+    private var isCollapsedByDefault: Bool {
+        estimatedLineCount(for: text) > Self.collapsedLineLimit
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.14)) {
-                        expanded.toggle()
+                if isCollapsedByDefault || streaming {
+                    disclosureHeader(
+                        title: streaming ? "THINKING…" : "THINKING",
+                        expanded: expanded,
+                        textColor: .white,
+                        chevronColor: .white,
+                        trailingAligned: false
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.14)) {
+                            expanded.toggle()
+                        }
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(streaming ? "THINKING…" : "THINKING")
-                            .font(.system(size: 9.5, weight: .semibold))
-                            .kerning(0.5)
-                            .opacity(0.8)
-                        Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 8, weight: .bold))
-                            .opacity(0.7)
-                    }
-                    .foregroundStyle(.white)
+                    .opacity(0.8)
                 }
-                .buttonStyle(.plain)
-                .pointingHandOnHover()
 
-                if expanded || streaming {
+                if streaming || expanded || !isCollapsedByDefault {
                     Text(text)
                         .font(.system(size: 11.5))
                         .italic()
                         .lineSpacing(2)
                         .foregroundStyle(.white)
                         .textSelection(.enabled)
+                        .lineLimit(streaming || expanded ? nil : Self.collapsedLineLimit)
                         .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(text)
+                        .font(.system(size: 11.5))
+                        .italic()
+                        .lineSpacing(2)
+                        .foregroundStyle(.white)
+                        .textSelection(.enabled)
+                        .lineLimit(Self.collapsedLineLimit)
                 }
             }
             .padding(.horizontal, 12)

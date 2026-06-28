@@ -23,10 +23,18 @@ npm run dev
 
 That starts the backend on `http://127.0.0.1:3000`.
 
+If you launch through `./scripts/run-rook.sh server` (or `mac`/`sim`/`phone`) on
+macOS, the script now starts the server in Terminal.app by default instead of a
+plain detached `nohup` process. This preserves Terminal's protected-folder
+access (notably Downloads/Desktop/Documents), which matters because Pi tool
+subprocesses may otherwise lose TCC-granted file access.
+
 ## Pi agent configuration
 
-Agent Station loads ACP-backed agent profiles from:
-- `config/agent-profiles.json`
+Rook loads ACP-backed agent profiles from:
+- `~/.rook/config/agent-profiles.json`
+
+More detail: [`../docs/configuration.md`](../docs/configuration.md)
 
 Default example:
 
@@ -73,12 +81,12 @@ Use that package for the agent-side configuration itself, such as:
 - installed or custom skills
 - Pi package metadata/config
 
-Use this repo for the launcher-side configuration, mainly:
-- `config/agent-profiles.json` to choose which Pi package to launch and with which args
+Use this repo for the launcher-side configuration, mainly through:
+- `~/.rook/config/agent-profiles.json` to choose which Pi package to launch and with which args
 
-If your Pi package lives somewhere else, update the `args` path in `config/agent-profiles.json`.
+If your Pi package lives somewhere else, update the `args` path in `~/.rook/config/agent-profiles.json`.
 
-Generated Pi launch helpers are written under `.var/agent-station/generated/pi-launchers/`.
+Generated Pi launch helpers are written under `.var/rook/generated/pi-launchers/`.
 
 Terse map of `src/`:
 
@@ -155,13 +163,13 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
   - `BaseAgent.ts`: the generic ACP stdio subprocess runtime and lifecycle implementation.
   - `PiAgent.ts`: thin Pi-specific adapter that launches `pi-acp` with Pi-oriented defaults and arguments.
   - `agentDiscovery.ts`: registry/factory for known agents + parent/child metadata.
-  - `config/agentProfiles.ts`: loads configured agent profiles from `config/agent-profiles.json`.
+  - `config/agentProfiles.ts`: loads configured agent profiles from `~/.rook/config/agent-profiles.json`.
   - `sessionLog.ts`: JSONL persistence for session records used to resume provider sessions.
 
 ### Main repository/persistence objects
 - `LocalEnvironmentRepository.ts`: maps `<kind>:<path>` environment IDs to skill bundle directories under `environment-repository/` and reads previewable skill files.
 - `EnvironmentDecisionStore.ts`: SQLite-backed store for persistent `approve` / `reject` decisions.
-  - Current DB location: `.var/agent-station/environment-decisions.sqlite`
+  - Current DB location: `.var/rook/environment-decisions.sqlite`
   - Clear it by removing that file
 - `sessionLog.ts`: stores provider/session restart metadata used to recreate stopped rooms.
 

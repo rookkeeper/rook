@@ -17,7 +17,7 @@ export interface PiAgentOptions {
 
 const DEFAULT_ARGS: string[] = [];
 const PI_ACP_ENTRYPOINT = path.join(SERVER_ROOT, "node_modules", "pi-acp", "dist", "index.js");
-const GENERATED_LAUNCHER_DIR = path.join(REPO_ROOT, ".var", "agent-station", "generated", "pi-launchers");
+const GENERATED_LAUNCHER_DIR = path.join(REPO_ROOT, ".var", "rook", "generated", "pi-launchers");
 
 function uniqueNonEmpty(values: string[] | undefined): string[] {
   return [...new Set((values ?? []).filter((value) => value.length > 0))];

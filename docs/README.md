@@ -1,0 +1,3 @@
+# Docs
+
+- [Configuration](./configuration.md)

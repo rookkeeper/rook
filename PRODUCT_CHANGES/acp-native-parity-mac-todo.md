@@ -16,7 +16,7 @@ Bring the Mac app to parity with the ACP-native web client for the client/UI sur
 - [ ] Keep shared queue state rich enough for edit, delete, and send-now flows.
 
 ## Mac model/state glue
-- [ ] Audit `clients/mac/Sources/Models/AgentStationModel.swift` against the ACP-native web reducer behavior.
+- [ ] Audit `clients/mac/Sources/Models/RookMacModel.swift` against the ACP-native web reducer behavior.
 - [ ] Add Mac model state for permission prompts, including pending request details and approve/deny actions.
 - [ ] Add Mac model state for ACP modes and current mode updates.
 - [ ] Add Mac model state for ACP config options and live option updates.

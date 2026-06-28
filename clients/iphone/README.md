@@ -8,8 +8,9 @@ the Chrome extension's `web:<slug>` and the Mac menu bar app's `app:<slug>`.
 The iPhone is a **fourth environment provider**. Its signal is GPS/geofence
 instead of a frontmost app or a browser tab, but it speaks the same REST + ACP
 contract to `:3000` and needs **zero server changes** — `place:office` resolves
-to `environment-repository/place/office/` exactly the way `web:wikipedia`
-resolves to `environment-repository/web/wikipedia/`.
+to `environment-repository/place/office/` exactly the way
+`web:en.wikipedia.org/wiki/Main_Page` resolves to
+`environment-repository/web/en.wikipedia.org/wiki/Main_Page/`.
 
 UI, networking, models, chat rendering, and voice are shared with the macOS menu
 bar app through the [`RookKit`](../RookKit/) Swift package, so the two clients
@@ -79,13 +80,13 @@ Rook (iOS app target)                         RookWidgets (app-extension)
   └─ Views/               RootView · AgentPickerScreen · ChatScreen · PlacesScreen · EnvironmentOfferSheet
             │
             ▼ depends on
-        RookKit  ──── Models · Net (AgentStationAPI/AcpSocket) · Design · Voice · LiveActivity
+        RookKit  ──── Models · Net (RookAPI/AcpSocket) · Design · Voice · LiveActivity
             │
             ▼ REST + ACP JSON-RPC over WebSocket
-        Agent Station server @ 127.0.0.1:3000
+        Rook server @ 127.0.0.1:3000
 ```
 
-`RookModel` is the iOS counterpart of the Mac app's `AgentStationModel`: it
+`RookModel` is the iOS counterpart of the Mac app's `RookMacModel`: it
 reuses the same socket/offer/chat reducer and substitutes `LocationProvider`
 (place) for `ForegroundAppMonitor` (app). Every macOS-only service (the Mac
 bridge, Accessibility/AX, screen capture, hotkeys, server supervision) is
@@ -93,7 +94,7 @@ dropped.
 
 ### The location → skill loop
 
-Mirrors `AgentStationModel.handleForegroundApp`, with place in place of app:
+Mirrors `RookMacModel.handleForegroundApp`, with place in place of app:
 
 1. You define places → `PlaceStore`; `LocationProvider` monitors their regions
    (Always auth recommended for background entry).
@@ -121,7 +122,7 @@ that bundle.
 ## Getting it running
 
 Prerequisites: Xcode, [xcodegen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`), and Node (for the Agent Station server). The iOS
+(`brew install xcodegen`), and Node (for the Rook server). The iOS
 **Simulator shares the Mac's network**, so the default
 `http://127.0.0.1:3000` works unchanged from the simulator.
 
@@ -135,12 +136,12 @@ Fast paths from the repo root:
 
 `run-rook.sh sim` starts the server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, installs the fresh app into the selected simulator, and launches it with `ROOK_SERVER_BASE_URL=http://127.0.0.1:3000`.
 
-`run-rook.sh phone` does the same for a paired physical iPhone, defaulting the app's server address to your Mac's LAN IP (`http://<your-mac-lan-ip>:3000`). It intentionally does **not** hardcode a development team into `project.yml`; pass `--team` / `ROOK_IOS_DEVELOPMENT_TEAM` when needed, or let the script auto-detect your local team for personal use.
+`run-rook.sh phone` does the same for a paired physical iPhone, requiring the app's server address to use your Mac's Tailscale MagicDNS name (`http://<your-mac>.ts.net:3000`) unless you explicitly override it with `--server-url`. You can also force a specific MagicDNS hostname with `ROOK_TAILSCALE_DNS_NAME`. It intentionally does **not** hardcode a development team into `project.yml`; pass `--team` / `ROOK_IOS_DEVELOPMENT_TEAM` when needed, or let the script auto-detect your local team for personal use.
 
 Manual steps:
 
 ```zsh
-# 1. Start the Agent Station server (skip if already running)
+# 1. Start the Rook server (skip if already running)
 cd <path-to-rookery>        # the repo root
 npm run dev
 # verify: curl http://127.0.0.1:3000/api/health  ->  {"ok":true,...}
@@ -157,7 +158,56 @@ xcodebuild -project Rook.xcodeproj -scheme Rook \
 #    iPhone 14 Pro or newer simulator.
 ```
 
-For a **physical device** on the LAN, the launcher script sets the base URL for you at launch time. If you run manually, set the base URL to the Mac's LAN IP. The base URL is stored in `UserDefaults` (`RookModel.baseURLString`) and can also be overridden at launch with `ROOK_SERVER_BASE_URL`; the `NSAllowsLocalNetworking` ATS exception in `Info.plist` permits the cleartext LAN connection.
+For a **physical device**, the launcher script sets the base URL for you at launch time using your Mac's Tailscale MagicDNS hostname. If you run manually, set the base URL to the Tailscale address your phone can reach. The base URL is stored in `UserDefaults` (`RookModel.baseURLString`) and can also be overridden at launch with `ROOK_SERVER_BASE_URL`; the `NSAllowsLocalNetworking` ATS exception in `Info.plist` permits the cleartext connection.
+
+### Onboarding: iPhone client + home server over Tailscale
+
+If you want Rook to live on a computer at home and stay reachable from your
+phone anywhere, Tailscale is the simplest setup.
+
+Typical arrangement:
+
+- a spare Mac, Mac mini, or laptop stays on at home and runs the Rook server
+- the iPhone runs the Rook client
+- both devices are signed into the same Tailscale tailnet
+- the iPhone talks to the server using the Mac's MagicDNS hostname
+
+Recommended flow:
+
+1. Create a Tailscale account.
+2. Install Tailscale on the Mac that will run the server.
+3. Install Tailscale on the iPhone.
+4. Sign both devices into the same tailnet.
+5. Copy the Mac's MagicDNS hostname from Tailscale (for example,
+   `johns-2024-macbook-pro.tail6ee26a.ts.net`).
+6. Start the Rook server on the Mac.
+7. Launch the iPhone app with `./scripts/run-rook.sh phone`, or manually set the
+   server URL in Rook's Settings screen to:
+   - `http://<your-mac>.ts.net:3000`
+
+Once this is working, the phone can maintain a direct encrypted connection to
+that home machine from anywhere with internet access; the devices no longer
+need to share the same local network.
+
+### Troubleshooting Tailscale connectivity on iPhone
+
+If the iPhone app is not connecting, first test the network path outside the
+app:
+
+1. On the iPhone, open Safari.
+2. Visit:
+   - `http://<your-mac>.ts.net:3000/api/health`
+3. Expected result:
+   - `{"ok":true,"service":"rook"}`
+
+That is the best intermediate test point:
+
+- If Safari **fails**, the issue is probably Tailscale itself: the phone may
+  not be connected, may be on the wrong tailnet, MagicDNS may be unavailable,
+  or the Mac may not be running the server.
+- If Safari **succeeds** but Rook fails, verify the server URL in the app's
+  Settings screen exactly matches the working Safari URL, then relaunch or
+  reinstall the app so it picks up the current configuration.
 
 ### Verifying location → skills on the simulator
 
@@ -198,6 +248,9 @@ xcrun simctl io booted screenshot /tmp/rook.png   # screenshot the simulator
 - `NSSupportsLiveActivities = YES`.
 - `NSAppTransportSecurity → NSAllowsLocalNetworking = YES` for the localhost/LAN
   dev server.
+- `NSAppTransportSecurity → NSExceptionDomains → tail6ee26a.ts.net` allows
+  insecure HTTP/WebSocket loads to your Tailscale MagicDNS hostnames during
+  development.
 
 ## Out of scope (follow-ups)
 

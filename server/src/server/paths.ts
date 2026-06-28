@@ -31,7 +31,7 @@ function findServerRoot(startDir: string): string {
 
 /** Monorepo root — walks up from the server package root. */
 function findRepoRoot(serverRoot: string): string {
-  // Walk up from serverRoot to find the top-level package.json (agent-station).
+  // Walk up from serverRoot to find the top-level package.json (rook).
   let current = serverRoot;
   while (true) {
     const parent = path.dirname(current);
@@ -41,7 +41,7 @@ function findRepoRoot(serverRoot: string): string {
     if (existsSync(path.join(parent, "package.json"))) {
       try {
         const pkg = JSON.parse(readFileSync(path.join(parent, "package.json"), "utf8")) as { name?: string };
-        if (pkg.name === "agent-station") return parent;
+        if (pkg.name === "rook") return parent;
       } catch {
         // keep walking
       }

@@ -11,7 +11,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Agent Station</string>
+	<string>Rook</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -30,10 +30,10 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Rookery</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Agent Station drives other apps (e.g. opening a Slack channel) on your behalf when you approve an app environment.</string>
+	<string>Rook drives other apps (e.g. opening a Slack channel) on your behalf when you approve an app environment.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Agent Station listens to your voice so you can talk to your agent hands-free.</string>
+	<string>Rook listens to your voice so you can talk to your agent hands-free.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Agent Station transcribes your speech on-device to send to your agent.</string>
+	<string>Rook transcribes your speech on-device to send to your agent.</string>
 </dict>
 </plist>

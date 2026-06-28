@@ -19,7 +19,7 @@ export class EnvironmentDecisionStore {
    * Defaults to a gitignored runtime location under `.var`.
    */
   constructor(location?: string) {
-    const filename = location ?? path.join(REPO_ROOT, ".var", "agent-station", "environment-decisions.sqlite");
+    const filename = location ?? path.join(REPO_ROOT, ".var", "rook", "environment-decisions.sqlite");
     if (filename !== ":memory:") mkdirSync(path.dirname(filename), { recursive: true });
     this.db = new DatabaseSync(filename);
     this.db.exec(`

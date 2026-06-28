@@ -95,9 +95,11 @@ struct ChatScreen: View {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     if model.blocks.isEmpty {
                         VStack(spacing: 8) {
-                            Image(systemName: "bird")
-                                .font(.system(size: 28, weight: .semibold))
-                                .foregroundStyle(PanelPalette.textMuted)
+                            Image("RookMark")
+                                .renderingMode(.original)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 28, height: 28)
                             Text("Say something to your agent")
                                 .font(.callout)
                                 .foregroundStyle(PanelPalette.textMuted)

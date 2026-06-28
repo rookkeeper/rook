@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { SERVER_ROOT } from "../paths.js";
+import { getAgentProfilesPath, migrateLegacyConfigIfNeeded } from "./configPaths.js";
 
 export interface AgentProfile {
   id: string;
@@ -21,11 +20,11 @@ type AgentProfilesFile = {
   profiles?: AgentProfile[];
 };
 
-const AGENT_PROFILES_PATH = path.join(SERVER_ROOT, "config", "agent-profiles.json");
-
 export function loadAgentProfiles(): AgentProfile[] {
-  if (!existsSync(AGENT_PROFILES_PATH)) return [];
-  const raw = readFileSync(AGENT_PROFILES_PATH, "utf8");
+  migrateLegacyConfigIfNeeded();
+  const agentProfilesPath = getAgentProfilesPath();
+  if (!existsSync(agentProfilesPath)) return [];
+  const raw = readFileSync(agentProfilesPath, "utf8");
   const parsed = JSON.parse(raw) as AgentProfilesFile;
   if (!Array.isArray(parsed.profiles)) return [];
 

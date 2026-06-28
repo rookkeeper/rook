@@ -43,9 +43,11 @@ struct RookHeader: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "bird.fill")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(PanelPalette.accent)
+            Image("RookMark")
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 17, height: 17)
             Text("Rook")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(PanelPalette.textNormal)

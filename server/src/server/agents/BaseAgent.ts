@@ -214,9 +214,9 @@ export class BaseAgent {
 
   respondToPermissionRequest(message: JsonRpcSuccess | JsonRpcFailure): void {
     const id = asJsonRpcId((message as { id?: unknown }).id);
-    if (id === undefined || !this.pendingPermissionRequestIds.has(id) || !this.process?.stdin.writable) return;
+    if (id === undefined || !this.pendingPermissionRequestIds.has(id) || !this.canWriteToProcess()) return;
     this.pendingPermissionRequestIds.delete(id);
-    this.process.stdin.write(`${JSON.stringify(message)}\n`);
+    this.writeToProcess(message);
   }
 
   protected async start(): Promise<void> {
@@ -399,13 +399,15 @@ export class BaseAgent {
   }
 
   protected sendRequest(method: string, params?: unknown): Promise<unknown> {
-    if (!this.process?.stdin.writable) {
+    if (!this.canWriteToProcess()) {
       return Promise.reject(new Error("ACP agent process is not writable."));
     }
 
     const id = `acp-${++this.requestIndex}`;
     const request: JsonRpcRequest = { jsonrpc: "2.0", id, method, ...(params === undefined ? {} : { params }) };
-    this.process.stdin.write(`${JSON.stringify(request)}\n`);
+    if (!this.writeToProcess(request)) {
+      return Promise.reject(new Error("ACP agent process is not writable."));
+    }
     return new Promise<unknown>((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
     });
@@ -420,8 +422,7 @@ export class BaseAgent {
   }
 
   protected notify(method: string, params?: unknown): void {
-    if (!this.process?.stdin.writable) return;
-    this.process.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) })}\n`);
+    this.writeToProcess({ jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) });
   }
 
   protected shouldIgnoreServerMessage(message: JsonRpcMessage): boolean {
@@ -464,27 +465,27 @@ export class BaseAgent {
       this.pendingPermissionRequestIds.add(id);
       if (this.acpPermissionRequestSink) {
         this.acpPermissionRequestSink(message as AcpPermissionRequest);
-      } else if (this.process?.stdin.writable) {
+      } else if (this.canWriteToProcess()) {
         const response: JsonRpcSuccess<AcpPermissionResponseResult> = {
           jsonrpc: "2.0",
           id,
           result: { outcome: { outcome: "cancelled" } },
         };
         this.pendingPermissionRequestIds.delete(id);
-        this.process.stdin.write(`${JSON.stringify(response)}\n`);
+        this.writeToProcess(response);
       }
       return;
     }
 
     if ("method" in message && id !== undefined) {
       this.emitAcpUpdate({ sessionUpdate: "_rookery_protocol_error", error: `Unsupported ACP server request: ${message.method}` });
-      if (this.process?.stdin.writable) {
+      if (this.canWriteToProcess()) {
         const response: JsonRpcFailure = {
           jsonrpc: "2.0",
           id,
           error: { code: -32601, message: `Unsupported ACP server request: ${message.method}` },
         };
-        this.process.stdin.write(`${JSON.stringify(response)}\n`);
+        this.writeToProcess(response);
       }
     }
   }
@@ -493,6 +494,22 @@ export class BaseAgent {
     const trimmed = line.trim();
     if (!trimmed) return;
     this.emitAcpUpdate({ sessionUpdate: "_rookery_status_changed", status: "busy", message: trimmed });
+  }
+
+  private canWriteToProcess(): boolean {
+    const stdin = this.process?.stdin;
+    return Boolean(stdin && stdin.writable && !stdin.destroyed && !stdin.writableEnded);
+  }
+
+  private writeToProcess(message: unknown): boolean {
+    const stdin = this.process?.stdin;
+    if (!stdin || !stdin.writable || stdin.destroyed || stdin.writableEnded) return false;
+    try {
+      stdin.write(`${JSON.stringify(message)}\n`);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   protected attachJsonlReader(stream: NodeJS.ReadableStream, onLine: (line: string) => void): void {

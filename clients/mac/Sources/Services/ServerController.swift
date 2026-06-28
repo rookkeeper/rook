@@ -1,6 +1,6 @@
 import Foundation
 
-/// Launches and supervises a dev Agent Station server (`npm run dev`) for the
+/// Launches and supervises a dev Rook server (`npm run dev`) for the
 /// rookery repo when one isn't already running.
 @MainActor
 final class ServerController {
@@ -9,23 +9,34 @@ final class ServerController {
     private(set) var isManagedServerRunning = false
     private var process: Process?
 
-    /// The rookery repo root. This source file lives at
-    /// `<repo>/clients/mac/Sources/Services/ServerController.swift`,
-    /// so walk four directories up; a `RookeryRepoRoot` default overrides it.
+    /// The rookery repo root, located by searching upward from this source file
+    /// for a directory containing repo-root markers. Robust to moving this file
+    /// within the tree (no hard-coded depth). A `RookeryRepoRoot` default overrides
+    /// the search.
     static var repoRoot: URL {
         if let override = UserDefaults.standard.string(forKey: "RookeryRepoRoot"), !override.isEmpty {
             return URL(fileURLWithPath: override)
         }
-        return URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
+        let fm = FileManager.default
+        // Markers that live only at the repo root.
+        let markers = ["environment-repository", ".git", "AGENTS.md"]
+        var dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        while true {
+            if markers.contains(where: { fm.fileExists(atPath: dir.appending(path: $0).path) }) {
+                return dir
+            }
+            let parent = dir.deletingLastPathComponent()
+            if parent.path == dir.path { break }   // reached "/"
+            dir = parent
+        }
+        // Don't silently return a wrong path — that's what hid the original bug.
+        assertionFailure("Could not locate rookery repo root from \(#filePath); set RookeryRepoRoot.")
+        return URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     }
 
     static var logFileURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: "Library/Logs/AgentStationMenuBar/server.log")
+            .appending(path: "Library/Logs/Rook/server.log")
     }
 
     func start() {

@@ -19,18 +19,24 @@ Usage:
   ./scripts/run-rook.sh mac
   ./scripts/run-rook.sh sim [--simulator NAME_OR_UDID] [--server-url URL]
   ./scripts/run-rook.sh phone [--device NAME_OR_UDID] [--team TEAM_ID] [--server-url URL]
+  ./scripts/run-rook.sh mac sim
+  ./scripts/run-rook.sh server mac sim
   ./scripts/run-rook.sh stop
 
 What it does:
   - starts the Rook server if needed
   - regenerates Xcode projects from project.yml
-  - rebuilds the selected app incrementally
-  - launches the selected target
+  - rebuilds the selected app(s) incrementally
+  - launches the selected target(s)
 
 Notes:
+  - you can pass multiple targets; they run in the order given
   - mac uses localhost by default
   - sim uses http://127.0.0.1:3000 by default
-  - phone uses your Mac's LAN IP by default
+  - phone requires your Mac's Tailscale MagicDNS name unless --server-url is provided
+  - on macOS, the server launches in Terminal.app so Pi keeps Terminal's
+    Downloads/Desktop/Documents permissions instead of losing them in a
+    detached nohup background process.
   - phone builds are intentionally NOT committed with a fixed team id;
     pass --team / ROOK_IOS_DEVELOPMENT_TEAM or let the script auto-detect
     your local Apple Development team from Keychain when possible.
@@ -57,7 +63,7 @@ stop_everything() {
     kill $pids || true
   fi
 
-  pkill -f AgentStationMenuBar 2>/dev/null || true
+  pkill -f Rook 2>/dev/null || true
 
   local booted
   booted="$(xcrun simctl list devices booted -j 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin).get("devices",{}); ids=[]
@@ -100,18 +106,18 @@ warn() { echo "[run-rook] warning: $*" >&2; }
 die() { echo "[run-rook] error: $*" >&2; exit 1; }
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "missing command: $1"; }
 
-TARGET="${1:-}"
-[[ -n "$TARGET" ]] || { usage; exit 2; }
-shift || true
-
+TARGETS=()
 SIMULATOR_FILTER=""
 DEVICE_FILTER=""
 TEAM_ID="${ROOK_IOS_DEVELOPMENT_TEAM:-}"
 SERVER_URL=""
-RESTART_SERVER=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    server|mac|sim|phone|stop)
+      TARGETS+=("$1")
+      shift
+      ;;
     --simulator)
       SIMULATOR_FILTER="${2:-}"
       shift 2
@@ -128,10 +134,6 @@ while [[ $# -gt 0 ]]; do
       SERVER_URL="${2:-}"
       shift 2
       ;;
-    --restart-server)
-      RESTART_SERVER=1
-      shift
-      ;;
     -h|--help)
       usage
       exit 0
@@ -142,14 +144,38 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-case "$TARGET" in
-  server|mac|sim|phone|stop) ;;
-  *) usage; exit 2 ;;
-esac
+[[ ${#TARGETS[@]} -gt 0 ]] || { usage; exit 2; }
+
+HAS_SERVER_TARGET=0
+HAS_PHONE_TARGET=0
+for target in "${TARGETS[@]}"; do
+  case "$target" in
+    server) HAS_SERVER_TARGET=1 ;;
+    phone) HAS_PHONE_TARGET=1 ;;
+    stop) ;;
+  esac
+done
+
+if (( ${#TARGETS[@]} > 1 )); then
+  for target in "${TARGETS[@]}"; do
+    if [[ "$target" == "stop" ]]; then
+      die "stop must be used by itself"
+    fi
+  done
+fi
 
 need_cmd curl
 need_cmd python3
 need_cmd lsof
+
+HAS_MAC_TARGET=0
+HAS_SIM_TARGET=0
+for target in "${TARGETS[@]}"; do
+  case "$target" in
+    mac) HAS_MAC_TARGET=1 ;;
+    sim) HAS_SIM_TARGET=1 ;;
+  esac
+done
 
 json_escape() {
   python3 - <<'PY' "$1"
@@ -194,6 +220,39 @@ kill_server_on_port() {
   sleep 1
 }
 
+stop_mac_app() {
+  if pgrep -f Rook >/dev/null 2>&1; then
+    log "stopping existing Rook mac app"
+    pkill -f Rook || true
+    sleep 1
+  fi
+}
+
+stop_simulators() {
+  need_cmd xcrun
+  local booted
+  booted="$(xcrun simctl list devices booted -j 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin).get("devices",{}); ids=[]
+for _,arr in d.items():
+  ids += [x["udid"] for x in arr if x.get("state")=="Booted"]
+print("\\n".join(ids))' 2>/dev/null || true)"
+  [[ -n "$booted" ]] || return 0
+  log "stopping existing simulator app(s) and booted simulators"
+  while IFS= read -r udid; do
+    [[ -n "$udid" ]] || continue
+    xcrun simctl terminate "$udid" com.rookery.Rook 2>/dev/null || true
+    xcrun simctl shutdown "$udid" 2>/dev/null || true
+  done <<< "$booted"
+}
+
+stop_requested_targets() {
+  (( HAS_MAC_TARGET )) && stop_mac_app
+  (( HAS_SIM_TARGET )) && stop_simulators
+  if (( HAS_SERVER_TARGET )); then
+    kill_server_if_owned
+    kill_server_on_port
+  fi
+}
+
 wait_for_health() {
   local attempts=${1:-60}
   local i
@@ -204,6 +263,44 @@ wait_for_health() {
     sleep 1
   done
   return 1
+}
+
+start_server_in_background() {
+  need_cmd npm
+  log "starting server in background (log: $SERVER_LOG)"
+  (
+    cd "$REPO_ROOT"
+    nohup npm run dev >"$SERVER_LOG" 2>&1 &
+    echo $! >"$SERVER_PIDFILE"
+  )
+}
+
+start_server_in_terminal() {
+  need_cmd npm
+  need_cmd osascript
+  local command
+  command="$(python3 - <<'PY' "$REPO_ROOT" "$RUN_ROOT" "$SERVER_LOG" "$SERVER_PIDFILE" "$SERVER_PORT"
+import shlex, sys
+repo_root, run_root, server_log, server_pidfile, server_port = sys.argv[1:]
+parts = [
+    f'cd {shlex.quote(repo_root)}',
+    f'mkdir -p {shlex.quote(run_root)}',
+    f': > {shlex.quote(server_log)}',
+    f'export ROOK_SERVER_PORT={shlex.quote(server_port)}',
+    f'echo $$ > {shlex.quote(server_pidfile)}',
+    f'exec > >(tee -a {shlex.quote(server_log)}) 2>&1',
+    'exec npm run dev',
+]
+print('bash -lc ' + shlex.quote('; '.join(parts)))
+PY
+)"
+  log "starting server in Terminal.app (log: $SERVER_LOG)"
+  if ! osascript \
+    -e 'tell application "Terminal" to activate' \
+    -e "tell application \"Terminal\" to do script $(json_escape "$command")" >/dev/null; then
+    warn "failed to launch Terminal.app; falling back to detached background server"
+    start_server_in_background
+  fi
 }
 
 ensure_server_deps() {
@@ -217,11 +314,6 @@ ensure_server_deps() {
 }
 
 start_server() {
-  if (( RESTART_SERVER )); then
-    kill_server_if_owned
-    kill_server_on_port
-  fi
-
   if health_ok; then
     log "server already healthy at http://127.0.0.1:${SERVER_PORT}"
   else
@@ -229,13 +321,11 @@ start_server() {
       die "port ${SERVER_PORT} is already in use, but /api/health is not healthy"
     fi
     ensure_server_deps
-    need_cmd npm
-    log "starting server (log: $SERVER_LOG)"
-    (
-      cd "$REPO_ROOT"
-      nohup npm run dev >"$SERVER_LOG" 2>&1 &
-      echo $! >"$SERVER_PIDFILE"
-    )
+    if [[ "$(uname -s)" == "Darwin" ]] && command -v osascript >/dev/null 2>&1; then
+      start_server_in_terminal
+    else
+      start_server_in_background
+    fi
     if ! wait_for_health 90; then
       tail -n 80 "$SERVER_LOG" >&2 || true
       die "server did not become healthy"
@@ -243,8 +333,8 @@ start_server() {
     log "server is healthy"
   fi
 
-  if [[ "$TARGET" == "phone" ]] && listener_is_localhost_only; then
-    die "server is only listening on localhost; restart it so the phone can reach your Mac over LAN"
+  if (( HAS_PHONE_TARGET )) && listener_is_localhost_only; then
+    die "server is only listening on localhost; restart it so the phone can reach your Mac over Tailscale"
   fi
 }
 
@@ -262,8 +352,16 @@ ensure_xcode_project() {
   )
 }
 
-current_lan_ip() {
-  ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true
+current_tailscale_dns_name() {
+  if [[ -n "${ROOK_TAILSCALE_DNS_NAME:-}" ]]; then
+    printf '%s\n' "$ROOK_TAILSCALE_DNS_NAME"
+    return 0
+  fi
+  command -v tailscale >/dev/null 2>&1 || return 1
+  tailscale status --json 2>/dev/null | python3 -c '
+import json,sys
+print((json.load(sys.stdin).get("Self", {}) or {}).get("DNSName", ""))
+' 2>/dev/null | sed -e 's/\.$//' -e '/^$/d' || true
 }
 
 resolve_simulator() {
@@ -400,19 +498,15 @@ print("\\n".join(ids))
 build_mac() {
   need_cmd xcodebuild
   local app_dir="$REPO_ROOT/clients/mac"
-  local proj="$app_dir/AgentStationMenuBar.xcodeproj"
-  local derived="$BUILD_ROOT/AgentStationMenuBar"
+  local proj="$app_dir/Rook.xcodeproj"
+  local derived="$BUILD_ROOT/Rook"
   ensure_xcode_project "$app_dir" "$proj"
-  if pgrep -f AgentStationMenuBar >/dev/null 2>&1; then
-    log "stopping existing AgentStationMenuBar"
-    pkill -f AgentStationMenuBar || true
-    sleep 1
-  fi
-  log "building AgentStationMenuBar"
-  xcodebuild -project "$proj" -scheme AgentStationMenuBar -configuration Debug -derivedDataPath "$derived" build >/dev/null
-  local app_path="$derived/Build/Products/Debug/AgentStationMenuBar.app"
+  stop_mac_app
+  log "building Rook"
+  xcodebuild -project "$proj" -scheme Rook -configuration Debug -derivedDataPath "$derived" build >/dev/null
+  local app_path="$derived/Build/Products/Debug/Rook.app"
   [[ -d "$app_path" ]] || die "missing built app: $app_path"
-  log "launching AgentStationMenuBar"
+  log "launching Rook"
   open "$app_path"
 }
 
@@ -443,11 +537,15 @@ build_sim() {
   [[ -d "$app_path" ]] || die "missing built app: $app_path"
 
   local url="${SERVER_URL:-http://127.0.0.1:${SERVER_PORT}}"
-  log "installing Rook into simulator"
+  log "refreshing simulator install for Rook"
+  xcrun simctl terminate "$sim_udid" com.rookery.Rook >/dev/null 2>&1 || true
+  xcrun simctl uninstall "$sim_udid" com.rookery.Rook >/dev/null 2>&1 || true
   xcrun simctl install "$sim_udid" "$app_path" >/dev/null
   log "launching Rook in simulator with ROOK_SERVER_BASE_URL=$url"
-  SIMCTL_CHILD_ROOK_SERVER_BASE_URL="$url" \
-    xcrun simctl launch --terminate-running-process "$sim_udid" com.rookery.Rook >/dev/null
+  local launch_output
+  launch_output="$(SIMCTL_CHILD_ROOK_SERVER_BASE_URL="$url" \
+    xcrun simctl launch --terminate-running-process "$sim_udid" com.rookery.Rook)"
+  log "$launch_output"
 }
 
 build_phone() {
@@ -469,10 +567,15 @@ build_phone() {
     fi
   fi
 
-  local lan_ip
-  lan_ip="$(current_lan_ip)"
-  [[ -n "$lan_ip" ]] || die "could not determine your Mac's LAN IP for the phone"
-  local url="${SERVER_URL:-http://${lan_ip}:${SERVER_PORT}}"
+  local url
+  if [[ -n "$SERVER_URL" ]]; then
+    url="$SERVER_URL"
+  else
+    local tailscale_dns
+    tailscale_dns="$(current_tailscale_dns_name)"
+    [[ -n "$tailscale_dns" ]] || die "could not determine your Mac's Tailscale MagicDNS name for the phone; connect Tailscale or pass --server-url explicitly"
+    url="http://${tailscale_dns}:${SERVER_PORT}"
+  fi
 
   local app_dir="$REPO_ROOT/clients/iphone"
   local proj="$app_dir/Rook.xcodeproj"
@@ -515,24 +618,27 @@ build_phone() {
 EOF
 }
 
-if [[ "$TARGET" == "stop" ]]; then
+if [[ "${TARGETS[0]}" == "stop" ]]; then
   stop_everything
   exit 0
 fi
 
+stop_requested_targets
 start_server
 
-case "$TARGET" in
-  server)
-    log "server only: http://127.0.0.1:${SERVER_PORT}"
-    ;;
-  mac)
-    build_mac
-    ;;
-  sim)
-    build_sim
-    ;;
-  phone)
-    build_phone
-    ;;
-esac
+for TARGET in "${TARGETS[@]}"; do
+  case "$TARGET" in
+    server)
+      log "server ready: http://127.0.0.1:${SERVER_PORT}"
+      ;;
+    mac)
+      build_mac
+      ;;
+    sim)
+      build_sim
+      ;;
+    phone)
+      build_phone
+      ;;
+  esac
+done
