@@ -23,7 +23,8 @@ export interface LocationKeyInput {
 export interface LocationKey {
   /** Path component for the environment id (after `loc:<domain>/`). */
   key: string;
-  kind: "store" | "address" | "geo";
+  /** Base used for the key; a store number (when present) is appended after it. */
+  kind: "address" | "geo";
   /** Present only when kind === "store". */
   storeNumber?: string;
 }
@@ -39,28 +40,34 @@ function slugify(value: string): string {
 }
 
 /**
- * Builds a stable, per-location key for a business, with precedence:
- *   1. numeric store id parsed from the website (`store-<n>`),
- *   2. generated `state-zip-street` address slug,
- *   3. a rounded `lat,lng` when no address is known — the matched building's
- *      centroid if the point is inside a building, else the business point.
+ * Builds a stable, per-location key for a business.
+ * Base (always carries the street address when known):
+ *   - `address`: `state-zip-street` slug,
+ *   - `geo`: a rounded `lat,lng` when no address is known — the matched building's
+ *     centroid if the point is inside a building, else the business point.
+ * A known store number is appended after the base for precision
+ * (`<base>/store-<n>`), rather than replacing the address.
  */
 export function locationKey(input: LocationKeyInput): LocationKey {
   // Authoritative provider store number wins; else guess from the website URL.
   const storeNumber = input.storeNumber ?? bestGuessStoreNumber(input.website, input.domain) ?? undefined;
-  if (storeNumber) {
-    return { key: `store-${storeNumber}`, kind: "store", storeNumber };
-  }
 
+  let base: string;
+  let kind: "address" | "geo";
   const street = input.address ? slugify(input.address) : "";
   if (street) {
-    const parts = [input.stateAbbrev, input.zip, input.address]
+    base = [input.stateAbbrev, input.zip, input.address]
       .map((p) => (p ? slugify(p) : ""))
-      .filter(Boolean);
-    return { key: parts.join("-"), kind: "address" };
+      .filter(Boolean)
+      .join("-");
+    kind = "address";
+  } else {
+    const geoLat = input.buildingCentroidLat ?? input.latitude;
+    const geoLon = input.buildingCentroidLon ?? input.longitude;
+    base = `${geoLat.toFixed(GEO_PRECISION)},${geoLon.toFixed(GEO_PRECISION)}`;
+    kind = "geo";
   }
 
-  const geoLat = input.buildingCentroidLat ?? input.latitude;
-  const geoLon = input.buildingCentroidLon ?? input.longitude;
-  return { key: `${geoLat.toFixed(GEO_PRECISION)},${geoLon.toFixed(GEO_PRECISION)}`, kind: "geo" };
+  const key = storeNumber ? `${base}/store-${storeNumber}` : base;
+  return { key, kind, storeNumber };
 }

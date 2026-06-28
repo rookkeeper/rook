@@ -60,6 +60,11 @@ export interface EnvironmentCandidate {
   /** Store number guessed from the business website URL (subset of storeNumber). */
   bestGuessStoreNumber?: string;
   address?: string;
+  /** Business coordinate — the path from the loc: id back to a location. */
+  latitude?: number;
+  longitude?: number;
+  /** Business website, when available (lets the agent reach its link metadata). */
+  website?: string;
   distanceMeters?: number;
   /** Rough 0..1 confidence for MVP. */
   confidence: number;

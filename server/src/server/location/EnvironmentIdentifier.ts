@@ -61,8 +61,8 @@ export class EnvironmentIdentifier {
     const hasKnownEnvironment = skillPaths.length > 0;
     const possibleSkills = await this.deps.skillSuggester.suggestSkills({ environmentId, operator });
 
-    const matchReasons = computeMatchReasons(poi, lk.kind, hasKnownEnvironment);
-    const confidence = computeConfidence(poi, request, operator, lk.kind);
+    const matchReasons = computeMatchReasons(poi, !!lk.storeNumber, hasKnownEnvironment);
+    const confidence = computeConfidence(poi, request, operator, !!lk.storeNumber);
 
     return {
       environmentId,
@@ -72,6 +72,9 @@ export class EnvironmentIdentifier {
       // "best guess" only when the store number came from the website, not the provider.
       ...(lk.storeNumber && !poi.storeNumber ? { bestGuessStoreNumber: lk.storeNumber } : {}),
       ...(poi.address ? { address: poi.address } : {}),
+      latitude: poi.latitude,
+      longitude: poi.longitude,
+      ...(website ? { website } : {}),
       distanceMeters: Math.round(poi.distanceMeters),
       confidence,
       matchReasons,
@@ -81,11 +84,11 @@ export class EnvironmentIdentifier {
   }
 }
 
-function computeMatchReasons(poi: PoiResult, keyKind: "store" | "address" | "geo", hasKnownEnvironment: boolean): string[] {
+function computeMatchReasons(poi: PoiResult, hasStore: boolean, hasKnownEnvironment: boolean): string[] {
   // Prefer provider-supplied signals (e.g. ptiles inside_building/name_match);
   // otherwise derive a coarse proximity reason from distance.
   const reasons: string[] = poi.matchReasons?.length ? [...poi.matchReasons] : [poi.distanceMeters <= 30 ? "nearest_poi" : "nearby_poi"];
-  if (keyKind === "store") reasons.push("operator_store_match");
+  if (hasStore) reasons.push("operator_store_match");
   if (hasKnownEnvironment) reasons.push("known_environment");
   return reasons;
 }
@@ -94,13 +97,13 @@ function computeMatchReasons(poi: PoiResult, keyKind: "store" | "address" | "geo
  * Rough 0..1 confidence. Closer + recognized operator + stationary/dwell raise
  * it; poor GPS accuracy and movement lower it. Intentionally coarse for MVP.
  */
-function computeConfidence(poi: PoiResult, request: IdentifyAvailableRequest, operator: string, keyKind: "store" | "address" | "geo"): number {
+function computeConfidence(poi: PoiResult, request: IdentifyAvailableRequest, operator: string, hasStore: boolean): number {
   // Distance: 1.0 at 0m decaying to ~0 by 150m.
   const distanceScore = clamp01(1 - poi.distanceMeters / SEARCH_RADIUS_METERS);
   let score = distanceScore * 0.6;
 
   if (isKnownOperator(operator)) score += 0.2;
-  if (keyKind === "store") score += 0.1;
+  if (hasStore) score += 0.1;
 
   // Provider match quality (ptiles): containment and name agreement are strong signals.
   if (poi.matchReasons?.includes("inside_building")) score += 0.25;

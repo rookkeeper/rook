@@ -5,12 +5,12 @@ import { locationKey } from "./locationKey.js";
 const COORD = { latitude: 36.06, longitude: -86.7 };
 
 describe("locationKey", () => {
-  it("uses an authoritative provider store number first", () => {
-    const lk = locationKey({ domain: "target.com", storeNumber: "1842", address: "1 Main St", ...COORD });
-    expect(lk).toMatchObject({ key: "store-1842", kind: "store", storeNumber: "1842" });
+  it("appends an authoritative provider store number after the address", () => {
+    const lk = locationKey({ domain: "target.com", storeNumber: "1842", address: "1 Main St", stateAbbrev: "TN", zip: "37000", ...COORD });
+    expect(lk).toMatchObject({ key: "tn-37000-1-main-st/store-1842", kind: "address", storeNumber: "1842" });
   });
 
-  it("guesses a numeric store id from the website", () => {
+  it("guesses a numeric store id from the website and appends it after the address", () => {
     const lk = locationKey({
       domain: "homedepot.com",
       website: "https://www.homedepot.com/l/Cleveland/TN/Cleveland/37312/743",
@@ -19,7 +19,12 @@ describe("locationKey", () => {
       zip: "37312",
       ...COORD,
     });
-    expect(lk).toMatchObject({ key: "store-743", kind: "store", storeNumber: "743" });
+    expect(lk).toMatchObject({ key: "tn-37312-546-paul-huff-pkwy-nw/store-743", kind: "address", storeNumber: "743" });
+  });
+
+  it("appends the store number after the geo base when there is no address", () => {
+    const lk = locationKey({ domain: "x.com", storeNumber: "55", latitude: 36.062, longitude: -86.7025 });
+    expect(lk).toMatchObject({ key: "36.06200,-86.70250/store-55", kind: "geo", storeNumber: "55" });
   });
 
   it("generates a state-zip-street slug when there is no store id", () => {
