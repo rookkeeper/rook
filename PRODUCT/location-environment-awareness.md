@@ -139,6 +139,15 @@ site.
   at the next grocery store" firing when the user enters or is near a grocery store.
 - **Favicon on entry (client).** Show the business's favicon (derived from its website
   domain) when entering a `loc:` business, for quick visual presence in the UI.
+- **Voice as a (meta-)environment.** The modality the user is interacting through — voice
+  vs. text — is itself an environment factor that could carry skills, the same way a
+  `loc:` place does. A `mode:voice` (or similar) environment could attach voice-tuned
+  skills/behaviors (shorter, TTS-friendly responses; barge-in/turn-taking conventions;
+  read-aloud formatting), entered while the user is talking and exited when they switch
+  back to text. It generalizes the environment model beyond physical/app context to
+  **interaction context**, and composes with `loc:` (e.g. voice + in-a-store). The
+  iPhone/Mac already have a `VoiceController` (`clients/RookKit`) that could act as the
+  provider.
 - **Capability-gated skills (e.g. "look up store hours").** A *store-specific* website (a
   deep link to this location, not a chain homepage like `kroger.com`) could drive a
   synthesized "look up hours" skill — hours are usually a single GET away. Doing it right
