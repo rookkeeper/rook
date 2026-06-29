@@ -72,8 +72,8 @@ export async function registerEnvironmentRoutes(
       reply.code(400).send({ error: "Missing environmentId" });
       return;
     }
-    const skills = await environmentManager.getSkillPreviews(environmentId);
-    return { environmentId, skills };
+    const preview = await environmentManager.getEnvironmentPreview(environmentId);
+    return preview;
   });
 
   app.post<{ Body: Record<string, unknown> }>("/api/environments/identify-available", async (request, reply) => {

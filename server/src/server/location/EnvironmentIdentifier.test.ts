@@ -7,7 +7,7 @@ import type { PoiLookupProvider, PoiResult } from "./PoiLookupProvider.js";
 
 const TEST_COORD = { latitude: 37.3318, longitude: -122.0312 };
 
-const emptyRepo: KnownEnvironmentLookup = { async getSkillPaths() { return []; } };
+const emptyRepo: KnownEnvironmentLookup = { async getSkillRuntimePaths() { return []; } };
 function identifierFor(poi: PoiResult): EnvironmentIdentifier {
   const provider: PoiLookupProvider = { async nearbyPois() { return [poi]; } };
   return new EnvironmentIdentifier({ poiProvider: provider, repository: emptyRepo, skillSuggester: new MockBuildingSkillSuggester() });
@@ -15,7 +15,7 @@ function identifierFor(poi: PoiResult): EnvironmentIdentifier {
 
 function makeIdentifier(knownIds: string[] = []) {
   const repository: KnownEnvironmentLookup = {
-    async getSkillPaths(environmentId: string) {
+    async getSkillRuntimePaths(environmentId: string) {
       return knownIds.includes(environmentId) ? [`/repo/${environmentId}/skills/x`] : [];
     },
   };

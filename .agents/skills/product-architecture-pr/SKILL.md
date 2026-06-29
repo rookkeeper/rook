@@ -15,7 +15,8 @@ Rookery PRs are decision records for **what changed in the product and architect
 
 ## Hard rules
 
-- **Never push to `main`.** All changes ship through a feature branch and PR.
+- **Before creating a branch or pushing, ask the developer whether this work should go on a branch / PR flow or be pushed directly to `main` / `master`.** Do not assume.
+- If the developer says to use a branch / PR flow, then do not push directly to `main` / `master`.
 - **Read every file under `PRODUCT/`** before writing the PR. (You should ignore PRODUCT_CHANGES, as it is for work in progress scratch documentation, todos, and status.) Treat drafts and placeholders as current intent until superseded.
 - **Update `PRODUCT/` in the same PR** when the change introduces, modifies, or removes a product or architecture idea - but don't be overly nit-picky because we don't want too much documentation churn. Most of product documents are quite high-level, so we don't need low-level product changes. See [AGENTS.md](../../../AGENTS.md).
 - **Do not ship** until product/architecture alignment sections are complete and doc updates are included (or explicitly marked N/A with reason).
@@ -26,13 +27,14 @@ Rookery PRs are decision records for **what changed in the product and architect
 Copy and track:
 
 ```
+- [ ] 0. Ask whether to use branch/PR flow or push directly to main/master
 - [ ] 1. Read all PRODUCT/ docs
 - [ ] 2. Analyze branch diff (product + architecture lens)
 - [ ] 3. Classify product & architecture alignment
 - [ ] 4. Update PRODUCT/ (and READMEs if structural)
 - [ ] 5. Draft PR title + body (template below)
 - [ ] 6. Validate required sections; ask developer if gaps
-- [ ] 7. Push branch and open PR with gh
+- [ ] 7. If using branch/PR flow, push branch and open PR with gh
 ```
 
 ### 1. Read all PRODUCT/ docs
@@ -104,11 +106,14 @@ Use the template in [pr-template.md](pr-template.md). And update it as indicated
 
 Follow repo git safety rules (no force-push to main, no `--no-verify` unless asked).
 
+If the developer said to use branch/PR flow:
 1. `git status`, `git diff`, `git log` — confirm scope
 2. Commit doc + code on a feature branch (not `main`)
 3. `git push -u origin HEAD`
 4. `gh pr create` with title and body from template
 5. Return the PR URL
+
+If the developer explicitly said to push directly to `main` / `master`, you may do so.
 
 Use `gh pr create` with a HEREDOC body; run `git status`, `git diff`, and `git log` against the default branch before push, per repo PR conventions.
 

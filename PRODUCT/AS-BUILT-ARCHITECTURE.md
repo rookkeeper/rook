@@ -23,7 +23,7 @@ Host clients / providers                         registers environment kind
   ├─ Chrome extension                            web:<slug>
   ├─ Obsidian plugin
   ├─ macOS menu bar app (native Swift)           app:<slug>   (frontmost Mac app)
-  └─ iPhone app (native Swift)                   place:<slug> (GPS geofence)
+  └─ iPhone app (native Swift)                   loc:<slug> (GPS geofence)
             │
             ▼
 server/ (Fastify)
@@ -66,9 +66,9 @@ See also: [`PRODUCT/agent-client-protocol.md`](./agent-client-protocol.md)
 | `server/` | Main backend at `:3000`; server, runtime orchestration, environment approvals |
 | `server/src/shared/` | Server-local ACP types, environment DTOs, agent/session contracts |
 | `clients/mac/` | Native macOS client and environment provider (`app:<slug>`) |
-| `clients/iphone/` | Native iOS client and location environment provider (`place:<slug>`) |
+| `clients/iphone/` | Native iOS client and location environment provider (`loc:<slug>`) |
 | `clients/RookKit/` | Shared Swift package (iOS + macOS) backing both native Swift clients |
-| `environment-repository/` | Local environment skill bundles keyed by `<kind>/<path>` |
+| `environment-repository/` | Local environment bundle content keyed by `<kind>/<path>` |
 | `PRODUCT/` | Product and architecture notes |
 
 ## 5. Main server architecture
@@ -82,7 +82,10 @@ It wires together:
 - `SessionRoomManager`
 - `EnvironmentManager`
 - `EnvironmentDecisionStore`
-- `LocalEnvironmentRepository`
+- `EnvironmentRepository`
+- `DirectoryEnvironmentRepository`
+- `CompositeEnvironmentRepository`
+- `EnvironmentRepositoryService`
 - REST routes
 - WebSocket ACP route
 - React app hosting
@@ -161,21 +164,24 @@ An **environment** is a context the user is currently "in", identified as:
 Examples:
 
 - `web:<host>/<path>` (browser URL-derived site/page context)
-- `demo:demo`
+- `web:example.com`
 - `app:<bundleId>` (macOS menu bar app — frontmost Mac app identity)
 - `app:md.obsidian/<vault>` (macOS menu bar app — Obsidian vault context)
 - `web:<host>/<path>` (macOS menu bar app — active browser URL, protocol/query stripped)
-- `place:<slug>` (iPhone app — current GPS geofence)
+- `loc:<slug>` (iPhone app — current GPS geofence)
 - `loc:<domain>/<state-zip-street>[/store-<n>]` (iPhone — a business identified from the user's coordinate; see §6.6)
 
-An environment maps to a directory in `environment-repository/` and provides one or more skill bundles. The kind (`web`, `app`, `place`, `loc`, …) is just the part before the first colon; `LocalEnvironmentRepository` splits on it and resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new skill content on disk.
+An environment maps to a directory in `environment-repository/` and provides zero or more `.bundles/<bundle-id>/` directories. The kind (`web`, `app`, `loc`, …) is just the part before the first colon; the directory-backed repository resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new bundle content on disk.
 
 ### 6.2 Environment repository
 
-`LocalEnvironmentRepository` resolves an environment id to a local directory and reads:
+`DirectoryEnvironmentRepository` resolves an environment id to a local directory and reads:
 
-- skill bundle paths for runtime injection
-- previewable skill files for the approval UI
+- `.bundles/<bundle-id>/` directories
+- grouped `skills/`, `mcp-servers/`, and `apps/` text artifacts
+- bundle-organized content for runtime bridging and preview rendering
+
+`CompositeEnvironmentRepository` unions the monorepo repository with the user-local `~/.rook/environment-repository/` root, and `EnvironmentRepositoryService` is the thin service wrapper that higher layers call.
 
 Current storage model is simple: local disk only.
 
@@ -255,7 +261,7 @@ Current ecosystem around `:3000`:
 - **Chrome extension**: detects supported web contexts and registers `web:<slug>` environments
 - **Obsidian plugin**: embeds the app in a sidebar view
 - **macOS menu bar app**: native SwiftUI client with the same backend; also registers `app:<slug>` environments for the frontmost Mac app
-- **iPhone app**: native SwiftUI client that registers `place:<slug>` environments from GPS geofences, making the agent location-aware (skills load as you arrive at a defined place). It also drives ptiles-based business discovery on arrival, registering `loc:<domain>/…` environments — see [`location-environment-awareness.md`](./location-environment-awareness.md). Adds Live Activity / Dynamic Island presence and on-device voice. See [`PRODUCT_CHANGES/research/rook-on-iphone.md`](../PRODUCT_CHANGES/research/rook-on-iphone.md) for the iOS sandbox constraints and the hosted-server/APNs follow-up.
+- **iPhone app**: native SwiftUI client that registers `loc:<slug>` environments from GPS geofences, making the agent location-aware (skills load as you arrive at a defined place). It also drives ptiles-based business discovery on arrival, registering `loc:<domain>/…` environments — see [`location-environment-awareness.md`](./location-environment-awareness.md). Adds Live Activity / Dynamic Island presence and on-device voice. See [`PRODUCT_CHANGES/research/rook-on-iphone.md`](../PRODUCT_CHANGES/research/rook-on-iphone.md) for the iOS sandbox constraints and the hosted-server/APNs follow-up.
 
 The two native Swift clients share one cross-platform layer — models, the REST/ACP-WebSocket clients, the design system and chat-block views, voice, and Live Activity attributes — through the `clients/RookKit` Swift package, so they stay protocol- and design-consistent with a single source of truth.
 
@@ -357,7 +363,7 @@ Important files:
 - `server/src/shared/agent.ts` — session metadata and agent-facing shared types
 - `server/src/shared/environment.ts` — environment ids, decisions, and preview types
 
-The debug bridge CLI and the server import from `server/src/shared/`. The server also retains locally-scoped shared helpers (`realtime.ts`, `environmentSkillPreview.ts`) that carry server-side logic.
+The debug bridge CLI and the server import from `server/src/shared/`. The server also retains locally-scoped shared helpers (`realtime.ts`) that carry server-side logic.
 
 ## 12. Architecture constraints that matter right now
 

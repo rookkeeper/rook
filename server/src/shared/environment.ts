@@ -1,12 +1,17 @@
-export interface SkillPreview {
-  id: string;
-  name: string;
-  files: Record<string, string>;
+import type { EnvironmentBundle, BundleArtifact, RepositoryReadError } from "./environmentRepository.js";
+
+export interface BundleArtifactPreview extends BundleArtifact {}
+
+export interface EnvironmentBundlePreview extends Pick<EnvironmentBundle, "id" | "bundleId" | "environmentId" | "repository" | "valid"> {
+  skills: BundleArtifactPreview[];
+  mcpServers: BundleArtifactPreview[];
+  apps: BundleArtifactPreview[];
+  errors: RepositoryReadError[];
 }
 
 export interface EnvironmentPreview {
   environmentId: string;
-  skills: SkillPreview[];
+  bundles: EnvironmentBundlePreview[];
 }
 
 /** The 2×2 decision model: positive/negative × this-visit/permanent. */

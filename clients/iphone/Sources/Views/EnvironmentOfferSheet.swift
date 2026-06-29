@@ -1,7 +1,7 @@
 import RookKit
 import SwiftUI
 
-/// Reuses the model's `pendingOffer` / `offerSkills` / `decideEnvironment`
+/// Reuses the model's `pendingOffer` / `offerBundles` / `decideEnvironment`
 /// flow — identical to the macOS approval, presented as an iOS sheet.
 struct EnvironmentOfferSheet: View {
     @ObservedObject var model: RookModel
@@ -20,8 +20,8 @@ struct EnvironmentOfferSheet: View {
                         if !model.offerError.isEmpty {
                             PanelMessageView(systemImage: "exclamationmark.triangle.fill", tint: PanelPalette.warning, text: model.offerError)
                         }
-                        ForEach(model.offerSkills) { skill in
-                            skillCard(skill)
+                        ForEach(model.offerBundles) { bundle in
+                            bundleCard(bundle)
                         }
                         decisionButtons
                     }
@@ -52,7 +52,7 @@ struct EnvironmentOfferSheet: View {
                     Text(model.pendingOffer?.sourceName ?? model.pendingOffer?.environmentId ?? "")
                         .font(.headline)
                         .foregroundStyle(PanelPalette.textNormal)
-                    Text("wants to load skills into this session")
+                    Text("wants to load environment bundles into this session")
                         .font(.caption)
                         .foregroundStyle(PanelPalette.textMuted)
                 }
@@ -60,17 +60,27 @@ struct EnvironmentOfferSheet: View {
         }
     }
 
-    private func skillCard(_ skill: SkillPreview) -> some View {
+    private func bundleCard(_ bundle: EnvironmentBundlePreview) -> some View {
         PanelCard {
-            Text(skill.name)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(PanelPalette.textNormal)
-            ForEach(skill.sortedFilePaths.prefix(1), id: \.self) { path in
-                if let content = skill.files[path] {
-                    Text(content)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(PanelPalette.textMuted)
-                        .lineLimit(8)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(bundle.bundleId)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(PanelPalette.textNormal)
+                if !bundle.valid, let error = bundle.errors.first {
+                    PanelMessageView(systemImage: "exclamationmark.triangle.fill", tint: PanelPalette.danger, text: error.message)
+                }
+                ForEach(bundle.allFilePaths, id: \.self) { path in
+                    if let content = bundle.content(for: path) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(path)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(PanelPalette.textMuted)
+                            Text(content)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(PanelPalette.textMuted)
+                                .lineLimit(8)
+                        }
+                    }
                 }
             }
         }
@@ -82,9 +92,11 @@ struct EnvironmentOfferSheet: View {
                 CompactActionButton(title: "Allow this visit", systemImage: "checkmark", tint: PanelPalette.success, prominence: .filled, helpText: "") {
                     model.decideEnvironment("accept")
                 }
+                .disabled(model.offerBundles.contains(where: { !$0.valid }))
                 CompactActionButton(title: "Always allow", systemImage: "checkmark.seal", tint: PanelPalette.info, prominence: .filled, helpText: "") {
                     model.decideEnvironment("approve")
                 }
+                .disabled(model.offerBundles.contains(where: { !$0.valid }))
             }
             HStack(spacing: 8) {
                 CompactActionButton(title: "Not now", systemImage: "xmark", tint: PanelPalette.secondaryText, prominence: .subtle, helpText: "") {
@@ -93,6 +105,7 @@ struct EnvironmentOfferSheet: View {
                 CompactActionButton(title: "Never", systemImage: "nosign", tint: PanelPalette.danger, prominence: .subtle, helpText: "") {
                     model.decideEnvironment("reject")
                 }
+                .disabled(model.offerBundles.contains(where: { !$0.valid }))
             }
         }
     }

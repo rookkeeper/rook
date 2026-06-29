@@ -119,7 +119,7 @@ Terse map of `src/`:
 - **Interaction helpers**:
   - `useBlockClick.ts`: opens a message/tool block detail view unless the user is selecting text.
   - `parentMessageTool.ts`: tracks `message_parent` tool calls and relays parsed payloads to `window.parent` via `postMessage`.
-  - `skillFiles.ts`: tree/file helpers for environment skill previews.
+  - `skillFiles.ts`: tree/file helpers for environment offer file previews (to be updated for bundle-oriented review).
 - **Styling**: `styles/*`
 - **Client tests**: `*.test.ts(x)` files in `src/client`
 
@@ -133,7 +133,7 @@ The older browser client sources in `src/client/` are now historical reference o
 - **Domain / service layer**: long-lived coordinators with in-memory runtime state.
   - `SessionRoomManager.ts`, `SessionRoom.ts`, `EnvironmentManager.ts`
 - **Repository layer**: disk/SQLite-backed persistence behind small interfaces.
-  - `LocalEnvironmentRepository.ts`, `EnvironmentDecisionStore.ts`, `sessionLog.ts`
+  - `EnvironmentRepository.ts`, `DirectoryEnvironmentRepository.ts`, `CompositeEnvironmentRepository.ts`, `EnvironmentDecisionStore.ts`, `sessionLog.ts`
 
 The goal is not perfect purity yet; this is the direction to follow when adding new server code.
 
@@ -158,6 +158,7 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
   - `EnvironmentEventStub.ts`, `types.ts`: room/runtime plumbing.
 - **Environment layer (`src/server/environment`)**:
   - `EnvironmentManager.ts`: global coordinator for environment availability and the 2×2 decision model; pushes offer/enter/exit/resolution events into subscribed rooms.
+  - `EnvironmentRepositoryService.ts`: thin service wrapper around repository lookups; returns bundle-organized environment content and bridges current runtime needs.
   - `types.ts`: `EnvironmentRecord`, `EnvironmentEventListener`, decision/helper types.
 - **Agent runtime layer (`src/server/agents`)**:
   - `BaseAgent.ts`: the generic ACP stdio subprocess runtime and lifecycle implementation.
@@ -167,7 +168,9 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
   - `sessionLog.ts`: JSONL persistence for session records used to resume provider sessions.
 
 ### Main repository/persistence objects
-- `LocalEnvironmentRepository.ts`: maps `<kind>:<path>` environment IDs to skill bundle directories under `environment-repository/` and reads previewable skill files.
+- `EnvironmentRepository.ts`: base repository abstraction for environment bundle lookup.
+- `DirectoryEnvironmentRepository.ts`: reads `<kind>:<path>` environments from disk and returns canonical bundle objects from `.bundles/<bundle-id>/` directories.
+- `CompositeEnvironmentRepository.ts`: unions multiple backing repositories into one logical repository.
 - `EnvironmentDecisionStore.ts`: SQLite-backed store for persistent `approve` / `reject` decisions.
   - Current DB location: `.var/rook/environment-decisions.sqlite`
   - Clear it by removing that file
@@ -187,8 +190,8 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
 - **Realtime/session event contract**: `shared/realtime.ts`
   - `SessionEvent` is the current internal UI/runtime update vocabulary
   - this remains transitional while the browser client is still reduced from ACP into the legacy view-model
-- **Environment contracts**: `shared/environment.ts`, `shared/environmentSkillPreview.ts`
-  - environment decision types, websocket event kind names, and preview payload shapes shared by client/server
+- **Environment contracts**: `shared/environment.ts`, `shared/environmentRepository.ts`
+  - environment decision types, bundle/repository types, websocket event kind names, and preview payload shapes shared by client/server
 
 ## Session / room mental model
 
@@ -199,7 +202,7 @@ Transcript history is no longer Rookery-owned durable replay state; restored his
 
 The **`SessionRoom`** is the live coordinator for one session. It holds the current `BaseAgent` runtime, serialises event publication, and fans events out to WebSocket subscribers. Rooms are managed by **`SessionRoomManager`** (keyed by `sessionId`).
 
-The **`EnvironmentManager`** sits alongside the room manager. When a room is created it subscribes to the `EnvironmentManager`. External providers (for example the Chrome extension or macOS app) signal availability directly via `POST /api/environments/register` / `POST /api/environments/unregister`. Hierarchical registrations are expanded to all implied parent prefixes and reference-counted, so unregistering one deep path only removes parents when nothing else still implies them. The manager tracks global availability plus persistent/ephemeral decisions, then pushes offer / enter / exit / resolution events into subscribed rooms. `SessionRoom` is what turns those into client-visible state and runtime rebuilds.
+The **`EnvironmentManager`** sits alongside the room manager. When a room is created it subscribes to the `EnvironmentManager`. External providers (for example the Chrome extension or macOS app) signal availability directly via `POST /api/environments/register` / `POST /api/environments/unregister`. Hierarchical registrations are expanded to all implied parent prefixes and reference-counted, so unregistering one deep path only removes parents when nothing else still implies them. The manager tracks global availability plus persistent/ephemeral decisions, asks `EnvironmentRepositoryService` for environment bundle content, then pushes offer / enter / exit / resolution events into subscribed rooms. `SessionRoom` is what turns those into client-visible state and runtime rebuilds.
 
 **`POST /api/agent/start`** is the only way to create or modify a room (`createOrReuseRoom` in `index.ts`):
 

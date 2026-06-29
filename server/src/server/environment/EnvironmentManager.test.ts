@@ -2,14 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EnvironmentManager } from "./EnvironmentManager.js";
 import { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
-import type { LocalEnvironmentRepository } from "./LocalEnvironmentRepository.js";
+import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import type { EnvironmentEventListener } from "./types.js";
 
-function mockRepository(skillPaths: string[] | Record<string, string[]>): LocalEnvironmentRepository {
+function mockRepositoryService(skillPaths: string[] | Record<string, string[]>): EnvironmentRepositoryService {
   return {
-    getSkillPaths: vi.fn(async (environmentId: string) => Array.isArray(skillPaths) ? skillPaths : (skillPaths[environmentId] ?? [])),
-    getSkillPreviews: vi.fn().mockResolvedValue([]),
-  } as unknown as LocalEnvironmentRepository;
+    getSkillRuntimePaths: vi.fn(async (environmentId: string) => Array.isArray(skillPaths) ? skillPaths : (skillPaths[environmentId] ?? [])),
+    getEnvironmentPreview: vi.fn().mockResolvedValue({ environmentId: "web:example.com", bundles: [] }),
+  } as unknown as EnvironmentRepositoryService;
 }
 
 function mockListener(): EnvironmentEventListener {
@@ -33,7 +33,7 @@ describe("EnvironmentManager", () => {
   });
 
   function newManager(skillPaths: string[] | Record<string, string[]> = ["/repo/web/example.com"]): EnvironmentManager {
-    return new EnvironmentManager(mockRepository(skillPaths), decisions);
+    return new EnvironmentManager(mockRepositoryService(skillPaths), decisions);
   }
 
   it("offers an undecided environment to subscribed sessions when it becomes available", async () => {

@@ -1,6 +1,6 @@
-import type { LocalEnvironmentRepository } from "./LocalEnvironmentRepository.js";
 import type { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
-import type { SkillPreview } from "../../shared/environment.js";
+import type { EnvironmentPreview } from "../../shared/environment.js";
+import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import type {
   EnvironmentDecision,
   EnvironmentEventListener,
@@ -45,7 +45,7 @@ export class EnvironmentManager {
   private readonly entered = new Map<string, Set<string>>();
 
   constructor(
-    private readonly repository: LocalEnvironmentRepository,
+    private readonly repositoryService: EnvironmentRepositoryService,
     private readonly decisions: EnvironmentDecisionStore,
   ) {}
 
@@ -70,7 +70,7 @@ export class EnvironmentManager {
       this.availableRefCounts.set(impliedId, nextCount);
       if (nextCount > 1) continue;
 
-      const repoSkillPaths = await this.repository.getSkillPaths(impliedId);
+      const repoSkillPaths = await this.repositoryService.getSkillRuntimePaths(impliedId);
       // Only the leaf (the registered id itself) gets the injected extra skills.
       const skillPaths = impliedId === env.id ? [...new Set([...repoSkillPaths, ...extraSkillPaths])] : repoSkillPaths;
       this.available.set(impliedId, {
@@ -150,8 +150,8 @@ export class EnvironmentManager {
 
   // --- Reads ------------------------------------------------------------------
 
-  async getSkillPreviews(environmentId: string): Promise<SkillPreview[]> {
-    return this.repository.getSkillPreviews(environmentId);
+  async getEnvironmentPreview(environmentId: string): Promise<EnvironmentPreview> {
+    return this.repositoryService.getEnvironmentPreview(environmentId);
   }
 
   isAvailable(environmentId: string): boolean {

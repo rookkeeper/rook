@@ -43,7 +43,7 @@ final class RookModel: ObservableObject {
 
     // Environment offers
     @Published var pendingOffer: EnvironmentOffer?
-    @Published var offerSkills: [SkillPreview] = []
+    @Published var offerBundles: [EnvironmentBundlePreview] = []
     @Published var offerLoading = false
     @Published var offerError = ""
 
@@ -244,7 +244,7 @@ final class RookModel: ObservableObject {
     }
 
     /// Pre-check each place against the server so the Places screen can show
-    /// whether a matching `environment-repository/place/<slug>/` bundle exists —
+    /// whether a matching `environment-repository/loc/<slug>/` bundle exists —
     /// otherwise a slug mismatch is invisible until you physically arrive.
     func refreshPlaceSkillStatus() {
         guard serverState == .online else {
@@ -253,8 +253,8 @@ final class RookModel: ObservableObject {
         Task {
             var status: [String: Bool] = [:]
             for place in placeStore.places {
-                let skills = (try? await api.skillPreviews(environmentId: "place:\(place.id)")) ?? []
-                status[place.id] = !skills.isEmpty
+                let preview = try? await api.environmentPreview(environmentId: "loc:\(place.id)")
+                status[place.id] = !(preview?.bundles.isEmpty ?? true)
             }
             placeSkillStatus = status
         }
@@ -297,7 +297,7 @@ final class RookModel: ObservableObject {
     /// on-disk skill-bundle guard, done via the preview endpoint).
     private func handlePlace(_ place: Place?) {
         currentPlaceName = place?.name
-        let envId = place.map { "place:\($0.id)" }
+        let envId = place.map { "loc:\($0.id)" }
         guard envId != placeEnvironmentId else {
             return
         }
@@ -311,8 +311,8 @@ final class RookModel: ObservableObject {
             guard let place, let envId else {
                 return
             }
-            let skills = (try? await api.skillPreviews(environmentId: envId)) ?? []
-            guard !skills.isEmpty else {
+            let preview = try? await api.environmentPreview(environmentId: envId)
+            guard let preview, !preview.bundles.isEmpty else {
                 // No skills defined for this place — don't raise an empty offer.
                 if placeEnvironmentId == envId {
                     placeEnvironmentId = nil
@@ -874,12 +874,12 @@ final class RookModel: ObservableObject {
             return
         }
         pendingOffer = offer
-        offerSkills = []
+        offerBundles = []
         offerError = ""
         offerLoading = true
         Task {
             do {
-                offerSkills = try await api.skillPreviews(environmentId: offer.environmentId)
+                offerBundles = try await api.environmentPreview(environmentId: offer.environmentId).bundles
             } catch {
                 offerError = error.localizedDescription
             }
@@ -914,7 +914,7 @@ final class RookModel: ObservableObject {
 
     func clearOffer() {
         pendingOffer = nil
-        offerSkills = []
+        offerBundles = []
         offerError = ""
     }
 }

@@ -6,7 +6,7 @@ import type { PoiLookupProvider, PoiResult } from "./PoiLookupProvider.js";
 
 /** Minimal repository surface needed to check if an environment is known. */
 export interface KnownEnvironmentLookup {
-  getSkillPaths(environmentId: string): Promise<string[]>;
+  getSkillRuntimePaths(environmentId: string): Promise<string[]>;
 }
 
 export interface EnvironmentIdentifierDeps {
@@ -57,7 +57,7 @@ export class EnvironmentIdentifier {
     });
     const environmentId = `loc:${domain}/${lk.key}`;
 
-    const skillPaths = await this.deps.repository.getSkillPaths(environmentId);
+    const skillPaths = await this.deps.repository.getSkillRuntimePaths(environmentId);
     const hasKnownEnvironment = skillPaths.length > 0;
     const possibleSkills = await this.deps.skillSuggester.suggestSkills({ environmentId, operator });
 
