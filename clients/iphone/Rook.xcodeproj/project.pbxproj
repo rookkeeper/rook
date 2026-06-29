@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -13,6 +13,7 @@
 		3E31B1CCF1F908C5F7D29789 /* RookModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF66E11A378847455B9EB32 /* RookModel.swift */; };
 		4173AAB22A3E2CE2F1D8F1D5 /* LocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE760C1B72265F36091790A /* LocationProvider.swift */; };
 		425A75EDAAF30B37701DD25D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BD772167EE16CB4B505749 /* RootView.swift */; };
+		5514FB82834676808A812C07 /* ArrivalGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37D6042614B792A9FB620D37 /* ArrivalGateTests.swift */; };
 		6466135E2CDDBF493C2179B9 /* PlacesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29576F6F57489599396405E7 /* PlacesScreen.swift */; };
 		6A758CE682622466DE13275A /* EnvironmentOfferSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3750D99D34721CDF69C0308 /* EnvironmentOfferSheet.swift */; };
 		6E1F6B55A850CCDE6BD8EBBE /* SessionsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC0E6975A54FDE443878E1C /* SessionsScreen.swift */; };
@@ -28,6 +29,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		9820E2B22093E9F4E08BFAE1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8551ED3D5A86D0D7BBCB0C85 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BECEADD2309FE9E37792DF18;
+			remoteInfo = Rook;
+		};
 		BCCEE7E04557050887EFAE64 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 8551ED3D5A86D0D7BBCB0C85 /* Project object */;
@@ -57,6 +65,7 @@
 		2970A475DCF3F26A17C649E2 /* Rook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Rook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C5F4783F949C9A22F7A9565 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookApp.swift; sourceTree = "<group>"; };
+		37D6042614B792A9FB620D37 /* ArrivalGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalGateTests.swift; sourceTree = "<group>"; };
 		4AC9D0D68548AE9E330CAABA /* RookKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = RookKit; path = ../RookKit; sourceTree = SOURCE_ROOT; };
 		4AF66E11A378847455B9EB32 /* RookModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookModel.swift; sourceTree = "<group>"; };
 		4C4EF5AAEC5E22542FA87BFA /* ChatScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatScreen.swift; sourceTree = "<group>"; };
@@ -67,6 +76,7 @@
 		B08909E5BDA34D380AF7B25F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CAB0B5D7F3477ABBB39A0B42 /* Rook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rook.entitlements; sourceTree = "<group>"; };
 		CCC0E6975A54FDE443878E1C /* SessionsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsScreen.swift; sourceTree = "<group>"; };
+		CE53483296E70F63627FCE2B /* RookTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D19DA31FA2274FE9C6942E5A /* RookWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookWidgetsBundle.swift; sourceTree = "<group>"; };
 		D3750D99D34721CDF69C0308 /* EnvironmentOfferSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferSheet.swift; sourceTree = "<group>"; };
 		D7BD772167EE16CB4B505749 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -102,6 +112,7 @@
 				45470E772448A8D9AE52E08E /* Packages */,
 				AF74CA7D5CB50C3666202358 /* RookWidgets */,
 				64235206901FF0219CF88D93 /* Sources */,
+				4BC284657011B1089CB0F3F9 /* Tests */,
 				9BF2CF96022C225E7F35AC3D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -112,6 +123,14 @@
 				4AC9D0D68548AE9E330CAABA /* RookKit */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		4BC284657011B1089CB0F3F9 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				37D6042614B792A9FB620D37 /* ArrivalGateTests.swift */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 		64235206901FF0219CF88D93 /* Sources */ = {
@@ -154,6 +173,7 @@
 			isa = PBXGroup;
 			children = (
 				2970A475DCF3F26A17C649E2 /* Rook.app */,
+				CE53483296E70F63627FCE2B /* RookTests.xctest */,
 				0655A103456645FE8E991A48 /* RookWidgets.appex */,
 			);
 			name = Products;
@@ -193,6 +213,22 @@
 			productReference = 0655A103456645FE8E991A48 /* RookWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		9ABF6EC8B2D911CBA6603E8F /* RookTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2E01152453FD3DA0BCEE47A9 /* Build configuration list for PBXNativeTarget "RookTests" */;
+			buildPhases = (
+				9C47E39E6BDC41D6DC0824A2 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CB6D45E3F74202306D12973F /* PBXTargetDependency */,
+			);
+			name = RookTests;
+			productName = RookTests;
+			productReference = CE53483296E70F63627FCE2B /* RookTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		BECEADD2309FE9E37792DF18 /* Rook */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1A686D95BA99B938A4E66840 /* Build configuration list for PBXNativeTarget "Rook" */;
@@ -227,6 +263,7 @@
 				};
 			};
 			buildConfigurationList = 8D92C9375EB3AAE1CAF52C4A /* Build configuration list for PBXProject "Rook" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -234,16 +271,14 @@
 				en,
 			);
 			mainGroup = 3B84888C46C0502477C50D82;
-			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				01A6C9AEB7EFAF3E16322253 /* XCLocalSwiftPackageReference "../RookKit" */,
 			);
-			preferredProjectObjectVersion = 77;
-			productRefGroup = 9BF2CF96022C225E7F35AC3D /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				BECEADD2309FE9E37792DF18 /* Rook */,
+				9ABF6EC8B2D911CBA6603E8F /* RookTests */,
 				80BB71880E0AA3D6EC52CD82 /* RookWidgets */,
 			);
 		};
@@ -287,6 +322,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		9C47E39E6BDC41D6DC0824A2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5514FB82834676808A812C07 /* ArrivalGateTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E19049BA0DABD3977D15C1A7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -304,9 +347,32 @@
 			target = 80BB71880E0AA3D6EC52CD82 /* RookWidgets */;
 			targetProxy = BCCEE7E04557050887EFAE64 /* PBXContainerItemProxy */;
 		};
+		CB6D45E3F74202306D12973F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BECEADD2309FE9E37792DF18 /* Rook */;
+			targetProxy = 9820E2B22093E9F4E08BFAE1 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0A867F4E65BBC45437692936 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.RookTests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Rook.app/Rook";
+			};
+			name = Release;
+		};
 		1CBEE1668F6A0CDCC7C0F1A9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -324,6 +390,24 @@
 				PRODUCT_NAME = Rook;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		3063BF82538929D41207A38A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.RookTests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Rook.app/Rook";
 			};
 			name = Debug;
 		};
@@ -514,6 +598,15 @@
 			buildConfigurations = (
 				1CBEE1668F6A0CDCC7C0F1A9 /* Debug */,
 				BD54EE846FEF53D388E8ED3B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2E01152453FD3DA0BCEE47A9 /* Build configuration list for PBXNativeTarget "RookTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3063BF82538929D41207A38A /* Debug */,
+				0A867F4E65BBC45437692936 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

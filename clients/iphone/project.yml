@@ -46,10 +46,27 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         ENABLE_USER_SCRIPT_SANDBOXING: "NO"
         SWIFT_VERSION: "5.9"
+  RookTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Rook
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rookery.RookTests
+        GENERATE_INFOPLIST_FILE: "YES"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
 schemes:
   Rook:
     build:
       targets:
         Rook: all
+        RookTests: [test]
     run:
       config: Debug
+    test:
+      targets:
+        - RookTests

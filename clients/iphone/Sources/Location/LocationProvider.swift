@@ -178,28 +178,55 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
         guard visit.departureDate == Date.distantFuture else {
             return
         }
+        let departureDate = visit.departureDate
         let coordinate = visit.coordinate
         let arrivalDate = visit.arrivalDate
         let accuracy = visit.horizontalAccuracy
         Task { @MainActor in
-            // Always feed place-suggestion detection.
+            // Always feed place-suggestion detection on arrival.
             onVisitArrival?(coordinate)
 
             // Gate the identification trigger: settled (low speed) and not driving.
-            let speed = currentLocation?.speed
-            let dwellSeconds = arrivalDate == Date.distantPast ? nil : Date().timeIntervalSince(arrivalDate)
-            let slowOrUnknown = (speed ?? 0) <= stationarySpeedThreshold
-            let isStationary = slowOrUnknown && !latestActivityIsAutomotive
-            guard isStationary else { return }
-
-            onArrival?(ArrivalContext(
+            guard let context = Self.arrivalContext(
+                departureDate: departureDate,
                 coordinate: coordinate,
-                horizontalAccuracy: accuracy >= 0 ? accuracy : nil,
-                dwellSeconds: dwellSeconds,
-                isStationary: true,
-                speedMetersPerSecond: (speed ?? -1) >= 0 ? speed : nil
-            ))
+                arrivalDate: arrivalDate,
+                horizontalAccuracy: accuracy,
+                speed: currentLocation?.speed,
+                isAutomotive: latestActivityIsAutomotive,
+                now: Date(),
+                stationarySpeedThreshold: stationarySpeedThreshold
+            ) else { return }
+            onArrival?(context)
         }
+    }
+
+    /// Pure dwell/motion gate (no CoreLocation/CoreMotion state) so it can be unit-tested.
+    /// Returns the `ArrivalContext` for a settled, not-driving arrival, else `nil`.
+    nonisolated static func arrivalContext(
+        departureDate: Date,
+        coordinate: CLLocationCoordinate2D,
+        arrivalDate: Date,
+        horizontalAccuracy: CLLocationAccuracy,
+        speed: CLLocationSpeed?,
+        isAutomotive: Bool,
+        now: Date,
+        stationarySpeedThreshold: CLLocationSpeed
+    ) -> ArrivalContext? {
+        // Still here (an arrival, not a departure).
+        guard departureDate == Date.distantFuture else { return nil }
+        // Settled: speed at/below threshold (unknown speed treated as settled) and not driving.
+        let slowOrUnknown = (speed ?? 0) <= stationarySpeedThreshold
+        guard slowOrUnknown && !isAutomotive else { return nil }
+
+        let dwellSeconds = arrivalDate == Date.distantPast ? nil : now.timeIntervalSince(arrivalDate)
+        return ArrivalContext(
+            coordinate: coordinate,
+            horizontalAccuracy: horizontalAccuracy >= 0 ? horizontalAccuracy : nil,
+            dwellSeconds: dwellSeconds,
+            isStationary: true,
+            speedMetersPerSecond: (speed ?? -1) >= 0 ? speed : nil
+        )
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
