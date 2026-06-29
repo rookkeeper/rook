@@ -70,6 +70,11 @@ process.stdin.on('data', (chunk) => {
         })();
         continue;
       }
+      // When an injected context block rides along, surface the FULL prompt (all parts,
+      // in order) so tests can assert ordering/visibility.
+      const parts = message.params.prompt.map((p) => p.text);
+      const hasContext = parts.some((t) => typeof t === 'string' && t.startsWith('<context'));
+      const echoText = hasContext ? `prompt:${parts.join('||')}` : `echo:${parts[0]}`;
       write({
         jsonrpc: '2.0',
         method: 'session/update',
@@ -77,7 +82,7 @@ process.stdin.on('data', (chunk) => {
           sessionId: message.params.sessionId,
           update: {
             sessionUpdate: 'agent_message_chunk',
-            content: { type: 'text', text: `echo:${message.params.prompt[0].text}` },
+            content: { type: 'text', text: echoText },
           },
         },
       });

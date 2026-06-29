@@ -1,5 +1,5 @@
 import type { EnvironmentCandidate } from "../../shared/environment.js";
-import { writeLocationContextSkill } from "./LocationContextSkill.js";
+import { renderLocationContextText, writeLocationContextSkill } from "./LocationContextSkill.js";
 
 /** The slice of EnvironmentManager the registrar needs (eases testing). */
 export interface LocationEnvironmentSink {
@@ -7,6 +7,7 @@ export interface LocationEnvironmentSink {
     env: { id: string; metadata: Record<string, unknown> },
     info: { sourceName?: string; canonicalSourceUrl?: string },
     extraSkillPaths?: string[],
+    contextText?: string,
   ): Promise<void>;
   unregister(environmentId: string): boolean;
   decideEnvironment(environmentId: string, decision: "accept" | "approve" | "ignore" | "reject"): void;
@@ -85,11 +86,13 @@ export class LocationRegistrar {
 
     const [current, ...nearby] = candidates;
     const contextDir = this.writeContextSkill(current, nearby);
+    const contextText = renderLocationContextText(current, nearby);
 
     await this.manager.registerAvailableEnvironment(
       { id: current.environmentId, metadata: metadataFor(current, true) },
       { sourceName: current.displayName, ...(current.website ? { canonicalSourceUrl: current.website } : {}) },
       [contextDir],
+      contextText,
     );
     // Auto-enter the current location so the agent gets the context immediately.
     this.manager.decideEnvironment(current.environmentId, "accept");

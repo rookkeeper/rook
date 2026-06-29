@@ -51,6 +51,9 @@ vi.mock("./agents/agentDiscovery.js", () => ({
       async stop() {
         return undefined;
       },
+      setContextEntry(_key: string, _text: string | null | undefined) {
+        return undefined;
+      },
       async run(message: string) {
         emitAcp({ sessionUpdate: "user_message_chunk", content: { type: "text", text: message } });
         emitAcp({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } });

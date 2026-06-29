@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import type { AcpConfigOption, AcpPermissionRequest, AcpPermissionResponseResult, AcpSessionModeState, AcpSessionNewResult, AcpSessionUpdateNotification, JsonRpcFailure, JsonRpcId, JsonRpcMessage, JsonRpcRequest, JsonRpcSuccess } from "../../shared/acp.js";
 import { appendSessionRecord, createSessionRecord, type AgentRestartMetadata, type AgentSessionRecord } from "./sessionLog.js";
+import { AgentContext } from "./AgentContext.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -72,6 +73,8 @@ export class BaseAgent {
   private pendingSteeringMessages: PendingSteeringMessage[] = [];
   private lastStopReasonValue: string | null = null;
   private runQueue: Promise<void> = Promise.resolve();
+  private readonly context = new AgentContext();
+  private contextPending = false;
 
   constructor(options: BaseAgentOptions, restartMetadata?: AgentRestartMetadata) {
     this.options = options;
@@ -90,6 +93,15 @@ export class BaseAgent {
 
   setSessionName(name: string): void {
     this.sessionName = name.trim() || "default";
+  }
+
+  /**
+   * Set or clear an ambient context block (keyed by source, e.g. "location").
+   * When it changes, the rendered context is injected — invisibly — into the next
+   * prompt turn, so every agent type receives it through the shared ACP path.
+   */
+  setContextEntry(key: string, text: string | null | undefined): void {
+    if (this.context.set(key, text)) this.contextPending = true;
   }
 
   get record(): AgentSessionRecord | undefined {
@@ -162,6 +174,9 @@ export class BaseAgent {
     }
 
     this.started = true;
+    // A freshly (re)started session has no history — re-assert any current context
+    // on its next turn.
+    if (!this.context.isEmpty) this.contextPending = true;
   }
 
   async stop(): Promise<void> {
@@ -316,9 +331,19 @@ export class BaseAgent {
 
     this.emitUserMessageChunk(userMessage);
 
+    // Inject any pending ambient context (e.g. current location) as a leading,
+    // UI-invisible block on this turn — sent to the model but not echoed to chat.
+    const prompt: Array<{ type: "text"; text: string }> = [];
+    if (this.contextPending) {
+      const rendered = this.context.render();
+      if (rendered) prompt.push({ type: "text", text: rendered });
+      this.contextPending = false;
+    }
+    prompt.push({ type: "text", text: userMessage });
+
     const result = await this.sendRequest("session/prompt", {
       sessionId: this.sessionIdValue,
-      prompt: [{ type: "text", text: userMessage }],
+      prompt,
     });
 
     return isObject(result) && typeof result.stopReason === "string" ? result.stopReason : "end_turn";

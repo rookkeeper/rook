@@ -33,6 +33,7 @@ describe("LocationRegistrar", () => {
       expect.objectContaining({ id: "loc:cicis.com/a", metadata: expect.objectContaining({ current: true }) }),
       expect.objectContaining({ sourceName: "loc:cicis.com/a", canonicalSourceUrl: "https://cicis.com/x" }),
       ["/tmp/ctx"],
+      expect.stringContaining("loc:cicis.com/a"),
     );
     expect(s.decideEnvironment).toHaveBeenCalledWith("loc:cicis.com/a", "accept");
     // neighbor: no extra skills, current:false

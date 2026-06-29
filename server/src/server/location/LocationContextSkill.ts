@@ -44,6 +44,36 @@ export function renderLocationContextSkill(current: EnvironmentCandidate, nearby
   return frontmatter + body;
 }
 
+/** Confidence floor and lead gap above which the top guess is treated as unambiguous. */
+const CONFIDENT_MIN = 0.7;
+const CONFIDENT_LEAD = 0.15;
+
+/** Whether the top candidate is a confident single match (vs an ambiguous cluster). */
+export function isConfidentMatch(current: EnvironmentCandidate, nearby: EnvironmentCandidate[]): boolean {
+  if (current.confidence < CONFIDENT_MIN) return false;
+  const second = nearby[0];
+  return !second || current.confidence - second.confidence >= CONFIDENT_LEAD;
+}
+
+/**
+ * Concise, ambiguity-aware "where you are" context PUSHED into the agent (≈ system
+ * prompt) — the best guess plus the top guesses by name. This is not the SKILL.md body
+ * (skills stay on-demand pull); it's what lets the agent answer "where am I".
+ */
+export function renderLocationContextText(current: EnvironmentCandidate, nearby: EnvironmentCandidate[]): string {
+  const names = [current, ...nearby].slice(0, 5).map((c) => c.displayName);
+  const guidance = `When the user says "here", refers to this place, or asks where they are, use this.`;
+
+  if (isConfidentMatch(current, nearby)) {
+    const where = current.address ? `${current.displayName} (${current.address})` : current.displayName;
+    const others = nearby.slice(0, 4).map((c) => c.displayName);
+    const nearbyLine = others.length > 0 ? ` Other businesses nearby: ${others.join(", ")}.` : "";
+    return `You are most likely at ${where}.${nearbyLine} ${guidance}`;
+  }
+
+  return `You are near several businesses and which one you're in is uncertain: ${names.join(", ")}. ${guidance}`;
+}
+
 /**
  * Write the location-context skill bundle to disk and return its directory path.
  * Overwrites any previous bundle (single global current location).

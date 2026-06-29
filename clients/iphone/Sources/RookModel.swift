@@ -805,7 +805,8 @@ final class RookModel: ObservableObject {
             if enteredEnvironments.insert(environmentId).inserted {
                 let entered = nearbyCandidates.first { $0.environmentId == environmentId }
                 let websites = orderedUniqueWebsites(entered: entered, all: nearbyCandidates)
-                appendBlock(.environment(EnvironmentBanner(displayName: entered?.displayName, websites: websites)))
+                let label = locationBannerLabel(entered: entered, candidates: nearbyCandidates)
+                appendBlock(.environment(EnvironmentBanner(displayName: label, websites: websites)))
             }
         case .environmentExited(let environmentId, let error):
             if enteredEnvironments.remove(environmentId) != nil {
@@ -814,6 +815,16 @@ final class RookModel: ObservableObject {
             }
         }
         scrollTick += 1
+    }
+
+    /// Banner label for an entered location: the business name when one match is clearly
+    /// best, "Surrounding businesses" when ambiguous, or nil (generic) when unknown.
+    /// Mirrors the server's confidence heuristic (`isConfidentMatch`).
+    private func locationBannerLabel(entered: EnvironmentCandidate?, candidates: [EnvironmentCandidate]) -> String? {
+        guard let top = candidates.first else { return entered?.displayName }
+        let ambiguous = top.confidence < 0.7 || (candidates.count >= 2 && top.confidence - candidates[1].confidence < 0.15)
+        if ambiguous { return "Surrounding businesses" }
+        return entered?.displayName ?? top.displayName
     }
 
     /// Website URLs for the entered-business favicon row: the entered business first,
