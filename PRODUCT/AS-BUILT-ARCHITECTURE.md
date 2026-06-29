@@ -166,8 +166,9 @@ Examples:
 - `app:md.obsidian/<vault>` (macOS menu bar app — Obsidian vault context)
 - `web:<host>/<path>` (macOS menu bar app — active browser URL, protocol/query stripped)
 - `place:<slug>` (iPhone app — current GPS geofence)
+- `loc:<domain>/<state-zip-street>[/store-<n>]` (iPhone — a business identified from the user's coordinate; see §6.6)
 
-An environment maps to a directory in `environment-repository/` and provides one or more skill bundles. The kind (`web`, `app`, `place`, …) is just the part before the first colon; `LocalEnvironmentRepository` splits on it and resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new skill content on disk.
+An environment maps to a directory in `environment-repository/` and provides one or more skill bundles. The kind (`web`, `app`, `place`, `loc`, …) is just the part before the first colon; `LocalEnvironmentRepository` splits on it and resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new skill content on disk.
 
 ### 6.2 Environment repository
 
@@ -225,6 +226,12 @@ That remains consistent with:
 
 - [`PRODUCT/relationship-or-environments-skills-and-agent.md`](./relationship-or-environments-skills-and-agent.md)
 - [`PRODUCT/narrow-skills-environment-bridge.md`](./narrow-skills-environment-bridge.md)
+
+### 6.6 Location identification (`loc:`)
+
+Beyond providers that already know their environment id, the iPhone can turn a raw coordinate into available `loc:` environments. On a settled (non-driving) `CLVisit` arrival the phone POSTs `/api/environments/identify-available`; `server/src/server/location/` reverse-resolves the coordinate to nearby businesses (the swappable `PoiLookupProvider`, today backed by ptiles range-served through `/api/ptiles/proxy`), normalizes them to stable `loc:<domain>/…` ids, and `LocationRegistrar` feeds the ranked set into the same `EnvironmentManager` availability/offer/enter flow as every other provider (§6.3–6.4).
+
+Full as-built detail — assumptions, limitations, and follow-ups — lives in [`PRODUCT/location-environment-awareness.md`](./location-environment-awareness.md).
 
 ## 7. Client architecture
 
