@@ -1,6 +1,6 @@
-import type { LocalEnvironmentRepository } from "./LocalEnvironmentRepository.js";
 import type { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
 import type { SkillPreview } from "../../shared/environment.js";
+import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import type {
   EnvironmentDecision,
   EnvironmentEventListener,
@@ -45,7 +45,7 @@ export class EnvironmentManager {
   private readonly entered = new Map<string, Set<string>>();
 
   constructor(
-    private readonly repository: LocalEnvironmentRepository,
+    private readonly repositoryService: EnvironmentRepositoryService,
     private readonly decisions: EnvironmentDecisionStore,
   ) {}
 
@@ -66,7 +66,7 @@ export class EnvironmentManager {
       this.availableRefCounts.set(impliedId, nextCount);
       if (nextCount > 1) continue;
 
-      const skillPaths = await this.repository.getSkillPaths(impliedId);
+      const skillPaths = await this.repositoryService.getSkillRuntimePaths(impliedId);
       this.available.set(impliedId, {
         record: { id: impliedId, metadata: env.metadata },
         skillPaths,
@@ -145,7 +145,7 @@ export class EnvironmentManager {
   // --- Reads ------------------------------------------------------------------
 
   async getSkillPreviews(environmentId: string): Promise<SkillPreview[]> {
-    return this.repository.getSkillPreviews(environmentId);
+    return this.repositoryService.getSkillPreviews(environmentId);
   }
 
   isAvailable(environmentId: string): boolean {

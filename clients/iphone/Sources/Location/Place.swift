@@ -2,7 +2,7 @@ import CoreLocation
 import Foundation
 
 /// A user-defined geofenced place. `id` is the slug used to build the
-/// environment id `place:<id>` and to resolve `environment-repository/place/<id>/`.
+/// environment id `loc:<id>` and to resolve `environment-repository/loc/<id>/`.
 struct Place: Codable, Equatable, Identifiable {
     var id: String
     var name: String

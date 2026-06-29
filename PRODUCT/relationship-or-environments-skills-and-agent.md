@@ -28,7 +28,7 @@ EnvironmentRepository
 **Types of environment repositories:**
 
 - **Canonical** — curated, trusted catalog (official Rook repo; today lives at `environment-repository/` in monorepo)
-- **Local** — user-owned disk repo for personal envs/skills – not built as separate path yet; same `LocalEnvironmentRepository` backend, different root – users can some somehow instruct the Rook agent to add and update skills in environments.
+- **Local** — user-owned disk repo for personal envs/skills – not built as separate path yet; same directory-backed repository backend, different root – users can some somehow instruct the Rook agent to add and update skills in environments.
 - **External** — repositories from other providers
 
 And environment repository needs to be searchable so that you can find environments and skills that might be useful.

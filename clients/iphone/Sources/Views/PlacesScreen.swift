@@ -20,7 +20,7 @@ struct PlacesScreen: View {
                         }
                         suggestionsList
                         placesList
-                        Text("Define a place here, and create a matching skill bundle on the server at environment-repository/place/<slug>/. When you arrive, Rook offers that place's skills.")
+                        Text("Define a place here, and create a matching skill bundle on the server at environment-repository/loc/<slug>/. When you arrive, Rook offers that place's skills.")
                             .font(.caption2)
                             .foregroundStyle(PanelPalette.textMuted)
                             .padding(.horizontal, 4)
@@ -162,7 +162,7 @@ struct PlacesScreen: View {
                                 Text(place.name)
                                     .font(.body.weight(.medium))
                                     .foregroundStyle(PanelPalette.textNormal)
-                                Text("place:\(place.id) · \(Int(place.radius)) m")
+                                Text("loc:\(place.id) · \(Int(place.radius)) m")
                                     .font(.caption2.monospaced())
                                     .foregroundStyle(PanelPalette.textMuted)
                                 skillBadge(for: place)

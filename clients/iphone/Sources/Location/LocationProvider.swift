@@ -5,7 +5,7 @@ import Foundation
 /// `ForegroundAppMonitor`. Monitors geofenced places (CLCircularRegion region
 /// monitoring, which relaunches the app on entry when Always-authorized) and
 /// emits `onRegionChange` with the entered place (or `nil` on leaving all
-/// regions). The model turns that into `place:<slug>` register/unregister.
+/// regions). The model turns that into `loc:<slug>` register/unregister.
 @MainActor
 final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDelegate {
     var onRegionChange: ((Place?) -> Void)?

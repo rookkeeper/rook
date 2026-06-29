@@ -1,11 +1,14 @@
 import dotenv from "dotenv";
 import fastify from "fastify";
 import websocket from "@fastify/websocket";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { EnvironmentDecisionStore } from "./environment/EnvironmentDecisionStore.js";
 import { EnvironmentManager } from "./environment/EnvironmentManager.js";
-import { LocalEnvironmentRepository } from "./environment/LocalEnvironmentRepository.js";
+import { CompositeEnvironmentRepository } from "./environment/CompositeEnvironmentRepository.js";
+import { DirectoryEnvironmentRepository } from "./environment/DirectoryEnvironmentRepository.js";
+import { EnvironmentRepositoryService } from "./environment/EnvironmentRepositoryService.js";
 import { REPO_ROOT } from "./paths.js";
 import { SessionRoomManager } from "./realtime/SessionRoomManager.js";
 import { registerAgentRoutes } from "./routes/agentRoutes.js";
@@ -27,9 +30,13 @@ export interface BuildServerOptions {
 
 export async function buildServer(options: BuildServerOptions = {}) {
   const app = fastify({ logger: options.logger ?? true });
-  const environmentRepository = new LocalEnvironmentRepository();
+  const environmentRepository = new CompositeEnvironmentRepository([
+    new DirectoryEnvironmentRepository(path.join(REPO_ROOT, "environment-repository")),
+    new DirectoryEnvironmentRepository(path.join(os.homedir(), ".rook", "environment-repository")),
+  ]);
+  const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
   const environmentDecisionStore = new EnvironmentDecisionStore(options.environmentDecisionStoreLocation);
-  const environmentManager = new EnvironmentManager(environmentRepository, environmentDecisionStore);
+  const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionStore);
   const roomManager = new SessionRoomManager({
     idleTimeoutMs: options.roomIdleTimeoutMs,
     onRoomRemoved: (sessionId) => environmentManager.unsubscribe(sessionId),

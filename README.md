@@ -11,7 +11,7 @@ ACP standardizes JSON-RPC between editors/clients and coding agents. Here, the b
 | [server](server/) | Backend/runtime package: Fastify API, session/runtime orchestration, environment manager, and ACP-backed agent adapters |
 | [clients/](clients/) | Home for the remaining native clients |
 | [clients/mac](clients/mac/) | Native SwiftUI macOS menu bar client with full chat/session/environment support; also registers `app:<slug>` environments based on the frontmost Mac app |
-| [clients/iphone](clients/iphone/) | Native SwiftUI iPhone client that registers `place:<slug>` environments from geofences and adds Live Activity / Dynamic Island + voice support |
+| [clients/iphone](clients/iphone/) | Native SwiftUI iPhone client that registers `loc:<slug>` environments from geofences and adds Live Activity / Dynamic Island + voice support |
 | [clients/RookKit](clients/RookKit/) | Shared cross-platform Swift package (iOS + macOS): models, REST/ACP-WebSocket clients, design system/chat views, voice, and Live Activity attributes |
 | [dummy-client](dummy-client/) | Port-3000 postMessage debug stub |
 
@@ -150,6 +150,6 @@ If you move or rename the sibling package, update `args` in `agent-profiles.json
 - `clients/mac/` is a Swift/xcodegen package (not npm); the preferred local launcher is `./scripts/run-rook.sh mac`, though you can still build manually with `xcodegen generate` + `xcodebuild` — see its [README](clients/mac/README.md) for exact run steps and menu-bar troubleshooting
 - `clients/iphone/` is a Swift/xcodegen package (not npm); the preferred local launchers are `./scripts/run-rook.sh sim` and `./scripts/run-rook.sh phone` (which now uses Tailscale MagicDNS for physical devices). It depends on `clients/RookKit/` and adds a Widget extension for the Live Activity — see its [README](clients/iphone/README.md) for device/simulator run steps and location-testing
 - `clients/RookKit/` is a local Swift Package (iOS + macOS) holding the cross-platform layer shared by both Swift clients (models, REST/ACP clients, design system, voice, Live Activity attributes); build-check it with `cd clients/RookKit && swift build`
-- `environment-repository/` holds local environment-linked skill bundles, keyed `<kind>/<path>` (`web/example.com`, `app/<slug>` for Mac apps fronted by the menu bar provider, and `place/<slug>` for physical locations fronted by the iPhone provider)
+- `environment-repository/` holds local environment-linked bundle content keyed by `<kind>/<path>` (`web/example.com`, `app/<slug>` for Mac apps fronted by the menu bar provider, and `loc/<slug>` for physical locations fronted by the iPhone provider). Environments can contain `.bundles/<bundle-id>/` directories with grouped `skills/`, `mcp-servers/`, and `apps/` content.
 - `scripts/` holds repo-level utilities
 - `PRODUCT/` holds product notes and evolving architecture docs
