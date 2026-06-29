@@ -17,6 +17,9 @@ and have been decompressed here). OSM GPS trace data is licensed **ODbL**.
 | nc-mine-creek-1184364.gpx | 1184364 | runbananas | Raleigh, NC |
 | nc-sals-branch-1191748.gpx | 1191748 | runbananas | Raleigh, NC |
 
+These fixture tests are **opt-in** (validation, not unit logic) — they don't run in the
+normal `npm test`. Run them with `npm run test:fixtures` (sets `GPX_FIXTURES=1`).
+
 Re-download example:
 ```
 curl -fsSL "https://www.openstreetmap.org/traces/1184467/data" | bunzip2 > nc-umstead-trails-1184467.gpx

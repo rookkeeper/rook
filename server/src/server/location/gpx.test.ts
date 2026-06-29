@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import { parseGpxPoints, parseGpxTrack } from "./gpx.js";
 
 const FIXTURE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "test-fixtures", "gpx");
-const fixtureFiles = readdirSync(FIXTURE_DIR).filter((f) => f.endsWith(".gpx"));
+// Real OSM trace fixtures are validation data, not unit logic — opt in with GPX_FIXTURES=1.
+const RUN_FIXTURES = process.env.GPX_FIXTURES === "1";
+const fixtureFiles = RUN_FIXTURES ? readdirSync(FIXTURE_DIR).filter((f) => f.endsWith(".gpx")) : [];
 
 describe("parseGpxPoints", () => {
   it("extracts lat/lon from trkpt/wpt/rtept tags (self-closing or with children)", () => {
@@ -48,17 +50,19 @@ describe("parseGpxTrack", () => {
     expect(pts[0]).toEqual({ lat: 36.1, lon: -86.2, t: Date.parse("2026-06-24T00:00:00Z") });
     expect(pts[1]).toEqual({ lat: 36.2, lon: -86.3 }); // no time
   });
+});
 
-  it("reads timestamps from the real fixtures", () => {
+// Validation against the real OSM trace fixtures (third-party GPS data). Opt-in only —
+// not part of the normal unit run: GPX_FIXTURES=1 (npm run test:fixtures).
+describe.runIf(RUN_FIXTURES)("real OSM trace fixtures (opt-in: GPX_FIXTURES=1)", () => {
+  it("has fixtures", () => {
+    expect(fixtureFiles.length).toBeGreaterThan(0);
+  });
+
+  it("reads timestamps from a real fixture", () => {
     const pts = parseGpxTrack(readFileSync(path.join(FIXTURE_DIR, "tn-middle-tennessee-3605997.gpx"), "utf8"));
     expect(pts.length).toBeGreaterThan(1000);
     expect(pts.filter((p) => p.t !== undefined).length).toBeGreaterThan(1000);
-  });
-});
-
-describe("parseGpxPoints on real OSM traces (NC/TN fixtures)", () => {
-  it("has fixtures", () => {
-    expect(fixtureFiles.length).toBeGreaterThan(0);
   });
 
   it.each(fixtureFiles)("parses %s into many southeast-US points", (file) => {
