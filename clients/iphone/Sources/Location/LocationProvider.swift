@@ -75,6 +75,18 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
         manager.requestLocation()
     }
 
+    /// Fire a synthesized stationary arrival (for Simulator/E2E validation, since CLVisit
+    /// never fires in the Simulator). Drives the same `onArrival` path as a real dwell.
+    func simulateArrival(latitude: Double, longitude: Double) {
+        onArrival?(ArrivalContext(
+            coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+            horizontalAccuracy: 10,
+            dwellSeconds: 300,
+            isStationary: true,
+            speedMetersPerSecond: 0
+        ))
+    }
+
     /// CLVisit-based "where you spend time" detection (Phase E). Fires
     /// `onVisitArrival` when you settle at a place — used to suggest naming it.
     func startMonitoringVisits() {

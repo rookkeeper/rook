@@ -129,6 +129,22 @@ final class RookModel: ObservableObject {
         Task {
             await refreshHealth()
         }
+        #if DEBUG
+        // E2E hook: ROOK_SIMULATE_ARRIVAL="lat,lon" fires identify once the server is online
+        // (CLVisit can't fire in the Simulator). Pass via SIMCTL_CHILD_ROOK_SIMULATE_ARRIVAL.
+        if let raw = ProcessInfo.processInfo.environment["ROOK_SIMULATE_ARRIVAL"] {
+            let parts = raw.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            if parts.count == 2 {
+                Task { [weak self] in
+                    for _ in 0..<30 where self?.serverState != .online {
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        await self?.refreshHealth()
+                    }
+                    self?.locationProvider.simulateArrival(latitude: parts[0], longitude: parts[1])
+                }
+            }
+        }
+        #endif
     }
 
     // MARK: - Voice

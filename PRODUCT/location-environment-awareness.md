@@ -158,7 +158,36 @@ and someone standing in a store. No motion signal ⇒ permissive (back-compat).
 > broken points (e.g. a GA Home Depot) now resolve `inPoly=true`. The provider keeps a
 > one-time empty-index warning as a guard against future regressions.
 
-## 6. Follow-up work
+## 6. End-to-end Simulator validation
+
+CLVisit can't fire in the iOS Simulator, so a DEBUG launch hook drives the identify
+path: `ROOK_SIMULATE_ARRIVAL="lat,lon"` (read in `RookModel.init`, `#if DEBUG`) calls
+`LocationProvider.simulateArrival(...)` once the server is online. Procedure:
+
+```
+# server (real ptiles egress)
+cd server && PORT=3000 npm run dev
+# build + launch the app in a booted Simulator, pointed at a business coordinate
+xcodebuild -scheme Rook -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -derivedDataPath /tmp/rook-dd build
+xcrun simctl install booted /tmp/rook-dd/Build/Products/Debug-iphonesimulator/Rook.app
+SIMCTL_CHILD_ROOK_SERVER_BASE_URL=http://127.0.0.1:3000 \
+SIMCTL_CHILD_ROOK_SIMULATE_ARRIVAL="36.1627,-86.7816" \
+  xcrun simctl launch booted com.rookery.Rook
+```
+
+Verified live: the app POSTs `identify-available`; the server runs the ptiles lookup
+(proxy range calls) and writes the context skill; a connected agent session receives
+`environment_offer_available` with the business `sourceName` + `canonicalSourceUrl`
+(website) and the server enters it (`skillPathCount: 1`).
+
+> **Known issue (agent runtime).** On `environment_entered` the SessionRoom rebuilds the
+> agent runtime to load the skill; with **ClaudeAgent** this currently fails with
+> `Resource not found: <sessionId>` (Claude Code can't `session/load` a just-created
+> session) and the room emits `environment_exited(error)`. The location pipeline is
+> correct (server logs `entered`); this is a ClaudeAgent resume/rebuild concern to fix
+> separately.
+
+## 7. Follow-up work
 
 - **Skills at scale (#22).** Author `loc:` skills at the operator/domain level so every
   branch inherits them hierarchically; replace the mocked suggester.
