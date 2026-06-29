@@ -398,7 +398,7 @@ describe("server", () => {
     await app.close();
   });
 
-  it("returns environment skill previews", async () => {
+  it("returns environment bundle previews", async () => {
     const app = await buildServer({ enableClient: false });
     const register = await app.inject({
       method: "POST",
@@ -409,14 +409,20 @@ describe("server", () => {
 
     const preview = await app.inject({ method: "GET", url: "/api/environments/preview?environmentId=web:example.com" });
     expect(preview.statusCode).toBe(200);
-    const body = preview.json() as { environmentId: string; skills: Array<{ id: string; files: Record<string, string> }> };
+    const body = preview.json() as {
+      environmentId: string;
+      bundles: Array<{ bundleId: string; valid: boolean; skills: Array<{ id: string; files: Record<string, string> }>; mcpServers: Array<{ id: string }>; apps: Array<{ id: string }>; errors: Array<{ code: string }> }>;
+    };
     expect(body.environmentId).toBe("web:example.com");
-    expect(body.skills.some((skill) => skill.id === "testing-fixture" && skill.files["testing-fixture/SKILL.md"]?.includes("testing purposes"))).toBe(true);
+    expect(body.bundles.some((bundle) => bundle.bundleId === "testing-fixture" && bundle.skills.some((skill) => skill.id === "testing-fixture" && skill.files["testing-fixture/SKILL.md"]?.includes("testing purposes")))).toBe(true);
+    expect(body.bundles.some((bundle) => bundle.bundleId === "web-with-mcp" && bundle.mcpServers.some((server) => server.id === "config"))).toBe(true);
+    expect(body.bundles.some((bundle) => bundle.bundleId === "app-instructions-and-skill" && bundle.apps.some((app) => app.id === "instructions"))).toBe(true);
+    expect(body.bundles.some((bundle) => bundle.bundleId === "invalid-bundle" && bundle.valid === false && bundle.errors.some((error) => error.code === "invalid_bundle_contents"))).toBe(true);
 
     await app.close();
   });
 
-  it("returns nested environment skill previews from the repository", async () => {
+  it("returns nested environment bundle previews from the repository", async () => {
     const app = await buildServer({ enableClient: false });
     const register = await app.inject({
       method: "POST",
@@ -427,9 +433,9 @@ describe("server", () => {
 
     const preview = await app.inject({ method: "GET", url: "/api/environments/preview?environmentId=web:example.com/stuff" });
     expect(preview.statusCode).toBe(200);
-    const body = preview.json() as { environmentId: string; skills: Array<{ id: string }> };
+    const body = preview.json() as { environmentId: string; bundles: Array<{ bundleId: string; skills: Array<{ id: string }> }> };
     expect(body.environmentId).toBe("web:example.com/stuff");
-    expect(body.skills.some((skill) => skill.id === "testing-fixture-child")).toBe(true);
+    expect(body.bundles.some((bundle) => bundle.bundleId === "testing-fixture-child" && bundle.skills.some((skill) => skill.id === "testing-fixture-child"))).toBe(true);
 
     await app.close();
   });

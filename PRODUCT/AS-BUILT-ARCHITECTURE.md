@@ -356,7 +356,7 @@ Important files:
 - `server/src/shared/agent.ts` — session metadata and agent-facing shared types
 - `server/src/shared/environment.ts` — environment ids, decisions, and preview types
 
-The debug bridge CLI and the server import from `server/src/shared/`. The server also retains locally-scoped shared helpers (`realtime.ts`, `environmentSkillPreview.ts`) that carry server-side logic.
+The debug bridge CLI and the server import from `server/src/shared/`. The server also retains locally-scoped shared helpers (`realtime.ts`) that carry server-side logic.
 
 ## 12. Architecture constraints that matter right now
 

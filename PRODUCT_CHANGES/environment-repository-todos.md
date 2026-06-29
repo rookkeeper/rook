@@ -89,11 +89,17 @@ Rules for maintaining this list:
 
 ## 8. Update preview/inspection behavior
 
-- [ ] Identify all current preview-related code paths.
-- [ ] Decide what the repository/service should return for inspection of bundle contents.
-- [ ] Update preview code to render bundle-organized content instead of skill-only content.
-- [ ] Keep in mind that preview is not a repository concept; it is a higher-layer rendering of repository contents.
-- [ ] Ensure the returned data is sufficient for clients/UI to show digestible bundle contents.
+- [x] Identify all current preview-related code paths.
+- [x] Redesign `/api/environments/preview` response to be bundle-oriented instead of skill-only.
+- [x] Decide what the repository/service should return for inspection of bundle contents.
+- [x] Return preview data as an environment plus an array of bundles.
+- [x] For each valid bundle, return the filesystem review structure for everything inside `.bundles/<bundle-id>/`.
+- [x] For each invalid bundle, also return its error(s) so the UI can show a red error box above the bundle review.
+- [x] Keep invalid bundles in the preview response.
+- [x] Update preview code to render bundle-organized content instead of skill-only content.
+- [x] Keep in mind that preview is not a repository concept; it is a higher-layer rendering of repository contents.
+- [x] Ensure the returned data is sufficient for clients/UI to show digestible bundle contents.
+- [x] Ensure preview/UI affordances can grey out acceptance buttons for invalid bundles except for `ignore`.
 
 ## 9. Update tests for the new repository design
 
@@ -123,21 +129,21 @@ Rules for maintaining this list:
 - [x] Find all remaining `place:` references in code, tests, and docs.
 - [x] Update iPhone code from `place:` to `loc:`.
 - [x] Update server/shared docs that still say `place:` when they should now say `loc:`.
-- [ ] Verify current environment registration/unregistration flows still work after the rename.
+- [x] Verify current environment registration/unregistration flows still work after the rename.
 
 ## 12. Update docs that should move with the code
 
 - [x] Update root `README.md` where the repository shape is described.
 - [x] Update `server/README.md` for the new repository/service architecture.
 - [x] Update relevant `PRODUCT/` docs if the as-built architecture changes materially during implementation.
-- [ ] Keep `PRODUCT_CHANGES/environment-repository.md` aligned with major implementation decisions if they shift.
+- [x] Keep `PRODUCT_CHANGES/environment-repository.md` aligned with major implementation decisions if they shift.
 
 ## 13. Agent-facing local authoring follow-up
 
-- [ ] Decide whether any implementation work is needed now for the simplified Rook-facing local skill view.
+- [x] Decide whether any implementation work is needed now for the simplified Rook-facing local skill view.
 - [ ] If yes, create a minimal adapter/interface for “where are the skills for this environment?”.
-- [ ] If no, explicitly defer it and avoid accidentally baking in a conflicting repository API.
-- [ ] Preserve the future option of symlink-backed local authoring without committing to the exact mechanism yet.
+- [x] If no, explicitly defer it and avoid accidentally baking in a conflicting repository API.
+- [x] Preserve the future option of symlink-backed local authoring without committing to the exact mechanism yet.
 
 ## 14. Validation and error handling
 
@@ -150,12 +156,21 @@ Rules for maintaining this list:
 
 - [x] Remove or retire obsolete `LocalEnvironmentRepository` code once the new stack fully replaces it.
 - [x] Remove obsolete tests tied to the old repository assumptions.
-- [ ] Remove dead helpers that only existed for skill-path-centric repository behavior.
+- [x] Remove dead helpers that only existed for skill-path-centric repository behavior.
+- [ ] Commit before doing a broad simplification / cleanup pass.
+- [ ] Do a quick runthrough after the commit to see whether any transitional code can now be simplified or removed.
 - [x] Make sure there is no accidental transitional adapter architecture left behind beyond the smallest necessary bridge.
 
 ## 16. Final verification
 
 - [x] Run the relevant server tests.
 - [x] Run any additional targeted checks for environment registration and repository lookup.
-- [ ] Confirm docs and tests are in sync with the new repository direction.
-- [ ] Review the todo list itself and update/check off anything that changed during implementation.
+- [x] Add/adjust test coverage for bundle-oriented preview behavior and other user-visible features (test features, not minutiae).
+- [x] Confirm docs and tests are in sync with the new repository direction.
+- [x] Review the todo list itself and update/check off anything that changed during implementation.
+
+## 17. To do next
+
+- [x] Remove or convert any remaining skill-only approval/preview code paths so offer review is bundle-oriented end to end.
+- [ ] Decide whether `EnvironmentManager` / runtime loading should also move from skill-path-oriented bridging to a fully bundle-oriented contract.
+- [ ] If that next step needs a design decision rather than straightforward implementation, stop and ask for input before pushing ahead.

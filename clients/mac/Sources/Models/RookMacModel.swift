@@ -76,7 +76,7 @@ final class RookMacModel: ObservableObject {
 
     // Environment offers
     @Published var pendingOffers: [EnvironmentOffer] = []
-    @Published var offerSkills: [SkillPreview] = []
+    @Published var offerBundles: [EnvironmentBundlePreview] = []
     @Published var offerLoading = false
     @Published var offerError = ""
 
@@ -1491,22 +1491,22 @@ final class RookMacModel: ObservableObject {
 
     private func loadCurrentOfferPreview() {
         guard let offer = pendingOffer else {
-            offerSkills = []
+            offerBundles = []
             offerError = ""
             offerLoading = false
             return
         }
         let environmentId = offer.environmentId
-        offerSkills = []
+        offerBundles = []
         offerError = ""
         offerLoading = true
         Task {
             do {
-                let skills = try await api.skillPreviews(environmentId: environmentId)
+                let bundles = try await api.environmentPreview(environmentId: environmentId).bundles
                 guard pendingOffer?.environmentId == environmentId else {
                     return
                 }
-                offerSkills = skills
+                offerBundles = bundles
             } catch {
                 guard pendingOffer?.environmentId == environmentId else {
                     return
@@ -1524,7 +1524,7 @@ final class RookMacModel: ObservableObject {
             loadCurrentOfferPreview()
             return
         }
-        offerSkills = []
+        offerBundles = []
         offerError = ""
         offerLoading = false
         if panelMode == .environmentOffer {

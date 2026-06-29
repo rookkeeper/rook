@@ -187,6 +187,7 @@ Answered so far:
   - `id`
   - `displayName`
   - `description`
+- Example fixture environments like `web:example.com` and `web:example.com/stuff` should carry meaningful `displayName` and `description` values in their eventual environment metadata.
 - For now, a bundle should also carry a `repository` field indicating where it came from.
   - Initially this may be a path on disk.
   - Later it may point to a Git repository or some other backing source.
@@ -285,6 +286,10 @@ Answered so far:
   - Bundle manifest location: `<environment>/.bundles/<bundle>/.manifest`
 - There is no separate notion of "preview files" in the environment repository itself.
   - Preview UI elsewhere can render the repository contents in a digestible way.
+  - For a valid bundle, the preview should be a filesystem review structure of everything inside `.bundles/<bundle-id>/`:
+    - file tree/navigation on the left
+    - scrollable file contents on the right
+  - For an invalid bundle, the same review structure should still be visible, but the bundle review should also show the bundle error at the top in a red box.
 - State schemas / metadata schemas will probably also live in dot directories, but the exact structure is still TBD.
 - Traversal should be shallow for discovery:
   - list top-level type directories
@@ -391,6 +396,13 @@ Answered so far:
 Open questions:
 - If/when we expose this outside the service layer, what normalized API shape should it have?
 
+Answered so far for a likely preview/inspection shape:
+- An environment offer / inspection result should be associated with an array of bundles.
+- Each bundle should be reviewed independently.
+- Errors should be per-bundle, not per-environment, because bundles for the same environment may come from different repositories.
+- Invalid bundles should still be returned in preview so the user can inspect the `.bundle` contents.
+- In the UI, invalid bundles should have acceptance actions greyed out except for `ignore`.
+
 ### 13. Validation and integrity
 
 Answered so far:
@@ -443,6 +455,13 @@ Answered so far:
 
 Open questions:
 - Exactly what error structure should we use when surfacing repository read/validation failures?
+
+## Still explicitly undone
+
+- The simplified Rook-facing local authoring interface is still intentionally unimplemented.
+- Bundle-oriented preview/inspection is specified at a product level now, but the actual code path still needs to be updated to return and render bundle-organized data.
+- After the current implementation stabilizes, we should do a quick cleanup pass to remove any remaining transitional code and simplify anything that became unnecessarily awkward during the migration.
+- Before that cleanup/simplification pass, make a commit first, because that is a good moment to accidentally introduce new bugs.
 
 ### 17. Testing strategy
 

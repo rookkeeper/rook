@@ -8,7 +8,7 @@ import type { EnvironmentEventListener } from "./types.js";
 function mockRepositoryService(skillPaths: string[] | Record<string, string[]>): EnvironmentRepositoryService {
   return {
     getSkillRuntimePaths: vi.fn(async (environmentId: string) => Array.isArray(skillPaths) ? skillPaths : (skillPaths[environmentId] ?? [])),
-    getSkillPreviews: vi.fn().mockResolvedValue([]),
+    getEnvironmentPreview: vi.fn().mockResolvedValue({ environmentId: "web:example.com", bundles: [] }),
   } as unknown as EnvironmentRepositoryService;
 }
 

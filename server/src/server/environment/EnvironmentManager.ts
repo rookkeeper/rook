@@ -1,5 +1,5 @@
 import type { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
-import type { SkillPreview } from "../../shared/environment.js";
+import type { EnvironmentPreview } from "../../shared/environment.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import type {
   EnvironmentDecision,
@@ -144,8 +144,8 @@ export class EnvironmentManager {
 
   // --- Reads ------------------------------------------------------------------
 
-  async getSkillPreviews(environmentId: string): Promise<SkillPreview[]> {
-    return this.repositoryService.getSkillPreviews(environmentId);
+  async getEnvironmentPreview(environmentId: string): Promise<EnvironmentPreview> {
+    return this.repositoryService.getEnvironmentPreview(environmentId);
   }
 
   isAvailable(environmentId: string): boolean {

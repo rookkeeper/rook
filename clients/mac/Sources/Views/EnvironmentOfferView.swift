@@ -3,11 +3,11 @@ import RookKit
 import SwiftUI
 
 /// Native counterpart of the web client's EnvironmentApprovalModal: shows the
-/// offered environment, previews the skill files that would be injected, and
+/// offered environment, previews the bundle files that would be injected, and
 /// posts one of the four 2×2 decisions.
 struct EnvironmentOfferDetail: View {
     @ObservedObject var model: RookMacModel
-    @State private var selectedSkillId: String?
+    @State private var selectedBundleId: String?
     @State private var selectedFilePath: String?
 
     var body: some View {
@@ -22,7 +22,7 @@ struct EnvironmentOfferDetail: View {
 
             if let offer = model.pendingOffer {
                 sourceCard(offer)
-                skillsCard
+                bundlesCard
                 decisionsCard
             } else {
                 PanelCard {
@@ -33,12 +33,8 @@ struct EnvironmentOfferDetail: View {
                 }
             }
         }
-        .onAppear {
-            ensureSelection()
-        }
-        .onChange(of: model.offerSkills) { _, _ in
-            ensureSelection()
-        }
+        .onAppear { ensureSelection() }
+        .onChange(of: model.offerBundles) { _, _ in ensureSelection() }
     }
 
     private func sourceCard(_ offer: EnvironmentOffer) -> some View {
@@ -49,7 +45,7 @@ struct EnvironmentOfferDetail: View {
                     Text(offer.sourceName ?? offer.environmentId)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                    Text("wants to load skills into this agent session")
+                    Text("wants to load environment bundles into this agent session")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if let url = offer.canonicalSourceUrl, !url.isEmpty {
@@ -64,85 +60,77 @@ struct EnvironmentOfferDetail: View {
         }
     }
 
-    private var selectedSkill: SkillPreview? {
-        model.offerSkills.first { $0.id == selectedSkillId } ?? model.offerSkills.first
+    private var selectedBundle: EnvironmentBundlePreview? {
+        model.offerBundles.first { $0.id == selectedBundleId } ?? model.offerBundles.first
     }
 
-    private var skillsCard: some View {
+    private var bundlesCard: some View {
         PanelCard {
             HStack(spacing: 8) {
-                Label("Skills", systemImage: "text.book.closed")
+                Label("Bundles", systemImage: "shippingbox")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 Spacer()
                 if model.offerLoading {
-                    ProgressView()
-                        .scaleEffect(0.5)
+                    ProgressView().scaleEffect(0.5)
                 }
             }
 
             if !model.offerError.isEmpty {
-                PanelMessageView(
-                    systemImage: "exclamationmark.triangle.fill",
-                    tint: PanelPalette.warning,
-                    text: model.offerError
-                )
+                PanelMessageView(systemImage: "exclamationmark.triangle.fill", tint: PanelPalette.warning, text: model.offerError)
             }
 
-            if model.offerSkills.isEmpty && !model.offerLoading {
-                Text("No skill files to preview.")
+            if model.offerBundles.isEmpty && !model.offerLoading {
+                Text("No bundle files to preview.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            if model.offerSkills.count > 1 {
+            if model.offerBundles.count > 1 {
                 HStack(spacing: 6) {
-                    ForEach(model.offerSkills) { skill in
-                        skillChip(skill)
+                    ForEach(model.offerBundles) { bundle in
+                        bundleChip(bundle)
                     }
                 }
             }
 
-            if let skill = selectedSkill {
-                filesList(skill)
-                if let path = selectedFilePath ?? skill.sortedFilePaths.first,
-                   let content = skill.files[path] {
+            if let bundle = selectedBundle {
+                if !bundle.valid, let error = bundle.errors.first {
+                    PanelMessageView(systemImage: "exclamationmark.triangle.fill", tint: PanelPalette.danger, text: error.message)
+                }
+                filesList(bundle)
+                if let path = selectedFilePath ?? bundle.allFilePaths.first,
+                   let content = bundle.content(for: path) {
                     fileContent(path: path, content: content)
                 }
             }
         }
     }
 
-    private func skillChip(_ skill: SkillPreview) -> some View {
-        let isSelected = skill.id == selectedSkill?.id
+    private func bundleChip(_ bundle: EnvironmentBundlePreview) -> some View {
+        let isSelected = bundle.id == selectedBundle?.id
         return Button {
-            selectedSkillId = skill.id
-            selectedFilePath = skill.sortedFilePaths.first
+            selectedBundleId = bundle.id
+            selectedFilePath = bundle.allFilePaths.first
         } label: {
-            Text(skill.name)
+            Text(bundle.bundleId)
                 .font(.caption)
                 .fontWeight(.medium)
                 .lineLimit(1)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(isSelected ? 0.20 : 0.09))
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(.white.opacity(isSelected ? 0.30 : 0.14))
-                )
+                .background(Capsule().fill(Color.white.opacity(isSelected ? 0.20 : 0.09)))
+                .overlay(Capsule().strokeBorder(.white.opacity(isSelected ? 0.30 : 0.14)))
         }
         .buttonStyle(.plain)
-        .help("Preview \(skill.name)")
+        .help("Preview \(bundle.bundleId)")
         .pointingHandOnHover()
     }
 
-    private func filesList(_ skill: SkillPreview) -> some View {
+    private func filesList(_ bundle: EnvironmentBundlePreview) -> some View {
         VStack(spacing: 0) {
-            ForEach(skill.sortedFilePaths, id: \.self) { path in
-                let isSelected = path == (selectedFilePath ?? skill.sortedFilePaths.first)
+            ForEach(bundle.allFilePaths, id: \.self) { path in
+                let isSelected = path == (selectedFilePath ?? bundle.allFilePaths.first)
                 Button {
                     selectedFilePath = path
                 } label: {
@@ -199,67 +187,44 @@ struct EnvironmentOfferDetail: View {
             .frame(minHeight: 90, maxHeight: 190, alignment: .topLeading)
         }
         .padding(9)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(PanelPalette.backgroundPrimary)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(PanelPalette.border)
-        )
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(PanelPalette.backgroundPrimary))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(PanelPalette.border))
+    }
+
+    private var hasInvalidBundle: Bool {
+        model.offerBundles.contains(where: { !$0.valid })
     }
 
     private var decisionsCard: some View {
         PanelCard {
             HStack(spacing: 8) {
-                CompactActionButton(
-                    title: "Allow this visit",
-                    systemImage: "checkmark",
-                    tint: PanelPalette.success,
-                    prominence: .filled,
-                    helpText: "Load skills for this visit only"
-                ) {
+                CompactActionButton(title: "Allow this visit", systemImage: "checkmark", tint: PanelPalette.success, prominence: .filled, helpText: "Load bundles for this visit only") {
                     model.decideEnvironment("accept")
                 }
-                CompactActionButton(
-                    title: "Always allow",
-                    systemImage: "checkmark.seal",
-                    tint: PanelPalette.info,
-                    prominence: .filled,
-                    helpText: "Load skills now and on every future visit"
-                ) {
+                .disabled(hasInvalidBundle)
+                CompactActionButton(title: "Always allow", systemImage: "checkmark.seal", tint: PanelPalette.info, prominence: .filled, helpText: "Load bundles now and on every future visit") {
                     model.decideEnvironment("approve")
                 }
+                .disabled(hasInvalidBundle)
             }
             HStack(spacing: 8) {
-                CompactActionButton(
-                    title: "Not now",
-                    systemImage: "xmark",
-                    tint: PanelPalette.secondaryText,
-                    prominence: .subtle,
-                    helpText: "Skip for this visit"
-                ) {
+                CompactActionButton(title: "Not now", systemImage: "xmark", tint: PanelPalette.secondaryText, prominence: .subtle, helpText: "Skip for this visit") {
                     model.decideEnvironment("ignore")
                 }
-                CompactActionButton(
-                    title: "Never",
-                    systemImage: "nosign",
-                    tint: PanelPalette.danger,
-                    prominence: .subtle,
-                    helpText: "Reject this environment permanently"
-                ) {
+                CompactActionButton(title: "Never", systemImage: "nosign", tint: PanelPalette.danger, prominence: .subtle, helpText: "Reject this environment permanently") {
                     model.decideEnvironment("reject")
                 }
+                .disabled(hasInvalidBundle)
             }
         }
     }
 
     private func ensureSelection() {
-        if selectedSkill == nil {
-            selectedSkillId = model.offerSkills.first?.id
+        if selectedBundle == nil {
+            selectedBundleId = model.offerBundles.first?.id
         }
         if selectedFilePath == nil {
-            selectedFilePath = selectedSkill?.sortedFilePaths.first
+            selectedFilePath = selectedBundle?.allFilePaths.first
         }
     }
 }

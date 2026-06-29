@@ -1,5 +1,5 @@
 import type { EnvironmentBundleResult, EnvironmentBundle } from "../../shared/environmentRepository.js";
-import type { SkillPreview } from "../../shared/environment.js";
+import type { EnvironmentPreview } from "../../shared/environment.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
 export class EnvironmentRepositoryService {
@@ -20,12 +20,22 @@ export class EnvironmentRepositoryService {
     );
   }
 
-  async getSkillPreviews(environmentId: string): Promise<SkillPreview[]> {
+  async getEnvironmentPreview(environmentId: string): Promise<EnvironmentPreview> {
     const result = await this.repository.getBundles(environmentId);
-    const previews = result.bundles
-      .flatMap((bundle) => bundle.skills)
-      .map((skill) => ({ id: skill.id, name: skill.id, files: skill.files }));
-    return previews.sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      environmentId,
+      bundles: result.bundles.map((bundle) => ({
+        id: bundle.id,
+        bundleId: bundle.bundleId,
+        environmentId: bundle.environmentId,
+        repository: bundle.repository,
+        valid: bundle.valid,
+        skills: bundle.skills,
+        mcpServers: bundle.mcpServers,
+        apps: bundle.apps,
+        errors: bundle.errors,
+      })),
+    };
   }
 
   async getBundleInspection(environmentId: string): Promise<EnvironmentBundle[]> {

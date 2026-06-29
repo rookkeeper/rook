@@ -29,7 +29,7 @@ WebSocket protocol.
   auto-send after the current turn (120 ms gap), matching the web client, with
   queue edit / delete / send-now controls (`_rookery/steering_prompt`).
 - **Environment offers** - `environment_offer_available` events open a native
-  approval view with skill-file preview (`GET /api/environments/preview`) and
+  approval view with bundle-file preview (`GET /api/environments/preview`) and
   the four 2×2 decisions (`POST /api/environments/decision`): allow this
   visit / always allow / not now / never.
 - **Server supervision** - health polling; if the server is down the panel can
@@ -129,7 +129,7 @@ unregistered (`POST /api/environments/unregister`). Activations are debounced
 activations (opening the panel doesn't end the episode), and currently cached
 registrations are re-announced if the server restarts. Offers arrive over the
 session websocket like any other environment, and the native approval view
-shows the skill files before anything loads.
+shows the bundle files before anything loads.
 
 Provider activity is traced to `/tmp/rook.log` for debugging.
 

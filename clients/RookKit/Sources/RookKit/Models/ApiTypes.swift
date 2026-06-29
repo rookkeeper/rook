@@ -48,19 +48,88 @@ public struct AgentSessionSummary: Equatable, Identifiable {
     }
 }
 
-public struct SkillPreview: Codable, Equatable, Identifiable {
+public struct EnvironmentArtifactPreview: Codable, Equatable, Identifiable {
     public let id: String
-    public let name: String
     public let files: [String: String]
 
-    public init(id: String, name: String, files: [String: String]) {
+    public init(id: String, files: [String: String]) {
         self.id = id
-        self.name = name
         self.files = files
     }
 
     public var sortedFilePaths: [String] {
         files.keys.sorted()
+    }
+}
+
+public struct RepositoryReadError: Codable, Equatable, Identifiable {
+    public let code: String
+    public let message: String
+    public let repository: String
+    public let environmentId: String
+    public let bundleId: String?
+    public let path: String?
+
+    public init(code: String, message: String, repository: String, environmentId: String, bundleId: String?, path: String?) {
+        self.code = code
+        self.message = message
+        self.repository = repository
+        self.environmentId = environmentId
+        self.bundleId = bundleId
+        self.path = path
+    }
+
+    public var id: String { [code, repository, environmentId, bundleId ?? "", path ?? ""].joined(separator: "|") }
+}
+
+public struct EnvironmentBundlePreview: Codable, Equatable, Identifiable {
+    public let id: String
+    public let bundleId: String
+    public let environmentId: String
+    public let repository: String
+    public let valid: Bool
+    public let skills: [EnvironmentArtifactPreview]
+    public let mcpServers: [EnvironmentArtifactPreview]
+    public let apps: [EnvironmentArtifactPreview]
+    public let errors: [RepositoryReadError]
+
+    public init(id: String, bundleId: String, environmentId: String, repository: String, valid: Bool, skills: [EnvironmentArtifactPreview], mcpServers: [EnvironmentArtifactPreview], apps: [EnvironmentArtifactPreview], errors: [RepositoryReadError]) {
+        self.id = id
+        self.bundleId = bundleId
+        self.environmentId = environmentId
+        self.repository = repository
+        self.valid = valid
+        self.skills = skills
+        self.mcpServers = mcpServers
+        self.apps = apps
+        self.errors = errors
+    }
+
+    public var allArtifacts: [EnvironmentArtifactPreview] {
+        skills + mcpServers + apps
+    }
+
+    public var allFilePaths: [String] {
+        allArtifacts.flatMap(\.sortedFilePaths).sorted()
+    }
+
+    public func content(for path: String) -> String? {
+        for artifact in allArtifacts {
+            if let content = artifact.files[path] {
+                return content
+            }
+        }
+        return nil
+    }
+}
+
+public struct EnvironmentPreview: Codable, Equatable {
+    public let environmentId: String
+    public let bundles: [EnvironmentBundlePreview]
+
+    public init(environmentId: String, bundles: [EnvironmentBundlePreview]) {
+        self.environmentId = environmentId
+        self.bundles = bundles
     }
 }
 

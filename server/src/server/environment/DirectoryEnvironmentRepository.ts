@@ -65,8 +65,13 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
   }
 
   private defaultEnvironmentRecord(environmentId: string): EnvironmentRecord {
-    const displayName = environmentId.split(":")[1]?.split("/").filter(Boolean).at(-1) ?? environmentId;
-    return { id: environmentId, displayName, description: "" };
+    const envPath = environmentId.split(":")[1] ?? environmentId;
+    const displayName = envPath
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => segment.replace(/[-_]+/g, " "))
+      .join(" / ") || environmentId;
+    return { id: environmentId, displayName, description: `Environment ${environmentId}` };
   }
 
   private resolveEnvironmentDir(environmentId: string): string | null {

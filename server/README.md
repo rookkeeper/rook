@@ -119,7 +119,7 @@ Terse map of `src/`:
 - **Interaction helpers**:
   - `useBlockClick.ts`: opens a message/tool block detail view unless the user is selecting text.
   - `parentMessageTool.ts`: tracks `message_parent` tool calls and relays parsed payloads to `window.parent` via `postMessage`.
-  - `skillFiles.ts`: tree/file helpers for environment skill previews.
+  - `skillFiles.ts`: tree/file helpers for environment offer file previews (to be updated for bundle-oriented review).
 - **Styling**: `styles/*`
 - **Client tests**: `*.test.ts(x)` files in `src/client`
 
@@ -190,7 +190,7 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
 - **Realtime/session event contract**: `shared/realtime.ts`
   - `SessionEvent` is the current internal UI/runtime update vocabulary
   - this remains transitional while the browser client is still reduced from ACP into the legacy view-model
-- **Environment contracts**: `shared/environment.ts`, `shared/environmentRepository.ts`, `shared/environmentSkillPreview.ts`
+- **Environment contracts**: `shared/environment.ts`, `shared/environmentRepository.ts`
   - environment decision types, bundle/repository types, websocket event kind names, and preview payload shapes shared by client/server
 
 ## Session / room mental model

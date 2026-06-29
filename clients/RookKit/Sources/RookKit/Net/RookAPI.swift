@@ -86,15 +86,11 @@ public struct RookAPI {
         return AgentSessionSummary(raw: session)
     }
 
-    public func skillPreviews(environmentId: String) async throws -> [SkillPreview] {
-        struct PreviewResponse: Codable {
-            let skills: [SkillPreview]
-        }
-        let body: PreviewResponse = try await get(
+    public func environmentPreview(environmentId: String) async throws -> EnvironmentPreview {
+        try await get(
             path: "api/environments/preview",
             query: ["environmentId": environmentId]
         )
-        return body.skills
     }
 
     public func registerEnvironment(id: String, sourceName: String, metadata: [String: JSONValue]) async throws {

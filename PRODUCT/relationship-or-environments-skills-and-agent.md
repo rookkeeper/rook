@@ -12,7 +12,9 @@ For some terminology, there are many "known" environments (ones that are availab
 
 ## Environment repositories
 
-Catalog of environment → skill content. Same API whether local disk or remote HTTP/Git.
+Catalog of environment → bundle content. Same API whether local disk or remote HTTP/Git.
+
+See also: [`PRODUCT/environment-repository.md`](./environment-repository.md)
 
 **Logical model:**
 

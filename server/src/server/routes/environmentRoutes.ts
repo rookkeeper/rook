@@ -64,7 +64,7 @@ export async function registerEnvironmentRoutes(app: FastifyInstance, environmen
       reply.code(400).send({ error: "Missing environmentId" });
       return;
     }
-    const skills = await environmentManager.getSkillPreviews(environmentId);
-    return { environmentId, skills };
+    const preview = await environmentManager.getEnvironmentPreview(environmentId);
+    return preview;
   });
 }
