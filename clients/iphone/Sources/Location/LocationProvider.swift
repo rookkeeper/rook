@@ -59,12 +59,16 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
 
     /// Start CoreMotion activity updates. Calling this is what triggers the OS Motion
     /// permission prompt the first time, so only call it from the Always-upgrade path.
-    private func startMotionUpdatesIfAvailable() {
-        guard CMMotionActivityManager.isActivityAvailable() else { return }
+    /// Returns false when activity isn't available (e.g. the iOS Simulator never supports
+    /// it), so callers don't mark the request as consumed and a real device can retry.
+    @discardableResult
+    private func startMotionUpdatesIfAvailable() -> Bool {
+        guard CMMotionActivityManager.isActivityAvailable() else { return false }
         motionManager.startActivityUpdates(to: .main) { [weak self] activity in
             guard let self, let activity else { return }
             self.latestActivityIsAutomotive = activity.automotive && activity.confidence != .low
         }
+        return true
     }
 
     var isAuthorized: Bool {
@@ -146,10 +150,13 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
                 // Granting Always is the background-arrival flow where drive-by
                 // filtering matters: request Motion here as one step (only when the
                 // Always grant followed an active upgrade, never a launch callback).
+                // Only mark consumed if updates actually started — the Simulator has no
+                // motion activity, so a later real device run still gets its prompt.
                 if self.pendingMotionFromUpgrade && !self.motionRequested {
-                    self.pendingMotionFromUpgrade = false
-                    self.motionRequested = true
-                    self.startMotionUpdatesIfAvailable()
+                    if self.startMotionUpdatesIfAvailable() {
+                        self.pendingMotionFromUpgrade = false
+                        self.motionRequested = true
+                    }
                 }
             }
             if status == .authorizedAlways || status == .authorizedWhenInUse {
