@@ -14,6 +14,8 @@ interface AvailableEnvironment {
   record: EnvironmentRecord;
   skillPaths: string[];
   info: EnvironmentOfferInfo;
+  /** Ambient context (e.g. current-location summary) pushed to the agent on enter. */
+  contextText?: string;
 }
 
 interface DirectEnvironmentRegistration {
@@ -51,8 +53,14 @@ export class EnvironmentManager {
 
   // --- Availability lifecycle -------------------------------------------------
 
-  /** A provider reports the user is now "in" this environment. Applies to all open rooms. */
-  async registerAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo = {}): Promise<void> {
+  /**
+   * A provider reports the user is now "in" this environment. Applies to all open rooms.
+   * Skills come from the repository facade; a skill-less env that should still carry
+   * metadata (e.g. a `loc:` business) supplies its bundle through a programmatic
+   * repository (see `LocationContextRepository`). `contextText` is ambient context
+   * pushed to the agent on enter.
+   */
+  async registerAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo = {}, contextText?: string): Promise<void> {
     const impliedIds = this.impliedEnvironmentIds(env.id);
     const existing = this.directRegistrations.get(env.id);
     if (existing) {
@@ -71,6 +79,8 @@ export class EnvironmentManager {
         record: { id: impliedId, metadata: env.metadata },
         skillPaths,
         info,
+        // Only the leaf (the registered id itself) carries the pushed context.
+        ...(impliedId === env.id && contextText ? { contextText } : {}),
       });
       for (const sessionId of this.listeners.keys()) {
         this.applyEnvironmentToSession(sessionId, impliedId);
@@ -198,11 +208,14 @@ export class EnvironmentManager {
     }
   }
 
-  private enterForSession(sessionId: string, environmentId: string, _available: AvailableEnvironment): void {
+  private enterForSession(sessionId: string, environmentId: string, available: AvailableEnvironment): void {
     const set = this.entered.get(sessionId)!;
     if (set.has(environmentId)) return;
     set.add(environmentId);
-    this.listeners.get(sessionId)!.onEnvironmentEntered(environmentId, this.inheritedSkillPaths(environmentId));
+    const listener = this.listeners.get(sessionId)!;
+    const skillPaths = this.inheritedSkillPaths(environmentId);
+    if (available.contextText) listener.onEnvironmentEntered(environmentId, skillPaths, available.contextText);
+    else listener.onEnvironmentEntered(environmentId, skillPaths);
   }
 
   private inheritedSkillPaths(environmentId: string): string[] {

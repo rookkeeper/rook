@@ -51,6 +51,9 @@ vi.mock("./agents/agentDiscovery.js", () => ({
       async stop() {
         return undefined;
       },
+      setContextEntry(_key: string, _text: string | null | undefined) {
+        return undefined;
+      },
       async run(message: string) {
         emitAcp({ sessionUpdate: "user_message_chunk", content: { type: "text", text: message } });
         emitAcp({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } });
@@ -72,6 +75,7 @@ vi.mock("./agents/sessionLog.js", async (importOriginal) => {
 });
 
 const { buildServer } = await import("./index");
+const { StubPoiLookupProvider } = await import("./location/StubPoiLookupProvider.js");
 
 async function listen(app: Awaited<ReturnType<typeof buildServer>>): Promise<string> {
   await app.listen({ host: "127.0.0.1", port: 0 });
@@ -389,12 +393,70 @@ describe("server", () => {
     await app.close();
   });
 
+  it("registers the identified location and auto-enters the current env over the websocket", async () => {
+    const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:", poiProvider: new StubPoiLookupProvider() });
+    const baseUrl = await listen(app);
+    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "PiAgent" } });
+    const socket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=s-mock`);
+
+    const eventsPromise = collectJsonMessages(socket, 3);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/environments/register-location",
+      payload: { latitude: 37.3318, longitude: -122.0312, isStationary: true },
+    });
+    expect(response.statusCode).toBe(200);
+
+    const currentId = "loc:target.com/123-main-st-springfield-il";
+    const events = await eventsPromise;
+    const kinds = events.map((m) => m.params?.update?.kind);
+    // current is offered (sourceName carried) then auto-entered.
+    expect(events.some((m) => m.params?.update?.kind === "environment_offer_available" && m.params?.update?.payload?.environmentId === currentId && m.params?.update?.payload?.sourceName === "Target")).toBe(true);
+    expect(kinds).toContain("environment_entered");
+
+    socket.close();
+    await app.close();
+  });
+
   it("validates environment decision input", async () => {
     const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:" });
     const bad = await app.inject({ method: "POST", url: "/api/environments/decision", payload: { environmentId: "web:example.com", decision: "maybe" } });
     expect(bad.statusCode).toBe(400);
     const unreg = await app.inject({ method: "POST", url: "/api/environments/unregister", payload: { id: "web:example.com" } });
     expect(unreg.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("identifies available environments from a location", async () => {
+    const app = await buildServer({ enableClient: false, poiProvider: new StubPoiLookupProvider() });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/environments/identify",
+      payload: {
+        latitude: 37.3318,
+        longitude: -122.0312,
+        horizontalAccuracy: 18,
+        source: "visit",
+        dwellSeconds: 540,
+        isStationary: true,
+        speedMetersPerSecond: 0.2,
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { candidates: Array<{ environmentId: string; confidence: number }> };
+    expect(body.candidates.length).toBeGreaterThanOrEqual(1);
+    expect(body.candidates[0].environmentId).toBe("loc:target.com/123-main-st-springfield-il");
+    await app.close();
+  });
+
+  it("rejects identify without coordinates", async () => {
+    const app = await buildServer({ enableClient: false });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/environments/identify",
+      payload: { longitude: -122.0312 },
+    });
+    expect(response.statusCode).toBe(400);
     await app.close();
   });
 

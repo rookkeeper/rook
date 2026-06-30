@@ -12,8 +12,14 @@
     "test": "node ./node_modules/vitest/vitest.mjs run",
     "test:watch": "node ./node_modules/vitest/vitest.mjs",
     "test:coverage": "node ./node_modules/vitest/vitest.mjs run --coverage",
+    "test:fixtures": "GPX_FIXTURES=1 node ./node_modules/vitest/vitest.mjs run src/server/location/gpx.test.ts",
     "dev:dummy": "node ../dummy-client/server.mjs",
-    "interact": "bash ../scripts/interact-with-remote-agent.sh"
+    "interact": "bash ../scripts/interact-with-remote-agent.sh",
+    "replay:gpx": "node ./node_modules/tsx/dist/cli.mjs scripts/location/replay-gpx.ts",
+    "trace:map": "node ./node_modules/tsx/dist/cli.mjs scripts/location/trace-map.ts",
+    "dwell:analysis": "node ./node_modules/tsx/dist/cli.mjs scripts/location/dwell-analysis.ts",
+    "fetch:traces": "node ./node_modules/tsx/dist/cli.mjs scripts/location/fetch-validation-traces.ts",
+    "maps:traces": "node ./node_modules/tsx/dist/cli.mjs scripts/location/render-trace-maps.ts"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.44.0",
@@ -23,6 +29,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "dotenv": "^17.4.2",
     "fastify": "^5.6.2",
+    "h3-js": "^4.4.0",
     "pi-acp": "github:arcturus-labs/pi-acp#5bd448f",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

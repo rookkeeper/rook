@@ -1,0 +1,14 @@
+{
+  "_comment": "Reproducible corpus of real OSM public GPS traces (ODbL) for dwell/motion validation of the location pipeline. `fixture` entries are also committed under src/server/location/test-fixtures/gpx (downloader skips them). Others download (decompressed) into .var/validation-traces/. Building footprints now work in all surveyed states (the earlier NC/TN-only buildings-index gap was fixed upstream), so add >=1 city-looking trace per state here over time — favoring pedestrian + vehicle coverage.",
+  "source": "https://www.openstreetmap.org/traces/<id>/data",
+  "license": "ODbL (OpenStreetMap)",
+  "traces": [
+    { "state": "TN", "traceId": 3605997, "mode": "vehicle", "area": "Nashville, TN (roads)", "fixture": "tn-middle-tennessee-3605997.gpx" },
+    { "state": "TN", "traceId": 1283272, "mode": "cycling", "area": "Maryville, TN", "fixture": "tn-maryville-trails-1283272.gpx" },
+    { "state": "TN", "traceId": 1063250, "mode": "pedestrian", "area": "Maryville, TN (hike)", "fixture": "tn-maryville-hike-1063250.gpx" },
+    { "state": "NC", "traceId": 1184467, "mode": "cycling", "area": "Umstead / Raleigh, NC", "fixture": "nc-umstead-trails-1184467.gpx" },
+    { "state": "NC", "traceId": 1184364, "mode": "cycling", "area": "Raleigh, NC", "fixture": "nc-mine-creek-1184364.gpx" },
+    { "state": "NC", "traceId": 1191748, "mode": "cycling", "area": "Raleigh, NC", "fixture": "nc-sals-branch-1191748.gpx" },
+    { "state": "TN", "traceId": 3605999, "mode": "vehicle", "area": "Nashville, TN (long drive)" }
+  ]
+}

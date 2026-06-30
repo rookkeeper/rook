@@ -17,8 +17,8 @@ usage() {
 Usage:
   ./scripts/run-rook.sh server
   ./scripts/run-rook.sh mac
-  ./scripts/run-rook.sh sim [--simulator NAME_OR_UDID] [--server-url URL]
-  ./scripts/run-rook.sh phone [--device NAME_OR_UDID] [--team TEAM_ID] [--server-url URL]
+  ./scripts/run-rook.sh sim [--simulator NAME_OR_UDID] [--server-url URL] [--reset-permissions]
+  ./scripts/run-rook.sh phone [--device NAME_OR_UDID] [--team TEAM_ID] [--server-url URL] [--reset-permissions]
   ./scripts/run-rook.sh mac sim
   ./scripts/run-rook.sh server mac sim
   ./scripts/run-rook.sh stop
@@ -42,6 +42,11 @@ Notes:
     your local Apple Development team from Keychain when possible.
   - stop shuts down the server, mac app, simulator app, booted simulators,
     and the phone app when reachable.
+  - --reset-permissions clears the app's privacy grants (location, motion, mic,
+    speech) so the OS prompts reappear next launch. On sim it resets via
+    `simctl privacy` (sim already reinstalls each run); on phone it uninstalls
+    the app first (the only way to reset device grants), so you re-grant from
+    scratch — useful for testing the location/motion permission flow.
 EOF
 }
 
@@ -111,11 +116,16 @@ SIMULATOR_FILTER=""
 DEVICE_FILTER=""
 TEAM_ID="${ROOK_IOS_DEVELOPMENT_TEAM:-}"
 SERVER_URL=""
+RESET_PERMISSIONS=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     server|mac|sim|phone|stop)
       TARGETS+=("$1")
+      shift
+      ;;
+    --reset-permissions)
+      RESET_PERMISSIONS=1
       shift
       ;;
     --simulator)
@@ -537,6 +547,10 @@ build_sim() {
   [[ -d "$app_path" ]] || die "missing built app: $app_path"
 
   local url="${SERVER_URL:-http://127.0.0.1:${SERVER_PORT}}"
+  if (( RESET_PERMISSIONS )); then
+    log "resetting simulator privacy permissions for com.rookery.Rook"
+    xcrun simctl privacy "$sim_udid" reset all com.rookery.Rook >/dev/null 2>&1 || true
+  fi
   log "refreshing simulator install for Rook"
   xcrun simctl terminate "$sim_udid" com.rookery.Rook >/dev/null 2>&1 || true
   xcrun simctl uninstall "$sim_udid" com.rookery.Rook >/dev/null 2>&1 || true
@@ -601,6 +615,10 @@ build_phone() {
   local app_path="$derived/Build/Products/Debug-iphoneos/Rook.app"
   [[ -d "$app_path" ]] || die "missing built app: $app_path"
 
+  if (( RESET_PERMISSIONS )); then
+    log "uninstalling Rook on $phone_name to reset its privacy permissions"
+    xcrun devicectl device uninstall app --device "$phone_udid" com.rookery.Rook >/dev/null 2>&1 || true
+  fi
   log "installing Rook on $phone_name"
   xcrun devicectl device install app --device "$phone_udid" "$app_path" >/dev/null
   log "launching Rook on $phone_name with ROOK_SERVER_BASE_URL=$url"

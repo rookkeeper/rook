@@ -27,7 +27,10 @@ export function attachRoomToEnvironments(room: SessionRoom, environmentManager: 
       extensionPaths: skillPaths.length > 0 ? [parentMessageToolExtensionPath] : [],
     });
     await agent.ensureStarted();
-    return { session: { ...room.session, restart: restartMetadata }, agentId: room.agentId, agent };
+    // If the rebuild had to start a fresh session (resume failed), track the new id so
+    // the next rebuild resumes it instead of re-failing on the stale one.
+    const effectiveRestart = agent.sessionId ? { ...restartMetadata, sessionId: agent.sessionId } : restartMetadata;
+    return { session: { ...room.session, restart: effectiveRestart }, agentId: room.agentId, agent };
   });
   environmentManager.subscribe(room.sessionId, room);
 }

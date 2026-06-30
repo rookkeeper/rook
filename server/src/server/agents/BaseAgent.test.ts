@@ -166,6 +166,65 @@ describe("BaseAgent", () => {
     await agent.stop();
   });
 
+  it("falls back to a fresh session when session/load fails (unresumable session)", async () => {
+    const agent = new BaseAgent({
+      command: "node",
+      args: [FIXTURE],
+      cwd: path.resolve("."),
+      sessionCwd: path.resolve("."),
+      agentName: "TestAcpAgent",
+    }, {
+      sessionId: "missing-session", // mock rejects session/load for this id
+      cwd: path.resolve("."),
+    });
+
+    // Resume fails -> should NOT throw; falls back to session/new ("acp-session-1").
+    await expect(agent.ensureStarted()).resolves.toBeUndefined();
+    expect(agent.sessionId).toBe("acp-session-1");
+    expect((agent.record?.restart as { sessionId?: string })?.sessionId).toBe("acp-session-1");
+
+    await agent.stop();
+  });
+
+  it("injects ambient context once on the next turn, invisibly, for any agent", async () => {
+    const agent = new BaseAgent({
+      command: "node",
+      args: [FIXTURE],
+      cwd: path.resolve("."),
+      sessionCwd: path.resolve("."),
+      agentName: "TestAcpAgent",
+    });
+    const acp = collectAcp(agent);
+
+    await agent.ensureStarted();
+    agent.setContextEntry("location", "You are at Target.");
+    await agent.run("hi");
+    await agent.run("again");
+
+    const agentChunks = acp
+      .filter((n) => n.params?.update?.sessionUpdate === "agent_message_chunk")
+      .map((n) => (n.params?.update as { content?: { text?: string } })?.content?.text ?? "");
+
+    // First turn: context block prepended (model sees it) before the user text.
+    const withContext = agentChunks.find((t) => t.startsWith("prompt:"));
+    expect(withContext).toBeDefined();
+    expect(withContext).toContain('<context source="location">');
+    expect(withContext).toContain("You are at Target.");
+    expect(withContext!.indexOf("<context")).toBeLessThan(withContext!.indexOf("hi"));
+
+    // Second turn: no re-injection (pending cleared) — plain echo.
+    expect(agentChunks).toContain("echo:again");
+
+    // The context never appears as a visible user message (only "hi"/"again" do).
+    const userTexts = acp
+      .filter((n) => n.params?.update?.sessionUpdate === "user_message_chunk")
+      .map((n) => (n.params?.update as { content?: { text?: string } })?.content?.text ?? "");
+    expect(userTexts).toContain("hi");
+    expect(userTexts.every((t) => !t.includes("<context"))).toBe(true);
+
+    await agent.stop();
+  });
+
   it("does not throw when auto-responding after stdin is destroyed", () => {
     const agent = new InspectableBaseAgent({
       command: "node",

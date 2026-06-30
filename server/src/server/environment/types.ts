@@ -31,8 +31,9 @@ export interface EnvironmentOfferInfo {
 export interface EnvironmentEventListener {
   /** Available + undecided: prompt this room's clients to decide. */
   onEnvironmentOffered(environmentId: string, info: EnvironmentOfferInfo): void;
-  /** Decision is accept/approve and the env is available: load skills (restart when idle). */
-  onEnvironmentEntered(environmentId: string, skillPaths: string[]): void;
+  /** Decision is accept/approve and the env is available: load skills (restart when idle).
+   * `contextText` (when present) is ambient context pushed into the agent on enter. */
+  onEnvironmentEntered(environmentId: string, skillPaths: string[], contextText?: string): void;
   /** Env left or was turned negative: remove skills (restart when idle). */
   onEnvironmentExited(environmentId: string): void;
   /** An offer was resolved (by any client, or because the env left): close prompts. */

@@ -32,6 +32,8 @@ function logEnvironmentEvent(sessionId: string, event: string, environmentId: st
 export class SessionRoom implements EnvironmentEventListener {
   private readonly events: RoomEventStream;
   private readonly environmentState = new EnvironmentSessionState();
+  /** Ambient context (e.g. current location) per entered environment, pushed to the agent. */
+  private readonly environmentContext = new Map<string, string>();
   private queue: Promise<void> = Promise.resolve();
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
@@ -97,16 +99,25 @@ export class SessionRoom implements EnvironmentEventListener {
     void this.broadcastEnvironmentEvent(this.environmentState.resolve(environmentId, resolution));
   }
 
-  onEnvironmentEntered(environmentId: string, skillPaths: string[]): void {
-    logEnvironmentEvent(this.sessionId, "entered", environmentId, { skillPathCount: skillPaths.length });
+  onEnvironmentEntered(environmentId: string, skillPaths: string[], contextText?: string): void {
+    logEnvironmentEvent(this.sessionId, "entered", environmentId, { skillPathCount: skillPaths.length, hasContext: Boolean(contextText) });
+    if (contextText) this.environmentContext.set(environmentId, contextText);
+    else this.environmentContext.delete(environmentId);
     this.environmentState.enter(environmentId, skillPaths);
     this.scheduleRuntimeRebuild(ENVIRONMENT_ENTERED_KIND, environmentId, true);
   }
 
   onEnvironmentExited(environmentId: string): void {
+    this.environmentContext.delete(environmentId);
     if (!this.environmentState.exit(environmentId)) return;
     logEnvironmentEvent(this.sessionId, "exited", environmentId);
     this.scheduleRuntimeRebuild(ENVIRONMENT_EXITED_KIND, environmentId, false);
+  }
+
+  /** Compose the ambient context from all entered environments (null when none). */
+  private currentLocationContext(): string | null {
+    if (this.environmentContext.size === 0) return null;
+    return [...this.environmentContext.values()].join("\n\n");
   }
 
   private scheduleRuntimeRebuild(kind: string, environmentId: string, interruptActiveRun: boolean): void {
@@ -122,6 +133,7 @@ export class SessionRoom implements EnvironmentEventListener {
         const nextRuntime = await this.environmentState.rebuild(this.environmentState.currentSkillPaths());
         await previousAgent.stop();
         this.setRuntime(nextRuntime);
+        nextRuntime.agent.setContextEntry("location", this.currentLocationContext());
         this.attachRuntimeEventSink();
         this.started = true;
         await this.broadcastEnvironmentEvent({ kind, payload: { environmentId } });

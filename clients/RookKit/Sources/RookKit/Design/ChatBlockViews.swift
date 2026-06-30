@@ -27,6 +27,8 @@ public struct ChatBlockView: View {
             SystemBlockView(text: text)
         case .plan(let entries):
             PlanBlockView(entries: entries)
+        case .environment(let banner):
+            EnvironmentBlockView(banner: banner)
         }
     }
 }
@@ -424,6 +426,113 @@ private struct SystemBlockView: View {
             .foregroundStyle(PanelPalette.secondaryText)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.vertical, 2)
+    }
+}
+
+/// Friendly "entered a business" banner: the display name (📍) plus a row of
+/// favicons for the entered business and nearby ones. Falls back to generic text
+/// when no name is known.
+private struct EnvironmentBlockView: View {
+    var banner: EnvironmentBanner
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(banner.displayName.map { "📍 \($0)" } ?? "Using nearby business context")
+                .font(.caption2)
+                .foregroundStyle(PanelPalette.secondaryText)
+            if !banner.websites.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(Array(banner.websites.prefix(6)), id: \.self) { website in
+                        FaviconView(website: website)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 2)
+    }
+}
+
+#if os(macOS)
+private typealias PlatformImage = NSImage
+#else
+private typealias PlatformImage = UIImage
+#endif
+
+private extension Image {
+    init?(platformImage: PlatformImage?) {
+        guard let platformImage else { return nil }
+        #if os(macOS)
+        self = Image(nsImage: platformImage)
+        #else
+        self = Image(uiImage: platformImage)
+        #endif
+    }
+}
+
+/// Loads a site favicon by trying a sequence of common icon URLs and using the
+/// first that decodes. `AsyncImage` can't chain fallbacks, so we drive it manually.
+@MainActor
+private final class FaviconLoader: ObservableObject {
+    @Published var image: Image?
+    @Published var failed = false
+    private var started = false
+
+    func load(website: String) {
+        guard !started else { return }
+        started = true
+        guard let host = FaviconLoader.host(of: website) else { failed = true; return }
+        let candidates = [
+            "https://\(host)/apple-touch-icon.png",
+            "https://\(host)/apple-touch-icon-precomposed.png",
+            "https://\(host)/favicon.ico",
+            "https://\(host)/favicon.png",
+            "https://\(host)/favicon-32x32.png",
+        ].compactMap(URL.init(string:))
+        Task { await attempt(candidates, index: 0) }
+    }
+
+    private func attempt(_ urls: [URL], index: Int) async {
+        guard index < urls.count else { failed = true; return }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: urls[index])
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                return await attempt(urls, index: index + 1)
+            }
+            if let platform = PlatformImage(data: data), let img = Image(platformImage: platform) {
+                image = img
+                return
+            }
+        } catch {
+            // fall through to next candidate
+        }
+        await attempt(urls, index: index + 1)
+    }
+
+    private static func host(of website: String) -> String? {
+        let trimmed = website.contains("://") ? website : "https://\(website)"
+        return URLComponents(string: trimmed)?.host
+    }
+}
+
+private struct FaviconView: View {
+    let website: String
+    @StateObject private var loader = FaviconLoader()
+
+    var body: some View {
+        Group {
+            if let image = loader.image {
+                image.resizable().scaledToFit()
+            } else {
+                Image(systemName: "globe")
+                    .font(.system(size: 12))
+                    .foregroundStyle(PanelPalette.secondaryText)
+            }
+        }
+        .frame(width: 18, height: 18)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .opacity(loader.image == nil && loader.failed ? 0.5 : 1)
+        .onAppear { loader.load(website: website) }
     }
 }
 

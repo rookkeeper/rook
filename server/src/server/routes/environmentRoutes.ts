@@ -1,8 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import type { EnvironmentManager } from "../environment/EnvironmentManager.js";
 import type { EnvironmentDecision } from "../environment/types.js";
+import type { EnvironmentIdentifier } from "../location/EnvironmentIdentifier.js";
+import type { LocationRegistrar } from "../location/LocationRegistrar.js";
+import type { IdentifyAvailableRequest, IdentifySource } from "../../shared/environment.js";
 
-export async function registerEnvironmentRoutes(app: FastifyInstance, environmentManager: EnvironmentManager): Promise<void> {
+export async function registerEnvironmentRoutes(
+  app: FastifyInstance,
+  environmentManager: EnvironmentManager,
+  environmentIdentifier: EnvironmentIdentifier,
+  locationRegistrar: LocationRegistrar,
+): Promise<void> {
   app.post<{ Body: { id?: unknown; metadata?: unknown; canonicalSourceUrl?: unknown; sourceName?: unknown } }>("/api/environments/register", async (request, reply) => {
     const id = request.body?.id;
     if (typeof id !== "string" || !id.trim()) {
@@ -66,5 +74,54 @@ export async function registerEnvironmentRoutes(app: FastifyInstance, environmen
     }
     const preview = await environmentManager.getEnvironmentPreview(environmentId);
     return preview;
+  });
+
+  function parseIdentifyRequest(body: Record<string, unknown>): IdentifyAvailableRequest | null {
+    const latitude = body.latitude;
+    const longitude = body.longitude;
+    if (typeof latitude !== "number" || !Number.isFinite(latitude) || typeof longitude !== "number" || !Number.isFinite(longitude)) {
+      return null;
+    }
+    const source = body.source;
+    return {
+      latitude,
+      longitude,
+      ...(typeof body.horizontalAccuracy === "number" ? { horizontalAccuracy: body.horizontalAccuracy } : {}),
+      ...(source === "visit" || source === "region" || source === "manual" ? { source: source as IdentifySource } : {}),
+      ...(typeof body.dwellSeconds === "number" ? { dwellSeconds: body.dwellSeconds } : {}),
+      ...(typeof body.isStationary === "boolean" ? { isStationary: body.isStationary } : {}),
+      ...(typeof body.speedMetersPerSecond === "number" ? { speedMetersPerSecond: body.speedMetersPerSecond } : {}),
+      ...(typeof body.observedAt === "string" ? { observedAt: body.observedAt } : {}),
+    };
+  }
+
+  // Read-only: reverse-resolve a coordinate to candidate `loc:` environments. No side effects.
+  app.post<{ Body: Record<string, unknown> }>("/api/environments/identify", async (request, reply) => {
+    const identifyRequest = parseIdentifyRequest(request.body ?? {});
+    if (!identifyRequest) {
+      reply.code(400).send({ error: "Missing or invalid latitude/longitude" });
+      return;
+    }
+    return { candidates: await environmentIdentifier.identifyAvailableEnvironments(identifyRequest) };
+  });
+
+  // Committing: identify, then register/auto-enter the dwell set into the SessionRoom/agent.
+  app.post<{ Body: Record<string, unknown> }>("/api/environments/register-location", async (request, reply) => {
+    const identifyRequest = parseIdentifyRequest(request.body ?? {});
+    if (!identifyRequest) {
+      reply.code(400).send({ error: "Missing or invalid latitude/longitude" });
+      return;
+    }
+    const candidates = await environmentIdentifier.identifyAvailableEnvironments(identifyRequest);
+    try {
+      await locationRegistrar.sync(candidates, {
+        isStationary: identifyRequest.isStationary,
+        dwellSeconds: identifyRequest.dwellSeconds,
+        speedMetersPerSecond: identifyRequest.speedMetersPerSecond,
+      });
+    } catch (error) {
+      app.log.warn(`location registration failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return { candidates };
   });
 }

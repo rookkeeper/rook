@@ -36,3 +36,49 @@ export interface EnvironmentOfferResolvedPayload {
 export interface EnvironmentLifecyclePayload {
   environmentId: string;
 }
+
+/** Source of a location identification request. */
+export type IdentifySource = "visit" | "region" | "manual";
+
+/**
+ * Phone -> server payload for identifying which `loc:` environments are
+ * likely available at the user's current location (issue #42, phase 1).
+ */
+export interface IdentifyAvailableRequest {
+  latitude: number;
+  longitude: number;
+  horizontalAccuracy?: number;
+  source?: IdentifySource;
+  dwellSeconds?: number;
+  isStationary?: boolean;
+  speedMetersPerSecond?: number;
+  observedAt?: string;
+}
+
+/** A ranked candidate environment near the requested coordinate. */
+export interface EnvironmentCandidate {
+  /** Stable URL-like id, e.g. `loc:target.com/tn-37000-1-main-st` or `loc:target.com`. */
+  environmentId: string;
+  displayName: string;
+  operator?: string;
+  /** Optional store/branch number metadata (provider value or parsed from the website). */
+  storeNumber?: string;
+  address?: string;
+  /** Business coordinate — the path from the loc: id back to a location. */
+  latitude?: number;
+  longitude?: number;
+  /** Business website, when available (lets the agent reach its link metadata). */
+  website?: string;
+  distanceMeters?: number;
+  /** Rough 0..1 confidence for MVP. */
+  confidence: number;
+  matchReasons: string[];
+  /** Whether the environment repository already knows this environment. */
+  hasKnownEnvironment: boolean;
+  /** Placeholder skill suggestions from the mocked building->skills system. */
+  possibleSkills?: string[];
+}
+
+export interface IdentifyAvailableResponse {
+  candidates: EnvironmentCandidate[];
+}

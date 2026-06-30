@@ -55,6 +55,9 @@ final class RookModel: ObservableObject {
     // slug → whether the server has a matching skill bundle (nil = not yet checked).
     // Surfaces slug↔bundle mismatches in the Places screen.
     @Published var placeSkillStatus: [String: Bool] = [:]
+    // Candidate loc: environments returned by the server for the current arrival
+    // (issue #42, phase 1). Return-only: surfaced, not auto-registered.
+    @Published var nearbyCandidates: [EnvironmentCandidate] = []
 
     // Voice
     private let voice = VoiceController()
@@ -115,6 +118,9 @@ final class RookModel: ObservableObject {
         locationProvider.onVisitArrival = { [weak self] coord in
             self?.placeStore.recordVisit(latitude: coord.latitude, longitude: coord.longitude)
         }
+        locationProvider.onArrival = { [weak self] context in
+            self?.identifyEnvironments(at: context)
+        }
         locationProvider.updateMonitoredPlaces(placeStore.places)
         if locationProvider.isAuthorized {
             locationProvider.startMonitoringVisits()
@@ -123,6 +129,22 @@ final class RookModel: ObservableObject {
         Task {
             await refreshHealth()
         }
+        #if DEBUG
+        // E2E hook: ROOK_SIMULATE_ARRIVAL="lat,lon" fires identify once the server is online
+        // (CLVisit can't fire in the Simulator). Pass via SIMCTL_CHILD_ROOK_SIMULATE_ARRIVAL.
+        if let raw = ProcessInfo.processInfo.environment["ROOK_SIMULATE_ARRIVAL"] {
+            let parts = raw.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            if parts.count == 2 {
+                Task { [weak self] in
+                    for _ in 0..<30 where self?.serverState != .online {
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        await self?.refreshHealth()
+                    }
+                    self?.locationProvider.simulateArrival(latitude: parts[0], longitude: parts[1])
+                }
+            }
+        }
+        #endif
     }
 
     // MARK: - Voice
@@ -251,6 +273,38 @@ final class RookModel: ObservableObject {
                 status[place.id] = !(preview?.bundles.isEmpty ?? true)
             }
             placeSkillStatus = status
+        }
+    }
+
+    /// Ask the server which `loc:` environments are likely available at an
+    /// arrival that passed the dwell/motion gate. Identification only — the
+    /// candidates are surfaced, not auto-registered (issue #42, phase 1).
+    private func identifyEnvironments(at context: ArrivalContext) {
+        guard serverState == .online else {
+            return
+        }
+        let observedAt = ISO8601DateFormatter().string(from: Date())
+        let request = IdentifyAvailableRequest(
+            latitude: context.coordinate.latitude,
+            longitude: context.coordinate.longitude,
+            horizontalAccuracy: context.horizontalAccuracy,
+            source: "visit",
+            dwellSeconds: context.dwellSeconds,
+            isStationary: context.isStationary,
+            speedMetersPerSecond: context.speedMetersPerSecond,
+            observedAt: observedAt
+        )
+        Task {
+            // Dwell/arrival is an auto-commit: register the identified set with the agent.
+            guard let candidates = try? await api.registerLocation(request) else {
+                return
+            }
+            nearbyCandidates = candidates
+            guard let top = candidates.first else {
+                return
+            }
+            let others = candidates.count > 1 ? " (+\(candidates.count - 1) more)" : ""
+            appendBlock(.system(text: "You appear to be near \(top.displayName)\(others). Found \(candidates.count) nearby environment\(candidates.count == 1 ? "" : "s")."))
         }
     }
 
@@ -750,7 +804,10 @@ final class RookModel: ObservableObject {
             handleEnvironmentOfferResolved(environmentId)
         case .environmentEntered(let environmentId):
             if enteredEnvironments.insert(environmentId).inserted {
-                appendBlock(.system(text: "Entered environment \(environmentId) — skills loaded."))
+                let entered = nearbyCandidates.first { $0.environmentId == environmentId }
+                let websites = orderedUniqueWebsites(entered: entered, all: nearbyCandidates)
+                let label = locationBannerLabel(entered: entered, candidates: nearbyCandidates)
+                appendBlock(.environment(EnvironmentBanner(displayName: label, websites: websites)))
             }
         case .environmentExited(let environmentId, let error):
             if enteredEnvironments.remove(environmentId) != nil {
@@ -759,6 +816,32 @@ final class RookModel: ObservableObject {
             }
         }
         scrollTick += 1
+    }
+
+    /// Banner label for an entered location: the business name when one match is clearly
+    /// best, "Surrounding businesses" when ambiguous, or nil (generic) when unknown.
+    /// Mirrors the server's confidence heuristic (`isConfidentMatch`).
+    private func locationBannerLabel(entered: EnvironmentCandidate?, candidates: [EnvironmentCandidate]) -> String? {
+        guard let top = candidates.first else { return entered?.displayName }
+        let ambiguous = top.confidence < 0.7 || (candidates.count >= 2 && top.confidence - candidates[1].confidence < 0.15)
+        if ambiguous { return "Surrounding businesses" }
+        return entered?.displayName ?? top.displayName
+    }
+
+    /// Website URLs for the entered-business favicon row: the entered business first,
+    /// then nearby candidates that have a website, deduped by host.
+    private func orderedUniqueWebsites(entered: EnvironmentCandidate?, all: [EnvironmentCandidate]) -> [String] {
+        let ordered = ([entered].compactMap { $0 } + all.filter { $0.environmentId != entered?.environmentId })
+        var seenHosts = Set<String>()
+        var result: [String] = []
+        for candidate in ordered {
+            guard let website = candidate.website, !website.isEmpty else { continue }
+            let key = URLComponents(string: website.contains("://") ? website : "https://\(website)")?.host ?? website
+            if seenHosts.insert(key.lowercased()).inserted {
+                result.append(website)
+            }
+        }
+        return result
     }
 
     private func appendBlock(_ kind: ChatBlockKind, id: String? = nil) {

@@ -68,6 +68,23 @@ describe("EnvironmentManager", () => {
     expect(listener.onEnvironmentEntered).not.toHaveBeenCalled();
   });
 
+  it("surfaces a loc: env whose skills come from a programmatic repository", async () => {
+    // The location-context bundle is served via a repository (not extraSkillPaths).
+    const manager = newManager({ "loc:cicis.com/tn-1-main": ["/tmp/location-context"] });
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment(
+      { id: "loc:cicis.com/tn-1-main", metadata: {} },
+      { sourceName: "Cicis" },
+    );
+    // accept -> enters with the repository-provided skill path.
+    manager.decideEnvironment("loc:cicis.com/tn-1-main", "accept");
+
+    expect(listener.onEnvironmentOffered).toHaveBeenCalledWith("loc:cicis.com/tn-1-main", { sourceName: "Cicis" });
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("loc:cicis.com/tn-1-main", ["/tmp/location-context"]);
+  });
+
   it("does NOT re-offer a previously-known environment once it has been unregistered", async () => {
     const manager = newManager();
     await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });

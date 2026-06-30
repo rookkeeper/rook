@@ -144,6 +144,17 @@ struct SettingsScreen: View {
                     .foregroundStyle(PanelPalette.warning)
             }
 
+            if model.locationProvider.authorizationStatus == .authorizedAlways,
+               model.locationProvider.motionAvailable,
+               !model.locationProvider.motionRequested {
+                CompactActionButton(title: "Enhance driving detection", systemImage: "car", tint: PanelPalette.accent, prominence: .subtle, helpText: "") {
+                    model.locationProvider.requestMotion()
+                }
+                Text("Uses motion so Rook can skip places you only drive past.")
+                    .font(.caption2)
+                    .foregroundStyle(PanelPalette.textMuted)
+            }
+
             Text("Define places with the map-pin button on the agent list.")
                 .font(.caption2)
                 .foregroundStyle(PanelPalette.textMuted)

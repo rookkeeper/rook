@@ -155,6 +155,19 @@ public struct AcpPermissionToolCall: Equatable {
     }
 }
 
+/// Friendly banner shown when the agent enters a `loc:` business environment.
+/// `displayName` is the entered business's name (nil -> generic fallback text);
+/// `websites` are website URLs (entered business first) used to render a favicon row.
+public struct EnvironmentBanner: Equatable {
+    public let displayName: String?
+    public let websites: [String]
+
+    public init(displayName: String?, websites: [String]) {
+        self.displayName = displayName
+        self.websites = websites
+    }
+}
+
 public enum ChatBlockKind: Equatable {
     case user(text: String)
     case assistantText(text: String, streaming: Bool)
@@ -163,6 +176,7 @@ public enum ChatBlockKind: Equatable {
     case error(source: String, message: String)
     case system(text: String)
     case plan(entries: [PlanEntry])
+    case environment(EnvironmentBanner)
 }
 
 public struct ChatBlock: Equatable, Identifiable {

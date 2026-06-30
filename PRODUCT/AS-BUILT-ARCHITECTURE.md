@@ -169,6 +169,7 @@ Examples:
 - `app:md.obsidian/<vault>` (macOS menu bar app — Obsidian vault context)
 - `web:<host>/<path>` (macOS menu bar app — active browser URL, protocol/query stripped)
 - `loc:<slug>` (iPhone app — current GPS geofence)
+- `loc:<domain>/<state-zip-street>` (iPhone — a business identified from the user's coordinate; address-based key, store number is metadata only; see §6.6)
 
 An environment maps to a directory in `environment-repository/` and provides zero or more `.bundles/<bundle-id>/` directories. The kind (`web`, `app`, `loc`, …) is just the part before the first colon; the directory-backed repository resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new bundle content on disk.
 
@@ -232,6 +233,14 @@ That remains consistent with:
 - [`PRODUCT/relationship-or-environments-skills-and-agent.md`](./relationship-or-environments-skills-and-agent.md)
 - [`PRODUCT/narrow-skills-environment-bridge.md`](./narrow-skills-environment-bridge.md)
 
+### 6.6 Location identification (`loc:`)
+
+Beyond providers that already know their environment id, the iPhone can turn a raw coordinate into available `loc:` environments. On a settled (non-driving) `CLVisit` arrival the phone POSTs `/api/environments/register-location`; `server/src/server/location/` reverse-resolves the coordinate to nearby businesses (the swappable `PoiLookupProvider`, today backed by ptiles fetched directly from the upstream host — an internal detail, no public route), normalizes them to stable address-based `loc:<domain>/…` ids, and `LocationRegistrar` feeds the ranked set into the same `EnvironmentManager` availability/offer/enter flow as every other provider (§6.3–6.4). A read-only `/api/environments/identify` returns the same candidates without registering.
+
+Two delivery channels carry a place to the agent: its **skills** load on-demand through the repository facade (the synthesized location-context bundle is served by a programmatic `LocationContextRepository`, no special-cased paths), and a concise **best-guess + nearby** context is *pushed* into the agent via the shared `AgentContext`/`setContextEntry` (§6.5) so it always knows where it is.
+
+Full as-built detail — assumptions, limitations, and follow-ups — lives in [`PRODUCT/location-environment-awareness.md`](./location-environment-awareness.md).
+
 ## 7. Client architecture
 
 ### 7.1 Web client
@@ -254,7 +263,7 @@ Current ecosystem around `:3000`:
 - **Chrome extension**: detects supported web contexts and registers `web:<slug>` environments
 - **Obsidian plugin**: embeds the app in a sidebar view
 - **macOS menu bar app**: native SwiftUI client with the same backend; also registers `app:<slug>` environments for the frontmost Mac app
-- **iPhone app**: native SwiftUI client that registers `loc:<slug>` environments from GPS geofences, making the agent location-aware (skills load as you arrive at a defined place). Adds Live Activity / Dynamic Island presence and on-device voice. See [`PRODUCT_CHANGES/research/rook-on-iphone.md`](../PRODUCT_CHANGES/research/rook-on-iphone.md) for the iOS sandbox constraints and the hosted-server/APNs follow-up.
+- **iPhone app**: native SwiftUI client that registers `loc:<slug>` environments from GPS geofences, making the agent location-aware (skills load as you arrive at a defined place). It also drives ptiles-based business discovery on arrival, registering `loc:<domain>/…` environments — see [`location-environment-awareness.md`](./location-environment-awareness.md). Adds Live Activity / Dynamic Island presence and on-device voice.
 
 The two native Swift clients share one cross-platform layer — models, the REST/ACP-WebSocket clients, the design system and chat-block views, voice, and Live Activity attributes — through the `clients/RookKit` Swift package, so they stay protocol- and design-consistent with a single source of truth.
 
@@ -313,6 +322,8 @@ Current major routes:
 - `POST /api/environments/register`
 - `POST /api/environments/unregister`
 - `POST /api/environments/decision`
+- `POST /api/environments/identify` (read-only: coordinate → candidate `loc:` environments)
+- `POST /api/environments/register-location` (identify + register/auto-enter the dwell set)
 - `GET /api/environments/preview`
 
 ### 9.2 WebSocket

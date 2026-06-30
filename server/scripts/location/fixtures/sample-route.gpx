@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="rook-sample">
+  <trk>
+    <name>Sample route through a few TN places</name>
+    <trkseg>
+      <!-- Collierville Home Depot (store-specific) -->
+      <trkpt lat="35.04974" lon="-89.69605"><ele>110</ele></trkpt>
+      <trkpt lat="35.05010" lon="-89.69560"/>
+      <!-- Nolensville Pike, Nashville (strip/commercial) -->
+      <trkpt lat="36.05890" lon="-86.71350"/>
+      <trkpt lat="36.05300" lon="-86.71010"/>
+      <!-- Downtown Nashville -->
+      <trkpt lat="36.16270" lon="-86.78160"/>
+      <!-- Open water / no coverage -->
+      <trkpt lat="25.00000" lon="-45.00000"/>
+    </trkseg>
+  </trk>
+</gpx>
