@@ -21,7 +21,8 @@ WebSocket protocol.
   renders agent text, thinking (collapsible), tool calls with normalized raw
   input/output (including auto-rendering well-formed JSON tool arguments as
   human-readable YAML), and assistant markdown with native drag-selection,
-  standard copy/paste behavior, plus a copy-source button; also renders plans,
+  standard copy/paste behavior, a copy-source button, and progressive
+  render-as-it-streams for stabilized markdown prefixes; also renders plans,
   run errors, stop/cancel semantics, context usage, and optional usage cost.
 - **ACP controls** — native support for permission requests
   (`session/request_permission`), session mode changes (`session/set_mode` /

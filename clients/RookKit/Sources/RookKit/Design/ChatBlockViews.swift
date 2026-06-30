@@ -129,32 +129,29 @@ private struct AssistantTextBlockView: View {
     var text: String
     var streaming: Bool
 
+    private var streamingPartition: StreamingMarkdownPartition {
+        StreamingMarkdownPartitioner.partition(text)
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
                 if streaming {
-                    Text(text)
-                        .font(.callout)
-                        .foregroundStyle(PanelPalette.textNormal)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 0) {
+                        if !streamingPartition.stablePrefix.isEmpty {
+                            assistantMarkdownView(streamingPartition.stablePrefix)
+                        }
+                        if !streamingPartition.unstableTail.isEmpty {
+                            Text(streamingPartition.unstableTail)
+                                .font(.callout)
+                                .foregroundStyle(PanelPalette.textNormal)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    MarkdownText(text)
-                        .foregroundStyle(PanelPalette.textNormal)
-                        .tint(PanelPalette.accentHover, for: .link)
-                        .tint(PanelPalette.hover, for: .inlineCodeBlock)
-                        .font(assistantMarkdownSystemFont(size: 22, weight: .semibold), for: .h1)
-                        .font(assistantMarkdownSystemFont(size: 18, weight: .semibold), for: .h2)
-                        .font(assistantMarkdownSystemFont(size: 15, weight: .semibold), for: .h3)
-                        .font(assistantMarkdownSystemFont(size: 13, weight: .semibold), for: .h4)
-                        .font(assistantMarkdownSystemFont(size: 13, weight: .semibold), for: .h5)
-                        .font(assistantMarkdownSystemFont(size: 12, weight: .semibold), for: .h6)
-                        .font(assistantMarkdownSystemFont(size: 13), for: .body)
-                        .font(assistantMarkdownSystemFont(size: 13), for: .blockQuote)
-                        .font(assistantMarkdownMonospacedFont(size: 12), for: .codeBlock)
-                        .font(assistantMarkdownSystemFont(size: 13), for: .tableBody)
-                        .font(assistantMarkdownSystemFont(size: 13, weight: .semibold), for: .tableHeader)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    assistantMarkdownView(text)
                 }
                 if streaming {
                     StreamingIndicator()
@@ -179,6 +176,25 @@ private struct AssistantTextBlockView: View {
             Spacer(minLength: 48)
         }
     }
+}
+
+private func assistantMarkdownView(_ markdown: String) -> some View {
+    MarkdownText(markdown)
+        .foregroundStyle(PanelPalette.textNormal)
+        .tint(PanelPalette.accentHover, for: .link)
+        .tint(PanelPalette.hover, for: .inlineCodeBlock)
+        .font(assistantMarkdownSystemFont(size: 22, weight: .semibold), for: .h1)
+        .font(assistantMarkdownSystemFont(size: 18, weight: .semibold), for: .h2)
+        .font(assistantMarkdownSystemFont(size: 15, weight: .semibold), for: .h3)
+        .font(assistantMarkdownSystemFont(size: 13, weight: .semibold), for: .h4)
+        .font(assistantMarkdownSystemFont(size: 13, weight: .semibold), for: .h5)
+        .font(assistantMarkdownSystemFont(size: 12, weight: .semibold), for: .h6)
+        .font(assistantMarkdownSystemFont(size: 13), for: .body)
+        .font(assistantMarkdownSystemFont(size: 13), for: .blockQuote)
+        .font(assistantMarkdownMonospacedFont(size: 12), for: .codeBlock)
+        .font(assistantMarkdownSystemFont(size: 13), for: .tableBody)
+        .font(assistantMarkdownSystemFont(size: 13, weight: .semibold), for: .tableHeader)
+        .frame(maxWidth: .infinity, alignment: .leading)
 }
 
 private func estimatedLineCount(for text: String) -> Int {
