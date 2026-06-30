@@ -6,11 +6,16 @@ export interface LocationEnvironmentSink {
   registerAvailableEnvironment(
     env: { id: string; metadata: Record<string, unknown> },
     info: { sourceName?: string; canonicalSourceUrl?: string },
-    extraSkillPaths?: string[],
     contextText?: string,
   ): Promise<void>;
   unregister(environmentId: string): boolean;
   decideEnvironment(environmentId: string, decision: "accept" | "approve" | "ignore" | "reject"): void;
+}
+
+/** The slice of LocationContextRepository the registrar needs (eases testing). */
+export interface LocationContextBundleStore {
+  setContextBundle(environmentId: string, sourcePath: string): void;
+  clear(environmentId: string): void;
 }
 
 type ContextSkillWriter = (current: EnvironmentCandidate, nearby: EnvironmentCandidate[]) => string;
@@ -69,6 +74,7 @@ export class LocationRegistrar {
 
   constructor(
     private readonly manager: LocationEnvironmentSink,
+    private readonly contextRepo: LocationContextBundleStore,
     private readonly writeContextSkill: ContextSkillWriter = writeLocationContextSkill,
   ) {}
 
@@ -79,7 +85,10 @@ export class LocationRegistrar {
     if (sameSet(nextIds, this.registeredIds)) return; // no change -> avoid agent churn
 
     // Replace the whole prior set.
-    for (const id of this.registeredIds) this.manager.unregister(id);
+    for (const id of this.registeredIds) {
+      this.manager.unregister(id);
+      this.contextRepo.clear(id);
+    }
     this.registeredIds = [];
 
     if (!dwell || candidates.length === 0) return; // moving through, or left the area
@@ -88,10 +97,12 @@ export class LocationRegistrar {
     const contextDir = this.writeContextSkill(current, nearby);
     const contextText = renderLocationContextText(current, nearby);
 
+    // Serve the synthesized context bundle through the repository facade so the
+    // manager picks it up via getSkillRuntimePaths (no extraSkillPaths channel).
+    this.contextRepo.setContextBundle(current.environmentId, contextDir);
     await this.manager.registerAvailableEnvironment(
       { id: current.environmentId, metadata: metadataFor(current, true) },
       { sourceName: current.displayName, ...(current.website ? { canonicalSourceUrl: current.website } : {}) },
-      [contextDir],
       contextText,
     );
     // Auto-enter the current location so the agent gets the context immediately.

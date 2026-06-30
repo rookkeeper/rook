@@ -68,17 +68,17 @@ describe("EnvironmentManager", () => {
     expect(listener.onEnvironmentEntered).not.toHaveBeenCalled();
   });
 
-  it("surfaces an otherwise skill-less env via injected extraSkillPaths", async () => {
-    const manager = newManager([]); // repo has no skills
+  it("surfaces a loc: env whose skills come from a programmatic repository", async () => {
+    // The location-context bundle is served via a repository (not extraSkillPaths).
+    const manager = newManager({ "loc:cicis.com/tn-1-main": ["/tmp/location-context"] });
     const listener = mockListener();
     manager.subscribe("s1", listener);
 
     await manager.registerAvailableEnvironment(
       { id: "loc:cicis.com/tn-1-main", metadata: {} },
       { sourceName: "Cicis" },
-      ["/tmp/location-context"],
     );
-    // accept -> enters with the injected skill path.
+    // accept -> enters with the repository-provided skill path.
     manager.decideEnvironment("loc:cicis.com/tn-1-main", "accept");
 
     expect(listener.onEnvironmentOffered).toHaveBeenCalledWith("loc:cicis.com/tn-1-main", { sourceName: "Cicis" });

@@ -11,6 +11,14 @@ function sink() {
   } satisfies LocationEnvironmentSink;
 }
 
+function contextStore() {
+  return { setContextBundle: vi.fn(), clear: vi.fn() };
+}
+
+function store() {
+  return { setContextBundle: vi.fn(), clear: vi.fn() };
+}
+
 function cand(id: string, over: Partial<EnvironmentCandidate> = {}): EnvironmentCandidate {
   return { environmentId: id, displayName: id, confidence: 0.9, matchReasons: [], hasKnownEnvironment: false, ...over };
 }
@@ -20,19 +28,21 @@ const writeStub = () => "/tmp/ctx";
 describe("LocationRegistrar", () => {
   it("registers current (with context skill + accept) and neighbors", async () => {
     const s = sink();
-    const reg = new LocationRegistrar(s, writeStub);
+    const cs = contextStore();
+    const reg = new LocationRegistrar(s, cs, writeStub);
     await reg.sync([
       cand("loc:cicis.com/a", { website: "https://cicis.com/x" }),
       cand("loc:gamestop.com/b"),
     ]);
 
     expect(s.registerAvailableEnvironment).toHaveBeenCalledTimes(2);
-    // current gets the context skill path + canonicalSourceUrl + accept
+    // the context bundle is served through the repository, not as extraSkillPaths
+    expect(cs.setContextBundle).toHaveBeenCalledWith("loc:cicis.com/a", "/tmp/ctx");
+    // current gets canonicalSourceUrl + contextText + accept
     expect(s.registerAvailableEnvironment).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ id: "loc:cicis.com/a", metadata: expect.objectContaining({ current: true }) }),
       expect.objectContaining({ sourceName: "loc:cicis.com/a", canonicalSourceUrl: "https://cicis.com/x" }),
-      ["/tmp/ctx"],
       expect.stringContaining("loc:cicis.com/a"),
     );
     expect(s.decideEnvironment).toHaveBeenCalledWith("loc:cicis.com/a", "accept");
@@ -46,7 +56,8 @@ describe("LocationRegistrar", () => {
 
   it("skips work when the set is unchanged", async () => {
     const s = sink();
-    const reg = new LocationRegistrar(s, writeStub);
+    const cs = contextStore();
+    const reg = new LocationRegistrar(s, cs, writeStub);
     const set = [cand("loc:a/1"), cand("loc:b/2")];
     await reg.sync(set);
     s.registerAvailableEnvironment.mockClear();
@@ -58,7 +69,8 @@ describe("LocationRegistrar", () => {
 
   it("replaces the prior set when it changes", async () => {
     const s = sink();
-    const reg = new LocationRegistrar(s, writeStub);
+    const cs = contextStore();
+    const reg = new LocationRegistrar(s, cs, writeStub);
     await reg.sync([cand("loc:a/1"), cand("loc:b/2")]);
     s.registerAvailableEnvironment.mockClear();
     await reg.sync([cand("loc:c/3")]);
@@ -69,7 +81,8 @@ describe("LocationRegistrar", () => {
 
   it("unregisters everything when no candidates remain", async () => {
     const s = sink();
-    const reg = new LocationRegistrar(s, writeStub);
+    const cs = contextStore();
+    const reg = new LocationRegistrar(s, cs, writeStub);
     await reg.sync([cand("loc:a/1")]);
     s.unregister.mockClear();
     await reg.sync([]);
@@ -78,14 +91,16 @@ describe("LocationRegistrar", () => {
 
   it("does not register a drive-by (moving, not dwelled)", async () => {
     const s = sink();
-    const reg = new LocationRegistrar(s, writeStub);
+    const cs = contextStore();
+    const reg = new LocationRegistrar(s, cs, writeStub);
     await reg.sync([cand("loc:a/1")], { isStationary: false, speedMetersPerSecond: 20, dwellSeconds: 2 });
     expect(s.registerAvailableEnvironment).not.toHaveBeenCalled();
   });
 
   it("registers a real dwell, then drops it when moving away", async () => {
     const s = sink();
-    const reg = new LocationRegistrar(s, writeStub);
+    const cs = contextStore();
+    const reg = new LocationRegistrar(s, cs, writeStub);
     await reg.sync([cand("loc:a/1")], { isStationary: true });
     expect(s.registerAvailableEnvironment).toHaveBeenCalledTimes(1);
     await reg.sync([cand("loc:b/2")], { isStationary: false, speedMetersPerSecond: 18 });

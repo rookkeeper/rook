@@ -55,10 +55,12 @@ export class EnvironmentManager {
 
   /**
    * A provider reports the user is now "in" this environment. Applies to all open rooms.
-   * `extraSkillPaths` are merged into the leaf env's skills (used to inject a
-   * synthesized location-context bundle so a skill-less env still carries metadata).
+   * Skills come from the repository facade; a skill-less env that should still carry
+   * metadata (e.g. a `loc:` business) supplies its bundle through a programmatic
+   * repository (see `LocationContextRepository`). `contextText` is ambient context
+   * pushed to the agent on enter.
    */
-  async registerAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo = {}, extraSkillPaths: string[] = [], contextText?: string): Promise<void> {
+  async registerAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo = {}, contextText?: string): Promise<void> {
     const impliedIds = this.impliedEnvironmentIds(env.id);
     const existing = this.directRegistrations.get(env.id);
     if (existing) {
@@ -72,9 +74,7 @@ export class EnvironmentManager {
       this.availableRefCounts.set(impliedId, nextCount);
       if (nextCount > 1) continue;
 
-      const repoSkillPaths = await this.repositoryService.getSkillRuntimePaths(impliedId);
-      // Only the leaf (the registered id itself) gets the injected extra skills.
-      const skillPaths = impliedId === env.id ? [...new Set([...repoSkillPaths, ...extraSkillPaths])] : repoSkillPaths;
+      const skillPaths = await this.repositoryService.getSkillRuntimePaths(impliedId);
       this.available.set(impliedId, {
         record: { id: impliedId, metadata: env.metadata },
         skillPaths,

@@ -8,6 +8,7 @@ import { EnvironmentDecisionStore } from "./environment/EnvironmentDecisionStore
 import { EnvironmentManager } from "./environment/EnvironmentManager.js";
 import { CompositeEnvironmentRepository } from "./environment/CompositeEnvironmentRepository.js";
 import { DirectoryEnvironmentRepository } from "./environment/DirectoryEnvironmentRepository.js";
+import { LocationContextRepository } from "./environment/LocationContextRepository.js";
 import { EnvironmentRepositoryService } from "./environment/EnvironmentRepositoryService.js";
 import { EnvironmentIdentifier } from "./location/EnvironmentIdentifier.js";
 import { MockBuildingSkillSuggester } from "./location/BuildingSkillSuggester.js";
@@ -38,9 +39,12 @@ export interface BuildServerOptions {
 
 export async function buildServer(options: BuildServerOptions = {}) {
   const app = fastify({ logger: options.logger ?? true });
+  // Programmatic repo for the synthesized location-context bundle (no extraSkillPaths).
+  const locationContextRepository = new LocationContextRepository();
   const environmentRepository = new CompositeEnvironmentRepository([
     new DirectoryEnvironmentRepository(path.join(REPO_ROOT, "environment-repository")),
     new DirectoryEnvironmentRepository(path.join(os.homedir(), ".rook", "environment-repository")),
+    locationContextRepository,
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
   const environmentDecisionStore = new EnvironmentDecisionStore(options.environmentDecisionStoreLocation);
@@ -53,7 +57,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
     repository: environmentRepositoryService,
     skillSuggester: new MockBuildingSkillSuggester(),
   });
-  const locationRegistrar = new LocationRegistrar(environmentManager);
+  const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
   const roomManager = new SessionRoomManager({
     idleTimeoutMs: options.roomIdleTimeoutMs,
     onRoomRemoved: (sessionId) => environmentManager.unsubscribe(sessionId),
