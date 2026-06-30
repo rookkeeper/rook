@@ -28,8 +28,9 @@ share one look and one protocol layer.
   into the agent. Leaving the region marks it unavailable
   (`POST /api/environments/unregister`).
 - **Full chat parity.** Agent picker, session start/resume, streaming ACP chat
-  (text, thinking, tool calls, plans, errors, context usage) — all rendered by
-  RookKit's shared chat views, the same code the Mac app uses.
+  (text, thinking, tool calls, plans, errors, context usage) — including
+  auto-rendering well-formed JSON tool arguments as human-readable YAML — all
+  rendered by RookKit's shared chat views, the same code the Mac app uses.
 - **Voice (hands-free).** Tap-to-talk in the chat screen: on-device speech
   recognition (`SFSpeechRecognizer`) sends your words as the prompt;
   `AVSpeechSynthesizer` speaks the reply once the turn completes. The shared

@@ -19,8 +19,9 @@ WebSocket protocol.
   (`GET /api/agent/session/recent`), like the web client.
 - **Streaming chat** — `session/prompt` over `ws://127.0.0.1:3000/api/ws`;
   renders agent text, thinking (collapsible), tool calls with normalized raw
-  input/output, plans, run errors, stop/cancel semantics, context usage, and
-  optional usage cost.
+  input/output (including auto-rendering well-formed JSON tool arguments as
+  human-readable YAML), plans, run errors, stop/cancel semantics, context
+  usage, and optional usage cost.
 - **ACP controls** — native support for permission requests
   (`session/request_permission`), session mode changes (`session/set_mode` /
   `current_mode_update`), and config options

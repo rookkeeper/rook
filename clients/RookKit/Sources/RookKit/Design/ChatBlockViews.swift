@@ -310,7 +310,7 @@ private struct ToolBlockView: View {
             if expanded {
                 VStack(alignment: .leading, spacing: 0) {
                     if !state.arguments.isEmpty {
-                        monoSection(label: "ARGUMENTS", text: state.arguments, isError: false)
+                        monoSection(label: "ARGUMENTS", text: ToolPayloadFormatting.displayArguments(state.arguments), isError: false)
                     }
                     if !state.output.isEmpty {
                         monoSection(label: "RESULT", text: state.output, isError: state.status == .failed)

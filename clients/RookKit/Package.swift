@@ -20,5 +20,9 @@ let package = Package(
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
             ]
         ),
+        .testTarget(
+            name: "RookKitTests",
+            dependencies: ["RookKit"]
+        ),
     ]
 )
