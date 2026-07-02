@@ -248,9 +248,10 @@ APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData \
 open "$APP_PATH"
 ```
 
-Look for the **purple rook icon** in the menu bar (no Dock icon - it's an
-`LSUIElement` app). If you don't see it, read the troubleshooting section
-below - on a crowded menu bar this is expected, not a bug.
+Look for the **purple rook icon** in the menu bar. The app is a regular app
+(`LSUIElement` is false) so it also shows a Dock tile and a main window. If
+you don't see the menu bar icon, read the troubleshooting section below - on
+a crowded menu bar this is expected, not a bug.
 
 To kill and relaunch (e.g. after a rebuild):
 
