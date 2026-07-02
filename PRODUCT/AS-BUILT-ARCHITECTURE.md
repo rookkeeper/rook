@@ -335,6 +335,7 @@ Current major routes:
 - `POST /api/environments/identify` (read-only: coordinate → candidate `loc:` environments)
 - `POST /api/environments/register-location` (identify + register/auto-enter the dwell set)
 - `GET /api/environments/preview`
+- `GET /api/diagnostics/environments` (development-only grouped diagnostics: dumps active + recent environment memory)
 
 ### 9.2 WebSocket
 

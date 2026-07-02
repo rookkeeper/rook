@@ -20,6 +20,7 @@ import { REPO_ROOT } from "./paths.js";
 import { SessionRoomManager } from "./realtime/SessionRoomManager.js";
 import { registerAgentRoutes } from "./routes/agentRoutes.js";
 import { registerEnvironmentRoutes } from "./routes/environmentRoutes.js";
+import { registerDiagnosticRoutes } from "./routes/diagnosticRoutes.js";
 import { registerWebsocketRoute } from "./routes/websocketRoute.js";
 import { ServerAuth } from "./auth.js";
 import { startRemoteProxy } from "./remoteProxy.js";
@@ -105,6 +106,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
   await registerAgentRoutes(app, { roomManager, environmentManager });
   await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar);
+  await registerDiagnosticRoutes(app, environmentManager);
   await registerWebsocketRoute(app, roomManager, auth);
 
   return app;

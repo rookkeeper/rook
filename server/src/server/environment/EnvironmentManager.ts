@@ -21,6 +21,19 @@ interface RememberedEnvironmentEntry {
   contextText?: string;
 }
 
+export interface DiagnosticEnvironmentEntry {
+  environmentId: string;
+  status: "active" | "recent";
+  record: EnvironmentRecord;
+  info: EnvironmentOfferInfo;
+  registeredAt?: string;
+  unregisteredAt?: string;
+  lastTouchedAt: string;
+  activeUntil?: string;
+  contextText?: string;
+  effectiveDecision: EffectiveDecision;
+}
+
 export interface EnvironmentManagerOptions {
   activeEnvironmentWindowMs?: number;
   recentEnvironmentRetentionMs?: number;
@@ -166,6 +179,27 @@ export class EnvironmentManager {
 
   enteredEnvironments(sessionId: string): string[] {
     return [...(this.entered.get(sessionId) ?? [])];
+  }
+
+  diagnosticSnapshot(): DiagnosticEnvironmentEntry[] {
+    this.pruneMemory();
+    return [...this.remembered.entries()]
+      .map(([environmentId, entry]) => ({
+        environmentId,
+        status: entry.status,
+        record: entry.record,
+        info: entry.info,
+        registeredAt: entry.registeredAt,
+        unregisteredAt: entry.unregisteredAt,
+        lastTouchedAt: entry.lastTouchedAt,
+        activeUntil: entry.activeUntil,
+        contextText: entry.contextText,
+        effectiveDecision: this.effectiveDecision(environmentId),
+      }))
+      .sort((a, b) => {
+        if (a.status !== b.status) return a.status === "active" ? -1 : 1;
+        return a.environmentId.localeCompare(b.environmentId);
+      });
   }
 
   close(): void {

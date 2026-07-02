@@ -553,6 +553,62 @@ describe("server", () => {
     await app.close();
   });
 
+  it("returns grouped diagnostic environment state", async () => {
+    const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:" });
+
+    const register = await app.inject({
+      method: "POST",
+      url: "/api/environments/register",
+      payload: {
+        id: "web:example.com",
+        sourceName: "Example",
+        canonicalSourceUrl: "https://example.com",
+        metadata: { foo: "bar" },
+      },
+    });
+    expect(register.statusCode).toBe(200);
+
+    const decision = await app.inject({
+      method: "POST",
+      url: "/api/environments/decision",
+      payload: { environmentId: "web:example.com", decision: "accept" },
+    });
+    expect(decision.statusCode).toBe(200);
+
+    const response = await app.inject({ method: "GET", url: "/api/diagnostics/environments" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      environments: [
+        expect.objectContaining({
+          environmentId: "web:example.com",
+          status: "active",
+          info: {
+            sourceName: "Example",
+            canonicalSourceUrl: "https://example.com",
+          },
+          record: {
+            id: "web:example.com",
+            metadata: expect.objectContaining({
+              foo: "bar",
+              registeredAt: expect.any(String),
+            }),
+          },
+          registeredAt: expect.any(String),
+          lastTouchedAt: expect.any(String),
+          activeUntil: expect.any(String),
+          effectiveDecision: "accept",
+        }),
+      ],
+      counts: {
+        total: 1,
+        active: 1,
+        recent: 0,
+      },
+    });
+
+    await app.close();
+  });
+
   it("returns nested environment bundle previews from the repository", async () => {
     const app = await buildServer({ enableClient: false });
     const register = await app.inject({
