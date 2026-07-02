@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -225,6 +225,8 @@
 				CB6D45E3F74202306D12973F /* PBXTargetDependency */,
 			);
 			name = RookTests;
+			packageProductDependencies = (
+			);
 			productName = RookTests;
 			productReference = CE53483296E70F63627FCE2B /* RookTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -263,7 +265,6 @@
 				};
 			};
 			buildConfigurationList = 8D92C9375EB3AAE1CAF52C4A /* Build configuration list for PBXProject "Rook" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -271,9 +272,12 @@
 				en,
 			);
 			mainGroup = 3B84888C46C0502477C50D82;
+			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				01A6C9AEB7EFAF3E16322253 /* XCLocalSwiftPackageReference "../RookKit" */,
 			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9BF2CF96022C225E7F35AC3D /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

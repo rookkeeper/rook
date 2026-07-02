@@ -13,14 +13,18 @@ description: >-
 
 Rookery PRs are decision records for **what changed in the product and architecture**, not walkthroughs of every code hunk. The code diff is the detail; the PR is the rationale, alignment, and consequences.
 
+Read [`references/pr-workflow.md`](./references/pr-workflow.md) when deciding whether to use a PR, when opening a PR for a large issue-sized chunk, and when handling post-merge local sync.
+
 ## Hard rules
 
 - **Before creating a branch or pushing, ask the developer whether this work should go on a branch / PR flow or be pushed directly to `main` / `master`.** Do not assume.
+- **Large chunks of work associated with an issue should usually go into a PR.** Treat the PR as the grouping/review unit unless the developer explicitly asks to skip that flow.
 - If the developer says to use a branch / PR flow, then do not push directly to `main` / `master`.
 - **Read every file under `PRODUCT/`** before writing the PR. (You should ignore PRODUCT_CHANGES, as it is for work in progress scratch documentation, todos, and status.) Treat drafts and placeholders as current intent until superseded.
 - **Update `PRODUCT/` in the same PR** when the change introduces, modifies, or removes a product or architecture idea - but don't be overly nit-picky because we don't want too much documentation churn. Most of product documents are quite high-level, so we don't need low-level product changes. See [AGENTS.md](../../../AGENTS.md).
 - **Do not ship** until product/architecture alignment sections are complete and doc updates are included (or explicitly marked N/A with reason).
 - If the **why this matters** section of the PR is missing or weak, **stop and ask the developer** before opening the PR.
+- **After creating a PR, ask the developer whether they want it merged now.** Do not assume that opening the PR implies immediate merge.
 
 ## Workflow
 
@@ -112,6 +116,8 @@ If the developer said to use branch/PR flow:
 3. `git push -u origin HEAD`
 4. `gh pr create` with title and body from template
 5. Return the PR URL
+6. Ask whether they want it merged now
+7. If yes, prefer squash merge and follow the local-sync guidance in [`references/pr-workflow.md`](./references/pr-workflow.md)
 
 If the developer explicitly said to push directly to `main` / `master`, you may do so.
 
