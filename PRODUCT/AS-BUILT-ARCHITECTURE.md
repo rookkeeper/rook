@@ -224,11 +224,12 @@ When an environment becomes available:
 1. providers call `/api/environments/register`
 2. the Mac provider does this immediately on foreground encounter, and also on wake/server-reconnect reconciliation for currently visible environments
 3. `EnvironmentManager` stores the exact registration in memory with its latest touch time
-4. the environment is counted as **active** for a configurable active window (currently 6 minutes)
-5. explicit `/api/environments/unregister` moves it to **recent** immediately
-6. inactive/recent entries remain in memory for a longer retention window (currently 30 minutes), then are forgotten
+4. on registration, it also consults the repository and remembers any valid bundle ids plus the `.bundles/` collection path(s) associated with that environment
+5. the environment is counted as **active** for a configurable active window (currently 6 minutes)
+6. explicit `/api/environments/unregister` moves it to **recent** immediately
+7. inactive/recent entries remain in memory for a longer retention window (currently 30 minutes), then are forgotten
 
-Current simplification: registration is intentionally not loading repository skills or pushing lifecycle events into rooms.
+Current simplification: registration is intentionally not yet loading bundle capabilities into rooms or rebuilding runtimes.
 
 ### 6.5 Environment-to-agent bridge
 

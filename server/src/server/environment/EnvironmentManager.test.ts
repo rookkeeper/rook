@@ -7,7 +7,8 @@ import type { EnvironmentEventListener } from "./types.js";
 
 function mockRepositoryService(): EnvironmentRepositoryService {
   return {
-    getSkillRuntimePaths: vi.fn(async () => []),
+    getValidBundles: vi.fn(async () => []),
+    getBundleCollectionPaths: vi.fn(async () => []),
     getEnvironmentPreview: vi.fn().mockResolvedValue({ environmentId: "web:example.com", bundles: [] }),
   } as unknown as EnvironmentRepositoryService;
 }
@@ -110,5 +111,42 @@ describe("EnvironmentManager", () => {
     expect(listener.onEnvironmentOffered).not.toHaveBeenCalled();
     expect(listener.onEnvironmentEntered).not.toHaveBeenCalled();
     expect(manager.enteredEnvironments("s1")).toEqual([]);
+  });
+
+  it("remembers discovered bundle paths with the environment", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getValidBundles).mockResolvedValue([
+      {
+        id: "web:example.com#testing",
+        bundleId: "testing",
+        environmentId: "web:example.com",
+        repository: "/repo",
+        bundlePath: "/repo/web/example.com/.bundles/testing",
+        skills: [],
+        mcpServers: [],
+        apps: [],
+        valid: true,
+        errors: [],
+      },
+    ] as any);
+    vi.mocked(repositoryService.getBundleCollectionPaths).mockResolvedValue([
+      "/repo/web/example.com/.bundles",
+    ]);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
+
+    expect(manager.diagnosticSnapshot()).toEqual([
+      expect.objectContaining({
+        environmentId: "web:example.com",
+        bundleIds: ["testing"],
+        bundleCollectionPaths: ["/repo/web/example.com/.bundles"],
+      }),
+    ]);
   });
 });

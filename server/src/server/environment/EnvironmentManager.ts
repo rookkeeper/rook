@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
 import type { EnvironmentPreview } from "../../shared/environment.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
@@ -19,6 +20,8 @@ interface RememberedEnvironmentEntry {
   activeUntil?: string;
   status: "active" | "recent";
   contextText?: string;
+  bundleIds: string[];
+  bundleCollectionPaths: string[];
 }
 
 export interface DiagnosticEnvironmentEntry {
@@ -31,6 +34,8 @@ export interface DiagnosticEnvironmentEntry {
   lastTouchedAt: string;
   activeUntil?: string;
   contextText?: string;
+  bundleIds: string[];
+  bundleCollectionPaths: string[];
   effectiveDecision: EffectiveDecision;
 }
 
@@ -84,6 +89,14 @@ export class EnvironmentManager {
     const existing = this.remembered.get(env.id);
     const registeredAt = nowIso;
     const activeUntil = new Date(now + this.activeEnvironmentWindowMs).toISOString();
+    const bundles = await this.repositoryService.getValidBundles(env.id);
+    const bundleIds = bundles.map((bundle) => bundle.bundleId);
+    const bundleCollectionPaths = [...new Set(
+      bundles
+        .map((bundle) => bundle.bundlePath)
+        .filter((bundlePath): bundlePath is string => Boolean(bundlePath))
+        .map((bundlePath) => path.dirname(bundlePath)),
+    )].sort((a, b) => a.localeCompare(b));
     const entry: RememberedEnvironmentEntry = {
       record: {
         id: env.id,
@@ -97,6 +110,8 @@ export class EnvironmentManager {
       lastTouchedAt: nowIso,
       activeUntil,
       status: "active",
+      bundleIds,
+      bundleCollectionPaths,
       ...(contextText ? { contextText } : {}),
     };
     this.remembered.set(env.id, entry);
@@ -107,6 +122,8 @@ export class EnvironmentManager {
         registeredAt,
         activeUntil,
         sourceName: info.sourceName,
+        bundleIds,
+        bundleCollectionPaths,
       },
       "environment registered",
     );
@@ -194,6 +211,8 @@ export class EnvironmentManager {
         lastTouchedAt: entry.lastTouchedAt,
         activeUntil: entry.activeUntil,
         contextText: entry.contextText,
+        bundleIds: entry.bundleIds,
+        bundleCollectionPaths: entry.bundleCollectionPaths,
         effectiveDecision: this.effectiveDecision(environmentId),
       }))
       .sort((a, b) => {

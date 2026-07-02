@@ -98,7 +98,7 @@ export class LocationRegistrar {
     const contextText = renderLocationContextText(current, nearby);
 
     // Serve the synthesized context bundle through the repository facade so the
-    // manager picks it up via getSkillRuntimePaths (no extraSkillPaths channel).
+    // manager can discover it as a normal environment bundle (no extra runtime channel).
     this.contextRepo.setContextBundle(current.environmentId, contextDir);
     await this.manager.registerAvailableEnvironment(
       { id: current.environmentId, metadata: metadataFor(current, true) },

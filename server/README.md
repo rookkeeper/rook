@@ -151,6 +151,7 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
 - `POST /api/environments/unregister { id }`: unregister an environment.
 - `POST /api/environments/decision { environmentId, decision }`: record `accept | approve | ignore | reject`.
 - `GET /api/environments/preview?environmentId=...`: return skill/file preview data for the approval UI.
+- `GET /api/diagnostics/environments`: return active/recent environment diagnostics including discovered bundles.
 - `GET /api/ws?sessionId=...`: WebSocket endpoint for live session events.
 
 ### Main domain/service objects
@@ -242,6 +243,7 @@ From the repo root:
 ```bash
 ./scripts/interact-with-remote-agent.sh --agent PiAgent --omit-deltas "hello"
 ./scripts/interact-with-remote-agent.sh --raw-acp --agent PiAgent "hello"
+./scripts/print-environments.sh
 ```
 
 - default mode prints the translated `SessionEvent` stream the current UI consumes

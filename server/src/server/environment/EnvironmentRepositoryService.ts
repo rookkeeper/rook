@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { EnvironmentBundleResult, EnvironmentBundle } from "../../shared/environmentRepository.js";
 import type { EnvironmentPreview } from "../../shared/environment.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
@@ -9,14 +10,18 @@ export class EnvironmentRepositoryService {
     return this.repository.getBundles(environmentId);
   }
 
-  async getSkillRuntimePaths(environmentId: string): Promise<string[]> {
+  async getValidBundles(environmentId: string): Promise<EnvironmentBundle[]> {
     const result = await this.repository.getBundles(environmentId);
+    return result.bundles.filter((bundle) => bundle.valid);
+  }
+
+  async getBundleCollectionPaths(environmentId: string): Promise<string[]> {
+    const bundles = await this.getValidBundles(environmentId);
     return unique(
-      result.bundles
-        .filter((bundle) => bundle.valid)
-        .flatMap((bundle) => bundle.skills)
-        .map((skill) => skill.sourcePath)
-        .filter((path): path is string => Boolean(path)),
+      bundles
+        .map((bundle) => bundle.bundlePath)
+        .filter((bundlePath): bundlePath is string => Boolean(bundlePath))
+        .map((bundlePath) => path.dirname(bundlePath)),
     );
   }
 

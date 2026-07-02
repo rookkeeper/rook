@@ -23,6 +23,7 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - `./scripts/run-rook.sh sim`
 - `./scripts/run-rook.sh phone`
 - `./scripts/run-rook.sh stop`
+- `./scripts/print-environments.sh` — dump active/recent environment diagnostics from the server
 
 ## High-level docs map
 

@@ -21,10 +21,7 @@ export interface RepositoryReadError {
 export interface BundleArtifact {
   id: string;
   files: Record<string, string>;
-  /**
-   * Transitional internal-only hint for runtime bridging while EnvironmentManager
-   * still needs directory-backed skill paths.
-   */
+  /** Internal-only path hint for directory-backed bundle artifacts. */
   sourcePath?: string;
 }
 
@@ -33,6 +30,8 @@ export interface EnvironmentBundle {
   bundleId: string;
   environmentId: string;
   repository: string;
+  /** Path to the bundle directory/root when one exists on disk (or an equivalent synthesized bundle root). */
+  bundlePath?: string;
   skills: BundleArtifact[];
   mcpServers: BundleArtifact[];
   apps: BundleArtifact[];
