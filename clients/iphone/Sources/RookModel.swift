@@ -102,10 +102,13 @@ final class RookModel: ObservableObject {
             urlString = "http://127.0.0.1:3000"
         }
         let envToken = ProcessInfo.processInfo.environment["ROOK_AUTH_TOKEN"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let storedToken = UserDefaults.standard.string(forKey: "RookAuthToken")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let legacyStoredToken = UserDefaults.standard.string(forKey: "RookAuthToken")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let keychainToken = KeychainStore.string(for: "RookAuthToken")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedToken = (keychainToken?.isEmpty == false ? keychainToken : legacyStoredToken)
         let authToken = (envToken?.isEmpty == false ? envToken : storedToken) ?? ""
-        if let envToken, !envToken.isEmpty, storedToken != envToken {
-            UserDefaults.standard.set(envToken, forKey: "RookAuthToken")
+        if let tokenToPersist = (envToken?.isEmpty == false ? envToken : storedToken), !tokenToPersist.isEmpty {
+            KeychainStore.setString(tokenToPersist, for: "RookAuthToken")
+            UserDefaults.standard.removeObject(forKey: "RookAuthToken")
         }
         let finalURL = URL(string: urlString) ?? URL(string: "http://127.0.0.1:3000")!
         baseURLString = urlString
@@ -383,7 +386,12 @@ final class RookModel: ObservableObject {
         baseURLString = trimmed
         authTokenString = trimmedToken
         UserDefaults.standard.set(trimmed, forKey: "RookServerBaseURL")
-        UserDefaults.standard.set(trimmedToken, forKey: "RookAuthToken")
+        UserDefaults.standard.removeObject(forKey: "RookAuthToken")
+        if trimmedToken.isEmpty {
+            KeychainStore.removeString(for: "RookAuthToken")
+        } else {
+            KeychainStore.setString(trimmedToken, for: "RookAuthToken")
+        }
         api = RookAPI(baseURL: url, authToken: trimmedToken)
         socket.disconnect()
         currentSession = nil

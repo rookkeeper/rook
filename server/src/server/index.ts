@@ -38,17 +38,25 @@ export interface BuildServerOptions {
   environmentDecisionStoreLocation?: string;
   /** Override the POI lookup provider (defaults to the ptiles provider via the proxy route). */
   poiProvider?: PoiLookupProvider;
-  /** Optional bearer token for non-loopback requests. */
+  /** Optional bearer token required by all HTTP + WebSocket requests. */
   authToken?: string;
-  /** Test hook: require auth even for loopback requests. */
-  trustLoopbackWithoutAuth?: boolean;
+  /** Test hook: observe registered routes. */
+  onRoute?: (route: { method: string | readonly string[]; url: string; websocket?: boolean }) => void;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {
   const app = fastify({ logger: options.logger ?? true });
+  if (options.onRoute) {
+    app.addHook("onRoute", (routeOptions) => {
+      options.onRoute?.({
+        method: routeOptions.method as string | readonly string[],
+        url: routeOptions.url,
+        websocket: (routeOptions as { websocket?: boolean }).websocket,
+      });
+    });
+  }
   const auth = new ServerAuth({
     token: options.authToken ?? process.env.ROOK_AUTH_TOKEN,
-    trustLoopbackWithoutAuth: options.trustLoopbackWithoutAuth,
   });
   // Programmatic repo for the synthesized location-context bundle (no extraSkillPaths).
   const locationContextRepository = new LocationContextRepository();

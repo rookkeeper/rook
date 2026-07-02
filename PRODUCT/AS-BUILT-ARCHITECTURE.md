@@ -10,7 +10,7 @@ Rookery is a local-first monorepo centered on one service at `127.0.0.1:3000`:
 
 - the server always binds loopback for on-machine clients
 - it may also expose a second listener on a configured remote/VPN address for phone access
-- non-loopback access is expected to be protected by a bearer token
+- when configured, bearer auth is required for all client access, including localhost
 
 - a **Fastify server**
 - a **React Native web chat UI**
@@ -99,7 +99,7 @@ The server is now API/websocket-only; native clients and debug scripts connect t
 Network exposure model as built:
 - localhost/macOS clients talk to the loopback listener
 - remote phone access is served by a second remote listener rather than broad `0.0.0.0` binding
-- auth is enforced for non-loopback HTTP + WebSocket access
+- auth is enforced for all HTTP + WebSocket access when configured
 
 ### 5.2 Session rooms
 

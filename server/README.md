@@ -31,7 +31,7 @@ subprocesses may otherwise lose TCC-granted file access.
 
 ## Network binding and auth
 
-The server now always binds loopback (`127.0.0.1`). For remote phone access, set `ROOK_BIND_IP` to add a second listener on your Mac's VPN/private-network address, and set `ROOK_AUTH_TOKEN`. See [docs/setup.md](../docs/setup.md).
+The server now always binds loopback (`127.0.0.1`). For remote phone access, set `ROOK_BIND_IP` to add a second listener on your Mac's VPN/private-network address, and set `ROOK_AUTH_TOKEN`. When a token is configured, every HTTP + WebSocket client — including localhost clients — must send it. See [docs/setup.md](../docs/setup.md).
 
 ## Pi agent configuration
 

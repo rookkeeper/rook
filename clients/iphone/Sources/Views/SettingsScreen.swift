@@ -71,7 +71,7 @@ struct SettingsScreen: View {
                         .strokeBorder(PanelPalette.border)
                 )
 
-            TextField("Bearer token (optional on localhost)", text: $authTokenDraft)
+            SecureField("Bearer token", text: $authTokenDraft)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .textContentType(.password)
@@ -87,7 +87,7 @@ struct SettingsScreen: View {
                         .strokeBorder(PanelPalette.border)
                 )
 
-            Text("On a device, use a hostname or IP address your phone can reach. Add the bearer token if the server is configured to require one for non-local access.")
+            Text("On a device, use a hostname or IP address your phone can reach. If the server is configured with a bearer token, every client request must send it.")
                 .font(.caption2)
                 .foregroundStyle(PanelPalette.textMuted)
 
