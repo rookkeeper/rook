@@ -29,6 +29,10 @@ function logEnvironmentEvent(sessionId: string, event: string, environmentId: st
   console.log(`[environment] session=${sessionId} event=${event} environment=${environmentId}${Object.keys(extra).length > 0 ? ` ${JSON.stringify(extra)}` : ""}`);
 }
 
+function stoppedError(): Error {
+  return new Error("Session room stopped.");
+}
+
 export class SessionRoom implements EnvironmentEventListener {
   private readonly events: RoomEventStream;
   private readonly environmentState = new EnvironmentSessionState();
@@ -155,10 +159,12 @@ export class SessionRoom implements EnvironmentEventListener {
   }
 
   async ensureStarted(): Promise<void> {
+    if (this.stopped) throw stoppedError();
     if (this.started) return;
     if (!this.startPromise) {
       this.startPromise = this.currentRuntime.agent.ensureStarted()
         .then(() => {
+          if (this.stopped) throw stoppedError();
           this.started = true;
         })
         .finally(() => {
@@ -171,7 +177,9 @@ export class SessionRoom implements EnvironmentEventListener {
   async run(message: string): Promise<{ ok: true; stopReason: string } | { ok: false; error: string }> {
     const run = async () => {
       try {
+        if (this.stopped) throw stoppedError();
         await this.ensureStarted();
+        if (this.stopped) throw stoppedError();
         await this.currentRuntime.agent.run(message);
         return { ok: true, stopReason: this.currentRuntime.agent.lastStopReason ?? "end_turn" } as const;
       } catch (error) {
@@ -199,25 +207,30 @@ export class SessionRoom implements EnvironmentEventListener {
   }
 
   async cancel(): Promise<void> {
+    if (this.stopped) throw stoppedError();
     await this.currentRuntime.agent.cancel();
   }
 
   async sendSteeringMessage(message: string): Promise<void> {
+    if (this.stopped) throw stoppedError();
     await this.ensureStarted();
     await this.currentRuntime.agent.sendSteeringMessage(message);
   }
 
   async setMode(modeId: string): Promise<unknown> {
+    if (this.stopped) throw stoppedError();
     await this.ensureStarted();
     return await this.currentRuntime.agent.setMode(modeId);
   }
 
   async setConfigOption(configId: string, value: string): Promise<unknown> {
+    if (this.stopped) throw stoppedError();
     await this.ensureStarted();
     return await this.currentRuntime.agent.setConfigOption(configId, value);
   }
 
   respondToPermissionRequest(message: JsonRpcSuccess | JsonRpcFailure): void {
+    if (this.stopped) return;
     this.currentRuntime.agent.respondToPermissionRequest(message);
   }
 

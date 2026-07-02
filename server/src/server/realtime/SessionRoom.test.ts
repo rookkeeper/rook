@@ -182,4 +182,17 @@ describe("SessionRoom", () => {
 
     expect(agent.cancelled).toBe(1);
   });
+
+  it("rejects new work after the room is stopped", async () => {
+    const room = createRoom(new TestAgent());
+
+    await room.stop();
+
+    await expect(room.ensureStarted()).rejects.toThrow("Session room stopped.");
+    await expect(room.sendSteeringMessage("Keep going")).rejects.toThrow("Session room stopped.");
+    await expect(room.setMode("ask")).rejects.toThrow("Session room stopped.");
+    await expect(room.setConfigOption("verbosity", "high")).rejects.toThrow("Session room stopped.");
+    await expect(room.cancel()).rejects.toThrow("Session room stopped.");
+    await expect(room.run("hello")).resolves.toEqual({ ok: false, error: "Session room stopped." });
+  });
 });

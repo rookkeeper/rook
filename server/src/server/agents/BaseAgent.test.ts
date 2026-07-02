@@ -1,11 +1,15 @@
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AcpSessionUpdateNotification } from "../../shared/acp";
 import { BaseAgent } from "./BaseAgent";
 
 class InspectableBaseAgent extends BaseAgent {
   inspectHandleStdoutLine(line: string): void {
     this.handleStdoutLine(line);
+  }
+
+  inspectSendRequest(method: string, params?: unknown): Promise<unknown> {
+    return this.sendRequest(method, params);
   }
 }
 
@@ -267,5 +271,36 @@ describe("BaseAgent", () => {
         }),
       }),
     );
+  });
+
+  it("rejects pending ACP requests when stopped", async () => {
+    const agent = new InspectableBaseAgent({
+      command: "node",
+      args: [FIXTURE],
+      cwd: path.resolve("."),
+      sessionCwd: path.resolve("."),
+      agentName: "TestAcpAgent",
+    });
+
+    const kill = vi.fn();
+    const write = vi.fn(() => true);
+    (agent as any).process = {
+      kill,
+      stdin: {
+        writable: true,
+        destroyed: false,
+        writableEnded: false,
+        write,
+      },
+    };
+    (agent as any).sessionIdValue = "session-1";
+
+    const pending = agent.inspectSendRequest("session/test", { hello: "world" });
+    await agent.stop();
+
+    await expect(pending).rejects.toThrow("TestAcpAgent stopped.");
+    expect(kill).toHaveBeenCalledWith("SIGTERM");
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify({ jsonrpc: "2.0", id: "acp-1", method: "session/test", params: { hello: "world" } })}\n`);
+    expect(write).toHaveBeenCalledWith(`${JSON.stringify({ jsonrpc: "2.0", method: "session/cancel", params: { sessionId: "session-1" } })}\n`);
   });
 });

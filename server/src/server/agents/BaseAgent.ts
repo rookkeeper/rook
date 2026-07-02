@@ -184,7 +184,7 @@ export class BaseAgent {
     this.activeRunReject?.(error);
     this.activeRunReject = undefined;
     this.rejectPendingSteeringMessages(error);
-    await this.stopImpl();
+    await this.stopImpl(error);
   }
 
   /**
@@ -354,9 +354,15 @@ export class BaseAgent {
     this.emitAcpUpdate({ sessionUpdate: "user_message_chunk", content: { type: "text", text: userMessage } });
   }
 
-  protected async stopImpl(): Promise<void> {
-    if (!this.process) return;
+  protected async stopImpl(reason: Error = new Error(`${this.agentName} stopped.`)): Promise<void> {
     this.stopping = true;
+    this.pendingPermissionRequestIds.clear();
+    this.rejectPendingRequests(reason);
+
+    if (!this.process) {
+      this.startPromise = null;
+      return;
+    }
 
     if (this.sessionIdValue) {
       try {
@@ -369,7 +375,6 @@ export class BaseAgent {
     this.process.kill("SIGTERM");
     this.process = null;
     this.startPromise = null;
-    this.pendingRequests.clear();
   }
 
   protected rejectPendingSteeringMessages(error: unknown): void {
@@ -377,6 +382,12 @@ export class BaseAgent {
     while (this.pendingSteeringMessages.length > 0) {
       this.pendingSteeringMessages.shift()?.reject(normalized);
     }
+  }
+
+  protected rejectPendingRequests(error: unknown): void {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    for (const pending of this.pendingRequests.values()) pending.reject(normalized);
+    this.pendingRequests.clear();
   }
 
   protected getSessionCwd(): string {
@@ -407,8 +418,7 @@ export class BaseAgent {
       child.on("exit", (code, signal) => {
         if (this.stopping) return;
         const message = `ACP agent process exited${code === null ? "" : ` with code ${code}`}${signal ? ` (${signal})` : ""}.`;
-        for (const pending of this.pendingRequests.values()) pending.reject(new Error(message));
-        this.pendingRequests.clear();
+        this.rejectPendingRequests(new Error(message));
         this.emitAcpUpdate({ sessionUpdate: "_rookery_connection_error", error: message });
       });
     });
