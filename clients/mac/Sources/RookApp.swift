@@ -7,9 +7,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var mainWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let icon = NSImage(named: "AppBrand") {
-            NSApp.applicationIconImage = icon
-        }
         guard let model = RookMacModel.shared else { return }
         let contentView = RookView(model: model)
         let hostingController = NSHostingController(rootView: contentView)
