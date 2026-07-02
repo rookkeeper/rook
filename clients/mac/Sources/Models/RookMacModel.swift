@@ -100,6 +100,8 @@ final class RookMacModel: ObservableObject {
     @Published var screenRecordingTrusted = false
     @Published var computerControlEnabled = false
     @Published var bridgePort: UInt16 = 0
+    @Published var baseURLString: String
+    @Published var authTokenString: String
 
     // Voice
     @Published var voiceModeEnabled = false
@@ -108,7 +110,7 @@ final class RookMacModel: ObservableObject {
     @Published var voiceSpeaking = false
     @Published var voicePartial = ""
 
-    let api = RookAPI()
+    private(set) var api: RookAPI
     private let socket = AcpSocket()
     private let serverController = ServerController()
     private let foregroundMonitor = ForegroundAppMonitor()
@@ -141,6 +143,23 @@ final class RookMacModel: ObservableObject {
     private let environmentStaleAfter: TimeInterval = 5 * 60
 
     init() {
+        let envBaseURL = ProcessInfo.processInfo.environment["ROOK_SERVER_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedBaseURL = UserDefaults.standard.string(forKey: "RookServerBaseURL")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedBaseURL = (envBaseURL?.isEmpty == false ? envBaseURL : storedBaseURL) ?? "http://127.0.0.1:3000"
+        if let envBaseURL, !envBaseURL.isEmpty, storedBaseURL != envBaseURL {
+            UserDefaults.standard.set(envBaseURL, forKey: "RookServerBaseURL")
+        }
+
+        let envToken = ProcessInfo.processInfo.environment["ROOK_AUTH_TOKEN"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedToken = KeychainStore.string(for: "RookAuthToken")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedToken = (envToken?.isEmpty == false ? envToken : storedToken) ?? ""
+        if let envToken, !envToken.isEmpty, storedToken != envToken {
+            KeychainStore.setString(envToken, for: "RookAuthToken")
+        }
+
+        baseURLString = resolvedBaseURL
+        authTokenString = resolvedToken
+        api = RookAPI(baseURL: URL(string: resolvedBaseURL) ?? URL(string: "http://127.0.0.1:3000")!, authToken: resolvedToken)
         RookMacModel.shared = self
         socket.onEvent = { [weak self] event in
             self?.handleSocketEvent(event)

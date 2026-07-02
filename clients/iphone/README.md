@@ -163,7 +163,7 @@ xcodebuild -project Rook.xcodeproj -scheme Rook \
 #    iPhone 14 Pro or newer simulator.
 ```
 
-For a **physical device**, the launcher script sets the base URL for you at launch time using a reachable hostname when it can discover one. If you run manually, set the base URL to the hostname or IP address your phone can reach. The base URL is stored in `UserDefaults` (`RookModel.baseURLString`) and can also be overridden at launch with `ROOK_SERVER_BASE_URL`; the `NSAllowsLocalNetworking` ATS exception in `Info.plist` permits the cleartext connection.
+For a **physical device**, the launcher script sets the base URL for you at launch time using a reachable hostname when it can discover one. If you run manually, set the base URL to the hostname or IP address your phone can reach. The base URL is stored in `UserDefaults` (`RookModel.baseURLString`) and can also be overridden at launch with `ROOK_SERVER_BASE_URL`; the bearer token is stored in Keychain and can be overridden at launch with `ROOK_AUTH_TOKEN`; the `NSAllowsLocalNetworking` ATS exception in `Info.plist` permits the cleartext connection.
 
 ### Onboarding: iPhone client + home server over a private remote network
 
@@ -274,7 +274,7 @@ xcrun simctl io booted screenshot /tmp/rook.png   # screenshot the simulator
 
 ## Out of scope (follow-ups)
 
-The MVP targets the local Mac dev server, unauthenticated, on the LAN. True
+The MVP targets the local Mac dev server and private-network phone access. True
 away-from-home presence (push-to-start Live Activities and remote updates while
 the app is closed) needs a hosted server + APNs + Sign in with Apple — see
 [`PRODUCT_CHANGES/research/rook-on-iphone.md`](../../PRODUCT_CHANGES/research/rook-on-iphone.md)

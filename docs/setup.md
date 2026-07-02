@@ -84,7 +84,7 @@ If you do not set `ROOK_REMOTE_HOSTNAME`, the phone launcher next tries `ROOK_BI
 If neither is set, it stops and tells you what to configure.
 
 ### `ROOK_AUTH_TOKEN`
-Optional bearer token for non-loopback access.
+Optional bearer token for all client access.
 
 Example:
 
@@ -94,10 +94,10 @@ ROOK_AUTH_TOKEN=replace-with-a-long-random-string
 
 Current behavior:
 - if unset, Rook has no app-level auth
-- if set, **non-loopback** HTTP and WebSocket requests must send `Authorization: Bearer <token>`
-- loopback requests from the same machine are still allowed without the token
+- if set, **every** HTTP and WebSocket request must send `Authorization: Bearer <token>`
+- that includes localhost clients, the Mac app, the iPhone app, and debug scripts
 
-That keeps the local Mac app/dev flow lightweight while protecting remote phone access.
+This closes the browser/localhost gap where a hostile local webpage or process could otherwise talk to Rook without authenticating.
 
 ## Common setups
 
@@ -135,7 +135,7 @@ ROOK_REMOTE_HOSTNAME=your-hostname.example.net
 ROOK_AUTH_TOKEN=replace-with-a-long-random-string
 ```
 
-The Mac app still uses localhost.
+The Mac app still uses localhost, but now sends the bearer token too.
 The iPhone launcher uses `ROOK_REMOTE_HOSTNAME`.
 
 ## Remote access notes

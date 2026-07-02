@@ -496,8 +496,13 @@ build_mac() {
   xcodebuild -project "$proj" -scheme Rook -configuration Debug -derivedDataPath "$derived" build >/dev/null
   local app_path="$derived/Build/Products/Debug/Rook.app"
   [[ -d "$app_path" ]] || die "missing built app: $app_path"
-  log "launching Rook"
-  open "$app_path"
+  local url="http://127.0.0.1:${SERVER_PORT}"
+  log "launching Rook with ROOK_SERVER_BASE_URL=$url"
+  if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
+    ROOK_SERVER_BASE_URL="$url" ROOK_AUTH_TOKEN="$SERVER_AUTH_TOKEN" "$app_path/Contents/MacOS/Rook" >/dev/null 2>&1 &
+  else
+    ROOK_SERVER_BASE_URL="$url" "$app_path/Contents/MacOS/Rook" >/dev/null 2>&1 &
+  fi
 }
 
 build_sim() {
