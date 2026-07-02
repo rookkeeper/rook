@@ -119,6 +119,8 @@ final class RookMacModel: ObservableObject {
     private let hotKey = HotKey()
     private var healthTimer: Timer?
     private var environmentExpiryTimer: Timer?
+    private var environmentSnapshotTimer: Timer?
+    private var workspaceObservers: [NSObjectProtocol] = []
     private var blockCounter = 0
     private var enteredEnvironments: Set<String> = []
     private var spokenTurnBuffer = ""
@@ -130,7 +132,15 @@ final class RookMacModel: ObservableObject {
     private struct RegisteredEnvironmentState {
         var sourceName: String
         var metadata: [String: JSONValue]
-        var lastSeenAt: Date
+        var lastEncounteredAt: Date
+        var lastRegisteredAt: Date
+        var expiresAt: Date
+    }
+
+    private struct WebEnvironmentCandidate {
+        let id: String
+        let sourceName: String
+        let metadata: [String: JSONValue]
     }
 
     private struct EnvironmentCandidate {
@@ -140,9 +150,21 @@ final class RookMacModel: ObservableObject {
     }
 
     private var registeredEnvironmentStates: [String: RegisteredEnvironmentState] = [:]
-    private let environmentStaleAfter: TimeInterval = 5 * 60
+    private let environmentEncounterTtl: TimeInterval
+    private let environmentReregisterInterval: TimeInterval
+    private let environmentSnapshotInterval: TimeInterval
+    private let environmentImmediateDedupWindow: TimeInterval
 
-    init() {
+    init(
+        environmentEncounterTtl: TimeInterval = 5 * 60,
+        environmentReregisterInterval: TimeInterval = 5 * 60,
+        environmentSnapshotInterval: TimeInterval = 15,
+        environmentImmediateDedupWindow: TimeInterval = 2
+    ) {
+        self.environmentEncounterTtl = environmentEncounterTtl
+        self.environmentReregisterInterval = environmentReregisterInterval
+        self.environmentSnapshotInterval = environmentSnapshotInterval
+        self.environmentImmediateDedupWindow = environmentImmediateDedupWindow
         let envBaseURL = ProcessInfo.processInfo.environment["ROOK_SERVER_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         let storedBaseURL = UserDefaults.standard.string(forKey: "RookServerBaseURL")?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedBaseURL = (envBaseURL?.isEmpty == false ? envBaseURL : storedBaseURL) ?? "http://127.0.0.1:3000"
@@ -183,7 +205,12 @@ final class RookMacModel: ObservableObject {
         }
         environmentExpiryTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.sweepStaleRegisteredEnvironments()
+                self?.maintainEncounteredEnvironments(reason: "timer", allowReregister: true)
+            }
+        }
+        environmentSnapshotTimer = Timer.scheduledTimer(withTimeInterval: environmentSnapshotInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.maintainEncounteredEnvironments(reason: "poll", allowReregister: false)
             }
         }
         foregroundMonitor.onForegroundChange = { [weak self] app in
@@ -196,6 +223,7 @@ final class RookMacModel: ObservableObject {
         voiceModeEnabled = UserDefaults.standard.bool(forKey: "EnableVoiceMode")
         setupVoice()
         startBridge()
+        installWorkspaceObservers()
         foregroundMonitor.start()
         accessibilityTrusted = AXReader.isTrusted()
         screenRecordingTrusted = ScreenCapturer.hasPermission()
@@ -358,13 +386,13 @@ final class RookMacModel: ObservableObject {
         voice.stopSpeaking()
         environmentExpiryTimer?.invalidate()
         environmentExpiryTimer = nil
-        let environmentsToRelease = registeredEnvironmentStates.keys.sorted { Self.environmentDepth($0) > Self.environmentDepth($1) }
+        environmentSnapshotTimer?.invalidate()
+        environmentSnapshotTimer = nil
+        for observer in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        workspaceObservers.removeAll()
         Task {
-            // Best-effort: end the current Mac-observed episodes so the server
-            // doesn't keep stale availability after we're gone.
-            for environmentId in environmentsToRelease {
-                try? await api.unregisterEnvironment(id: environmentId)
-            }
             if managedServerRunning {
                 serverController.stop()
             }
@@ -973,6 +1001,8 @@ final class RookMacModel: ObservableObject {
 
     private static func webEnvironmentIds(from rawURL: String) -> [String] {
         guard let components = URLComponents(string: rawURL),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
               let host = components.host?.lowercased(), !host.isEmpty else {
             return []
         }
@@ -987,6 +1017,30 @@ final class RookMacModel: ObservableObject {
             ids.append("web:\(current)")
         }
         return ids
+    }
+
+    private static func webEnvironmentCandidate(
+        rawURL: String,
+        bundleId: String,
+        appName: String,
+        windowTitle: String? = nil
+    ) -> WebEnvironmentCandidate? {
+        guard let deepestWebId = Self.webEnvironmentIds(from: rawURL).last else {
+            return nil
+        }
+        var metadata: [String: JSONValue] = [
+            "bundleId": .string(bundleId),
+            "appName": .string(appName),
+            "url": .string(rawURL),
+        ]
+        if let windowTitle, !windowTitle.isEmpty {
+            metadata["windowTitle"] = .string(windowTitle)
+        }
+        return WebEnvironmentCandidate(
+            id: deepestWebId,
+            sourceName: rawURL,
+            metadata: metadata
+        )
     }
 
     /// Dump everything the Mac can see right now — app identity, window title,
@@ -1041,7 +1095,7 @@ final class RookMacModel: ObservableObject {
     }
 
     private func observeCurrentEnvironments(app: ForegroundApp, title: String?) {
-        let candidates = deriveEnvironmentCandidates(app: app, title: title)
+        let candidates = deriveForegroundEnvironmentCandidates(app: app, title: title)
         let appCandidates = candidates.filter { $0.id.hasPrefix("app:") }
         let webCandidates = candidates.filter { $0.id.hasPrefix("web:") }
         foregroundEnvironmentId = appCandidates.last?.id
@@ -1049,10 +1103,33 @@ final class RookMacModel: ObservableObject {
         let bridgeEnvironmentId = webCandidates.last?.id ?? appCandidates.last?.id
         providerLog("foreground: \(app.name) [\(app.bundleId)] title=\(title ?? "nil") -> \(candidates.map(\.id).joined(separator: ", "))")
         updateBridgeContext(app: app, title: title, environmentId: bridgeEnvironmentId)
-        observeEnvironmentCandidates(candidates)
+        encounterEnvironmentCandidates(candidates, reason: "foreground")
     }
 
-    private func deriveEnvironmentCandidates(app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
+    private func installWorkspaceObservers() {
+        let center = NSWorkspace.shared.notificationCenter
+        workspaceObservers.append(center.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.maintainEncounteredEnvironments(reason: "app-terminated", allowReregister: false)
+            }
+        })
+        workspaceObservers.append(center.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.reconcileVisibleEnvironmentSnapshot(reason: "wake")
+                self?.maintainEncounteredEnvironments(reason: "wake", allowReregister: false)
+            }
+        })
+    }
+
+    private func deriveForegroundEnvironmentCandidates(app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
         var candidates: [EnvironmentCandidate] = []
 
         var appMetadata: [String: JSONValue] = [
@@ -1082,75 +1159,266 @@ final class RookMacModel: ObservableObject {
         }
 
         if Self.browserBundleIds.contains(app.bundleId),
-           let rawURL = AXReader.activeTabURL(pid: app.pid), !rawURL.isEmpty,
-           let deepestWebId = Self.webEnvironmentIds(from: rawURL).last {
-            var metadata: [String: JSONValue] = [
-                "bundleId": .string(app.bundleId),
-                "appName": .string(app.name),
-                "url": .string(rawURL),
-            ]
-            if let title, !title.isEmpty {
-                metadata["windowTitle"] = .string(title)
-            }
+           let rawURL = AXReader.activeTabURL(pid: app.pid),
+           let webCandidate = Self.webEnvironmentCandidate(rawURL: rawURL, bundleId: app.bundleId, appName: app.name, windowTitle: title) {
             candidates.append(EnvironmentCandidate(
-                id: deepestWebId,
-                sourceName: rawURL,
-                metadata: metadata
+                id: webCandidate.id,
+                sourceName: webCandidate.sourceName,
+                metadata: webCandidate.metadata
             ))
         }
 
         return candidates.sorted { Self.environmentDepth($0.id) < Self.environmentDepth($1.id) }
     }
 
-    private func observeEnvironmentCandidates(_ candidates: [EnvironmentCandidate]) {
+    private func encounterEnvironmentCandidates(_ candidates: [EnvironmentCandidate], reason: String) {
         let now = Date()
         for candidate in candidates {
-            if var state = registeredEnvironmentStates[candidate.id] {
-                state.lastSeenAt = now
-                state.sourceName = candidate.sourceName
-                state.metadata = candidate.metadata
-                registeredEnvironmentStates[candidate.id] = state
+            let existing = registeredEnvironmentStates[candidate.id]
+            if let existing,
+               existing.sourceName == candidate.sourceName,
+               now.timeIntervalSince(existing.lastRegisteredAt) < environmentImmediateDedupWindow {
+                var touched = existing
+                touched.lastEncounteredAt = now
+                touched.expiresAt = now.addingTimeInterval(environmentEncounterTtl)
+                registeredEnvironmentStates[candidate.id] = touched
+                providerLog("register skip [\(reason)]: \(candidate.id)")
                 continue
             }
+
+            let registeredAt = now
+            var metadata = candidate.metadata
+            metadata["registeredAt"] = .string(Self.iso8601String(from: registeredAt))
+            let metadataForRegister = metadata
             registeredEnvironmentStates[candidate.id] = RegisteredEnvironmentState(
                 sourceName: candidate.sourceName,
-                metadata: candidate.metadata,
-                lastSeenAt: now
+                metadata: metadataForRegister,
+                lastEncounteredAt: now,
+                lastRegisteredAt: now,
+                expiresAt: now.addingTimeInterval(environmentEncounterTtl)
             )
             Task {
                 do {
                     try await api.registerEnvironment(
                         id: candidate.id,
                         sourceName: candidate.sourceName,
-                        metadata: candidate.metadata
+                        metadata: metadataForRegister
                     )
-                    providerLog("register ok: \(candidate.id)")
+                    providerLog("register ok [\(reason)]: \(candidate.id)")
                 } catch {
-                    providerLog("provider error: \(error.localizedDescription)")
+                    providerLog("register error [\(reason)]: \(error.localizedDescription)")
                 }
             }
         }
     }
 
-    private func sweepStaleRegisteredEnvironments() {
+    private func maintainEncounteredEnvironments(reason: String, allowReregister: Bool) {
         let now = Date()
-        let staleIds = registeredEnvironmentStates.compactMap { id, state in
-            now.timeIntervalSince(state.lastSeenAt) >= environmentStaleAfter ? id : nil
-        }.sorted { Self.environmentDepth($0) > Self.environmentDepth($1) }
-        guard !staleIds.isEmpty else {
-            return
-        }
-        for id in staleIds {
-            registeredEnvironmentStates.removeValue(forKey: id)
+        let openAppBundleIds = currentOpenApplicationBundleIds()
+        let openWebEnvironmentIds = currentOpenWebEnvironmentIds()
+
+        for id in registeredEnvironmentStates.keys.sorted(by: { Self.environmentDepth($0) > Self.environmentDepth($1) }) {
+            guard let state = registeredEnvironmentStates[id] else {
+                continue
+            }
+
+            if !isEnvironmentStillOpen(id: id, state: state, openAppBundleIds: openAppBundleIds, openWebEnvironmentIds: openWebEnvironmentIds) {
+                registeredEnvironmentStates.removeValue(forKey: id)
+                Task {
+                    do {
+                        try await api.unregisterEnvironment(id: id)
+                        providerLog("unregister ok [\(reason)]: \(id)")
+                    } catch {
+                        providerLog("unregister error [\(reason)]: \(error.localizedDescription)")
+                    }
+                }
+                continue
+            }
+
+            if state.expiresAt <= now {
+                registeredEnvironmentStates.removeValue(forKey: id)
+                providerLog("cache forget [\(reason)]: \(id)")
+                continue
+            }
+
+            guard allowReregister else {
+                continue
+            }
+            if now.timeIntervalSince(state.lastRegisteredAt) < environmentReregisterInterval {
+                continue
+            }
+
+            var refreshedState = state
+            refreshedState.lastRegisteredAt = now
+            refreshedState.metadata["registeredAt"] = .string(Self.iso8601String(from: now))
+            registeredEnvironmentStates[id] = refreshedState
             Task {
                 do {
-                    try await api.unregisterEnvironment(id: id)
-                    providerLog("stale unregister ok: \(id)")
+                    try await api.registerEnvironment(
+                        id: id,
+                        sourceName: refreshedState.sourceName,
+                        metadata: refreshedState.metadata
+                    )
+                    providerLog("reregister ok [\(reason)]: \(id)")
                 } catch {
-                    providerLog("stale provider error: \(error.localizedDescription)")
+                    providerLog("reregister error [\(reason)]: \(error.localizedDescription)")
                 }
             }
         }
+    }
+
+    private func currentOpenApplicationBundleIds() -> Set<String> {
+        Set(NSWorkspace.shared.runningApplications.compactMap { app in
+            guard let bundleId = app.bundleIdentifier,
+                  app.activationPolicy == .regular,
+                  bundleId != Bundle.main.bundleIdentifier else {
+                return nil
+            }
+            return bundleId
+        })
+    }
+
+    private func currentVisibleApplications() -> [NSRunningApplication] {
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let windowInfo = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return []
+        }
+
+        let visiblePids = Set(windowInfo.compactMap { info -> pid_t? in
+            guard let layer = info[kCGWindowLayer as String] as? NSNumber,
+                  layer.intValue == 0,
+                  let alpha = info[kCGWindowAlpha as String] as? NSNumber,
+                  alpha.doubleValue > 0.01,
+                  let bounds = info[kCGWindowBounds as String] as? [String: CGFloat],
+                  (bounds["Width"] ?? 0) > 40,
+                  (bounds["Height"] ?? 0) > 40,
+                  let pid = info[kCGWindowOwnerPID as String] as? NSNumber else {
+                return nil
+            }
+            return pid_t(pid.intValue)
+        })
+
+        return NSWorkspace.shared.runningApplications.compactMap { app in
+            guard visiblePids.contains(app.processIdentifier),
+                  app.activationPolicy == .regular,
+                  app.bundleIdentifier != Bundle.main.bundleIdentifier,
+                  app.isHidden == false else {
+                return nil
+            }
+            return app
+        }
+    }
+
+    private func reconcileVisibleEnvironmentSnapshot(reason: String) {
+        let candidates = visibleEnvironmentCandidates()
+        guard !candidates.isEmpty else {
+            providerLog("visible-snapshot [\(reason)]: (none)")
+            return
+        }
+        providerLog("visible-snapshot [\(reason)]: \(candidates.map(\.id).joined(separator: ", "))")
+        encounterEnvironmentCandidates(candidates, reason: reason)
+    }
+
+    private func visibleEnvironmentCandidates() -> [EnvironmentCandidate] {
+        var byId: [String: EnvironmentCandidate] = [:]
+        for app in currentVisibleApplications() {
+            guard let bundleId = app.bundleIdentifier,
+                  let name = app.localizedName else {
+                continue
+            }
+
+            let appCandidate = EnvironmentCandidate(
+                id: "app:\(bundleId)",
+                sourceName: name,
+                metadata: [
+                    "bundleId": .string(bundleId),
+                    "appName": .string(name),
+                ]
+            )
+            byId[appCandidate.id] = appCandidate
+
+            if Self.browserBundleIds.contains(bundleId),
+               let rawURL = AXReader.activeTabURL(pid: app.processIdentifier),
+               let webCandidate = Self.webEnvironmentCandidate(rawURL: rawURL, bundleId: bundleId, appName: name) {
+                byId[webCandidate.id] = EnvironmentCandidate(
+                    id: webCandidate.id,
+                    sourceName: webCandidate.sourceName,
+                    metadata: webCandidate.metadata
+                )
+            }
+        }
+        return byId.values.sorted { Self.environmentDepth($0.id) < Self.environmentDepth($1.id) }
+    }
+
+    private func currentOpenWebEnvironmentIds() -> Set<String> {
+        let openAppBundleIds = currentOpenApplicationBundleIds()
+        var ids: Set<String> = []
+        for bundleId in Self.browserBundleIds where openAppBundleIds.contains(bundleId) {
+            for rawURL in browserTabURLs(bundleId: bundleId) {
+                if let webCandidate = Self.webEnvironmentCandidate(rawURL: rawURL, bundleId: bundleId, appName: "") {
+                    ids.insert(webCandidate.id)
+                }
+            }
+        }
+        return ids
+    }
+
+    private func isEnvironmentStillOpen(
+        id: String,
+        state: RegisteredEnvironmentState,
+        openAppBundleIds: Set<String>,
+        openWebEnvironmentIds: Set<String>
+    ) -> Bool {
+        if id.hasPrefix("web:") {
+            return openWebEnvironmentIds.contains(id)
+        }
+        if let bundleId = state.metadata["bundleId"]?.stringValue {
+            return openAppBundleIds.contains(bundleId)
+        }
+        return true
+    }
+
+    private func browserTabURLs(bundleId: String) -> [String] {
+        let script = appleScriptForTabURLs(bundleId: bundleId)
+        guard !script.isEmpty else {
+            return []
+        }
+        var error: NSDictionary?
+        let result = NSAppleScript(source: script)?.executeAndReturnError(&error)
+        if let error {
+            providerLog("tab-scan failed [\(bundleId)]: \(error[NSAppleScript.errorMessage] ?? error)")
+            return []
+        }
+        let output = result?.stringValue ?? ""
+        return output
+            .split(separator: "\n")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func appleScriptForTabURLs(bundleId: String) -> String {
+        return """
+        set _urls to {}
+        tell application id "\(bundleId)"
+            repeat with w in windows
+                repeat with t in tabs of w
+                    try
+                        set end of _urls to (URL of t as text)
+                    end try
+                end repeat
+            end repeat
+        end tell
+        set AppleScript's text item delimiters to linefeed
+        set _joined to _urls as text
+        set AppleScript's text item delimiters to ""
+        return _joined
+        """
+    }
+
+    private static func iso8601String(from date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
     }
 
     // MARK: - Mac bridge (Tier 2)
@@ -1438,6 +1706,8 @@ final class RookMacModel: ObservableObject {
     /// Re-announce currently cached Mac-observed environments after the server
     /// comes (back) up — registrations are in-memory server state and die with it.
     private func reannounceRegisteredEnvironments() {
+        reconcileVisibleEnvironmentSnapshot(reason: "server-online")
+        maintainEncounteredEnvironments(reason: "server-online", allowReregister: false)
         let candidates = registeredEnvironmentStates
             .sorted { Self.environmentDepth($0.key) < Self.environmentDepth($1.key) }
         Task {

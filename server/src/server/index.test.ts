@@ -456,61 +456,34 @@ describe("server", () => {
     expect(response.json()).toEqual({ error: "Unknown agent" });
   });
 
-  it("pushes an environment offer over the websocket and resolves it on decision", async () => {
+  it("registers an environment and returns its registration timestamp", async () => {
     const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:" });
-    const baseUrl = await listen(app);
-    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "PiAgent" } });
-    const socket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=s-mock`);
 
-    const offerPromise = collectJsonMessages(socket, 1);
     const register = await app.inject({ method: "POST", url: "/api/environments/register", payload: { id: "web:example.com", sourceName: "Example" } });
-    expect(register.json()).toEqual({ ok: true, id: "web:example.com" });
-    const [offer] = await offerPromise;
-    expect(offer).toMatchObject({
-      jsonrpc: "2.0",
-      method: "session/update",
-      params: {
-        update: {
-          sessionUpdate: "_rookery_environment_event",
-          kind: "environment_offer_available",
-          payload: { environmentId: "web:example.com", sourceName: "Example" },
-        },
-      },
-    });
 
-    // Accepting enters the env (entered event) and resolves the offer (resolved event).
-    const resolvedPromise = collectJsonMessages(socket, 2);
+    expect(register.statusCode).toBe(200);
+    expect(register.json()).toMatchObject({ ok: true, id: "web:example.com" });
+    expect(typeof register.json().registeredAt).toBe("string");
+
     const decision = await app.inject({ method: "POST", url: "/api/environments/decision", payload: { environmentId: "web:example.com", decision: "accept" } });
     expect(decision.statusCode).toBe(200);
-    const messages = await resolvedPromise;
-    expect(messages.some((m) => m.params?.update?.sessionUpdate === "_rookery_environment_event" && m.params?.update?.kind === "environment_offer_resolved" && m.params?.update?.payload?.decision === "approved")).toBe(true);
 
-    socket.close();
     await app.close();
   });
 
-  it("registers the identified location and auto-enters the current env over the websocket", async () => {
+  it("registers identified locations without requiring websocket environment events", async () => {
     const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:", poiProvider: new StubPoiLookupProvider() });
-    const baseUrl = await listen(app);
-    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "PiAgent" } });
-    const socket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=s-mock`);
 
-    const eventsPromise = collectJsonMessages(socket, 3);
     const response = await app.inject({
       method: "POST",
       url: "/api/environments/register-location",
       payload: { latitude: 37.3318, longitude: -122.0312, isStationary: true },
     });
+
     expect(response.statusCode).toBe(200);
+    const body = response.json() as { candidates: Array<{ environmentId: string }> };
+    expect(body.candidates[0]?.environmentId).toBe("loc:target.com/123-main-st-springfield-il");
 
-    const currentId = "loc:target.com/123-main-st-springfield-il";
-    const events = await eventsPromise;
-    const kinds = events.map((m) => m.params?.update?.kind);
-    // current is offered (sourceName carried) then auto-entered.
-    expect(events.some((m) => m.params?.update?.kind === "environment_offer_available" && m.params?.update?.payload?.environmentId === currentId && m.params?.update?.payload?.sourceName === "Target")).toBe(true);
-    expect(kinds).toContain("environment_entered");
-
-    socket.close();
     await app.close();
   });
 

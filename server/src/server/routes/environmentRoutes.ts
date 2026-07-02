@@ -34,7 +34,8 @@ export async function registerEnvironmentRoutes(
       { id: trimmedId, metadata: (metadata ?? {}) as Record<string, unknown> },
       { ...(canonicalSourceUrl ? { canonicalSourceUrl } : {}), ...(sourceName ? { sourceName } : {}) },
     );
-    return { ok: true, id: trimmedId };
+    const registeredAt = new Date().toISOString();
+    return { ok: true, id: trimmedId, registeredAt };
   });
 
   app.post<{ Body: { id?: unknown } }>("/api/environments/unregister", async (request, reply) => {

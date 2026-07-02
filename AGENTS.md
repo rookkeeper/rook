@@ -2,7 +2,7 @@
 
 This is a mono-repo for the Rook personal agent. The agent knows its user AND the agent can be made to interact with the environment around it.
 
-Product/design notes: `PRODUCT/`. When making PRs, make sure to reference anything in this directory and describe how the PR interacts with the current PRODUCT design philosophy and approach. Does it implement a missing feature that product docs is asking for? Does it create a new concept (which you definitely need to add to documentation as part of the PR)? Does it change part of the design philosophy and approach or negate it (In this case, also update the docs as part of the PR)?
+Product/design notes: `PRODUCT/`. When making PRs, make sure to reference anything in this directory and describe how the PR interacts with the current PRODUCT design philosophy and approach. Does it implement a missing feature that product docs is asking for? Does it create a new concept (which you definitely need to add to documentation as part of the PR)? Does it change part of the design philosophy and approach or negate it (In this case, also update the docs as part of the PR)? `PRODUCT/AS-BUILT-ARCHITECTURE.md` is also a good place to look for the current structure. If you notice the structure is being modified from what this document describes, make sure to eventually update this document too.
 
 When making changes:
 - Keep tests in sync with code changes.

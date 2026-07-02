@@ -36,6 +36,10 @@ export interface BuildServerOptions {
   roomIdleTimeoutMs?: number;
   /** SQLite location for persistent environment decisions; ":memory:" in tests. */
   environmentDecisionStoreLocation?: string;
+  /** Active environment window. Defaults to 6 minutes. */
+  environmentActiveWindowMs?: number;
+  /** Retention for recent inactive environments. Defaults to 30 minutes. */
+  environmentRecentRetentionMs?: number;
   /** Override the POI lookup provider (defaults to the ptiles provider via the proxy route). */
   poiProvider?: PoiLookupProvider;
   /** Optional bearer token required by all HTTP + WebSocket requests. */
@@ -67,7 +71,11 @@ export async function buildServer(options: BuildServerOptions = {}) {
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
   const environmentDecisionStore = new EnvironmentDecisionStore(options.environmentDecisionStoreLocation);
-  const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionStore);
+  const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionStore, {
+    activeEnvironmentWindowMs: options.environmentActiveWindowMs ?? Number(process.env.ROOK_ENVIRONMENT_ACTIVE_WINDOW_MS ?? 6 * 60_000),
+    recentEnvironmentRetentionMs: options.environmentRecentRetentionMs ?? Number(process.env.ROOK_ENVIRONMENT_RECENT_RETENTION_MS ?? 30 * 60_000),
+    logger: app.log,
+  });
   // Ptiles is an internal geo-identification detail: fetch byte ranges directly from
   // the upstream host (single egress, allowlisted file names) — no public route.
   const fetchRange = createUpstreamFetchRange();
@@ -91,6 +99,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   });
 
   app.addHook("onClose", async () => {
+    environmentManager.close();
     await roomManager.closeAll();
   });
 
