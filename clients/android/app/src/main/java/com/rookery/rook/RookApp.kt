@@ -7,6 +7,7 @@ package com.rookery.rook
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -25,10 +26,13 @@ fun RookApp(viewModel: RookViewModel) {
     val currentSession by viewModel.currentSession.collectAsState()
     val chatVisible by viewModel.chatVisible.collectAsState()
 
+    // ponytail: targetSdk 35 forces edge-to-edge (no opt-out) — safeDrawingPadding keeps
+    // content clear of the status bar / nav bar / cutouts, the SwiftUI safe-area equivalent.
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(PanelPalette.backgroundPrimary)
+            .safeDrawingPadding()
     ) {
         when {
             currentSession != null && chatVisible -> ChatScreen(viewModel)

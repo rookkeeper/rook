@@ -22,7 +22,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -160,7 +167,7 @@ private fun ResumeRow(session: AgentSessionSummary, isRunning: Boolean, onClick:
             modifier = Modifier.size(32.dp).clip(CircleShape).background(PanelPalette.accent),
             contentAlignment = Alignment.Center
         ) {
-            Text("▶", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text("Resume chat", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textNormal)
@@ -175,7 +182,7 @@ private fun ResumeRow(session: AgentSessionSummary, isRunning: Boolean, onClick:
         if (isRunning) {
             Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(PanelPalette.warning))
         }
-        Text("›", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = PanelPalette.textMuted)
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = PanelPalette.textMuted)
     }
 }
 
@@ -193,7 +200,12 @@ private fun AgentRow(agent: AgentDefinition, depth: Int, enabled: Boolean, onCli
             modifier = Modifier.size(24.dp).clip(CircleShape).background(PanelPalette.info.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(if (depth > 0) "◆" else "✦", fontSize = 11.sp, color = PanelPalette.info)
+            Icon(
+                if (depth > 0) Icons.Filled.Person else Icons.Filled.AutoAwesome,
+                contentDescription = null,
+                tint = PanelPalette.info,
+                modifier = Modifier.size(13.dp)
+            )
         }
         Text(
             text = agent.id,
@@ -202,7 +214,7 @@ private fun AgentRow(agent: AgentDefinition, depth: Int, enabled: Boolean, onCli
             color = PanelPalette.textNormal,
             modifier = Modifier.weight(1f)
         )
-        Text("›", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = PanelPalette.textMuted)
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = PanelPalette.textMuted)
     }
 }
 
@@ -219,7 +231,7 @@ private fun MessageBanner(tint: Color, text: String) {
             .background(tint.copy(alpha = 0.12f))
             .padding(12.dp)
     ) {
-        Text("!", color = tint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
         Text(text, fontSize = 12.sp, color = PanelPalette.textMuted)
     }
 }

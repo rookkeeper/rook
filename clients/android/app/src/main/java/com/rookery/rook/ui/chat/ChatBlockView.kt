@@ -1,11 +1,5 @@
 // Mirrors clients/RookKit/Sources/RookKit/Design/ChatBlockViews.swift
 //
-// ponytail: chevron/disclosure/circle glyphs use plain Text characters ("›"/"⌄"/"○")
-// instead of material-icons-extended — that library is a few thousand icons just for a
-// handful of shapes. CheckCircle/Refresh/List come free from material-icons-core (already
-// a transitive dep of material3) and are used where available. Swap the glyphs for real
-// icons if material-icons-extended gets added for another reason later.
-//
 // AssistantText renders plain Text even once streaming is done, not styled Markdown — the
 // Phase 2 plan's markdown-renderer dependency has no release compatible with this project's
 // Kotlin 2.0.21 / compileSdk 35 toolchain (every maintained tag needs Kotlin 2.2+ /
@@ -41,7 +35,10 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -138,11 +135,11 @@ private fun DisclosureHeader(
             color = textColor.copy(alpha = 0.85f)
         )
         Spacer(Modifier.width(6.dp))
-        Text(
-            text = if (expanded) "⌄" else "›",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = textColor.copy(alpha = 0.75f)
+        Icon(
+            if (expanded) Icons.Filled.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = textColor.copy(alpha = 0.75f),
+            modifier = Modifier.size(14.dp)
         )
         if (!trailingAligned) Spacer(Modifier.weight(1f))
     }
@@ -344,11 +341,11 @@ private fun ToolBlockView(state: ToolBlockState, modifier: Modifier = Modifier) 
                     .padding(horizontal = 7.dp, vertical = 2.dp)
             )
             Spacer(Modifier.width(6.dp))
-            Text(
-                text = if (expanded) "⌄" else "›",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = PanelPalette.textMuted
+            Icon(
+                if (expanded) Icons.Filled.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = PanelPalette.textMuted,
+                modifier = Modifier.size(14.dp)
             )
         }
 
@@ -479,7 +476,12 @@ private fun PlanBlockView(entries: List<PlanEntry>, modifier: Modifier = Modifie
                         tint = PanelPalette.info,
                         modifier = Modifier.size(12.dp)
                     )
-                    else -> Text(text = "○", fontSize = 10.sp, color = PanelPalette.secondaryText)
+                    else -> Icon(
+                        Icons.Filled.RadioButtonUnchecked,
+                        contentDescription = null,
+                        tint = PanelPalette.secondaryText,
+                        modifier = Modifier.size(12.dp)
+                    )
                 }
                 Text(
                     text = entry.content,

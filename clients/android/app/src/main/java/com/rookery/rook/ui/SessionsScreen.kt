@@ -20,8 +20,17 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -99,11 +108,11 @@ fun SessionsScreen(viewModel: RookViewModel) {
                             .clickable(enabled = !startingSession) { startNew() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (startingSession) "…" else "↑",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                        Icon(
+                            if (startingSession) Icons.Filled.HourglassEmpty else Icons.Filled.ArrowUpward,
+                            contentDescription = "Start",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -179,13 +188,13 @@ private fun SessionsHeader(agentId: String, sessions: List<AgentSessionSummary>,
                 .clickable(onClick = onBack),
             contentAlignment = Alignment.Center
         ) {
-            Text("‹", color = PanelPalette.textNormal, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Back", tint = PanelPalette.textNormal)
         }
         Box(
             modifier = Modifier.size(28.dp).clip(CircleShape).background(PanelPalette.info.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
-            Text("✦", fontSize = 12.sp, color = PanelPalette.info)
+            Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = PanelPalette.info, modifier = Modifier.size(14.dp))
         }
         Column {
             Text(agentId, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textNormal, maxLines = 1)
@@ -241,7 +250,12 @@ private fun SessionRow(session: AgentSessionSummary, enabled: Boolean, onClick: 
             modifier = Modifier.size(30.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(if (session.running) "⚡" else "☾", fontSize = 12.sp, color = tint)
+            Icon(
+                if (session.running) Icons.Filled.Bolt else Icons.Filled.Bedtime,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(14.dp)
+            )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(session.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = PanelPalette.textNormal, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -259,7 +273,7 @@ private fun SessionRow(session: AgentSessionSummary, enabled: Boolean, onClick: 
                 .background(tint.copy(alpha = 0.25f))
                 .padding(horizontal = 8.dp, vertical = 3.dp)
         )
-        Text("›", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PanelPalette.textMuted)
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = PanelPalette.textMuted)
     }
 }
 

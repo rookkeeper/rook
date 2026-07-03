@@ -26,7 +26,15 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -118,7 +126,7 @@ private fun ChatHeader(agentName: String, sessionName: String?, contextUsage: Pa
                 .clickable(onClick = onBack),
             contentAlignment = Alignment.Center
         ) {
-            Text("‹", color = PanelPalette.textNormal, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Back", tint = PanelPalette.textNormal)
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(agentName, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textNormal, maxLines = 1)
@@ -153,7 +161,7 @@ private fun ChatThread(blocks: List<com.rookery.rook.model.ChatBlock>, modifier:
     if (blocks.isEmpty()) {
         Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("✦", fontSize = 28.sp, color = PanelPalette.textMuted)
+                Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = PanelPalette.textMuted, modifier = Modifier.size(28.dp))
                 Text(
                     text = "Say something to your agent",
                     fontSize = 15.sp,
@@ -233,13 +241,15 @@ private fun QueuedBar(messages: List<String>, onRemove: (Int) -> Unit) {
                     .border(1.dp, PanelPalette.border, RoundedCornerShape(percent = 50))
                     .padding(start = 9.dp, end = 6.dp, top = 5.dp, bottom = 5.dp)
             ) {
-                Text("⏱", fontSize = 10.sp, color = PanelPalette.textMuted)
+                Icon(Icons.Filled.Schedule, contentDescription = null, tint = PanelPalette.textMuted, modifier = Modifier.size(10.dp))
                 Text(message, fontSize = 12.sp, color = PanelPalette.textNormal, maxLines = 1)
-                Text(
-                    text = "✕",
-                    fontSize = 11.sp,
-                    color = PanelPalette.textMuted,
-                    modifier = Modifier.clickable { onRemove(index) }
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Remove",
+                    tint = PanelPalette.textMuted,
+                    modifier = Modifier
+                        .size(13.dp)
+                        .clickable { onRemove(index) }
                 )
             }
         }
@@ -293,7 +303,12 @@ private fun Composer(
                 .clickable(enabled = canSend, onClick = onSubmit),
             contentAlignment = Alignment.Center
         ) {
-            Text(if (isRunning) "⇩" else "↑", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Icon(
+                if (isRunning) Icons.Filled.Inbox else Icons.Filled.ArrowUpward,
+                contentDescription = "Send",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
