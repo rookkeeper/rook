@@ -177,31 +177,32 @@ export class EnvironmentManager {
   decideEnvironment(environmentId: string, decision: EnvironmentDecision, bundleHash?: string): void {
     this.pruneMemory();
     const decisionKey = bundleHash ?? environmentId;
+    const bundle = bundleHash
+      ? this.remembered.get(environmentId)?.bundles.find((candidate) => candidate.bundleHash === bundleHash)
+      : undefined;
+
     if (decision === "approve" || decision === "reject") {
-      this.decisions.setDecision(decisionKey, decision);
+      this.decisions.setDecision(decisionKey, environmentId, bundle?.bundleId ?? null, decision);
       this.ephemeral.delete(decisionKey);
     } else {
       this.ephemeral.set(decisionKey, decision);
     }
 
-    if (bundleHash) {
-      const bundle = this.remembered.get(environmentId)?.bundles.find((candidate) => candidate.bundleHash == bundleHash);
-      if (bundle) {
-        this.broadcastBundleResolution(
-          environmentId,
-          bundle.bundleId,
-          bundle.bundleHash,
-          decision === "accept" || decision === "approve" ? "approved" : "dismissed",
-        );
-      }
+    if (bundle) {
+      this.broadcastBundleResolution(
+        environmentId,
+        bundle.bundleId,
+        bundle.bundleHash,
+        decision === "accept" || decision === "approve" ? "approved" : "dismissed",
+      );
     }
   }
 
-  effectiveDecision(environmentId: string): EffectiveDecision {
+  effectiveDecision(bundleHash: string): EffectiveDecision {
     this.pruneMemory();
-    const ephemeral = this.ephemeral.get(environmentId);
+    const ephemeral = this.ephemeral.get(bundleHash);
     if (ephemeral) return ephemeral;
-    return this.decisions.getDecision(environmentId) ?? "undecided";
+    return this.decisions.getDecision(bundleHash) ?? "undecided";
   }
 
   subscribe(sessionId: string, listener: EnvironmentEventListener): void {

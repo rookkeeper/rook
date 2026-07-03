@@ -11,8 +11,8 @@ import { REPO_ROOT } from "../paths.js";
  * later swap in another backend, only this file changes. Ephemeral decisions
  * (Accept / Ignore) are NOT stored here; they live in memory on the EnvironmentManager.
  *
- * The stored key is an opaque decision key. Today that is typically a bundle-content
- * hash, but older callers may still pass environment ids.
+ * The stored key is a bundle-content hash. Each row also records which
+ * environment and bundle the decision was made for, for auditability.
  */
 export class EnvironmentDecisionStore {
   private readonly db: DatabaseSync;
@@ -27,32 +27,34 @@ export class EnvironmentDecisionStore {
     this.db = new DatabaseSync(filename);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS environment_decisions (
-        environment_id TEXT PRIMARY KEY,
+        bundle_hash TEXT PRIMARY KEY,
+        environment_id TEXT NOT NULL,
+        bundle_id TEXT,
         decision TEXT NOT NULL CHECK (decision IN ('approve', 'reject')),
         updated_at TEXT NOT NULL
       )
     `);
   }
 
-  getDecision(environmentId: string): PersistentDecision | null {
+  getDecision(bundleHash: string): PersistentDecision | null {
     const row = this.db
-      .prepare("SELECT decision FROM environment_decisions WHERE environment_id = ?")
-      .get(environmentId) as { decision: PersistentDecision } | undefined;
+      .prepare("SELECT decision FROM environment_decisions WHERE bundle_hash = ?")
+      .get(bundleHash) as { decision: PersistentDecision } | undefined;
     return row?.decision ?? null;
   }
 
-  setDecision(environmentId: string, decision: PersistentDecision): void {
+  setDecision(bundleHash: string, environmentId: string, bundleId: string | null, decision: PersistentDecision): void {
     this.db
       .prepare(`
-        INSERT INTO environment_decisions (environment_id, decision, updated_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT (environment_id) DO UPDATE SET decision = excluded.decision, updated_at = excluded.updated_at
+        INSERT INTO environment_decisions (bundle_hash, environment_id, bundle_id, decision, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (bundle_hash) DO UPDATE SET environment_id = excluded.environment_id, bundle_id = excluded.bundle_id, decision = excluded.decision, updated_at = excluded.updated_at
       `)
-      .run(environmentId, decision, new Date().toISOString());
+      .run(bundleHash, environmentId, bundleId, decision, new Date().toISOString());
   }
 
-  clearDecision(environmentId: string): void {
-    this.db.prepare("DELETE FROM environment_decisions WHERE environment_id = ?").run(environmentId);
+  clearDecision(bundleHash: string): void {
+    this.db.prepare("DELETE FROM environment_decisions WHERE bundle_hash = ?").run(bundleHash);
   }
 
   close(): void {

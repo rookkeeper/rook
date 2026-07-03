@@ -127,6 +127,154 @@ describe("EnvironmentManager", () => {
     expect(manager.effectiveDecision("web:example.com")).toBe("ignore");
   });
 
+  it("stores environment_id and bundle_id when approving a bundle by hash", async () => {
+    const manager = newManager();
+
+    // Simulate an environment with bundles in memory so decideEnvironment can
+    // look up the bundle metadata.
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#my-bundle",
+          bundleId: "my-bundle",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/my-bundle",
+          skills: [],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-abc",
+      },
+    ] as any);
+    const bundleManager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+
+    // Register to get the bundle into remembered state.
+    await bundleManager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
+
+    // Approve the bundle by hash.
+    bundleManager.decideEnvironment("web:example.com", "approve", "hash-abc");
+
+    // effectiveDecision by hash should return approve.
+    expect(bundleManager.effectiveDecision("hash-abc")).toBe("approve");
+    // The DB entry should be findable.
+    expect(decisions.getDecision("hash-abc")).toBe("approve");
+  });
+
+  it("shows per-bundle effectiveDecision in diagnostic snapshot", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#my-bundle",
+          bundleId: "my-bundle",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/my-bundle",
+          skills: [{ id: "talk", files: {} }],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-abc",
+      },
+    ] as any);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
+    manager.decideEnvironment("web:example.com", "accept", "hash-abc");
+
+    const snapshot = manager.diagnosticSnapshot();
+    expect(snapshot).toHaveLength(1);
+    // Per-bundle decision should be "accept".
+    expect(snapshot[0].bundles[0].effectiveDecision).toBe("accept");
+    // The top-level (environment-keyed) decision won't match the bundle hash.
+  });
+
+  it("ephemeral accept is forgotten when the environment expires", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#my-bundle",
+          bundleId: "my-bundle",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/my-bundle",
+          skills: [],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-abc",
+      },
+    ] as any);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 1_000,
+      recentEnvironmentRetentionMs: 30_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.decideEnvironment("web:example.com", "accept", "hash-abc");
+    expect(manager.effectiveDecision("hash-abc")).toBe("accept");
+
+    // Advance past the active window — environment moves to recent, accept is forgotten.
+    nowMs += 1_001;
+    expect(manager.effectiveDecision("hash-abc")).toBe("undecided");
+  });
+
+  it("approve persists across environment expiry", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#my-bundle",
+          bundleId: "my-bundle",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/my-bundle",
+          skills: [],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-abc",
+      },
+    ] as any);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 1_000,
+      recentEnvironmentRetentionMs: 30_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.decideEnvironment("web:example.com", "approve", "hash-abc");
+    expect(manager.effectiveDecision("hash-abc")).toBe("approve");
+
+    // Advance past the active window — environment expires, but approve is in DB.
+    nowMs += 1_001;
+    expect(manager.effectiveDecision("hash-abc")).toBe("approve");
+  });
+
   it("tracks subscriptions without entering environments", async () => {
     const repositoryService = mockRepositoryService();
     vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
