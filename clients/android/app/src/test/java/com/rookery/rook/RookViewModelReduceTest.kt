@@ -46,6 +46,28 @@ class RookViewModelReduceTest {
     }
 
     @Test
+    fun runCompletedWithNoContentShowsErrorInsteadOfSilentSuccess() {
+        // Mirrors a real upstream failure (e.g. a provider billing rejection): the server
+        // reports a normal end_turn with zero content instead of RunFailed.
+        val viewModel = RookViewModel()
+
+        viewModel.handleSocketEvent(AcpClientEvent.RunCompleted("end_turn"))
+
+        val error = viewModel.blocks.value.single().kind as ChatBlockKind.Error
+        assertEquals("run", error.source)
+    }
+
+    @Test
+    fun runCompletedWithContentStaysSilent() {
+        val viewModel = RookViewModel()
+
+        viewModel.handleSocketEvent(AcpClientEvent.AgentMessageChunk("hi"))
+        viewModel.handleSocketEvent(AcpClientEvent.RunCompleted("end_turn"))
+
+        assertTrue(viewModel.blocks.value.none { it.kind is ChatBlockKind.Error })
+    }
+
+    @Test
     fun toolCallUpdateForUnknownIdSynthesizesFallbackBlock() {
         val viewModel = RookViewModel()
 

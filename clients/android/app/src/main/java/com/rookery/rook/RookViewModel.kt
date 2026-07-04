@@ -120,6 +120,11 @@ class RookViewModel(
     private var autoResumeAttempted = false
     private var reconnectJob: Job? = null
     private var userCancelledRun = false
+    // Set on any content-bearing event during the in-flight turn; checked on RunCompleted.
+    // Upstream provider failures (e.g. billing/auth rejections) can come back from the
+    // server as a normal RunCompleted with zero content instead of a RunFailed — this
+    // catches that case client-side so the failure is still visible in the chat.
+    private var turnHasContent = false
     private var started = false
 
     fun start() {
@@ -283,6 +288,7 @@ class RookViewModel(
         appendBlock(ChatBlockKind.User(text))
         _isRunning.value = true
         _statusLine.value = "Agent is working…"
+        turnHasContent = false
         socket.sendPrompt(text)
     }
 
@@ -357,16 +363,19 @@ class RookViewModel(
             is AcpClientEvent.UserMessageChunk -> appendBlock(ChatBlockKind.User(event.text))
 
             is AcpClientEvent.AgentMessageChunk -> {
+                turnHasContent = true
                 _statusLine.value = "Responding…"
                 appendStreamingText(event.text, isThinking = false)
             }
 
             is AcpClientEvent.AgentThoughtChunk -> {
+                turnHasContent = true
                 _statusLine.value = "Thinking…"
                 appendStreamingText(event.text, isThinking = true)
             }
 
             is AcpClientEvent.ToolCallStarted -> {
+                turnHasContent = true
                 _statusLine.value = "Using tool: ${event.title}"
                 val status = if (event.status == "in_progress") ToolBlockStatus.RUNNING else ToolBlockStatus.PENDING
                 appendBlock(
@@ -423,7 +432,10 @@ class RookViewModel(
             is AcpClientEvent.CurrentModeUpdate -> {}
             is AcpClientEvent.ConfigOptionUpdate -> {}
 
-            is AcpClientEvent.PlanUpdate -> upsertPlanBlock(event.entries)
+            is AcpClientEvent.PlanUpdate -> {
+                turnHasContent = true
+                upsertPlanBlock(event.entries)
+            }
 
             is AcpClientEvent.UsageUpdate -> _contextUsage.value = event.used to event.size
 
@@ -431,7 +443,11 @@ class RookViewModel(
                 finalizeStreamingBlocks()
                 _isRunning.value = false
                 _statusLine.value = ""
+                val wasCancelled = userCancelledRun
                 userCancelledRun = false
+                if (!turnHasContent && event.stopReason != "cancelled" && !wasCancelled) {
+                    appendErrorBlock("run", "Agent produced no response — the model call likely failed upstream (check provider billing/auth).")
+                }
                 deliverNextQueuedIfIdle()
             }
 
