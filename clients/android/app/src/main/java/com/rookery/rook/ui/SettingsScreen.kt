@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import com.rookery.rook.RookViewModel
 import com.rookery.rook.ServerState
 import com.rookery.rook.location.LocationAuthStatus
+import com.rookery.rook.location.RecordingInfo
+import androidx.compose.ui.text.font.FontFamily
 import com.rookery.rook.ui.chat.PanelButton
 import com.rookery.rook.ui.chat.PanelCard
 import com.rookery.rook.ui.chat.PanelPalette
@@ -46,6 +48,8 @@ fun SettingsScreen(viewModel: RookViewModel) {
     val authStatus by remember {
         viewModel.locationAuthStatus ?: MutableStateFlow(LocationAuthStatus.DENIED)
     }.collectAsState()
+
+    val recording by remember { viewModel.recording ?: MutableStateFlow<RecordingInfo?>(null) }.collectAsState()
 
     var serverDraft by remember { mutableStateOf(viewModel.baseUrlString) }
     var tokenDraft by remember { mutableStateOf(viewModel.currentAuthToken) }
@@ -64,6 +68,10 @@ fun SettingsScreen(viewModel: RookViewModel) {
     val backgroundLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { viewModel.refreshAuthorizationStatus() }
+    // Pre-10 needs WRITE_EXTERNAL_STORAGE to write to public Downloads; 10+ uses MediaStore.
+    val writeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) viewModel.startRecording() }
 
     SheetScaffold(title = "Settings", onClose = { viewModel.setShowSettings(false) }) {
         // MARK: Server
@@ -144,6 +152,53 @@ fun SettingsScreen(viewModel: RookViewModel) {
                 }
             }
             Text("Define places with the map-pin button on the agent list.", fontSize = 11.sp, color = PanelPalette.textMuted)
+        }
+
+        // MARK: Record (accel + GPS capture for tuning the movement classifier)
+        PanelCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Record example", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textNormal)
+                Spacer(Modifier.weight(1f))
+                if (recording != null) StatusDot(PanelPalette.danger)
+            }
+            Text(
+                "Continuously logs accelerometer + GPS to a CSV in Downloads/Rook — a new file each " +
+                    "time — real sensor data for tuning movement detection.",
+                fontSize = 11.sp,
+                color = PanelPalette.textMuted
+            )
+            val active = recording
+            if (active == null) {
+                PanelButton(
+                    text = "Start recording",
+                    onClick = {
+                        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                            writeLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        } else {
+                            viewModel.startRecording()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = authStatus != LocationAuthStatus.DENIED
+                )
+                if (authStatus == LocationAuthStatus.DENIED) {
+                    Text("Enable location first.", fontSize = 11.sp, color = PanelPalette.warning)
+                }
+            } else {
+                Text(
+                    active.filePath,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = PanelPalette.textMuted
+                )
+                PanelButton(
+                    text = "Stop recording",
+                    onClick = { viewModel.stopRecording() },
+                    modifier = Modifier.fillMaxWidth(),
+                    tint = PanelPalette.danger,
+                    filled = false
+                )
+            }
         }
     }
 

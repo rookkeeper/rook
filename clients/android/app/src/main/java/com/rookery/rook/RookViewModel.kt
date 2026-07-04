@@ -707,6 +707,13 @@ class RookViewModel(
         locationController?.stopService()
     }
 
+    // MARK: - Recording
+
+    val recording get() = locationController?.recording
+
+    fun startRecording() { locationController?.startRecording() }
+    fun stopRecording() { locationController?.stopRecording() }
+
     /**
      * DEBUG/E2E seam (mirrors iOS's ROOK_SIMULATE_ARRIVAL): wait for the server to come
      * online, then fire a synthetic arrival through the same onArrival path a real dwell
