@@ -245,6 +245,44 @@ export class EnvironmentManager {
     return [...(this.entered.get(sessionId) ?? [])];
   }
 
+  enterEnvironment(sessionId: string, environmentId: string): string[] {
+    this.pruneMemory();
+    const listener = this.listeners.get(sessionId);
+    if (!listener) return [];
+
+    const entry = this.remembered.get(environmentId);
+    if (!entry || entry.status !== "active") return [];
+
+    const skillPaths: string[] = [];
+    for (const bundle of entry.bundles) {
+      const decision = this.effectiveDecision(bundle.bundleHash);
+      if (decision !== "accept" && decision !== "approve") continue;
+      if (!bundle.bundlePath) continue;
+      for (const skillId of bundle.skills) {
+        skillPaths.push(path.join(bundle.bundlePath, "skills", skillId));
+      }
+    }
+
+    if (!this.entered.has(sessionId)) this.entered.set(sessionId, new Set());
+    this.entered.get(sessionId)!.add(environmentId);
+
+    listener.onEnvironmentEntered(environmentId, skillPaths, entry.contextText);
+    return [...this.entered.get(sessionId)!];
+  }
+
+  exitEnvironment(sessionId: string, environmentId: string): string[] {
+    this.pruneMemory();
+    const listener = this.listeners.get(sessionId);
+    if (!listener) return this.enteredEnvironments(sessionId);
+
+    const entered = this.entered.get(sessionId);
+    if (!entered?.has(environmentId)) return this.enteredEnvironments(sessionId);
+
+    entered.delete(environmentId);
+    listener.onEnvironmentExited(environmentId);
+    return [...entered];
+  }
+
   diagnosticSnapshot(): DiagnosticEnvironmentEntry[] {
     this.pruneMemory();
     return [...this.remembered.entries()]
@@ -269,6 +307,44 @@ export class EnvironmentManager {
         if (a.status !== b.status) return a.status === "active" ? -1 : 1;
         return a.environmentId.localeCompare(b.environmentId);
       });
+  }
+
+  environmentList(sessionId: string): {
+    environmentId: string;
+    sourceName?: string;
+    status: "active" | "recent";
+    lastTouchedAt: string;
+    entered: boolean;
+    bundleCount: number;
+    approvedBundleCount: number;
+  }[] {
+    this.pruneMemory();
+    const entered = this.entered.get(sessionId) ?? new Set();
+    const entries = this.diagnosticSnapshot();
+
+    const list = entries.map((entry) => {
+      const approved = entry.bundles.filter(
+        (b) => b.effectiveDecision === "accept" || b.effectiveDecision === "approve",
+      ).length;
+      return {
+        environmentId: entry.environmentId,
+        sourceName: entry.info.sourceName,
+        status: entry.status,
+        lastTouchedAt: entry.lastTouchedAt,
+        entered: entered.has(entry.environmentId),
+        bundleCount: entry.bundles.length,
+        approvedBundleCount: approved,
+      };
+    });
+
+    // Sort: entered first, then active by recency, then recent by recency.
+    list.sort((a, b) => {
+      if (a.entered !== b.entered) return a.entered ? -1 : 1;
+      if (a.status !== b.status) return a.status === "active" ? -1 : 1;
+      return b.lastTouchedAt.localeCompare(a.lastTouchedAt);
+    });
+
+    return list;
   }
 
   private broadcastBundleOffer(offer: EnvironmentBundleOffer): void {

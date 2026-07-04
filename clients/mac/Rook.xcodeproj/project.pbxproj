@@ -12,6 +12,7 @@
 		2133C332EBC272332F53F69E /* AXReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EF90459F4F62F45D925B32 /* AXReader.swift */; };
 		247B6E1117CD714B7D212531 /* ScreenOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */; };
 		38F4F35F3EF2EC01A5D66DE7 /* EnvironmentOfferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */; };
+		437DFA10167DD112587F7EB5 /* EnvironmentsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93A5264726E74327D489A47 /* EnvironmentsDetailView.swift */; };
 		53437456FFF017B27C184447 /* CapabilitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3251190EB3275711DF69AE0E /* CapabilitiesView.swift */; };
 		64732F130DD711AA245FEE1A /* ScreenCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 684A1389822C3C6175B654FC /* ScreenCapturer.swift */; };
 		86F91627A128BBD4CBF341B2 /* MacBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCDBF5403D71795728D9928A /* MacBridge.swift */; };
@@ -43,6 +44,7 @@
 		7F2330969071E5BF5037823E /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		891E038256B011C6B53596BB /* HotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKey.swift; sourceTree = "<group>"; };
 		89D369786A8FE57C99D452D1 /* RookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookView.swift; sourceTree = "<group>"; };
+		A93A5264726E74327D489A47 /* EnvironmentsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentsDetailView.swift; sourceTree = "<group>"; };
 		B08909E5BDA34D380AF7B25F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CAB0B5D7F3477ABBB39A0B42 /* Rook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rook.entitlements; sourceTree = "<group>"; };
 		D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
@@ -121,6 +123,7 @@
 				3251190EB3275711DF69AE0E /* CapabilitiesView.swift */,
 				7F2330969071E5BF5037823E /* ChatView.swift */,
 				D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */,
+				A93A5264726E74327D489A47 /* EnvironmentsDetailView.swift */,
 				0087B8D63F86E9DD505D802D /* LogViewerView.swift */,
 				89D369786A8FE57C99D452D1 /* RookView.swift */,
 			);
@@ -211,6 +214,7 @@
 				53437456FFF017B27C184447 /* CapabilitiesView.swift in Sources */,
 				CEEBCE8607A6BCB97868C2A0 /* ChatView.swift in Sources */,
 				38F4F35F3EF2EC01A5D66DE7 /* EnvironmentOfferView.swift in Sources */,
+				437DFA10167DD112587F7EB5 /* EnvironmentsDetailView.swift in Sources */,
 				1D381D9C5FAF51B3E9158694 /* ForegroundAppMonitor.swift in Sources */,
 				ACFC98FFE07090B9A5C95D75 /* HotKey.swift in Sources */,
 				C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */,

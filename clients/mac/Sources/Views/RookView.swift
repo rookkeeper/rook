@@ -86,6 +86,8 @@ struct RookView: View {
                 EnvironmentOfferDetail(model: model)
             case .capabilities:
                 CapabilitiesDetail(model: model)
+            case .environments:
+                EnvironmentsDetail(model: model)
             }
         }
     }
@@ -103,6 +105,8 @@ struct RookView: View {
                 EnvironmentOfferDetail(model: model)
             case .capabilities:
                 CapabilitiesDetail(model: model)
+            case .environments:
+                EnvironmentsDetail(model: model)
             }
         }
     }

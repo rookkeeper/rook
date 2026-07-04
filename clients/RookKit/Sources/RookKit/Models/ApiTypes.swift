@@ -244,3 +244,25 @@ public struct EnvironmentOffer: Equatable {
         self.apps = apps
     }
 }
+
+public struct EnvironmentListItem: Codable, Equatable, Identifiable {
+    public let environmentId: String
+    public let sourceName: String?
+    public let status: String
+    public let lastTouchedAt: String
+    public let entered: Bool
+    public let bundleCount: Int
+    public let approvedBundleCount: Int
+
+    public var id: String { environmentId }
+
+    public init(environmentId: String, sourceName: String?, status: String, lastTouchedAt: String, entered: Bool, bundleCount: Int, approvedBundleCount: Int) {
+        self.environmentId = environmentId
+        self.sourceName = sourceName
+        self.status = status
+        self.lastTouchedAt = lastTouchedAt
+        self.entered = entered
+        self.bundleCount = bundleCount
+        self.approvedBundleCount = approvedBundleCount
+    }
+}

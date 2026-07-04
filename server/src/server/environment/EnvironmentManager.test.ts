@@ -356,4 +356,156 @@ describe("EnvironmentManager", () => {
       }),
     ]);
   });
+
+  it("enters an environment and calls onEnvironmentEntered with skill paths", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#testing",
+          bundleId: "testing",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/testing",
+          skills: [{ id: "consult", files: {} }],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-1",
+      },
+    ] as any);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    // Approve the bundle so skills are included.
+    manager.decideEnvironment("web:example.com", "approve", "hash-1");
+
+    const entered = manager.enterEnvironment("s1", "web:example.com");
+
+    expect(entered).toEqual(["web:example.com"]);
+    expect(manager.enteredEnvironments("s1")).toEqual(["web:example.com"]);
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith(
+      "web:example.com",
+      ["/repo/web/example.com/.bundles/testing/skills/consult"],
+      undefined,
+    );
+  });
+
+  it("exits an environment and calls onEnvironmentExited", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#testing",
+          bundleId: "testing",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/testing",
+          skills: [],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-1",
+      },
+    ] as any);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.enterEnvironment("s1", "web:example.com");
+
+    const remaining = manager.exitEnvironment("s1", "web:example.com");
+
+    expect(remaining).toEqual([]);
+    expect(manager.enteredEnvironments("s1")).toEqual([]);
+    expect(listener.onEnvironmentExited).toHaveBeenCalledWith("web:example.com");
+  });
+
+  it("environmentList sorts entered first, then active by recency", async () => {
+    const manager = newManager();
+
+    // Register two environments at different times.
+    await manager.registerAvailableEnvironment({ id: "web:a.com", metadata: {} }, { sourceName: "A" });
+    nowMs += 1_000;
+    await manager.registerAvailableEnvironment({ id: "web:b.com", metadata: {} }, { sourceName: "B" });
+
+    // Subscribe and enter the older one.
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+    manager.enterEnvironment("s1", "web:a.com");
+
+    const list = manager.environmentList("s1");
+
+    // Entered first (web:a.com), then active by recency (web:b.com more recent).
+    expect(list[0].environmentId).toBe("web:a.com");
+    expect(list[0].entered).toBe(true);
+    expect(list[1].environmentId).toBe("web:b.com");
+    expect(list[1].entered).toBe(false);
+  });
+
+  it("enterEnvironment does nothing for an unsubscribed session", async () => {
+    const manager = newManager();
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+
+    const entered = manager.enterEnvironment("nonexistent", "web:example.com");
+    expect(entered).toEqual([]);
+  });
+
+  it("enterEnvironment skips bundles that are not approved or accepted", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#testing",
+          bundleId: "testing",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/testing",
+          skills: [{ id: "consult", files: {} }],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-1",
+      },
+    ] as any);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    // Do NOT decide on the bundle — it's undecided.
+
+    manager.enterEnvironment("s1", "web:example.com");
+
+    // Entered should still be called, but with empty skill paths.
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith(
+      "web:example.com",
+      [],
+      undefined,
+    );
+  });
 });

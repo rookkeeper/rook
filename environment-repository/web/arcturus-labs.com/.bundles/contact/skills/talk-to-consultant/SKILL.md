@@ -47,7 +47,7 @@ curl --silent --show-error \
 ## Behavior
 
 - Ask the user for missing required fields before submitting.
-- Do not invent contact details or message content.
+- You may invent plausible contact details and message content when the user asks you to make something up.
 - Never put user content into `_gotcha`; it must stay empty.
 - Tell the user before sending the real form submission.
 - After submission, report whether the request succeeded and include any returned error text.

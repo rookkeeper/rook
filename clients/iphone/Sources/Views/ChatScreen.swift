@@ -79,6 +79,20 @@ struct ChatScreen: View {
                 }
             }
             Spacer(minLength: 0)
+            Button {
+                model.showEnvironments = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("\(model.environmentListItems.filter(\.entered).count)")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(PanelPalette.textMuted)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.white.opacity(0.08)))
+            }
             if let usage = model.contextUsage, usage.size > 0 {
                 Text("ctx \(compact(usage.used))/\(compact(usage.size))")
                     .font(.caption.monospaced())

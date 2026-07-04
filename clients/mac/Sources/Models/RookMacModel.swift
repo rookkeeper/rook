@@ -10,6 +10,7 @@ enum PanelMode: Equatable {
     case chat
     case environmentOffer
     case capabilities
+    case environments
 }
 
 enum ServerState: Equatable {
@@ -79,6 +80,12 @@ final class RookMacModel: ObservableObject {
     @Published var offerBundles: [EnvironmentBundlePreview] = []
     @Published var offerLoading = false
     @Published var offerError = ""
+
+    // Environment join/leave
+    @Published var environmentListItems: [EnvironmentListItem] = []
+    @Published var enteredEnvironmentIds: Set<String> = []
+    @Published var environmentsLoading = false
+    @Published var environmentsError = ""
 
     var pendingOffer: EnvironmentOffer? {
         pendingOffers.first
@@ -489,10 +496,13 @@ final class RookMacModel: ObservableObject {
         pendingPermission = nil
         lastStopReason = nil
         enteredEnvironments = []
+        enteredEnvironmentIds = []
+        environmentListItems = []
         socket.connect(sessionId: session.id, request: api.webSocketRequest(sessionId: session.id))
         if switchToChat {
             panelMode = .chat
         }
+        refreshEnvironmentList()
     }
 
     func goHome() {
@@ -501,6 +511,19 @@ final class RookMacModel: ObservableObject {
 
     func openCapabilities() {
         panelMode = .capabilities
+    }
+
+    func openEnvironments() {
+        panelMode = .environments
+        refreshEnvironmentList()
+    }
+
+    func closeEnvironments() {
+        if currentSession != nil {
+            panelMode = .chat
+        } else {
+            panelMode = .home
+        }
     }
 
     func openChat() {
@@ -832,10 +855,12 @@ final class RookMacModel: ObservableObject {
             handleEnvironmentOfferResolved(environmentId, bundleHash: bundleHash)
         case .environmentEntered(let environmentId):
             if enteredEnvironments.insert(environmentId).inserted {
+                enteredEnvironmentIds.insert(environmentId)
                 appendBlock(.system(text: "Entered environment \(environmentId)."))
             }
         case .environmentExited(let environmentId, let error):
             if enteredEnvironments.remove(environmentId) != nil {
+                enteredEnvironmentIds.remove(environmentId)
                 let suffix = error.map { " (\($0))" } ?? ""
                 appendBlock(.system(text: "Exited environment \(environmentId)\(suffix)."))
             }
@@ -1685,6 +1710,53 @@ final class RookMacModel: ObservableObject {
         offerLoading = false
         if panelMode == .environmentOffer {
             dismissOfferView()
+        }
+    }
+
+    // MARK: - Environment join / leave
+
+    func refreshEnvironmentList() {
+        guard let session = currentSession else {
+            environmentListItems = []
+            return
+        }
+        environmentsLoading = true
+        environmentsError = ""
+        Task {
+            defer { environmentsLoading = false }
+            do {
+                environmentListItems = try await api.environmentList(sessionId: session.id)
+                enteredEnvironmentIds = Set(environmentListItems.filter(\.entered).map(\.environmentId))
+                environmentsError = ""
+            } catch {
+                environmentsError = error.localizedDescription
+            }
+        }
+    }
+
+    func joinEnvironment(_ environmentId: String) {
+        guard let session = currentSession else { return }
+        Task {
+            do {
+                let entered = try await api.enterEnvironment(sessionId: session.id, environmentId: environmentId)
+                enteredEnvironmentIds = Set(entered)
+                refreshEnvironmentList()
+            } catch {
+                environmentsError = error.localizedDescription
+            }
+        }
+    }
+
+    func leaveEnvironment(_ environmentId: String) {
+        guard let session = currentSession else { return }
+        Task {
+            do {
+                let entered = try await api.exitEnvironment(sessionId: session.id, environmentId: environmentId)
+                enteredEnvironmentIds = Set(entered)
+                refreshEnvironmentList()
+            } catch {
+                environmentsError = error.localizedDescription
+            }
         }
     }
 }

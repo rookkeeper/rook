@@ -27,6 +27,8 @@ struct ChatDetail: View {
                 permissionCard(pendingPermission)
             }
 
+            environmentsBar
+
             threadCard
 
             if !model.queuedMessages.isEmpty {
@@ -58,6 +60,50 @@ struct ChatDetail: View {
             return "reconnecting…"
         }
         return model.socketConnected ? "" : "disconnected"
+    }
+
+    private var environmentsBar: some View {
+        let enteredCount = model.enteredEnvironmentIds.count
+        let availableCount = model.environmentListItems.filter { $0.status == "active" }.count
+        return Button {
+            model.openEnvironments()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "globe")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(enteredCount > 0 ? PanelPalette.accent : PanelPalette.textMuted)
+                Text("Environments")
+                    .font(.caption)
+                    .foregroundStyle(PanelPalette.textNormal)
+                if enteredCount > 0 {
+                    Text("\(enteredCount) joined")
+                        .font(.caption2)
+                        .foregroundStyle(PanelPalette.success)
+                }
+                Spacer(minLength: 4)
+                Text("\(availableCount) available")
+                    .font(.caption2)
+                    .foregroundStyle(PanelPalette.textMuted)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(PanelPalette.backgroundSecondary.opacity(0.5))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(PanelPalette.border)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help("View and join environments")
+        .pointingHandOnHover()
     }
 
     private func compactCount(_ value: Int) -> String {

@@ -114,4 +114,43 @@ export async function registerEnvironmentRoutes(
     }
     return { candidates };
   });
+
+  app.post<{ Body: { sessionId?: unknown; environmentId?: unknown } }>("/api/environments/enter", async (request, reply) => {
+    const sessionId = request.body?.sessionId;
+    const environmentId = request.body?.environmentId;
+    if (typeof sessionId !== "string" || !sessionId.trim()) {
+      reply.code(400).send({ error: "Missing sessionId" });
+      return;
+    }
+    if (typeof environmentId !== "string" || !environmentId.trim()) {
+      reply.code(400).send({ error: "Missing environmentId" });
+      return;
+    }
+    const entered = environmentManager.enterEnvironment(sessionId.trim(), environmentId.trim());
+    return { ok: true, entered };
+  });
+
+  app.post<{ Body: { sessionId?: unknown; environmentId?: unknown } }>("/api/environments/exit", async (request, reply) => {
+    const sessionId = request.body?.sessionId;
+    const environmentId = request.body?.environmentId;
+    if (typeof sessionId !== "string" || !sessionId.trim()) {
+      reply.code(400).send({ error: "Missing sessionId" });
+      return;
+    }
+    if (typeof environmentId !== "string" || !environmentId.trim()) {
+      reply.code(400).send({ error: "Missing environmentId" });
+      return;
+    }
+    const entered = environmentManager.exitEnvironment(sessionId.trim(), environmentId.trim());
+    return { ok: true, entered };
+  });
+
+  app.get<{ Querystring: { sessionId?: string } }>("/api/environments/list", async (request, reply) => {
+    const sessionId = typeof request.query.sessionId === "string" ? request.query.sessionId.trim() : "";
+    if (!sessionId) {
+      reply.code(400).send({ error: "Missing sessionId" });
+      return;
+    }
+    return environmentManager.environmentList(sessionId);
+  });
 }

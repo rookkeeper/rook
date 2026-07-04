@@ -187,6 +187,40 @@ public struct RookAPI {
         )
     }
 
+    public func enterEnvironment(sessionId: String, environmentId: String) async throws -> [String] {
+        struct EnterResponse: Decodable {
+            let ok: Bool
+            let entered: [String]
+        }
+        let response: EnterResponse = try await post(
+            path: "api/environments/enter",
+            payload: .object([
+                "sessionId": .string(sessionId),
+                "environmentId": .string(environmentId),
+            ])
+        )
+        return response.entered
+    }
+
+    public func exitEnvironment(sessionId: String, environmentId: String) async throws -> [String] {
+        struct ExitResponse: Decodable {
+            let ok: Bool
+            let entered: [String]
+        }
+        let response: ExitResponse = try await post(
+            path: "api/environments/exit",
+            payload: .object([
+                "sessionId": .string(sessionId),
+                "environmentId": .string(environmentId),
+            ])
+        )
+        return response.entered
+    }
+
+    public func environmentList(sessionId: String) async throws -> [EnvironmentListItem] {
+        try await get(path: "api/environments/list", query: ["sessionId": sessionId])
+    }
+
     // MARK: - Transport helpers
 
     private func requestURL(path: String, query: [String: String]) -> URL {
@@ -202,6 +236,16 @@ public struct RookAPI {
 
     private func get<T: Decodable>(path: String, query: [String: String]) async throws -> T {
         let (data, response) = try await URLSession.shared.data(for: authorizedRequest(url: requestURL(path: path, query: query)))
+        try throwIfErrorResponse(data: data, response: response)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func post<T: Decodable>(path: String, payload: JSONValue) async throws -> T {
+        var request = authorizedRequest(url: requestURL(path: path, query: [:]))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(payload)
+        let (data, response) = try await URLSession.shared.data(for: request)
         try throwIfErrorResponse(data: data, response: response)
         return try JSONDecoder().decode(T.self, from: data)
     }
