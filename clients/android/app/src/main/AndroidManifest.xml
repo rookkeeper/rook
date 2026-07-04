@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Pre-10 only: writing recordings to public Downloads. 10+ uses MediaStore (no permission). -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <application
         android:allowBackup="true"
@@ -27,6 +29,11 @@
 
         <service
             android:name=".location.MovementService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <service
+            android:name=".location.RecordingService"
             android:exported="false"
             android:foregroundServiceType="location" />
     </application>

@@ -34,6 +34,9 @@ data class ArrivalContext(
 /** Coarse authorization state driving the Settings 3-step location flow. */
 enum class LocationAuthStatus { DENIED, FOREGROUND, BACKGROUND }
 
+/** Active recording session (null when not recording). */
+data class RecordingInfo(val filePath: String, val startedAtMs: Long)
+
 class LocationController private constructor(private val appContext: Context) {
 
     val placeStore = PlaceStore(appContext.getSharedPreferences(PLACES_PREFS, Context.MODE_PRIVATE))
@@ -80,6 +83,22 @@ class LocationController private constructor(private val appContext: Context) {
     fun stopService() {
         appContext.stopService(Intent(appContext, MovementService::class.java))
     }
+
+    // MARK: - Recording (accel + GPS capture, RecordingService owns the file)
+
+    private val _recording = MutableStateFlow<RecordingInfo?>(null)
+    val recording: StateFlow<RecordingInfo?> = _recording.asStateFlow()
+
+    fun startRecording() {
+        ContextCompat.startForegroundService(appContext, Intent(appContext, RecordingService::class.java))
+    }
+
+    fun stopRecording() {
+        appContext.stopService(Intent(appContext, RecordingService::class.java))
+    }
+
+    fun setRecording(info: RecordingInfo) { _recording.value = info }
+    fun clearRecording() { _recording.value = null }
 
     // Called by the service; routes to the ViewModel when bound.
     fun emitArrival(context: ArrivalContext) {
