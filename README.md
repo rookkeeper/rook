@@ -14,6 +14,7 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - [server/](server/) — Fastify API, session/runtime orchestration, environment manager, ACP-backed agent adapters
 - [clients/mac](clients/mac/) — native macOS menu bar client
 - [clients/iphone](clients/iphone/) — native iPhone client
+- [clients/android](clients/android/) — native Android client
 - [clients/RookKit](clients/RookKit/) — shared Swift package for the native clients
 
 ## Common entry points
@@ -21,7 +22,8 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - `./scripts/run-rook.sh server`
 - `./scripts/run-rook.sh mac`
 - `./scripts/run-rook.sh sim`
-- `./scripts/run-rook.sh phone`
+- `./scripts/run-rook.sh ios` (alias: `phone`)
+- `./scripts/run-rook.sh android`
 - `./scripts/run-rook.sh stop`
 
 ## High-level docs map
@@ -31,3 +33,4 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - server package details: [server/README.md](server/README.md)
 - iPhone client details: [clients/iphone/README.md](clients/iphone/README.md)
 - macOS client details: [clients/mac/README.md](clients/mac/README.md)
+- Android client details: [clients/android/README.md](clients/android/README.md)

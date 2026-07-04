@@ -7,6 +7,23 @@ full build plan and source-of-truth mapping to the Swift clients.
 
 ## Getting it running
 
+The easiest way is `../../scripts/run-rook.sh android` from the repo root — it
+starts the server, does the `adb reverse` dance below automatically, and
+builds/installs/launches onto whichever single emulator or device `adb
+devices` sees (pass `--device` to disambiguate if more than one is
+connected, `--server-url URL` to point at a specific server instead, or
+`--reset-permissions` to reinstall and re-grant runtime permissions from
+scratch). Run `./scripts/run-rook.sh --help` for all targets/flags.
+
+```bash
+./scripts/run-rook.sh android                    # server + adb reverse + build/install/launch
+./scripts/run-rook.sh android --device emulator-5554
+./scripts/run-rook.sh android --server-url http://your-mac.tailxxxx.ts.net:3000
+./scripts/run-rook.sh stop                        # shut down server + launched app(s)
+```
+
+The manual equivalent, if you'd rather not use the script:
+
 `RookApi` defaults to `http://127.0.0.1:3000` (`net/RookApi.kt`), matching the
 iOS simulator's default. On an **emulator**, that alias doesn't reach the host
 Mac; on a **physical device**, `127.0.0.1` just points back at the phone

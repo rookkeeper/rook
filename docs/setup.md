@@ -73,7 +73,7 @@ Optional helper for the phone launcher.
 ROOK_REMOTE_HOSTNAME=your-computer.example.net
 ```
 
-If set, `./scripts/run-rook.sh phone` uses this hostname automatically.
+If set, `./scripts/run-rook.sh ios` (alias: `phone`) uses this hostname automatically.
 
 Use this when:
 - your phone should connect by hostname rather than raw IP
@@ -82,6 +82,21 @@ Use this when:
 
 If you do not set `ROOK_REMOTE_HOSTNAME`, the phone launcher next tries `ROOK_BIND_IP`.
 If neither is set, it stops and tells you what to configure.
+
+You can also skip both env vars and pass the address directly for a one-off run:
+
+```bash
+./scripts/run-rook.sh ios --server-url http://your-computer.example.net:3000
+```
+
+The Android launcher doesn't need any of this by default — `./scripts/run-rook.sh android`
+uses `adb reverse` to reach the server over the USB/adb connection regardless of network
+setup. `--server-url` works the same way there too, for pointing an emulator or device at a
+specific remote server instead:
+
+```bash
+./scripts/run-rook.sh android --server-url http://your-computer.example.net:3000
+```
 
 ### `ROOK_AUTH_TOKEN`
 Optional bearer token for all client access.
