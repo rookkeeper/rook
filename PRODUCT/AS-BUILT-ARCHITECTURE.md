@@ -26,7 +26,7 @@ Host clients / providers                         registers environment kind
   ├─ Browser at :3000
   ├─ Chrome extension                            web:<slug>
   ├─ Obsidian plugin
-  ├─ macOS menu bar app (native Swift)           app:<slug>   (frontmost Mac app)
+  ├─ macOS menu bar app (native Swift)           app:<slug>, web:<slug>   (foreground encounters, plus close detection)
   └─ iPhone app (native Swift)                   loc:<slug> (GPS geofence)
             │
             ▼
@@ -174,7 +174,7 @@ Examples:
 
 - `web:<host>/<path>` (browser URL-derived site/page context)
 - `web:example.com`
-- `app:<bundleId>` (macOS menu bar app — frontmost Mac app identity)
+- `app:<bundleId>` (macOS menu bar app — encountered Mac app identity)
 - `app:md.obsidian/<vault>` (macOS menu bar app — Obsidian vault context)
 - `web:<host>/<path>` (macOS menu bar app — active browser URL, protocol/query stripped)
 - `loc:<slug>` (iPhone app — current GPS geofence)
@@ -196,15 +196,15 @@ Current storage model is simple: local disk only.
 
 ### 6.3 Environment manager
 
-`EnvironmentManager` tracks three separate concepts:
+`EnvironmentManager` currently tracks:
 
 | Concept | Meaning |
 |---|---|
-| **available** | a provider says the environment is currently present |
-| **decision** | global allow/reject choice for that environment |
-| **entered** | a session currently has that environment's skills loaded |
+| **active** | recently registered and still within the active window |
+| **recent** | seen recently, but now past the active window |
+| **decision** | allow/reject choice for an exact bundle-content hash |
 
-Decision model:
+Decision model remains:
 
 - `accept`: allow once
 - `approve`: allow persistently
@@ -213,21 +213,25 @@ Decision model:
 
 Storage model:
 
+- active/recent environment memory lives in process memory
+- discovered bundles and their exact-content hashes live alongside each remembered environment in memory
 - ephemeral decisions (`accept`, `ignore`) live in memory
-- persistent decisions (`approve`, `reject`) live in SQLite
+- persistent decisions (`approve`, `reject`) live in SQLite keyed by bundle-content hash
 
 ### 6.4 How environments affect sessions
 
 When an environment becomes available:
 
 1. providers call `/api/environments/register`
-2. if the id is hierarchical, `EnvironmentManager` expands it to all implied parent prefixes (for example `web:host`, `web:host/path`, `web:host/path/page`) and reference-counts them
-3. `EnvironmentManager` decides whether each resulting session environment should be offered or entered
-4. `SessionRoom` receives the lifecycle event
-5. if entered, the room rebuilds the runtime with merged skill paths
-6. the room emits a Rookery environment event to connected clients over ACP
+2. the Mac provider does this immediately on foreground encounter, and also on wake/server-reconnect reconciliation for currently visible environments
+3. `EnvironmentManager` stores the exact registration in memory with its latest touch time
+4. on registration, it also consults the repository, resolves any valid bundles, hashes their text contents, and remembers the bundle ids plus `.bundles/` collection path(s) associated with that environment
+5. any active, undecided bundles are offered to subscribed sessions for review
+6. the environment is counted as **active** for a configurable active window (currently 5m15s)
+7. when an environment is no longer refreshed, it naturally ages from **active** to **recent** and any pending bundle offers resolve as unavailable
+8. inactive/recent entries remain in memory for a longer retention window (currently 30 minutes), then are forgotten
 
-Important constraint: the manager does **not** manipulate sockets or runtimes directly. It only pushes lifecycle events into rooms.
+Current simplification: registration is intentionally not yet loading bundle capabilities into rooms or rebuilding runtimes; it currently stops at bundle discovery, hashing, and offer/decision flow.
 
 ### 6.5 Environment-to-agent bridge
 
@@ -244,7 +248,7 @@ That remains consistent with:
 
 ### 6.6 Location identification (`loc:`)
 
-Beyond providers that already know their environment id, the iPhone can turn a raw coordinate into available `loc:` environments. On a settled (non-driving) `CLVisit` arrival the phone POSTs `/api/environments/register-location`; `server/src/server/location/` reverse-resolves the coordinate to nearby businesses (the swappable `PoiLookupProvider`, today backed by ptiles fetched directly from the upstream host — an internal detail, no public route), normalizes them to stable address-based `loc:<domain>/…` ids, and `LocationRegistrar` feeds the ranked set into the same `EnvironmentManager` availability/offer/enter flow as every other provider (§6.3–6.4). A read-only `/api/environments/identify` returns the same candidates without registering.
+Beyond providers that already know their environment id, the iPhone can turn a raw coordinate into available `loc:` environments. On a settled (non-driving) `CLVisit` arrival the phone POSTs `/api/environments/register-location`; `server/src/server/location/` reverse-resolves the coordinate to nearby businesses (the swappable `PoiLookupProvider`, today backed by ptiles fetched directly from the upstream host — an internal detail, no public route), normalizes them to stable address-based `loc:<domain>/…` ids, and `LocationRegistrar` writes the ranked set into the same in-memory active/recent cache as every other provider (§6.3–6.4). A read-only `/api/environments/identify` returns the same candidates without registering.
 
 Two delivery channels carry a place to the agent: its **skills** load on-demand through the repository facade (the synthesized location-context bundle is served by a programmatic `LocationContextRepository`, no special-cased paths), and a concise **best-guess + nearby** context is *pushed* into the agent via the shared `AgentContext`/`setContextEntry` (§6.5) so it always knows where it is.
 
@@ -271,7 +275,7 @@ Current ecosystem around `:3000`:
 
 - **Chrome extension**: detects supported web contexts and registers `web:<slug>` environments
 - **Obsidian plugin**: embeds the app in a sidebar view
-- **macOS menu bar app**: native SwiftUI client with the same backend; also registers `app:<slug>` environments for the frontmost Mac app
+- **macOS menu bar app**: native SwiftUI client with the same backend; registers newly seen user-visible app/page encounters, re-registers them every 5 minutes while still in its local TTL cache, and otherwise lets the server age them out
 - **iPhone app**: native SwiftUI client that registers `loc:<slug>` environments from GPS geofences, making the agent location-aware (skills load as you arrive at a defined place). It also drives ptiles-based business discovery on arrival, registering `loc:<domain>/…` environments — see [`location-environment-awareness.md`](./location-environment-awareness.md). Adds Live Activity / Dynamic Island presence and on-device voice.
 
 The two native Swift clients share one cross-platform layer — models, the REST/ACP-WebSocket clients, the design system and chat-block views, voice, and Live Activity attributes — through the `clients/RookKit` Swift package, so they stay protocol- and design-consistent with a single source of truth.
@@ -329,11 +333,11 @@ Current major routes:
 - `GET /api/agent/session/recent`
 - `POST /api/agent/start`
 - `POST /api/environments/register`
-- `POST /api/environments/unregister`
-- `POST /api/environments/decision`
+- `POST /api/environments/decision` (bundle-level 2×2 decision keyed by exact bundle hash)
 - `POST /api/environments/identify` (read-only: coordinate → candidate `loc:` environments)
 - `POST /api/environments/register-location` (identify + register/auto-enter the dwell set)
 - `GET /api/environments/preview`
+- `GET /api/diagnostics/environments` (development-only grouped diagnostics: dumps active + recent environment memory)
 
 ### 9.2 WebSocket
 
@@ -357,7 +361,7 @@ Current local mutable state is under `.var/rook/`.
 
 Important pieces:
 
-- `environment-decisions.sqlite` - persistent environment approvals/rejections
+- `environment-decisions.sqlite` - persistent bundle approvals/rejections keyed by exact bundle hash
 - generated Pi launchers
 - session records in `sessionLog.ts` backing saved/restartable sessions
 
@@ -382,8 +386,8 @@ The debug bridge CLI and the server import from `server/src/shared/`. The server
 
 1. **One live room per session id.**
 2. **ACP is the primary protocol on both sides of the server.**
-3. **Environment decisions are global, but entered state is per session.**
-4. **Runtime rebuilds happen at the room layer, not in `EnvironmentManager`.**
+3. **Environment bundle decisions are keyed by exact bundle-content hash, and current environment availability is process-local memory.**
+4. **`EnvironmentManager` currently discovers/hashes/offers bundles on registration rather than rebuilding runtimes.**
 5. **Session restoration depends on saved restart metadata plus ACP `session/load`.**
 6. **Pi-specific behavior should stay inside `PiAgent` or `pi-acp`, not leak into the client.**
 
@@ -391,4 +395,4 @@ The debug bridge CLI and the server import from `server/src/shared/`. The server
 
 The shortest accurate model of the current system is:
 
-> Rookery is a localhost ACP router/orchestrator with a React UI, a room-based session lifecycle, and an environment system that can inject skill bundles into live agent sessions.
+> Rookery is a localhost ACP router/orchestrator with native clients, a room-based session lifecycle, and an environment system that currently caches/logs active and recent environments in memory.

@@ -456,61 +456,34 @@ describe("server", () => {
     expect(response.json()).toEqual({ error: "Unknown agent" });
   });
 
-  it("pushes an environment offer over the websocket and resolves it on decision", async () => {
+  it("registers an environment and returns its registration timestamp", async () => {
     const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:" });
-    const baseUrl = await listen(app);
-    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "PiAgent" } });
-    const socket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=s-mock`);
 
-    const offerPromise = collectJsonMessages(socket, 1);
     const register = await app.inject({ method: "POST", url: "/api/environments/register", payload: { id: "web:example.com", sourceName: "Example" } });
-    expect(register.json()).toEqual({ ok: true, id: "web:example.com" });
-    const [offer] = await offerPromise;
-    expect(offer).toMatchObject({
-      jsonrpc: "2.0",
-      method: "session/update",
-      params: {
-        update: {
-          sessionUpdate: "_rookery_environment_event",
-          kind: "environment_offer_available",
-          payload: { environmentId: "web:example.com", sourceName: "Example" },
-        },
-      },
-    });
 
-    // Accepting enters the env (entered event) and resolves the offer (resolved event).
-    const resolvedPromise = collectJsonMessages(socket, 2);
+    expect(register.statusCode).toBe(200);
+    expect(register.json()).toMatchObject({ ok: true, id: "web:example.com" });
+    expect(typeof register.json().registeredAt).toBe("string");
+
     const decision = await app.inject({ method: "POST", url: "/api/environments/decision", payload: { environmentId: "web:example.com", decision: "accept" } });
     expect(decision.statusCode).toBe(200);
-    const messages = await resolvedPromise;
-    expect(messages.some((m) => m.params?.update?.sessionUpdate === "_rookery_environment_event" && m.params?.update?.kind === "environment_offer_resolved" && m.params?.update?.payload?.decision === "approved")).toBe(true);
 
-    socket.close();
     await app.close();
   });
 
-  it("registers the identified location and auto-enters the current env over the websocket", async () => {
+  it("registers identified locations without requiring websocket environment events", async () => {
     const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:", poiProvider: new StubPoiLookupProvider() });
-    const baseUrl = await listen(app);
-    await app.inject({ method: "POST", url: "/api/agent/start", payload: { agent: "PiAgent" } });
-    const socket = await openWebSocket(`${baseUrl.replace("http", "ws")}/api/ws?sessionId=s-mock`);
 
-    const eventsPromise = collectJsonMessages(socket, 3);
     const response = await app.inject({
       method: "POST",
       url: "/api/environments/register-location",
       payload: { latitude: 37.3318, longitude: -122.0312, isStationary: true },
     });
+
     expect(response.statusCode).toBe(200);
+    const body = response.json() as { candidates: Array<{ environmentId: string }> };
+    expect(body.candidates[0]?.environmentId).toBe("loc:target.com/123-main-st-springfield-il");
 
-    const currentId = "loc:target.com/123-main-st-springfield-il";
-    const events = await eventsPromise;
-    const kinds = events.map((m) => m.params?.update?.kind);
-    // current is offered (sourceName carried) then auto-entered.
-    expect(events.some((m) => m.params?.update?.kind === "environment_offer_available" && m.params?.update?.payload?.environmentId === currentId && m.params?.update?.payload?.sourceName === "Target")).toBe(true);
-    expect(kinds).toContain("environment_entered");
-
-    socket.close();
     await app.close();
   });
 
@@ -518,8 +491,6 @@ describe("server", () => {
     const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:" });
     const bad = await app.inject({ method: "POST", url: "/api/environments/decision", payload: { environmentId: "web:example.com", decision: "maybe" } });
     expect(bad.statusCode).toBe(400);
-    const unreg = await app.inject({ method: "POST", url: "/api/environments/unregister", payload: { id: "web:example.com" } });
-    expect(unreg.statusCode).toBe(200);
     await app.close();
   });
 
@@ -576,6 +547,62 @@ describe("server", () => {
     expect(body.bundles.some((bundle) => bundle.bundleId === "web-with-mcp" && bundle.mcpServers.some((server) => server.id === "config"))).toBe(true);
     expect(body.bundles.some((bundle) => bundle.bundleId === "app-instructions-and-skill" && bundle.apps.some((app) => app.id === "instructions"))).toBe(true);
     expect(body.bundles.some((bundle) => bundle.bundleId === "invalid-bundle" && bundle.valid === false && bundle.errors.some((error) => error.code === "invalid_bundle_contents"))).toBe(true);
+
+    await app.close();
+  });
+
+  it("returns grouped diagnostic environment state", async () => {
+    const app = await buildServer({ enableClient: false, environmentDecisionStoreLocation: ":memory:" });
+
+    const register = await app.inject({
+      method: "POST",
+      url: "/api/environments/register",
+      payload: {
+        id: "web:example.com",
+        sourceName: "Example",
+        canonicalSourceUrl: "https://example.com",
+        metadata: { foo: "bar" },
+      },
+    });
+    expect(register.statusCode).toBe(200);
+
+    const decision = await app.inject({
+      method: "POST",
+      url: "/api/environments/decision",
+      payload: { environmentId: "web:example.com", decision: "accept" },
+    });
+    expect(decision.statusCode).toBe(200);
+
+    const response = await app.inject({ method: "GET", url: "/api/diagnostics/environments" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      environments: [
+        expect.objectContaining({
+          environmentId: "web:example.com",
+          status: "active",
+          info: {
+            sourceName: "Example",
+            canonicalSourceUrl: "https://example.com",
+          },
+          record: {
+            id: "web:example.com",
+            metadata: expect.objectContaining({
+              foo: "bar",
+              registeredAt: expect.any(String),
+            }),
+          },
+          registeredAt: expect.any(String),
+          lastTouchedAt: expect.any(String),
+          activeUntil: expect.any(String),
+          effectiveDecision: "accept",
+        }),
+      ],
+      counts: {
+        total: 1,
+        active: 1,
+        recent: 0,
+      },
+    });
 
     await app.close();
   });

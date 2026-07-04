@@ -1,9 +1,30 @@
 # Relationship between Sessions and Environments
 
-Sessions and environments are confusing to work with together. Right now, environments have a notion of "approve forever" versus "just approve for now" versus "cancel or ignore for now" versus "reject forever," but that really doesn't map to what we need in a particular situation.
+An environment is a context the user finds themselves in — a website, a physical location, an app, or any other recognizable domain. Each environment can have zero or more **capability bundles** associated with it. A bundle contains skills, MCP servers, and app instructions that an agent can use while the user is in that environment.
 
-I might, for example, have a session where I'm doing coding work, and then I go to Lowe's and open a new session to shop around Lowe's. But when I'm standing in line, I flip back to the session for my coding work. I don't want it to suddenly adopt all the Lowe's environment skills, which would confuse my coding work. So somehow each session must be associated with its own set of environments.
+## Bundle decisions are app-wide, not per-session
 
-The best ideas that came out of a recent discussion were as follows. The main idea is that the agent itself can help us figure out some of these problems, and there are kind of two scenarios. If we're in the middle of an ongoing conversation when an environment changes, we could propose that environment to the agent and ask the agent to auto-insert it, to ask the user if it should be inserted, or to ignore it. We can even do this in a hook so that the request doesn't muddy up the context too much. If we're not in a session — meaning it's the very start of a session — then the agent can be asked a similar question, but probably phrased differently because it's much more permissive. Or maybe it's based on the user's first request. We don't know yet.
+When a bundle is presented to the user as an environment offer, the user makes a decision about that specific bundle (identified by its content hash). That decision is **app-wide** — it applies to all sessions:
 
-The other side of it is the user interface itself having some affordances to guide the user. Maybe the user always accepts certain environments, like their home environment. Whenever new environments arrive, the user might get a sound and a notification about the change that they can see at the top of the screen and dismiss. If there's stuff they don't want, it would show up as a red dot or exclamation point on the environments button. Whenever they click on that button, they can do surgery on the set of environments for that session — hard-coding the ones they want in or ignoring the ones they don't.
+- **Accept** / **Ignore**: ephemeral. The decision lives in memory only while the environment is active. When the environment expires from memory, the decision is forgotten and the bundle can be offered again next time.
+
+- **Approve** / **Reject**: persistent. The decision is stored in the database, keyed by the bundle's content hash (a Merkle tree of every file in the bundle directory). The same bundle will never be offered again — across any session — once approved or rejected.
+
+## How sessions consume environments
+
+When any session wants to join an environment, it receives all bundles of that environment whose **effective decision** is positive (accepted or approved). The session does not make its own decisions about bundles — it inherits the app-wide decisions.
+
+This means:
+- If you accept a Lowe's bundle while in your shopping session, then switch to your coding session, the coding session will also gain Lowe's skills if it enters that environment.
+- Use "Ignore" (not "Reject") if you only want to skip a bundle for the current visit without affecting other sessions.
+- Use "Reject" to permanently opt out of a bundle everywhere.
+
+## What about session-specific concerns?
+
+The product doc previously considered per-session decisions to avoid cross-contamination (e.g., Lowe's skills leaking into a coding session). The resolution is:
+
+1. Sessions don't auto-enter environments — they only enter environments the user or agent explicitly joins.
+2. The agent can help decide whether to enter an environment based on the current session's context.
+3. The UI provides affordances to see and manage which environments are active for a session.
+
+If session-specific bundle gating is needed in the future, it would be a separate layer on top of the app-wide bundle decisions.

@@ -21,13 +21,14 @@ binding, and bearer-token auth, start with [docs/setup.md](../../docs/setup.md).
 
 - **Location → skills (the core loop).** Define places (name + GPS center +
   radius). `LocationProvider` monitors each as a `CLCircularRegion`. Entering a
-  region builds `loc:<slug>`, pre-checks the server for matching skills
+  region builds `loc:<slug>`, pre-checks the server for matching bundles
   (`GET /api/environments/preview`), and if any exist registers the environment
   (`POST /api/environments/register`) with `latitude`/`longitude`/`regionId`
-  metadata. The server pushes an offer over the session websocket; you approve
-  with the same 2×2 decisions as every other client; the place's skills load
-  into the agent. Leaving the region marks it unavailable
-  (`POST /api/environments/unregister`).
+  metadata. The server pushes a bundle offer over the session websocket; you
+  review the bundle name plus the names of any skills, MCP servers, and apps it
+  contains, then decide with the same 2×2 choices as every other client.
+  Leaving the region simply stops refreshing it from the phone; the server ages
+  it out on its own.
 - **Full chat parity.** Agent picker, session start/resume, streaming ACP chat
   (text, thinking, tool calls, plans, errors, context usage) — including
   auto-rendering well-formed JSON tool arguments as human-readable YAML and
@@ -107,7 +108,7 @@ Mirrors `RookMacModel.handleForegroundApp`, with place in place of app:
    `loc:<slug>`, pre-check skills via `GET /api/environments/preview`. If
    non-empty, `register`; if empty, skip (no empty offer).
 3. Server pushes `environment_offer_available` → `EnvironmentOfferSheet` → you
-   approve → `POST /api/environments/decision` → skills load into the session.
+   decide on the offered bundle → `POST /api/environments/decision`.
 4. **Region exit**: `markEnvironmentUnavailable`.
 5. **Reconnect / relaunch**: re-announce the current place. **Background**:
    released on `scenePhase == .background`.
@@ -243,7 +244,8 @@ That is the best intermediate test point:
 2. In the simulator: **Features → Location → Custom Location** (or a GPX route),
    set a coordinate **inside** that geofence → the offer sheet appears → approve.
 3. Ask the agent something the office skill covers → it answers using the place
-   skill. Move the simulated location away → `unregister` fires.
+   skill. Move the simulated location away → the phone stops refreshing it and
+   the server ages it out.
 
 Test hooks for scripted verification (set as `SIMCTL_CHILD_*` env vars):
 

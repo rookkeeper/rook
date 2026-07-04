@@ -20,6 +20,7 @@
 		6E9D67785D0292F3DD674483 /* RookMarkPurple.png in Resources */ = {isa = PBXBuildFile; fileRef = F7BB35715064833F54ABBC87 /* RookMarkPurple.png */; };
 		8840E0A6C19AD35B38A0943B /* RookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 14EB51A753FB1D1C047A02B6 /* RookKit */; };
 		A8B2F835A776E831E436D046 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */; };
+		AA7B07DF99FB258A5231A471 /* EnvironmentsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BA6601D3330B68D8EFBA40E /* EnvironmentsScreen.swift */; };
 		BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */; };
 		D78E9CFFE4A0752E0DC8E7CF /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B15032C32C3A8CFD7D44F9 /* Place.swift */; };
 		E392DAA1A839394313F7B082 /* AgentPickerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E79B58E5AF477E4EE3EF7A6 /* AgentPickerScreen.swift */; };
@@ -73,6 +74,7 @@
 		4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6E79B58E5AF477E4EE3EF7A6 /* AgentPickerScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPickerScreen.swift; sourceTree = "<group>"; };
 		768A82DF7FBC198B0C9B4666 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
+		7BA6601D3330B68D8EFBA40E /* EnvironmentsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentsScreen.swift; sourceTree = "<group>"; };
 		B08909E5BDA34D380AF7B25F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CAB0B5D7F3477ABBB39A0B42 /* Rook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rook.entitlements; sourceTree = "<group>"; };
 		CCC0E6975A54FDE443878E1C /* SessionsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsScreen.swift; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 				6E79B58E5AF477E4EE3EF7A6 /* AgentPickerScreen.swift */,
 				4C4EF5AAEC5E22542FA87BFA /* ChatScreen.swift */,
 				D3750D99D34721CDF69C0308 /* EnvironmentOfferSheet.swift */,
+				7BA6601D3330B68D8EFBA40E /* EnvironmentsScreen.swift */,
 				29576F6F57489599396405E7 /* PlacesScreen.swift */,
 				D7BD772167EE16CB4B505749 /* RootView.swift */,
 				CCC0E6975A54FDE443878E1C /* SessionsScreen.swift */,
@@ -315,6 +318,7 @@
 				E392DAA1A839394313F7B082 /* AgentPickerScreen.swift in Sources */,
 				219F951A1479769704EAB1DD /* ChatScreen.swift in Sources */,
 				6A758CE682622466DE13275A /* EnvironmentOfferSheet.swift in Sources */,
+				AA7B07DF99FB258A5231A471 /* EnvironmentsScreen.swift in Sources */,
 				4173AAB22A3E2CE2F1D8F1D5 /* LocationProvider.swift in Sources */,
 				D78E9CFFE4A0752E0DC8E7CF /* Place.swift in Sources */,
 				6466135E2CDDBF493C2179B9 /* PlacesScreen.swift in Sources */,
@@ -369,7 +373,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.RookTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.d56ksd4ff9.RookTests;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -390,7 +394,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.d56ksd4ff9.Rook;
 				PRODUCT_NAME = Rook;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -407,7 +411,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.RookTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.d56ksd4ff9.RookTests;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -483,7 +487,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook.RookWidgets;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.d56ksd4ff9.Rook.RookWidgets;
 				PRODUCT_NAME = RookWidgets;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
@@ -566,7 +570,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook.RookWidgets;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.d56ksd4ff9.Rook.RookWidgets;
 				PRODUCT_NAME = RookWidgets;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
@@ -587,7 +591,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.d56ksd4ff9.Rook;
 				PRODUCT_NAME = Rook;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;

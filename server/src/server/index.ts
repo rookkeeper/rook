@@ -20,6 +20,7 @@ import { REPO_ROOT } from "./paths.js";
 import { SessionRoomManager } from "./realtime/SessionRoomManager.js";
 import { registerAgentRoutes } from "./routes/agentRoutes.js";
 import { registerEnvironmentRoutes } from "./routes/environmentRoutes.js";
+import { registerDiagnosticRoutes } from "./routes/diagnosticRoutes.js";
 import { registerWebsocketRoute } from "./routes/websocketRoute.js";
 import { ServerAuth } from "./auth.js";
 import { startRemoteProxy } from "./remoteProxy.js";
@@ -36,6 +37,10 @@ export interface BuildServerOptions {
   roomIdleTimeoutMs?: number;
   /** SQLite location for persistent environment decisions; ":memory:" in tests. */
   environmentDecisionStoreLocation?: string;
+  /** Active environment window. Defaults to 5m15s. */
+  environmentActiveWindowMs?: number;
+  /** Retention for recent inactive environments. Defaults to 30 minutes. */
+  environmentRecentRetentionMs?: number;
   /** Override the POI lookup provider (defaults to the ptiles provider via the proxy route). */
   poiProvider?: PoiLookupProvider;
   /** Optional bearer token required by all HTTP + WebSocket requests. */
@@ -67,7 +72,11 @@ export async function buildServer(options: BuildServerOptions = {}) {
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
   const environmentDecisionStore = new EnvironmentDecisionStore(options.environmentDecisionStoreLocation);
-  const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionStore);
+  const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionStore, {
+    activeEnvironmentWindowMs: options.environmentActiveWindowMs ?? Number(process.env.ROOK_ENVIRONMENT_ACTIVE_WINDOW_MS ?? 5 * 60_000 + 15_000),
+    recentEnvironmentRetentionMs: options.environmentRecentRetentionMs ?? Number(process.env.ROOK_ENVIRONMENT_RECENT_RETENTION_MS ?? 30 * 60_000),
+    logger: app.log,
+  });
   // Ptiles is an internal geo-identification detail: fetch byte ranges directly from
   // the upstream host (single egress, allowlisted file names) — no public route.
   const fetchRange = createUpstreamFetchRange();
@@ -91,11 +100,13 @@ export async function buildServer(options: BuildServerOptions = {}) {
   });
 
   app.addHook("onClose", async () => {
+    environmentManager.close();
     await roomManager.closeAll();
   });
 
   await registerAgentRoutes(app, { roomManager, environmentManager });
   await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar);
+  await registerDiagnosticRoutes(app, environmentManager);
   await registerWebsocketRoute(app, roomManager, auth);
 
   return app;

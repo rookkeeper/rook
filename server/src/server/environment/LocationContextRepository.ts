@@ -5,10 +5,9 @@ const REPO_NAME = "location-context";
 
 /**
  * Programmatic, in-memory environment repository for the synthesized location-context
- * bundle. Composed alongside the directory repositories so the location-context skill
- * reaches the agent through the normal repository facade (`getSkillRuntimePaths`) —
- * no special-cased `extraSkillPaths` channel. `LocationRegistrar` sets/clears the
- * current location's bundle as the user moves.
+ * bundle. Composed alongside the directory repositories so the location-context bundle
+ * reaches the server through the normal repository facade — no special-cased runtime
+ * channel. `LocationRegistrar` sets/clears the current location's bundle as the user moves.
  */
 export class LocationContextRepository extends EnvironmentRepository {
   /** environmentId -> the skill bundle directory (containing SKILL.md). */
@@ -33,6 +32,7 @@ export class LocationContextRepository extends EnvironmentRepository {
           bundleId: "location-context",
           environmentId,
           repository: REPO_NAME,
+          bundlePath: sourcePath,
           skills: [{ id: "location-context", files: {}, sourcePath }],
           mcpServers: [],
           apps: [],

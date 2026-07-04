@@ -33,16 +33,16 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
   auto-send after the current turn (120 ms gap), matching the web client, with
   queue edit / delete / send-now controls (`_rookery/steering_prompt`).
 - **Environment offers** - `environment_offer_available` events open a native
-  approval view with bundle-file preview (`GET /api/environments/preview`) and
-  the four 2×2 decisions (`POST /api/environments/decision`): allow this
-  visit / always allow / not now / never.
+  bundle-level approval view showing the offered bundle name plus the names of
+  any bundled skills, MCP servers, and apps, with the four 2×2 decisions
+  (`POST /api/environments/decision`): allow this visit / always allow /
+  not now / never.
 - **Server supervision** - health polling; if the server is down the panel can
   launch `npm run dev` for the repo and tail its log
   (`~/Library/Logs/Rook/server.log`).
-- **Foreground-app environment provider** - the app watches which Mac app is
-  frontmost (NSWorkspace activation notifications - no Accessibility permission
-  needed) and registers/unregisters derived `app:` / `web:` environments as you
-  switch apps.
+- **Mac environment provider** - the app immediately registers newly seen
+  user-visible environments, keeps them alive with periodic re-registration,
+  and forgets them locally after 4m45s without renewed user-visible focus.
 
 ## Voice (hands-free)
 
@@ -104,10 +104,16 @@ Live) as an I/O layer that forwards to Rook as the brain.
 
 ## Foreground-app environments
 
-The Mac app now derives environment IDs directly from the observed context and
-keeps a small in-memory cache with 5-minute expiry. It registers only the
-**deepest concrete environment** it currently sees, and the server expands that
-into all implied parent paths.
+The Mac app now keeps an in-memory cache of **encountered** environments.
+Encountering means the environment became foreground on the Mac or appeared in a
+startup/wake visible snapshot. Newly encountered environments register
+immediately and start a configurable 5-minute local TTL window.
+
+Tracked foreground environments include:
+
+- frontmost regular apps as `app:<bundleId>`
+- richer foreground-derived app environments such as `app:md.obsidian/<vault>`
+- frontmost browser pages as deepest `web:<host>/<path>` ids
 
 Examples:
 
@@ -116,24 +122,34 @@ Examples:
 - `https://en.wikipedia.org/wiki/Main_Page?foo=bar` →
   `web:en.wikipedia.org/wiki/Main_Page`
 
-The Mac app sends only that deepest ID; the server treats it as implying:
+The Mac app registers the exact encountered ID it sees at the moment, such as:
 
-- `web:en.wikipedia.org`
-- `web:en.wikipedia.org/wiki`
+- `app:com.tinyspeck.slackmacgap`
+- `app:md.obsidian/Peeps`
 - `web:en.wikipedia.org/wiki/Main_Page`
 
 For Obsidian, vault parsing is title-based and works backwards so note names may
 contain dashes safely. For plain apps the base identity is the bundle id:
 `app:<bundleId>`.
 
-Switching to a new derived environment registers it (`POST
-/api/environments/register`); a context that has not been seen for 5 minutes is
-unregistered (`POST /api/environments/unregister`). Activations are debounced
-(700 ms) so ⌘-Tab flicker doesn't churn registrations, the app ignores its own
-activations (opening the panel doesn't end the episode), and currently cached
-registrations are re-announced if the server restarts. Offers arrive over the
-session websocket like any other environment, and the native approval view
-shows the bundle files before anything loads.
+Each newly encountered environment registers with a fresh `registeredAt`
+timestamp (`POST /api/environments/register`). If the same cached environment
+stays within its local TTL, the Mac performs a scheduled keepalive re-register
+every 5 minutes. If it is not brought back into user-visible focus within
+4m45s, it simply falls out of the Mac cache; the server ages it out on its
+own.
+
+Non-user timers/polls do **not** discover new environments. They are used only
+for:
+
+- local TTL expiry cleanup of already-cached environments
+- scheduled keepalive re-register of already-cached environments
+- server/wake reconciliation of currently visible environments
+
+Foreground activations are still debounced (700 ms) so ⌘-Tab flicker doesn't
+thrash the richer foreground context, the app ignores its own activations
+(opening the panel doesn't end the episode), and cached registrations are
+re-announced if the server restarts.
 
 Provider activity is traced to `/tmp/rook.log` for debugging.
 

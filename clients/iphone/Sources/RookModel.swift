@@ -49,6 +49,12 @@ final class RookModel: ObservableObject {
     @Published var offerLoading = false
     @Published var offerError = ""
 
+    // Environment join/leave
+    @Published var environmentListItems: [EnvironmentListItem] = []
+    @Published var environmentsLoading = false
+    @Published var environmentsError = ""
+    @Published var showEnvironments = false
+
     // Location → place environment provider
     let placeStore = PlaceStore()
     let locationProvider = LocationProvider()
@@ -326,7 +332,7 @@ final class RookModel: ObservableObject {
     }
 
     /// Mirrors `RookMacModel.handleForegroundApp`: diff the current place
-    /// against the registered environment, unregister the old, register the new
+    /// against the registered environment and register the new one
     /// (only if the server has skills for it — the iOS analog of the Mac's
     /// on-disk skill-bundle guard, done via the preview endpoint).
     private func handlePlace(_ place: Place?) {
@@ -335,13 +341,9 @@ final class RookModel: ObservableObject {
         guard envId != placeEnvironmentId else {
             return
         }
-        let previous = placeEnvironmentId
         placeEnvironmentId = envId
         updateLiveActivity()
         Task {
-            if let previous {
-                try? await api.unregisterEnvironment(id: previous)
-            }
             guard let place, let envId else {
                 return
             }
@@ -562,11 +564,13 @@ final class RookModel: ObservableObject {
         statusLine = ""
         contextUsage = nil
         enteredEnvironments = []
+        environmentListItems = []
         if resumed {
             appendBlock(.system(text: "Resumed session — earlier messages aren't replayed."))
         }
         socket.connect(sessionId: session.id, request: api.webSocketRequest(sessionId: session.id))
         updateLiveActivity()
+        refreshEnvironmentList()
     }
 
     func leaveChat() {
@@ -587,8 +591,8 @@ final class RookModel: ObservableObject {
     /// intentionally (silent — no phantom "connection lost") and stop any
     /// in-flight run spinner cleanly; reconnect on return. The place
     /// environment is deliberately NOT released here: region monitoring keeps
-    /// running in the background, so you're still "at" the place — physically
-    /// leaving the geofence (`didExitRegion`) is what unregisters it.
+    /// running in the background, so you're still "at" the place, and the
+    /// server will age old registrations out if they stop being refreshed.
     func handleEnteredBackground() {
         guard currentSession != nil else {
             return
@@ -834,8 +838,8 @@ final class RookModel: ObservableObject {
             appendErrorBlock(source: "connection", message: message)
         case .environmentOffered(let offer):
             handleEnvironmentOffered(offer)
-        case .environmentOfferResolved(let environmentId):
-            handleEnvironmentOfferResolved(environmentId)
+        case .environmentOfferResolved(let environmentId, let bundleHash):
+            handleEnvironmentOfferResolved(environmentId, bundleHash: bundleHash)
         case .environmentEntered(let environmentId):
             if enteredEnvironments.insert(environmentId).inserted {
                 let entered = nearbyCandidates.first { $0.environmentId == environmentId }
@@ -843,11 +847,13 @@ final class RookModel: ObservableObject {
                 let label = locationBannerLabel(entered: entered, candidates: nearbyCandidates)
                 appendBlock(.environment(EnvironmentBanner(displayName: label, websites: websites)))
             }
+            refreshEnvironmentList()
         case .environmentExited(let environmentId, let error):
             if enteredEnvironments.remove(environmentId) != nil {
                 let suffix = error.map { " (\($0))" } ?? ""
                 appendBlock(.system(text: "Exited environment \(environmentId)\(suffix)."))
             }
+            refreshEnvironmentList()
         }
         scrollTick += 1
     }
@@ -956,19 +962,11 @@ final class RookModel: ObservableObject {
         pendingOffer = offer
         offerBundles = []
         offerError = ""
-        offerLoading = true
-        Task {
-            do {
-                offerBundles = try await api.environmentPreview(environmentId: offer.environmentId).bundles
-            } catch {
-                offerError = error.localizedDescription
-            }
-            offerLoading = false
-        }
+        offerLoading = false
     }
 
-    private func handleEnvironmentOfferResolved(_ environmentId: String) {
-        guard pendingOffer?.environmentId == environmentId else {
+    private func handleEnvironmentOfferResolved(_ environmentId: String, bundleHash: String) {
+        guard pendingOffer?.environmentId == environmentId, pendingOffer?.bundleHash == bundleHash else {
             return
         }
         clearOffer()
@@ -980,9 +978,9 @@ final class RookModel: ObservableObject {
         }
         Task {
             do {
-                try await api.decideEnvironment(environmentId: offer.environmentId, decision: decision)
+                try await api.decideEnvironment(environmentId: offer.environmentId, bundleHash: offer.bundleHash, decision: decision)
                 if decision == "accept" || decision == "approve" {
-                    appendBlock(.system(text: "Environment \(offer.environmentId) allowed — agent reloads its skills when idle."))
+                    appendBlock(.system(text: "Bundle \(offer.bundleId) allowed for \(offer.environmentId)."))
                 }
             } catch {
                 offerError = error.localizedDescription
@@ -996,5 +994,49 @@ final class RookModel: ObservableObject {
         pendingOffer = nil
         offerBundles = []
         offerError = ""
+    }
+
+    // MARK: - Environment join / leave
+
+    func refreshEnvironmentList() {
+        guard let session = currentSession else {
+            environmentListItems = []
+            return
+        }
+        environmentsLoading = true
+        environmentsError = ""
+        Task {
+            defer { environmentsLoading = false }
+            do {
+                environmentListItems = try await api.environmentList(sessionId: session.id)
+                environmentsError = ""
+            } catch {
+                environmentsError = error.localizedDescription
+            }
+        }
+    }
+
+    func joinEnvironment(_ environmentId: String) {
+        guard let session = currentSession else { return }
+        Task {
+            do {
+                _ = try await api.enterEnvironment(sessionId: session.id, environmentId: environmentId)
+                refreshEnvironmentList()
+            } catch {
+                environmentsError = error.localizedDescription
+            }
+        }
+    }
+
+    func leaveEnvironment(_ environmentId: String) {
+        guard let session = currentSession else { return }
+        Task {
+            do {
+                _ = try await api.exitEnvironment(sessionId: session.id, environmentId: environmentId)
+                refreshEnvironmentList()
+            } catch {
+                environmentsError = error.localizedDescription
+            }
+        }
     }
 }

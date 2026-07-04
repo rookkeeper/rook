@@ -25,6 +25,8 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - `./scripts/run-rook.sh ios` (alias: `phone`)
 - `./scripts/run-rook.sh android`
 - `./scripts/run-rook.sh stop`
+- `./scripts/print-environments.sh` — dump active/recent environment diagnostics from the server
+- `./scripts/run-tests` — run the known server, Swift package, iPhone, and macOS test/build checks
 
 ## High-level docs map
 

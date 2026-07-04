@@ -34,23 +34,13 @@ export async function registerEnvironmentRoutes(
       { id: trimmedId, metadata: (metadata ?? {}) as Record<string, unknown> },
       { ...(canonicalSourceUrl ? { canonicalSourceUrl } : {}), ...(sourceName ? { sourceName } : {}) },
     );
-    return { ok: true, id: trimmedId };
+    const registeredAt = new Date().toISOString();
+    return { ok: true, id: trimmedId, registeredAt };
   });
 
-  app.post<{ Body: { id?: unknown } }>("/api/environments/unregister", async (request, reply) => {
-    const id = request.body?.id;
-    if (typeof id !== "string" || !id.trim()) {
-      reply.code(400).send({ error: "Missing environment id" });
-      return;
-    }
-    const trimmedId = id.trim();
-    request.log.info({ environmentId: trimmedId }, "environment unregistered");
-    environmentManager.unregister(trimmedId);
-    return { ok: true };
-  });
-
-  app.post<{ Body: { environmentId?: unknown; decision?: unknown } }>("/api/environments/decision", async (request, reply) => {
+  app.post<{ Body: { environmentId?: unknown; bundleHash?: unknown; decision?: unknown } }>("/api/environments/decision", async (request, reply) => {
     const environmentId = request.body?.environmentId;
+    const bundleHash = typeof request.body?.bundleHash === "string" && request.body.bundleHash.trim() ? request.body.bundleHash.trim() : undefined;
     const decision = request.body?.decision;
     if (typeof environmentId !== "string" || !environmentId.trim()) {
       reply.code(400).send({ error: "Missing environmentId" });
@@ -61,8 +51,8 @@ export async function registerEnvironmentRoutes(
       return;
     }
     const trimmedEnvironmentId = environmentId.trim();
-    request.log.info({ environmentId: trimmedEnvironmentId, decision }, "environment decision recorded");
-    environmentManager.decideEnvironment(trimmedEnvironmentId, decision as EnvironmentDecision);
+    request.log.info({ environmentId: trimmedEnvironmentId, bundleHash, decision }, "environment decision recorded");
+    environmentManager.decideEnvironment(trimmedEnvironmentId, decision as EnvironmentDecision, bundleHash);
     return { ok: true };
   });
 
@@ -123,5 +113,44 @@ export async function registerEnvironmentRoutes(
       app.log.warn(`location registration failed: ${error instanceof Error ? error.message : String(error)}`);
     }
     return { candidates };
+  });
+
+  app.post<{ Body: { sessionId?: unknown; environmentId?: unknown } }>("/api/environments/enter", async (request, reply) => {
+    const sessionId = request.body?.sessionId;
+    const environmentId = request.body?.environmentId;
+    if (typeof sessionId !== "string" || !sessionId.trim()) {
+      reply.code(400).send({ error: "Missing sessionId" });
+      return;
+    }
+    if (typeof environmentId !== "string" || !environmentId.trim()) {
+      reply.code(400).send({ error: "Missing environmentId" });
+      return;
+    }
+    const entered = environmentManager.enterEnvironment(sessionId.trim(), environmentId.trim());
+    return { ok: true, entered };
+  });
+
+  app.post<{ Body: { sessionId?: unknown; environmentId?: unknown } }>("/api/environments/exit", async (request, reply) => {
+    const sessionId = request.body?.sessionId;
+    const environmentId = request.body?.environmentId;
+    if (typeof sessionId !== "string" || !sessionId.trim()) {
+      reply.code(400).send({ error: "Missing sessionId" });
+      return;
+    }
+    if (typeof environmentId !== "string" || !environmentId.trim()) {
+      reply.code(400).send({ error: "Missing environmentId" });
+      return;
+    }
+    const entered = environmentManager.exitEnvironment(sessionId.trim(), environmentId.trim());
+    return { ok: true, entered };
+  });
+
+  app.get<{ Querystring: { sessionId?: string } }>("/api/environments/list", async (request, reply) => {
+    const sessionId = typeof request.query.sessionId === "string" ? request.query.sessionId.trim() : "";
+    if (!sessionId) {
+      reply.code(400).send({ error: "Missing sessionId" });
+      return;
+    }
+    return environmentManager.environmentList(sessionId);
   });
 }

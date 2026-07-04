@@ -32,6 +32,9 @@ struct RootView: View {
         .sheet(isPresented: $showPlaces) {
             PlacesScreen(model: model)
         }
+        .sheet(isPresented: $model.showEnvironments) {
+            EnvironmentsScreen(model: model)
+        }
     }
 }
 
