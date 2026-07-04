@@ -106,6 +106,7 @@ data class EnvironmentBundlePreview(
     val environmentId: String,
     val repository: String,
     val valid: Boolean,
+    val bundleHash: String = "",
     val skills: List<EnvironmentArtifactPreview>,
     val mcpServers: List<EnvironmentArtifactPreview>,
     val apps: List<EnvironmentArtifactPreview>,
@@ -130,6 +131,25 @@ data class EnvironmentPreview(
 
 data class EnvironmentOffer(
     val environmentId: String,
+    val bundleId: String,
+    val bundleHash: String,
     val sourceName: String?,
-    val canonicalSourceUrl: String?
+    val canonicalSourceUrl: String?,
+    val skills: List<String>,
+    val mcpServers: List<String>,
+    val apps: List<String>
 )
+
+// One environment row from GET /api/environments/list.
+@Serializable
+data class EnvironmentListItem(
+    val environmentId: String,
+    val sourceName: String? = null,
+    val status: String,
+    val lastTouchedAt: String,
+    val entered: Boolean,
+    val bundleCount: Int,
+    val approvedBundleCount: Int
+) {
+    val id: String get() = environmentId
+}

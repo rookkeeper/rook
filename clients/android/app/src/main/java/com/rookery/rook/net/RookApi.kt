@@ -4,6 +4,7 @@ package com.rookery.rook.net
 import com.rookery.rook.model.AgentDefinition
 import com.rookery.rook.model.AgentSessionSummary
 import com.rookery.rook.model.EnvironmentCandidate
+import com.rookery.rook.model.EnvironmentListItem
 import com.rookery.rook.model.EnvironmentPreview
 import com.rookery.rook.model.IdentifyAvailableRequest
 import com.rookery.rook.model.get
@@ -12,6 +13,7 @@ import com.rookery.rook.model.boolValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -32,11 +34,25 @@ import java.util.concurrent.TimeUnit
 
 class RookApiException(message: String) : Exception(message)
 
+/** Distinguishes 401 from other failures so the UI can show an UNAUTHORIZED state. */
+sealed class RookHealthResult {
+    data object Ok : RookHealthResult()
+    data object Unauthorized : RookHealthResult()
+    data class HttpStatus(val code: Int) : RookHealthResult()
+    data class TransportError(val message: String) : RookHealthResult()
+}
+
 /** REST control plane for the Rook server. */
-class RookApi(val baseUrl: String = "http://127.0.0.1:3000") {
+class RookApi(
+    val baseUrl: String = "http://127.0.0.1:3000",
+    authToken: String = ""
+) {
     private val base: HttpUrl = baseUrl.toHttpUrl()
     private val client = OkHttpClient()
     private val json = Json { ignoreUnknownKeys = true }
+
+    // Trimmed, empty-as-absent — matches RookAPI.swift's authToken normalization.
+    private val token: String = authToken.trim()
 
     val webSocketUrl: String
         get() {
@@ -47,19 +63,27 @@ class RookApi(val baseUrl: String = "http://127.0.0.1:3000") {
 
     val webAppUrl: String get() = baseUrl
 
-    suspend fun health(timeoutMs: Long = 1500): Boolean = withContext(Dispatchers.IO) {
+    suspend fun healthResult(timeoutMs: Long = 1500): RookHealthResult = withContext(Dispatchers.IO) {
         try {
             val timedClient = client.newBuilder().callTimeout(timeoutMs, TimeUnit.MILLISECONDS).build()
-            val request = Request.Builder().url(requestUrl("api/health")).build()
+            val request = authorized(Request.Builder().url(requestUrl("api/health"))).build()
             timedClient.newCall(request).execute().use { response ->
-                if (response.code != 200) return@use false
-                val body = json.parseToJsonElement(response.body?.string().orEmpty())
-                body["ok"]?.boolValue == true
+                when (response.code) {
+                    200 -> {
+                        val body = runCatching { json.parseToJsonElement(response.body?.string().orEmpty()) }.getOrNull()
+                        if (body?.get("ok")?.boolValue == true) RookHealthResult.Ok
+                        else RookHealthResult.TransportError("Malformed health response")
+                    }
+                    401 -> RookHealthResult.Unauthorized
+                    else -> RookHealthResult.HttpStatus(response.code)
+                }
             }
         } catch (e: Exception) {
-            false
+            RookHealthResult.TransportError(e.message ?: "Transport error")
         }
     }
+
+    suspend fun health(timeoutMs: Long = 1500): Boolean = healthResult(timeoutMs) is RookHealthResult.Ok
 
     suspend fun agents(): List<AgentDefinition> {
         @Serializable data class AgentsResponse(val agents: List<AgentDefinition>)
@@ -136,14 +160,50 @@ class RookApi(val baseUrl: String = "http://127.0.0.1:3000") {
         return json.decodeFromJsonElement(IdentifyResponse.serializer(), body).candidates
     }
 
-    suspend fun decideEnvironment(environmentId: String, decision: String) {
+    /**
+     * Committing variant: identify, then register/auto-enter the dwell set into the
+     * SessionRoom/agent. This is what the arrival path (classifier Stationary) calls.
+     */
+    suspend fun registerLocation(request: IdentifyAvailableRequest): List<EnvironmentCandidate> {
+        @Serializable data class IdentifyResponse(val candidates: List<EnvironmentCandidate>)
+        val payload = json.encodeToJsonElement(IdentifyAvailableRequest.serializer(), request).jsonObject
+        val body = postJson("api/environments/register-location", payload)
+        return json.decodeFromJsonElement(IdentifyResponse.serializer(), body).candidates
+    }
+
+    suspend fun decideEnvironment(environmentId: String, bundleHash: String, decision: String) {
         postJson(
             "api/environments/decision",
             buildJsonObject {
                 put("environmentId", environmentId)
+                put("bundleHash", bundleHash)
                 put("decision", decision)
             }
         )
+    }
+
+    suspend fun enterEnvironment(sessionId: String, environmentId: String): List<String> =
+        enterExit("api/environments/enter", sessionId, environmentId)
+
+    suspend fun exitEnvironment(sessionId: String, environmentId: String): List<String> =
+        enterExit("api/environments/exit", sessionId, environmentId)
+
+    private suspend fun enterExit(path: String, sessionId: String, environmentId: String): List<String> {
+        @Serializable data class EnterResponse(val ok: Boolean = false, val entered: List<String> = emptyList())
+        val body = postJson(
+            path,
+            buildJsonObject {
+                put("sessionId", sessionId)
+                put("environmentId", environmentId)
+            }
+        )
+        return json.decodeFromJsonElement(EnterResponse.serializer(), body).entered
+    }
+
+    // GET returns a bare array (mirrors RookAPI.swift environmentList).
+    suspend fun environmentList(sessionId: String): List<EnvironmentListItem> {
+        val body = getJson("api/environments/list", mapOf("sessionId" to sessionId))
+        return json.decodeFromJsonElement(ListSerializer(EnvironmentListItem.serializer()), body)
     }
 
     // MARK: - Transport helpers
@@ -154,14 +214,20 @@ class RookApi(val baseUrl: String = "http://127.0.0.1:3000") {
         return builder.build()
     }
 
+    // Single chokepoint for the auth header — mirrors RookAPI.swift authorizedRequest.
+    private fun authorized(builder: Request.Builder): Request.Builder {
+        if (token.isNotEmpty()) builder.header("Authorization", "Bearer $token")
+        return builder
+    }
+
     private suspend fun getJson(path: String, query: Map<String, String> = emptyMap()): JsonElement {
-        val request = Request.Builder().url(requestUrl(path, query)).build()
+        val request = authorized(Request.Builder().url(requestUrl(path, query))).build()
         return execute(request)
     }
 
     private suspend fun postJson(path: String, payload: JsonElement): JsonElement {
         val body = json.encodeToString(JsonElement.serializer(), payload).toRequestBody("application/json".toMediaType())
-        val request = Request.Builder().url(requestUrl(path)).post(body).build()
+        val request = authorized(Request.Builder().url(requestUrl(path)).post(body)).build()
         return execute(request)
     }
 

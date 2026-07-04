@@ -40,7 +40,7 @@ sealed class AcpClientEvent {
     data class ProtocolError(val message: String) : AcpClientEvent()
     data class ConnectionError(val message: String) : AcpClientEvent()
     data class EnvironmentOffered(val offer: EnvironmentOffer) : AcpClientEvent()
-    data class EnvironmentOfferResolved(val environmentId: String) : AcpClientEvent()
+    data class EnvironmentOfferResolved(val environmentId: String, val bundleHash: String) : AcpClientEvent()
     data class EnvironmentEntered(val environmentId: String) : AcpClientEvent()
     data class EnvironmentExited(val environmentId: String, val error: String?) : AcpClientEvent()
 }

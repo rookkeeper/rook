@@ -13,6 +13,7 @@ package com.rookery.rook
 import com.rookery.rook.model.AcpClientEvent
 import com.rookery.rook.model.AgentSessionSummary
 import com.rookery.rook.model.ChatBlockKind
+import com.rookery.rook.model.EnvironmentOffer
 import com.rookery.rook.model.ToolBlockStatus
 import com.rookery.rook.net.RookApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -130,5 +131,54 @@ class RookViewModelReduceTest {
 
         assertEquals(listOf("hi"), viewModel.queuedMessages.value)
         assertTrue(viewModel.blocks.value.isEmpty())
+    }
+
+    // MARK: - Environment reducer branches (location/skills phase)
+
+    private fun offer(envId: String, bundleId: String = "b1", hash: String = "hash1") =
+        EnvironmentOffer(envId, bundleId, hash, "Store", null, emptyList(), emptyList(), emptyList())
+
+    @Test
+    fun environmentOfferedSetsPendingOfferAndIgnoresDuplicate() {
+        val viewModel = RookViewModel()
+
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOffered(offer("loc:x", bundleId = "b1")))
+        assertEquals("loc:x", viewModel.pendingOffer.value?.environmentId)
+
+        // A re-offer of the same environment id is ignored (keeps the first).
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOffered(offer("loc:x", bundleId = "b2")))
+        assertEquals("b1", viewModel.pendingOffer.value?.bundleId)
+    }
+
+    @Test
+    fun environmentOfferResolvedClearsOnlyOnMatchingHash() {
+        val viewModel = RookViewModel()
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOffered(offer("loc:x", hash = "hash1")))
+
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOfferResolved("loc:x", "wrong"))
+        assertEquals("loc:x", viewModel.pendingOffer.value?.environmentId)
+
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOfferResolved("loc:x", "hash1"))
+        assertEquals(null, viewModel.pendingOffer.value)
+    }
+
+    @Test
+    fun environmentEnteredAppendsBannerOnceThenDedups() {
+        val viewModel = RookViewModel()
+
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentEntered("loc:x"))
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentEntered("loc:x"))
+
+        assertEquals(1, viewModel.blocks.value.count { it.kind is ChatBlockKind.Environment })
+    }
+
+    @Test
+    fun environmentExitedAppendsSystemBlockWithError() {
+        val viewModel = RookViewModel()
+
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentExited("loc:x", "boom"))
+
+        val system = viewModel.blocks.value.last().kind as ChatBlockKind.System
+        assertTrue(system.text.contains("boom"))
     }
 }

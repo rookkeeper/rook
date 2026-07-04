@@ -32,9 +32,11 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,7 +83,8 @@ fun ChatScreen(viewModel: RookViewModel) {
             agentName = currentSession?.agent ?: "Rook",
             sessionName = currentSession?.name?.takeIf { it != "default" },
             contextUsage = contextUsage,
-            onBack = viewModel::leaveChat
+            onBack = viewModel::leaveChat,
+            onEnvironments = { viewModel.setShowEnvironments(true) }
         )
         HorizontalDivider(color = PanelPalette.border)
 
@@ -110,7 +113,13 @@ fun ChatScreen(viewModel: RookViewModel) {
 }
 
 @Composable
-private fun ChatHeader(agentName: String, sessionName: String?, contextUsage: Pair<Int, Int>?, onBack: () -> Unit) {
+private fun ChatHeader(
+    agentName: String,
+    sessionName: String?,
+    contextUsage: Pair<Int, Int>?,
+    onBack: () -> Unit,
+    onEnvironments: () -> Unit
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -141,6 +150,9 @@ private fun ChatHeader(agentName: String, sessionName: String?, contextUsage: Pa
                 fontFamily = FontFamily.Monospace,
                 color = PanelPalette.textMuted
             )
+        }
+        IconButton(onClick = onEnvironments) {
+            Icon(Icons.Filled.Public, contentDescription = "Environments", tint = PanelPalette.textMuted)
         }
     }
 }

@@ -77,6 +77,7 @@ fun ChatBlockView(block: ChatBlock, modifier: Modifier = Modifier) {
         is ChatBlockKind.Error -> ErrorBlockView(kind.source, kind.message, modifier)
         is ChatBlockKind.System -> SystemBlockView(kind.text, modifier)
         is ChatBlockKind.Plan -> PlanBlockView(kind.entries, modifier)
+        is ChatBlockKind.Environment -> EnvironmentBlockView(kind.displayName, kind.websites, modifier)
     }
 }
 
@@ -443,6 +444,49 @@ private fun SystemBlockView(text: String, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .padding(vertical = 2.dp)
     )
+}
+
+// Mirrors EnvironmentBlockView (ChatBlockViews.swift). ponytail: the entered-business
+// favicon row is rendered as host-name chips instead — Coil isn't a dependency and adding
+// async favicon loading for a decorative row is out of scope for v0. Swap in favicons later.
+@Composable
+private fun EnvironmentBlockView(displayName: String?, websites: List<String>, modifier: Modifier = Modifier) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+    ) {
+        Text(
+            text = displayName?.let { "📍 $it" } ?: "Using nearby business context",
+            fontSize = 11.sp,
+            color = PanelPalette.secondaryText,
+            textAlign = TextAlign.Center
+        )
+        if (websites.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                websites.take(6).forEach { website ->
+                    Text(
+                        text = websiteHost(website),
+                        fontSize = 9.sp,
+                        color = PanelPalette.textMuted,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(PanelPalette.hover)
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Lowercased host of a URL — "https://www.target.com/x" -> "target.com". Best-effort.
+private fun websiteHost(website: String): String {
+    var host = website.substringAfter("://", website).substringBefore("/").lowercase()
+    if (host.startsWith("www.")) host = host.removePrefix("www.")
+    return host.ifEmpty { website }
 }
 
 @Composable

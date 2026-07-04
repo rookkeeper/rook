@@ -419,16 +419,28 @@ class AcpSocket(
         val payload = update["payload"] as? JsonObject ?: JsonObject(emptyMap())
         val environmentId = payload["environmentId"]?.stringValue ?: return
         when (kind) {
-            "environment_offer_available" -> emit(
-                AcpClientEvent.EnvironmentOffered(
-                    EnvironmentOffer(
-                        environmentId = environmentId,
-                        sourceName = payload["sourceName"]?.stringValue,
-                        canonicalSourceUrl = payload["canonicalSourceUrl"]?.stringValue
+            "environment_offer_available" -> {
+                val bundleId = payload["bundleId"]?.stringValue ?: return
+                val bundleHash = payload["bundleHash"]?.stringValue ?: return
+                emit(
+                    AcpClientEvent.EnvironmentOffered(
+                        EnvironmentOffer(
+                            environmentId = environmentId,
+                            bundleId = bundleId,
+                            bundleHash = bundleHash,
+                            sourceName = payload["sourceName"]?.stringValue,
+                            canonicalSourceUrl = payload["canonicalSourceUrl"]?.stringValue,
+                            skills = stringList(payload["skills"]),
+                            mcpServers = stringList(payload["mcpServers"]),
+                            apps = stringList(payload["apps"])
+                        )
                     )
                 )
-            )
-            "environment_offer_resolved" -> emit(AcpClientEvent.EnvironmentOfferResolved(environmentId))
+            }
+            "environment_offer_resolved" -> {
+                val bundleHash = payload["bundleHash"]?.stringValue ?: return
+                emit(AcpClientEvent.EnvironmentOfferResolved(environmentId, bundleHash))
+            }
             "environment_entered" -> emit(AcpClientEvent.EnvironmentEntered(environmentId))
             "environment_exited" -> emit(AcpClientEvent.EnvironmentExited(environmentId, payload["error"]?.stringValue))
             else -> {}
@@ -587,4 +599,7 @@ class AcpSocket(
     }
 
     private fun intValue(value: JsonElement?): Int? = value?.numberValue?.toInt()
+
+    private fun stringList(value: JsonElement?): List<String> =
+        (value as? JsonArray)?.mapNotNull { it.stringValue } ?: emptyList()
 }

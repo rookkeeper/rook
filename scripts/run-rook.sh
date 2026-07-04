@@ -28,7 +28,7 @@ Usage:
   ./scripts/run-rook.sh sim [--simulator NAME_OR_UDID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
   ./scripts/run-rook.sh ios [--device NAME_OR_UDID] [--team TEAM_ID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
   ./scripts/run-rook.sh phone ...   (alias of ios)
-  ./scripts/run-rook.sh android [--device SERIAL_OR_NAME] [--server-url URL] [--reset-permissions]
+  ./scripts/run-rook.sh android [--device SERIAL_OR_NAME] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
   ./scripts/run-rook.sh mac sim
   ./scripts/run-rook.sh server mac sim
   ./scripts/run-rook.sh stop
@@ -62,11 +62,11 @@ Notes:
     `simctl privacy` (sim already reinstalls each run); on phone/android it
     uninstalls the app first (the only way to reset device grants), so you
     re-grant from scratch — useful for testing the location/motion permission flow.
-  - --simulate-arrival "LAT,LON" launches with the DEBUG ROOK_SIMULATE_ARRIVAL
-    hook, firing a synthetic stationary arrival (bypassing GPS/CLVisit) so the
-    identify -> register -> banner -> agent-context flow runs without real
-    movement. Debug builds only; works on sim/ios/phone. Not yet supported on
-    android (location isn't implemented there yet).
+  - --simulate-arrival "LAT,LON" fires a synthetic stationary arrival (bypassing
+    GPS/CLVisit/the movement classifier) so the identify -> register -> banner ->
+    agent-context flow runs without real movement. Debug builds only. On sim/ios/phone
+    it uses the DEBUG ROOK_SIMULATE_ARRIVAL env hook; on android it passes an
+    `am start --es simulate_arrival "LAT,LON"` intent extra (same effect).
 EOF
 }
 
@@ -808,7 +808,8 @@ build_android() {
   fi
 
   if [[ -n "$SIMULATE_ARRIVAL" ]]; then
-    warn "--simulate-arrival is not supported on android yet (location isn't implemented); ignoring"
+    log "simulating arrival at $SIMULATE_ARRIVAL (DEBUG simulate_arrival intent extra)"
+    extra_args+=(--es simulate_arrival "$SIMULATE_ARRIVAL")
   fi
 
   if (( RESET_PERMISSIONS )); then

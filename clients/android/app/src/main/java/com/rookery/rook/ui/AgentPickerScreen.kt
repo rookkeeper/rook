@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,10 +28,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -66,13 +71,24 @@ fun AgentPickerScreen(viewModel: RookViewModel) {
             .fillMaxSize()
             .background(PanelPalette.backgroundPrimary)
     ) {
-        Text(
-            text = "Rook",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = PanelPalette.textNormal,
-            modifier = Modifier.padding(16.dp)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 4.dp, end = 8.dp)
+        ) {
+            Text(
+                text = "Rook",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = PanelPalette.textNormal
+            )
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = { viewModel.setShowPlaces(true) }) {
+                Icon(Icons.Filled.Place, contentDescription = "Places", tint = PanelPalette.textMuted)
+            }
+            IconButton(onClick = { viewModel.setShowSettings(true) }) {
+                Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = PanelPalette.textMuted)
+            }
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),

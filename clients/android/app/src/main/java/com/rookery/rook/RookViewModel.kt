@@ -16,16 +16,25 @@
 package com.rookery.rook
 
 import androidx.lifecycle.ViewModel
+import com.rookery.rook.location.ArrivalContext
+import com.rookery.rook.location.LocationController
 import com.rookery.rook.model.AcpClientEvent
 import com.rookery.rook.model.AgentDefinition
 import com.rookery.rook.model.AgentSessionSummary
 import com.rookery.rook.model.ChatBlock
 import com.rookery.rook.model.ChatBlockKind
+import com.rookery.rook.model.EnvironmentCandidate
+import com.rookery.rook.model.EnvironmentListItem
+import com.rookery.rook.model.EnvironmentOffer
+import com.rookery.rook.model.IdentifyAvailableRequest
+import com.rookery.rook.model.Place
+import com.rookery.rook.model.PlaceSuggestion
 import com.rookery.rook.model.PlanEntry
 import com.rookery.rook.model.ToolBlockState
 import com.rookery.rook.model.ToolBlockStatus
 import com.rookery.rook.net.AcpSocket
 import com.rookery.rook.net.RookApi
+import com.rookery.rook.net.RookHealthResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -36,8 +45,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.time.Instant
 
-enum class ServerState { UNKNOWN, OFFLINE, ONLINE }
+enum class ServerState { UNKNOWN, OFFLINE, ONLINE, UNAUTHORIZED }
 
 /** DFS matching RookModel.swift's agentTree: roots first, children under each root, orphans appended last at depth 0. */
 fun buildAgentTree(agents: List<AgentDefinition>): List<Pair<AgentDefinition, Int>> {
@@ -58,12 +70,17 @@ fun buildAgentTree(agents: List<AgentDefinition>): List<Pair<AgentDefinition, In
 }
 
 class RookViewModel(
-    private val api: RookApi = RookApi(),
+    api: RookApi = RookApi(),
     private val socket: AcpSocket = AcpSocket(),
+    private val locationController: LocationController? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 ) : ViewModel() {
 
+    // Rebuilt by setServerConnection when the base URL / auth token changes.
+    private var api: RookApi = api
+
     val baseUrlString: String get() = api.baseUrl
+    val currentAuthToken: String get() = locationController?.authToken ?: ""
 
     private val _serverState = MutableStateFlow(ServerState.UNKNOWN)
     val serverState: StateFlow<ServerState> = _serverState.asStateFlow()
@@ -116,6 +133,61 @@ class RookViewModel(
     private val _contextUsage = MutableStateFlow<Pair<Int, Int>?>(null)
     val contextUsage: StateFlow<Pair<Int, Int>?> = _contextUsage.asStateFlow()
 
+    // MARK: - Location / environment state (mirrors RookModel.swift)
+
+    // Places/suggestions are forwarded from the shared PlaceStore, not duplicated.
+    val places: StateFlow<List<Place>> =
+        locationController?.placeStore?.places ?: MutableStateFlow(emptyList())
+    val suggestions: StateFlow<List<PlaceSuggestion>> =
+        locationController?.placeStore?.suggestions ?: MutableStateFlow(emptyList())
+
+    private val _placeSkillStatus = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val placeSkillStatus: StateFlow<Map<String, Boolean>> = _placeSkillStatus.asStateFlow()
+
+    private val _currentPlaceName = MutableStateFlow<String?>(null)
+    val currentPlaceName: StateFlow<String?> = _currentPlaceName.asStateFlow()
+
+    private val _placeEnvironmentId = MutableStateFlow<String?>(null)
+    val placeEnvironmentId: StateFlow<String?> = _placeEnvironmentId.asStateFlow()
+
+    private val _nearbyCandidates = MutableStateFlow<List<EnvironmentCandidate>>(emptyList())
+    val nearbyCandidates: StateFlow<List<EnvironmentCandidate>> = _nearbyCandidates.asStateFlow()
+
+    private val _pendingOffer = MutableStateFlow<EnvironmentOffer?>(null)
+    val pendingOffer: StateFlow<EnvironmentOffer?> = _pendingOffer.asStateFlow()
+
+    private val _offerError = MutableStateFlow<String?>(null)
+    val offerError: StateFlow<String?> = _offerError.asStateFlow()
+
+    private val _environmentListItems = MutableStateFlow<List<EnvironmentListItem>>(emptyList())
+    val environmentListItems: StateFlow<List<EnvironmentListItem>> = _environmentListItems.asStateFlow()
+
+    private val _environmentsLoading = MutableStateFlow(false)
+    val environmentsLoading: StateFlow<Boolean> = _environmentsLoading.asStateFlow()
+
+    private val _environmentsError = MutableStateFlow("")
+    val environmentsError: StateFlow<String> = _environmentsError.asStateFlow()
+
+    private val _serverError = MutableStateFlow("")
+    val serverError: StateFlow<String> = _serverError.asStateFlow()
+
+    val locationAuthStatus get() = locationController?.authorizationStatus
+    val currentLocation get() = locationController?.currentLocation
+
+    fun requestCurrentLocation() { locationController?.requestCurrentLocation() }
+
+    private val _showSettings = MutableStateFlow(false)
+    val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
+
+    private val _showPlaces = MutableStateFlow(false)
+    val showPlaces: StateFlow<Boolean> = _showPlaces.asStateFlow()
+
+    private val _showEnvironments = MutableStateFlow(false)
+    val showEnvironments: StateFlow<Boolean> = _showEnvironments.asStateFlow()
+
+    // Server-confirmed entered environment ids — dedup bookkeeping for enter/exit events.
+    private val enteredEnvironments = mutableSetOf<String>()
+
     private var blockCounter = 0
     private var autoResumeAttempted = false
     private var reconnectJob: Job? = null
@@ -130,6 +202,13 @@ class RookViewModel(
     fun start() {
         if (started) return
         started = true
+        // The MovementService emits arrivals/region-changes through the shared controller;
+        // wire them to the environment flow (recordVisit is done inside emitArrival).
+        locationController?.let { lc ->
+            lc.onArrival = { context -> identifyEnvironments(context) }
+            lc.onRegionChange = { place -> handlePlace(place) }
+            lc.onVisitArrival = { _, _ -> } // suggestion recording handled in emitArrival
+        }
         scope.launch { socket.events.collect { handleSocketEvent(it) } }
         scope.launch { socket.isConnected.collect { handleSocketConnectionChange(it) } }
         scope.launch { while (true) { refreshHealth(); delay(4000) } }
@@ -155,11 +234,15 @@ class RookViewModel(
     fun refreshHealth() {
         scope.launch {
             val wasOnline = _serverState.value == ServerState.ONLINE
-            val healthy = api.health()
-            _serverState.value = if (healthy) ServerState.ONLINE else ServerState.OFFLINE
-            if (healthy && !wasOnline) {
+            _serverState.value = when (api.healthResult()) {
+                is RookHealthResult.Ok -> ServerState.ONLINE
+                is RookHealthResult.Unauthorized -> ServerState.UNAUTHORIZED
+                else -> ServerState.OFFLINE
+            }
+            if (_serverState.value == ServerState.ONLINE && !wasOnline) {
                 loadAgents()
                 autoResumeRecentSessionIfNeeded()
+                reannouncePlaceEnvironment()
             }
         }
     }
@@ -467,11 +550,38 @@ class RookViewModel(
             is AcpClientEvent.ProtocolError -> appendErrorBlock("protocol", event.message)
             is AcpClientEvent.ConnectionError -> appendErrorBlock("connection", event.message)
 
-            // no-op in Phase 2 — revisit in location/skills phase
-            is AcpClientEvent.EnvironmentOffered -> {}
-            is AcpClientEvent.EnvironmentOfferResolved -> {}
-            is AcpClientEvent.EnvironmentEntered -> {}
-            is AcpClientEvent.EnvironmentExited -> {}
+            is AcpClientEvent.EnvironmentOffered -> {
+                // Ignore a duplicate re-offer of the environment already pending.
+                if (_pendingOffer.value?.environmentId != event.offer.environmentId) {
+                    _offerError.value = null
+                    _pendingOffer.value = event.offer
+                }
+            }
+
+            is AcpClientEvent.EnvironmentOfferResolved -> {
+                val pending = _pendingOffer.value
+                if (pending != null &&
+                    pending.environmentId == event.environmentId &&
+                    pending.bundleHash == event.bundleHash
+                ) {
+                    _pendingOffer.value = null
+                }
+            }
+
+            is AcpClientEvent.EnvironmentEntered -> {
+                if (enteredEnvironments.add(event.environmentId)) {
+                    val (label, websites) = environmentBanner(event.environmentId)
+                    appendBlock(ChatBlockKind.Environment(label, websites))
+                }
+                refreshEnvironmentList()
+            }
+
+            is AcpClientEvent.EnvironmentExited -> {
+                enteredEnvironments.remove(event.environmentId)
+                val suffix = event.error?.let { " ($it)" } ?: ""
+                appendBlock(ChatBlockKind.System("Left nearby environment$suffix."))
+                refreshEnvironmentList()
+            }
         }
     }
 
@@ -549,5 +659,254 @@ class RookViewModel(
         } else {
             appendBlock(ChatBlockKind.Plan(entries))
         }
+    }
+
+    // MARK: - Sheet visibility
+
+    fun setShowSettings(visible: Boolean) { _showSettings.value = visible }
+    fun setShowPlaces(visible: Boolean) { _showPlaces.value = visible }
+    fun setShowEnvironments(visible: Boolean) {
+        _showEnvironments.value = visible
+        if (visible) refreshEnvironmentList()
+    }
+
+    // MARK: - Server connection
+
+    /** Validate + persist a new server URL/token, rebuild the API, and reconnect. */
+    fun setServerConnection(baseUrl: String, authToken: String) {
+        val trimmedUrl = baseUrl.trim()
+        if (!(trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://"))) {
+            _serverError.value = "URL must start with http:// or https://"
+            return
+        }
+        val trimmedToken = authToken.trim()
+        _serverError.value = ""
+        locationController?.baseUrl = trimmedUrl
+        locationController?.authToken = trimmedToken
+        api = RookApi(trimmedUrl, trimmedToken)
+        socket.disconnect()
+        reconnectJob?.cancel()
+        reconnectJob = null
+        _currentSession.value = null
+        _chatVisible.value = false
+        autoResumeAttempted = false
+        refreshHealth()
+    }
+
+    // MARK: - Location
+
+    /** Start the movement/arrival service and refresh place-derived state. */
+    fun enableLocation() {
+        locationController?.startService()
+        locationController?.refreshAuthorizationStatus()
+        refreshMonitoredPlaces()
+        refreshPlaceSkillStatus()
+    }
+
+    fun disableLocation() {
+        locationController?.stopService()
+    }
+
+    /**
+     * DEBUG/E2E seam (mirrors iOS's ROOK_SIMULATE_ARRIVAL): wait for the server to come
+     * online, then fire a synthetic arrival through the same onArrival path a real dwell
+     * would. Triggered by MainActivity from the `simulate_arrival` intent extra.
+     */
+    fun simulateArrival(latitude: Double, longitude: Double) {
+        scope.launch {
+            for (i in 0 until 30) {
+                if (_serverState.value == ServerState.ONLINE) break
+                refreshHealth()
+                delay(500)
+            }
+            locationController?.simulateArrival(latitude, longitude)
+        }
+    }
+
+    fun refreshAuthorizationStatus() {
+        locationController?.refreshAuthorizationStatus()
+    }
+
+    // ponytail: the MovementService reads PlaceStore.places live (StateFlow), so there's
+    // nothing to push here — re-evaluating "already inside" happens on the next fix. Kept
+    // for parity with RookModel.refreshMonitoredPlaces and to refresh server skill status.
+    fun refreshMonitoredPlaces() {
+        refreshPlaceSkillStatus()
+    }
+
+    /** For each place, mark whether the server has a matching bundle (mirrors RookModel). */
+    fun refreshPlaceSkillStatus() {
+        val store = locationController?.placeStore ?: return
+        scope.launch {
+            val status = mutableMapOf<String, Boolean>()
+            for (place in store.places.value) {
+                val preview = runCatching { api.environmentPreview("loc:${place.id}") }.getOrNull()
+                status[place.id] = preview?.bundles?.isNotEmpty() == true
+            }
+            _placeSkillStatus.value = status
+        }
+    }
+
+    // MARK: - Places passthrough (PlacesScreen)
+
+    fun addPlace(name: String, latitude: Double, longitude: Double, radius: Double) {
+        locationController?.placeStore?.add(name, latitude, longitude, radius)
+        refreshMonitoredPlaces()
+    }
+
+    fun removePlace(place: Place) {
+        locationController?.placeStore?.remove(place)
+        refreshMonitoredPlaces()
+    }
+
+    fun promoteSuggestion(suggestion: PlaceSuggestion, name: String, radius: Double) {
+        locationController?.placeStore?.promoteSuggestion(suggestion, name, radius)
+        refreshMonitoredPlaces()
+    }
+
+    fun dismissSuggestion(suggestion: PlaceSuggestion) {
+        locationController?.placeStore?.dismissSuggestion(suggestion)
+    }
+
+    // MARK: - Arrival / region (wired to LocationController callbacks)
+
+    // On a settled arrival: POST register-location (server auto-enters). The visible banner
+    // is raised later by the environment_entered socket event, which reads nearbyCandidates.
+    private fun identifyEnvironments(context: ArrivalContext) {
+        if (_serverState.value != ServerState.ONLINE) return
+        scope.launch {
+            val request = IdentifyAvailableRequest(
+                latitude = context.latitude,
+                longitude = context.longitude,
+                horizontalAccuracy = context.horizontalAccuracy,
+                source = "visit",
+                dwellSeconds = context.dwellSeconds,
+                isStationary = context.isStationary,
+                speedMetersPerSecond = context.speedMetersPerSecond,
+                observedAt = Instant.now().toString()
+            )
+            val candidates = runCatching { api.registerLocation(request) }.getOrNull() ?: return@launch
+            _nearbyCandidates.value = candidates
+            candidates.firstOrNull()?.let { top ->
+                val more = if (candidates.size > 1) " (+${candidates.size - 1} more)" else ""
+                appendBlock(
+                    ChatBlockKind.System(
+                        "You appear to be near ${top.displayName}$more. Found ${candidates.size} nearby environment(s)."
+                    )
+                )
+            }
+        }
+    }
+
+    // On region enter/exit: only register loc:<slug> when the server preview has bundles.
+    private fun handlePlace(place: Place?) {
+        _currentPlaceName.value = place?.name
+        val envId = place?.let { "loc:${it.id}" }
+        if (envId == _placeEnvironmentId.value) return
+        _placeEnvironmentId.value = envId
+        if (place == null || envId == null) return // leaving: state cleared, no REST
+        scope.launch {
+            val preview = runCatching { api.environmentPreview(envId) }.getOrNull()
+            if (preview == null || preview.bundles.isEmpty()) {
+                // No skills for this place — roll back (guarded against a newer transition).
+                if (_placeEnvironmentId.value == envId) _placeEnvironmentId.value = null
+                return@launch
+            }
+            val metadata = buildJsonObject {
+                put("slug", place.id)
+                put("latitude", place.latitude)
+                put("longitude", place.longitude)
+            }
+            runCatching { api.registerEnvironment(envId, place.name, metadata) }
+        }
+    }
+
+    // On offline->online, re-register the current geofenced place env (mirrors RookModel).
+    private fun reannouncePlaceEnvironment() {
+        val envId = _placeEnvironmentId.value ?: return
+        val place = locationController?.placeStore?.places?.value?.firstOrNull { "loc:${it.id}" == envId } ?: return
+        scope.launch {
+            val metadata = buildJsonObject {
+                put("slug", place.id)
+                put("latitude", place.latitude)
+                put("longitude", place.longitude)
+            }
+            runCatching { api.registerEnvironment(envId, place.name, metadata) }
+        }
+    }
+
+    // MARK: - Environment offers / list
+
+    fun decideEnvironment(decision: String) {
+        val offer = _pendingOffer.value ?: return
+        _pendingOffer.value = null // optimistic; server also emits offer_resolved
+        scope.launch {
+            runCatching { api.decideEnvironment(offer.environmentId, offer.bundleHash, decision) }
+                .onFailure { _offerError.value = it.message ?: "Failed to record decision" }
+        }
+    }
+
+    fun clearOffer() {
+        _pendingOffer.value = null
+    }
+
+    fun refreshEnvironmentList() {
+        val session = _currentSession.value ?: return
+        scope.launch {
+            _environmentsLoading.value = true
+            try {
+                _environmentListItems.value = api.environmentList(session.id)
+                _environmentsError.value = ""
+            } catch (e: Exception) {
+                _environmentsError.value = e.message ?: "Failed to load environments"
+            } finally {
+                _environmentsLoading.value = false
+            }
+        }
+    }
+
+    fun joinEnvironment(environmentId: String) {
+        val session = _currentSession.value ?: return
+        scope.launch {
+            runCatching { api.enterEnvironment(session.id, environmentId) }
+            refreshEnvironmentList()
+        }
+    }
+
+    fun leaveEnvironment(environmentId: String) {
+        val session = _currentSession.value ?: return
+        scope.launch {
+            runCatching { api.exitEnvironment(session.id, environmentId) }
+            refreshEnvironmentList()
+        }
+    }
+
+    // Mirrors RookModel's locationBannerLabel + orderedUniqueWebsites.
+    private fun environmentBanner(environmentId: String): Pair<String?, List<String>> {
+        val candidates = _nearbyCandidates.value
+        val entered = candidates.firstOrNull { it.environmentId == environmentId }
+        val top = candidates.firstOrNull()
+        val ambiguous = top != null && (
+            top.confidence < 0.7 ||
+                (candidates.size >= 2 && top.confidence - candidates[1].confidence < 0.15)
+            )
+        val label = when {
+            ambiguous -> "Surrounding businesses"
+            entered != null -> entered.displayName
+            else -> top?.displayName
+        }
+        val ordered = (listOfNotNull(entered) + candidates.filter { it.environmentId != environmentId })
+            .mapNotNull { it.website }
+        return label to orderedUniqueByHost(ordered)
+    }
+
+    private fun orderedUniqueByHost(urls: List<String>): List<String> {
+        val seen = mutableSetOf<String>()
+        val result = mutableListOf<String>()
+        for (url in urls) {
+            val host = url.substringAfter("://", url).substringBefore("/").lowercase()
+            if (host.isNotEmpty() && seen.add(host)) result.add(url)
+        }
+        return result
     }
 }

@@ -92,6 +92,11 @@ sealed class ChatBlockKind {
     data class Error(val source: String, val message: String) : ChatBlockKind()
     data class System(val text: String) : ChatBlockKind()
     data class Plan(val entries: List<PlanEntry>) : ChatBlockKind()
+
+    // Friendly banner shown when the agent enters a `loc:` business environment.
+    // displayName is the entered business's name (null -> generic fallback); websites are
+    // URLs (entered business first) rendered as a small host row. Mirrors EnvironmentBanner.
+    data class Environment(val displayName: String?, val websites: List<String>) : ChatBlockKind()
 }
 
 data class ChatBlock(
