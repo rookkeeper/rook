@@ -4,6 +4,7 @@
 // has no iOS equivalent.
 package com.rookery.rook.ui
 
+import android.content.Context
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -11,6 +12,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
@@ -200,6 +206,9 @@ fun SettingsScreen(viewModel: RookViewModel) {
                 )
             }
         }
+
+        // MARK: Battery
+        BatteryOptimizationCard()
     }
 
     if (showDisclosure) {
@@ -275,4 +284,43 @@ private fun locationStatusTint(status: LocationAuthStatus): Color = when (status
     LocationAuthStatus.BACKGROUND -> PanelPalette.success
     LocationAuthStatus.FOREGROUND -> PanelPalette.warning
     LocationAuthStatus.DENIED -> PanelPalette.textMuted
+}
+
+@Composable
+private fun BatteryOptimizationCard() {
+    val context = LocalContext.current
+    val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    val isExempt = pm.isIgnoringBatteryOptimizations(context.packageName)
+
+    PanelCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Battery", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textNormal)
+            Spacer(Modifier.weight(1f))
+            Text(
+                if (isExempt) "Optimized" else "Restricted",
+                fontSize = 11.sp,
+                color = if (isExempt) PanelPalette.success else PanelPalette.warning
+            )
+        }
+        Text(
+            if (isExempt) "Rook is exempt from battery optimization — background connections stay alive."
+            else "Android may suspend Rook's network in the background. Disable battery optimization to keep the server connection alive.",
+            fontSize = 11.sp,
+            color = PanelPalette.textMuted
+        )
+        if (!isExempt) {
+            PanelButton(
+                text = "Disable battery optimization",
+                onClick = {
+                    val intent = Intent(
+                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        Uri.parse("package:${context.packageName}")
+                    )
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                tint = PanelPalette.warning
+            )
+        }
+    }
 }
