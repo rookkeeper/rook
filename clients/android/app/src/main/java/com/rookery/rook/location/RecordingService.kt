@@ -51,6 +51,7 @@ class RecordingService : Service(), SensorEventListener {
     private var sinkUri: android.net.Uri? = null
     private val writeLock = Any()
     private var rowsSinceFlush = 0
+    private var flushRunnable: Runnable? = null
     private var rowCount = 0
 
     // A CSV sink plus a display path, an optional MediaStore URI (10+), and a finalize hook.
@@ -80,6 +81,8 @@ class RecordingService : Service(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        flushRunnable?.let { writerThread?.let { t -> Handler(t.looper).removeCallbacks(it) } }
+        flushRunnable = null
         Log.i(TAG, "onDestroy: wrote $rowCount rows total")
         runCatching { sensorManager?.unregisterListener(this) }
         runCatching { locationSource?.stop() }
@@ -151,6 +154,7 @@ class RecordingService : Service(), SensorEventListener {
         val src = LocationSource.create(this)
         locationSource = src
         src.start(RECORD_GPS_INTERVAL_MS) { writeGps(it) } // GPS callbacks on the main looper (~1 Hz)
+        schedulePeriodicFlush()
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -165,6 +169,23 @@ class RecordingService : Service(), SensorEventListener {
         val speed = if (loc.hasSpeed()) loc.speed.toString() else ""
         val acc = if (loc.hasAccuracy()) loc.accuracy.toString() else ""
         writeRow("${loc.elapsedRealtimeNanos},gps,${loc.latitude},${loc.longitude},$alt,$speed,$acc,,,")
+    }
+
+    private fun schedulePeriodicFlush() {
+        val handler = writerThread?.let { Handler(it.looper) } ?: return
+        flushRunnable = object : Runnable {
+            override fun run() {
+                flushBuffer()
+                handler.postDelayed(this, FLUSH_INTERVAL_MS)
+            }
+        }
+        handler.postDelayed(flushRunnable!!, FLUSH_INTERVAL_MS)
+    }
+
+    private fun flushBuffer() {
+        synchronized(writeLock) {
+            runCatching { writer?.flush() }.onFailure { Log.e(TAG, "periodic flush failed", it) }
+        }
     }
 
     private fun writeRow(row: String) {
@@ -221,5 +242,6 @@ class RecordingService : Service(), SensorEventListener {
         private const val NOTIFICATION_ID = 43
         private const val RECORD_GPS_INTERVAL_MS = 1000L
         private const val FLUSH_EVERY = 128
+        private const val FLUSH_INTERVAL_MS = 15_000L
     }
 }
