@@ -23,7 +23,7 @@ npm run dev
 
 That starts the backend on `http://127.0.0.1:3000`.
 
-If you launch through `./scripts/run-rook.sh server` (or `mac`/`sim`/`phone`) on
+If you launch through `./scripts/run-rook.sh server` (or `mac`/`sim`/`ios`/`android`) on
 macOS, the script now starts the server in Terminal.app by default instead of a
 plain detached `nohup` process. This preserves Terminal's protected-folder
 access (notably Downloads/Desktop/Documents), which matters because Pi tool

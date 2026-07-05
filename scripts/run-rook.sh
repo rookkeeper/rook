@@ -25,35 +25,48 @@ usage() {
 Usage:
   ./scripts/run-rook.sh server
   ./scripts/run-rook.sh mac
-  ./scripts/run-rook.sh sim [--simulator NAME_OR_UDID] [--reset-permissions]
-  ./scripts/run-rook.sh phone [--device NAME_OR_UDID] [--team TEAM_ID] [--reset-permissions]
+  ./scripts/run-rook.sh sim [--simulator NAME_OR_UDID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
+  ./scripts/run-rook.sh ios [--device NAME_OR_UDID] [--team TEAM_ID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
+  ./scripts/run-rook.sh phone ...   (alias of ios)
+  ./scripts/run-rook.sh android [--device SERIAL_OR_NAME] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
   ./scripts/run-rook.sh mac sim
   ./scripts/run-rook.sh server mac sim
   ./scripts/run-rook.sh stop
 
 What it does:
   - starts the Rook server if needed
-  - regenerates Xcode projects from project.yml
+  - regenerates Xcode projects from project.yml (iOS/mac) or runs Gradle (android)
   - rebuilds the selected app(s) incrementally
   - launches the selected target(s)
 
 Notes:
   - you can pass multiple targets; they run in the order given
   - mac uses localhost by default
-  - sim uses http://127.0.0.1:3000
-  - phone uses ROOK_REMOTE_HOSTNAME, ROOK_BIND_IP, or a non-localhost ROOK_SERVER_HOST
+  - sim uses http://127.0.0.1:3000 by default; pass --server-url to override
+  - ios/phone uses ROOK_REMOTE_HOSTNAME, ROOK_BIND_IP, or a non-localhost
+    ROOK_SERVER_HOST by default; pass --server-url to override
+  - android uses `adb reverse` so the app's built-in 127.0.0.1 default reaches
+    this Mac (works for both emulators and physical devices, no app rebuild
+    needed); pass --server-url to instead point the app at an explicit URL
+    (e.g. a Tailscale hostname) via an `am start` intent extra, skipping
+    adb reverse
   - the server always binds localhost; ROOK_BIND_IP adds a second remote listener
   - the server runs as a detached background process and logs to .var/run-rook/server.log
-  - phone builds are intentionally NOT committed with a fixed team id;
+  - phone/ios builds are intentionally NOT committed with a fixed team id;
     pass --team / ROOK_IOS_DEVELOPMENT_TEAM or let the script auto-detect
     your local Apple Development team from Keychain when possible.
   - stop shuts down the server, mac app, simulator app, booted simulators,
-    and the phone app when reachable.
+    the phone app, and the android app, wherever reachable.
   - --reset-permissions clears the app's privacy grants (location, motion, mic,
     speech) so the OS prompts reappear next launch. On sim it resets via
-    `simctl privacy` (sim already reinstalls each run); on phone it uninstalls
-    the app first (the only way to reset device grants), so you re-grant from
-    scratch — useful for testing the location/motion permission flow.
+    `simctl privacy` (sim already reinstalls each run); on phone/android it
+    uninstalls the app first (the only way to reset device grants), so you
+    re-grant from scratch — useful for testing the location/motion permission flow.
+  - --simulate-arrival "LAT,LON" fires a synthetic stationary arrival (bypassing
+    GPS/CLVisit/the movement classifier) so the identify -> register -> banner ->
+    agent-context flow runs without real movement. Debug builds only. On sim/ios/phone
+    it uses the DEBUG ROOK_SIMULATE_ARRIVAL env hook; on android it passes an
+    `am start --es simulate_arrival "LAT,LON"` intent extra (same effect).
 EOF
 }
 
@@ -119,7 +132,16 @@ PY
   fi
   rm -f "$tmp"
 
-  log "stopped server, mac app, simulator app(s), booted simulators, and phone app if present"
+  if command -v adb >/dev/null 2>&1; then
+    local serials
+    serials="$(adb devices 2>/dev/null | tail -n +2 | awk '$2=="device"{print $1}')"
+    while IFS= read -r s; do
+      [[ -n "$s" ]] || continue
+      adb -s "$s" shell am force-stop com.rookery.rook >/dev/null 2>&1 || true
+    done <<< "$serials"
+  fi
+
+  log "stopped server, mac app, simulator app(s), booted simulators, phone app, and android app if present"
 }
 
 log() { echo "[run-rook] $*"; }
@@ -138,8 +160,12 @@ DEFAULT_IOS_TEST_BUNDLE_ID="com.rookery.RookTests"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    server|mac|sim|phone|stop)
+    server|mac|sim|phone|android|stop)
       TARGETS+=("$1")
+      shift
+      ;;
+    ios)
+      TARGETS+=("phone")
       shift
       ;;
     --reset-permissions)
@@ -156,6 +182,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --team)
       TEAM_ID="${2:-}"
+      shift 2
+      ;;
+    --server-url)
+      SERVER_URL="${2:-}"
+      shift 2
+      ;;
+    --simulate-arrival)
+      SIMULATE_ARRIVAL="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -194,10 +228,12 @@ need_cmd lsof
 
 HAS_MAC_TARGET=0
 HAS_SIM_TARGET=0
+HAS_ANDROID_TARGET=0
 for target in "${TARGETS[@]}"; do
   case "$target" in
     mac) HAS_MAC_TARGET=1 ;;
     sim) HAS_SIM_TARGET=1 ;;
+    android) HAS_ANDROID_TARGET=1 ;;
   esac
 done
 
@@ -274,9 +310,22 @@ print("\\n".join(ids))' 2>/dev/null || true)"
   done <<< "$booted"
 }
 
+stop_android_app() {
+  command -v adb >/dev/null 2>&1 || return 0
+  local serials
+  serials="$(adb devices 2>/dev/null | tail -n +2 | awk '$2=="device"{print $1}')"
+  [[ -n "$serials" ]] || return 0
+  log "stopping existing Rook android app"
+  while IFS= read -r s; do
+    [[ -n "$s" ]] || continue
+    adb -s "$s" shell am force-stop com.rookery.rook >/dev/null 2>&1 || true
+  done <<< "$serials"
+}
+
 stop_requested_targets() {
   (( HAS_MAC_TARGET )) && stop_mac_app
   (( HAS_SIM_TARGET )) && stop_simulators
+  (( HAS_ANDROID_TARGET )) && stop_android_app
   if (( HAS_SERVER_TARGET )); then
     kill_server_if_owned
     kill_server_on_port
@@ -333,6 +382,10 @@ start_server() {
 
   if (( HAS_PHONE_TARGET )) && listener_is_localhost_only; then
     die "server is only listening on localhost; restart it so the phone can reach your Mac over your chosen remote network"
+  fi
+
+  if (( HAS_ANDROID_TARGET )) && [[ -n "$SERVER_URL" ]] && listener_is_localhost_only; then
+    die "server is only listening on localhost; restart it so the android device can reach your Mac over your chosen remote network, or drop --server-url to use adb reverse instead"
   fi
 }
 
@@ -578,7 +631,7 @@ build_sim() {
   local app_path="$derived/Build/Products/Debug-iphonesimulator/Rook.app"
   [[ -d "$app_path" ]] || die "missing built app: $app_path"
 
-  local url="http://127.0.0.1:${SERVER_PORT}"
+  local url="${SERVER_URL:-http://127.0.0.1:${SERVER_PORT}}"
   if (( RESET_PERMISSIONS )); then
     log "resetting simulator privacy permissions for com.rookery.Rook"
     xcrun simctl privacy "$sim_udid" reset all com.rookery.Rook >/dev/null 2>&1 || true
@@ -588,15 +641,16 @@ build_sim() {
   xcrun simctl uninstall "$sim_udid" com.rookery.Rook >/dev/null 2>&1 || true
   xcrun simctl install "$sim_udid" "$app_path" >/dev/null
   log "launching Rook in simulator with ROOK_SERVER_BASE_URL=$url"
-  local launch_output
+  local -a sim_env=(SIMCTL_CHILD_ROOK_SERVER_BASE_URL="$url")
   if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
-    launch_output="$(SIMCTL_CHILD_ROOK_SERVER_BASE_URL="$url" \
-      SIMCTL_CHILD_ROOK_AUTH_TOKEN="$SERVER_AUTH_TOKEN" \
-      xcrun simctl launch --terminate-running-process "$sim_udid" com.rookery.Rook)"
-  else
-    launch_output="$(SIMCTL_CHILD_ROOK_SERVER_BASE_URL="$url" \
-      xcrun simctl launch --terminate-running-process "$sim_udid" com.rookery.Rook)"
+    sim_env+=(SIMCTL_CHILD_ROOK_AUTH_TOKEN="$SERVER_AUTH_TOKEN")
   fi
+  if [[ -n "$SIMULATE_ARRIVAL" ]]; then
+    log "simulating arrival at $SIMULATE_ARRIVAL (DEBUG ROOK_SIMULATE_ARRIVAL)"
+    sim_env+=(SIMCTL_CHILD_ROOK_SIMULATE_ARRIVAL="$SIMULATE_ARRIVAL")
+  fi
+  local launch_output
+  launch_output="$(env "${sim_env[@]}" xcrun simctl launch --terminate-running-process "$sim_udid" com.rookery.Rook)"
   log "$launch_output"
 }
 
@@ -620,20 +674,25 @@ build_phone() {
   fi
 
   local url
-  local remote_target
-  remote_target="$(current_remote_target)"
-  if [[ -z "$remote_target" ]]; then
-    cat >&2 <<EOF
+  if [[ -n "$SERVER_URL" ]]; then
+    url="$SERVER_URL"
+  else
+    local remote_target
+    remote_target="$(current_remote_target)"
+    if [[ -z "$remote_target" ]]; then
+      cat >&2 <<EOF
 [run-rook] error: could not determine a reachable server address for the phone
 [run-rook] set one of:
 [run-rook]   ROOK_REMOTE_HOSTNAME=your-hostname
 [run-rook]   ROOK_BIND_IP=your.remote.ip
 [run-rook] example with Tailscale:
 [run-rook]   ROOK_REMOTE_HOSTNAME=your-mac.tailxxxx.ts.net
+[run-rook] or pass --server-url URL directly
 EOF
-    exit 1
+      exit 1
+    fi
+    url="http://${remote_target}:${SERVER_PORT}"
   fi
-  url="http://${remote_target}:${SERVER_PORT}"
 
   local app_dir="$REPO_ROOT/clients/iphone"
   local proj="$app_dir/Rook.xcodeproj"
@@ -672,10 +731,15 @@ EOF
   log "launching Rook on $phone_name with ROOK_SERVER_BASE_URL=$url"
   local launch_env
   if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
-    launch_env="{\"ROOK_SERVER_BASE_URL\":$(json_escape "$url"),\"ROOK_AUTH_TOKEN\":$(json_escape "$SERVER_AUTH_TOKEN")}"
+    launch_env="{\"ROOK_SERVER_BASE_URL\":$(json_escape "$url"),\"ROOK_AUTH_TOKEN\":$(json_escape "$SERVER_AUTH_TOKEN")"
   else
-    launch_env="{\"ROOK_SERVER_BASE_URL\":$(json_escape "$url")}"
+    launch_env="{\"ROOK_SERVER_BASE_URL\":$(json_escape "$url")"
   fi
+  if [[ -n "$SIMULATE_ARRIVAL" ]]; then
+    log "simulating arrival at $SIMULATE_ARRIVAL (DEBUG ROOK_SIMULATE_ARRIVAL)"
+    launch_env+=",\"ROOK_SIMULATE_ARRIVAL\":$(json_escape "$SIMULATE_ARRIVAL")"
+  fi
+  launch_env+="}"
   local launch_log="$RUN_ROOT/rook-phone-launch.log"
   if ! xcrun devicectl device process launch \
     --device "$phone_udid" \
@@ -702,6 +766,69 @@ EOF
 EOF
 }
 
+resolve_android() {
+  need_cmd adb
+  local rows
+  rows="$(adb devices -l 2>/dev/null | tail -n +2 | awk 'NF && $2=="device"')"
+  [[ -n "$rows" ]] || return 1
+  if [[ -n "$DEVICE_FILTER" ]]; then
+    rows="$(grep -i -- "$DEVICE_FILTER" <<<"$rows" || true)"
+    [[ -n "$rows" ]] || return 1
+  fi
+  case "$(grep -c . <<<"$rows")" in
+    1)
+      awk '{print $1}' <<<"$rows"
+      return 0
+      ;;
+    *)
+      echo "[run-rook] multiple android devices/emulators match:" >&2
+      awk '{print "[run-rook]   - " $0}' <<<"$rows" >&2
+      return 1
+      ;;
+  esac
+}
+
+build_android() {
+  need_cmd adb
+  local serial
+  if ! serial="$(resolve_android)"; then
+    die "no single connected Android device or emulator found; check 'adb devices' and pass --device to disambiguate if more than one is connected"
+  fi
+  log "using android device: $serial"
+
+  local app_dir="$REPO_ROOT/clients/android"
+  local url="http://127.0.0.1:${SERVER_PORT}"
+  local -a extra_args=()
+  if [[ -n "$SERVER_URL" ]]; then
+    url="$SERVER_URL"
+    extra_args=(--es server_url "$SERVER_URL")
+  else
+    log "forwarding device localhost:${SERVER_PORT} to this Mac's localhost:${SERVER_PORT} (adb reverse)"
+    adb -s "$serial" reverse "tcp:${SERVER_PORT}" "tcp:${SERVER_PORT}" >/dev/null
+  fi
+
+  if [[ -n "$SIMULATE_ARRIVAL" ]]; then
+    log "simulating arrival at $SIMULATE_ARRIVAL (DEBUG simulate_arrival intent extra)"
+    extra_args+=(--es simulate_arrival "$SIMULATE_ARRIVAL")
+  fi
+
+  if (( RESET_PERMISSIONS )); then
+    log "uninstalling Rook on $serial to reset its runtime permissions"
+    adb -s "$serial" uninstall com.rookery.rook >/dev/null 2>&1 || true
+  fi
+
+  log "building and installing Rook for android"
+  local build_log="$RUN_ROOT/rook-android-build.log"
+  if ! (cd "$app_dir" && ANDROID_SERIAL="$serial" ./gradlew :app:installDebug) >"$build_log" 2>&1; then
+    tail -n 80 "$build_log" >&2 || true
+    die "android build/install failed (full log: $build_log)"
+  fi
+
+  adb -s "$serial" shell am force-stop com.rookery.rook >/dev/null 2>&1 || true
+  log "launching Rook on $serial with server URL $url"
+  adb -s "$serial" shell am start -n com.rookery.rook/.MainActivity "${extra_args[@]}" >/dev/null
+}
+
 if [[ "${TARGETS[0]}" == "stop" ]]; then
   stop_everything
   exit 0
@@ -723,6 +850,9 @@ for TARGET in "${TARGETS[@]}"; do
       ;;
     phone)
       build_phone
+      ;;
+    android)
+      build_android
       ;;
   esac
 done
