@@ -53,6 +53,7 @@ private class FusedLocationSource(context: Context) : LocationSource {
         }
         callback = cb
         runCatching { client.requestLocationUpdates(request, cb, Looper.getMainLooper()) }
+            .onFailure { android.util.Log.e("RookRec", "FusedLocationSource.start failed", it) }
     }
 
     override fun stop() {
@@ -79,11 +80,10 @@ private class PlatformLocationSource(context: Context) : LocationSource {
     override fun start(intervalMs: Long, onFix: (Location) -> Unit) {
         val mgr = manager ?: return
         val l = LocationListener { onFix(it) }
-        listener = l
-        // GPS gives speed (Doppler) the classifier reads; NETWORK is a coarse fallback.
         for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
             if (mgr.isProviderEnabled(provider)) {
                 runCatching { mgr.requestLocationUpdates(provider, intervalMs, 0f, l, Looper.getMainLooper()) }
+                    .onFailure { android.util.Log.e("RookRec", "Platform GPS start failed ($provider)", it) }
             }
         }
     }

@@ -157,7 +157,7 @@ fun SettingsScreen(viewModel: RookViewModel) {
         // MARK: Record (accel + GPS capture for tuning the movement classifier)
         PanelCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Record example", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textNormal)
+                Text("Record motion test", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textNormal)
                 Spacer(Modifier.weight(1f))
                 if (recording != null) StatusDot(PanelPalette.danger)
             }

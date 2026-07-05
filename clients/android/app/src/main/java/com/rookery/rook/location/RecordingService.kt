@@ -31,6 +31,7 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.SystemClock
 import android.provider.MediaStore
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.rookery.rook.MainActivity
 import java.io.BufferedWriter
@@ -47,11 +48,13 @@ class RecordingService : Service(), SensorEventListener {
     private var writerThread: HandlerThread? = null
     private var writer: BufferedWriter? = null
     private var finalizeSink: (() -> Unit)? = null
+    private var sinkUri: android.net.Uri? = null
     private val writeLock = Any()
     private var rowsSinceFlush = 0
+    private var rowCount = 0
 
-    // A CSV sink plus a display path and a finalize hook (MediaStore un-pending / no-op).
-    private class Sink(val writer: BufferedWriter, val displayPath: String, val finalize: () -> Unit)
+    // A CSV sink plus a display path, an optional MediaStore URI (10+), and a finalize hook.
+    private class Sink(val writer: BufferedWriter, val displayPath: String, val uri: android.net.Uri? = null, val finalize: () -> Unit)
 
     override fun onCreate() {
         super.onCreate()
@@ -59,13 +62,17 @@ class RecordingService : Service(), SensorEventListener {
         sensorManager = getSystemService(SENSOR_SERVICE) as? SensorManager
         createNotificationChannel()
     }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!hasLocationPermission()) { stopSelf(); return START_NOT_STICKY }
         val sink = openSink() ?: run { stopSelf(); return START_NOT_STICKY }
         writer = sink.writer
         finalizeSink = sink.finalize
+        sinkUri = sink.uri
         writeHeader()
+        // Clear IS_PENDING now so the file is visible in file managers immediately.
+        sinkUri?.let { uri ->
+            contentResolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+        }
         startForegroundNotification()
         startCapture()
         controller.setRecording(RecordingInfo(sink.displayPath, System.currentTimeMillis()))
@@ -73,13 +80,14 @@ class RecordingService : Service(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        Log.i(TAG, "onDestroy: wrote $rowCount rows total")
         runCatching { sensorManager?.unregisterListener(this) }
         runCatching { locationSource?.stop() }
         synchronized(writeLock) {
             runCatching { writer?.flush(); writer?.close() }
             writer = null
         }
-        runCatching { finalizeSink?.invoke() } // MediaStore: clear IS_PENDING so the file is visible
+        runCatching { finalizeSink?.invoke() } // MediaStore: ensure IS_PENDING clear (may be no-op if cleared early)
         finalizeSink = null
         writerThread?.quitSafely()
         controller.clearRecording()
@@ -105,7 +113,7 @@ class RecordingService : Service(), SensorEventListener {
         }
         val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return@runCatching null
         val stream = contentResolver.openOutputStream(uri) ?: return@runCatching null
-        Sink(stream.bufferedWriter(), "Download/Rook/$name") {
+        Sink(stream.bufferedWriter(), "Download/Rook/$name", uri) {
             contentResolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
         }
     }.getOrNull()
@@ -126,7 +134,8 @@ class RecordingService : Service(), SensorEventListener {
                 w.write("# started_at_elapsed_ns=${SystemClock.elapsedRealtimeNanos()}\n")
                 w.write("elapsed_ns,kind,lat,lon,alt,speed,accuracy,ax,ay,az\n")
                 w.flush()
-            }
+            }.onFailure { Log.e(TAG, "writeHeader failed", it) }
+            Log.i(TAG, "Header written, file visible in Downloads/Rook/")
         }
     }
 
@@ -134,9 +143,11 @@ class RecordingService : Service(), SensorEventListener {
         // Accel on a background thread so 50 Hz file writes never touch the main thread.
         val thread = HandlerThread("rook-rec").also { it.start() }
         writerThread = thread
-        sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
+        val hasAccel = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
             sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME, Handler(thread.looper))
-        }
+            true
+        } ?: false
+        Log.i(TAG, "startCapture: accel=$hasAccel")
         val src = LocationSource.create(this)
         locationSource = src
         src.start(RECORD_GPS_INTERVAL_MS) { writeGps(it) } // GPS callbacks on the main looper (~1 Hz)
@@ -163,7 +174,8 @@ class RecordingService : Service(), SensorEventListener {
                 w.write(row)
                 w.write("\n")
                 if (++rowsSinceFlush >= FLUSH_EVERY) { w.flush(); rowsSinceFlush = 0 }
-            }
+                rowCount++
+            }.onFailure { Log.e(TAG, "writeRow failed (row $rowCount)", it) }
         }
     }
 
@@ -204,6 +216,7 @@ class RecordingService : Service(), SensorEventListener {
     }
 
     companion object {
+        private const val TAG = "RookRec"
         private const val CHANNEL_ID = "rook_recording"
         private const val NOTIFICATION_ID = 43
         private const val RECORD_GPS_INTERVAL_MS = 1000L
