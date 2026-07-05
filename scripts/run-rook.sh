@@ -154,6 +154,8 @@ SIMULATOR_FILTER=""
 DEVICE_FILTER=""
 TEAM_ID="${ROOK_IOS_DEVELOPMENT_TEAM:-}"
 RESET_PERMISSIONS=0
+SERVER_URL=""
+SIMULATE_ARRIVAL=""
 DEFAULT_IOS_APP_BUNDLE_ID="com.rookery.Rook"
 DEFAULT_IOS_WIDGET_BUNDLE_ID="${DEFAULT_IOS_APP_BUNDLE_ID}.RookWidgets"
 DEFAULT_IOS_TEST_BUNDLE_ID="com.rookery.RookTests"
@@ -451,7 +453,37 @@ current_remote_target() {
     printf '%s\n' "$ROOK_SERVER_HOST"
     return 0
   fi
+  # Auto: this machine's Tailscale MagicDNS name, when Tailscale is up.
+  local ts_host
+  ts_host="$(tailscale_magicdns_host)"
+  if [[ -n "$ts_host" ]]; then
+    printf '%s\n' "$ts_host"
+    return 0
+  fi
   return 1
+}
+
+# This machine's Tailscale MagicDNS FQDN, only when Tailscale is actively Running; else empty.
+tailscale_magicdns_host() {
+  command -v tailscale >/dev/null 2>&1 || return 0
+  tailscale status --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+if d.get("BackendState") != "Running":
+    sys.exit(0)
+name = (d.get("Self") or {}).get("DNSName", "").rstrip(".")
+if name:
+    print(name)
+' 2>/dev/null
+}
+
+# This machine's Tailscale IPv4, for binding the server to the tailnet.
+tailscale_self_ip() {
+  command -v tailscale >/dev/null 2>&1 || return 0
+  tailscale ip -4 2>/dev/null | head -n1
 }
 
 resolve_simulator() {
@@ -835,6 +867,27 @@ if [[ "${TARGETS[0]}" == "stop" ]]; then
 fi
 
 stop_requested_targets
+
+# Auto-use Tailscale for the android app when no --server-url was given: pre-populate the
+# server URL with this Mac's remote/MagicDNS host and bind the server to the tailnet, so the
+# phone reaches the Mac over Tailscale with no flags. Falls back to adb reverse (SERVER_URL
+# left empty) when no remote host is derivable, or a localhost-only server is already running.
+if [[ -z "$SERVER_URL" ]] && (( HAS_ANDROID_TARGET )); then
+  auto_remote="$(current_remote_target || true)"
+  if [[ -n "$auto_remote" ]]; then
+    if health_ok && listener_is_localhost_only; then
+      log "remote host $auto_remote is available, but a localhost-only server is already running — using adb reverse"
+    else
+      if [[ -z "${ROOK_BIND_IP:-}" ]]; then
+        ts_ip="$(tailscale_self_ip || true)"
+        if [[ -n "$ts_ip" ]]; then export ROOK_BIND_IP="$ts_ip"; fi
+      fi
+      SERVER_URL="http://${auto_remote}:${SERVER_PORT}"
+      log "auto server URL $SERVER_URL (server bind ${ROOK_BIND_IP:-tailnet})"
+    fi
+  fi
+fi
+
 start_server
 
 for TARGET in "${TARGETS[@]}"; do
