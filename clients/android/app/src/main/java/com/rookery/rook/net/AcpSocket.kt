@@ -66,6 +66,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import java.net.URLEncoder
 
 sealed class SocketRequestException(message: String) : Exception(message) {
@@ -77,7 +78,9 @@ sealed class SocketRequestException(message: String) : Exception(message) {
 class AcpSocket(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 ) {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .pingInterval(30, TimeUnit.SECONDS)
+        .build()
     private val json = Json { ignoreUnknownKeys = true }
     private val prettyJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
 

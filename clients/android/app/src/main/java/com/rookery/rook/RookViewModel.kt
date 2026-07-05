@@ -410,10 +410,14 @@ class RookViewModel(
             if (delaySeconds > 0) delay(delaySeconds * 1000L)
             if (_currentSession.value == null) return@launch
             if (api.health()) {
-                api.resumeSession(session)
-                socket.connect(session.id, api.webSocketUrl)
-                _reconnecting.value = false
-                deliverNextQueuedIfIdle()
+                try {
+                    api.resumeSession(session)
+                    socket.connect(session.id, api.webSocketUrl)
+                    _reconnecting.value = false
+                    deliverNextQueuedIfIdle()
+                } catch (_: Exception) {
+                    scheduleReconnect(delaySeconds = 3)
+                }
             } else {
                 scheduleReconnect(delaySeconds = 3)
             }
