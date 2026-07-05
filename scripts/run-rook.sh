@@ -154,6 +154,8 @@ SIMULATOR_FILTER=""
 DEVICE_FILTER=""
 TEAM_ID="${ROOK_IOS_DEVELOPMENT_TEAM:-}"
 RESET_PERMISSIONS=0
+SERVER_URL=""
+SIMULATE_ARRIVAL=""
 DEFAULT_IOS_APP_BUNDLE_ID="com.rookery.Rook"
 DEFAULT_IOS_WIDGET_BUNDLE_ID="${DEFAULT_IOS_APP_BUNDLE_ID}.RookWidgets"
 DEFAULT_IOS_TEST_BUNDLE_ID="com.rookery.RookTests"
@@ -384,9 +386,6 @@ start_server() {
     die "server is only listening on localhost; restart it so the phone can reach your Mac over your chosen remote network"
   fi
 
-  if (( HAS_ANDROID_TARGET )) && [[ -n "$SERVER_URL" ]] && listener_is_localhost_only; then
-    die "server is only listening on localhost; restart it so the android device can reach your Mac over your chosen remote network, or drop --server-url to use adb reverse instead"
-  fi
 }
 
 ensure_xcode_project() {
