@@ -277,7 +277,10 @@ public struct RookAPI {
             return
         }
         let body = try? JSONDecoder().decode(JSONValue.self, from: data)
-        let message = body?["error"]?.stringValue ?? "Server error (\(http.statusCode))"
+        // Fastify 500s put the real message in "message", user-land errors in "error".
+        let message = body?["error"]?.stringValue
+            ?? body?["message"]?.stringValue
+            ?? "Server error (\(http.statusCode))"
         throw RookAPIError(message: message)
     }
 }
