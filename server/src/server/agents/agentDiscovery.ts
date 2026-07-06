@@ -6,6 +6,7 @@ import { BaseAgent, type BaseAgentOptions } from "./BaseAgent.js";
 import { PiAgent, type PiAgentOptions } from "./PiAgent.js";
 import { ClaudeAgent, type ClaudeAgentOptions } from "./ClaudeAgent.js";
 import { CursorAgent, type CursorAgentOptions } from "./CursorAgent.js";
+import { MockAgent } from "./MockAgent.js";
 import type { AgentRestartMetadata } from "./sessionLog.js";
 
 export interface AgentDefinition {
@@ -86,6 +87,12 @@ const AGENT_REGISTRY: AgentRegistryEntry[] = [
       cwd: REPO_ROOT,
       agentName: "CursorAgent",
     }),
+  },
+  // MockAgent — replays a transcript. Remove this entry + MockAgent.ts to delete.
+  {
+    id: "MockAgent",
+    parentId: null,
+    create: () => new MockAgent(),
   },
   ...AGENT_PROFILES.map((profile): AgentRegistryEntry => {
     if (profile.type === "pi") {
