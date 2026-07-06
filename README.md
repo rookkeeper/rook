@@ -29,7 +29,7 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - `./scripts/run-rook.sh stop`
 - `./scripts/print-environments.sh` — dump active/recent environment diagnostics from the server
 - `./scripts/tail-pi-traces.sh` — inspect provider-payload traces in `.var/pi-traces.jsonl` (follows by default; use `--once` for one-shot output)
-- `./scripts/run-tests` — run the known server, Swift package, iPhone, and macOS test/build checks
+- `./scripts/run-tests.sh` — run the known server, Swift package, iPhone, and macOS test/build checks
 
 ## High-level docs map
 
