@@ -12,6 +12,7 @@ export interface PiAgentOptions {
   startupTimeoutMs?: number;
   skillPaths?: string[];
   extensionPaths?: string[];
+  appendSystemPrompt?: string;
   agentName?: string;
 }
 
@@ -23,7 +24,7 @@ function uniqueNonEmpty(values: string[] | undefined): string[] {
   return [...new Set((values ?? []).filter((value) => value.length > 0))];
 }
 
-function ensurePiLauncher(options: { command: string; args: string[]; skillPaths: string[]; extensionPaths: string[] }): string {
+function ensurePiLauncher(options: { command: string; args: string[]; skillPaths: string[]; extensionPaths: string[]; appendSystemPrompt?: string }): string {
   mkdirSync(GENERATED_LAUNCHER_DIR, { recursive: true });
 
   const launcherSpec = JSON.stringify(options);
@@ -36,11 +37,13 @@ const piBinary = ${JSON.stringify(options.command)};
 const baseArgs = ${JSON.stringify(options.args)};
 const skillPaths = ${JSON.stringify(options.skillPaths)};
 const extensionPaths = ${JSON.stringify(options.extensionPaths)};
+const appendSystemPrompt = ${JSON.stringify(options.appendSystemPrompt ?? "")};
 const forwardedArgs = process.argv.slice(2);
 const extensionArgs = extensionPaths.flatMap((extensionPath) => ["-e", extensionPath]);
 const skillArgs = skillPaths.flatMap((skillPath) => ["--skill", skillPath]);
+const appendSystemPromptArgs = appendSystemPrompt ? ["--append-system-prompt", appendSystemPrompt] : [];
 
-const child = spawn(piBinary, [...baseArgs, ...forwardedArgs, ...extensionArgs, ...skillArgs], {
+const child = spawn(piBinary, [...baseArgs, ...forwardedArgs, ...appendSystemPromptArgs, ...extensionArgs, ...skillArgs], {
   cwd: process.cwd(),
   env: process.env,
   stdio: "inherit",
@@ -72,6 +75,7 @@ function toBaseAgentOptions(options: PiAgentOptions, restartMetadata?: AgentRest
     args: options.args ?? DEFAULT_ARGS,
     skillPaths,
     extensionPaths,
+    appendSystemPrompt: options.appendSystemPrompt,
   });
 
   return {
@@ -79,6 +83,7 @@ function toBaseAgentOptions(options: PiAgentOptions, restartMetadata?: AgentRest
     args: [PI_ACP_ENTRYPOINT],
     env: {
       PI_ACP_PI_COMMAND: launcherPath,
+      ROOK_PI_TRACE_LOG_PATH: path.join(REPO_ROOT, ".var", "pi-traces.jsonl"),
     },
     cwd,
     sessionCwd: typeof restartMetadata?.cwd === "string" ? restartMetadata.cwd : cwd,

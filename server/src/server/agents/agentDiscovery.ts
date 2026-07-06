@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { REPO_ROOT } from "../paths.js";
 import { AGENT_PROFILES } from "../config/agentProfiles.js";
 import { BaseAgent, type BaseAgentOptions } from "./BaseAgent.js";
@@ -14,6 +16,7 @@ export interface AgentDefinition {
 export interface AgentCreateOptions {
   skillPaths?: string[];
   extensionPaths?: string[];
+  appendSystemPrompt?: string;
 }
 
 type AgentFactory = (restartMetadata?: AgentRestartMetadata, options?: AgentCreateOptions) => BaseAgent;
@@ -26,6 +29,18 @@ type AgentRegistryEntry = {
 
 function uniqueNonEmpty(values: string[] | undefined): string[] {
   return [...new Set((values ?? []).filter((value) => value.length > 0))];
+}
+
+const CREATE_SKILLS_PATH = path.join(REPO_ROOT, "skills", "create-skills");
+const PROMPT_TRACE_LOGGER_EXTENSION_PATH = path.join(REPO_ROOT, "dev-tools", "prompt-trace-logger.ts");
+
+function defaultPiSkillPaths(): string[] {
+  return existsSync(CREATE_SKILLS_PATH) ? [CREATE_SKILLS_PATH] : [];
+}
+
+function defaultPiExtensionPaths(): string[] {
+  // TODO: gate this behind an explicit dev-mode / prod-mode distinction once we have one.
+  return existsSync(PROMPT_TRACE_LOGGER_EXTENSION_PATH) ? [PROMPT_TRACE_LOGGER_EXTENSION_PATH] : [];
 }
 
 function createPiAgent(restartMetadata: AgentRestartMetadata | undefined, options: PiAgentOptions): BaseAgent {
@@ -51,8 +66,9 @@ const AGENT_REGISTRY: AgentRegistryEntry[] = [
     create: (restartMetadata, options) => createPiAgent(restartMetadata, {
       cwd: REPO_ROOT,
       agentName: "PiAgent",
-      skillPaths: uniqueNonEmpty(options?.skillPaths),
-      extensionPaths: uniqueNonEmpty(options?.extensionPaths),
+      skillPaths: uniqueNonEmpty([...defaultPiSkillPaths(), ...(options?.skillPaths ?? [])]),
+      extensionPaths: uniqueNonEmpty([...defaultPiExtensionPaths(), ...(options?.extensionPaths ?? [])]),
+      appendSystemPrompt: options?.appendSystemPrompt,
     }),
   },
   {
@@ -81,9 +97,10 @@ const AGENT_REGISTRY: AgentRegistryEntry[] = [
           cwd: profile.cwd ?? REPO_ROOT,
           args: profile.args,
           agentName: profile.id,
-          skillPaths: uniqueNonEmpty([...(profile.skillPaths ?? []), ...(options?.skillPaths ?? [])]),
-          extensionPaths: uniqueNonEmpty([...(profile.extensionPaths ?? []), ...(options?.extensionPaths ?? [])]),
+          skillPaths: uniqueNonEmpty([...defaultPiSkillPaths(), ...(profile.skillPaths ?? []), ...(options?.skillPaths ?? [])]),
+          extensionPaths: uniqueNonEmpty([...defaultPiExtensionPaths(), ...(profile.extensionPaths ?? []), ...(options?.extensionPaths ?? [])]),
           startupTimeoutMs: profile.startupTimeoutMs,
+          appendSystemPrompt: options?.appendSystemPrompt,
         }),
       };
     }

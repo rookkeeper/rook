@@ -2,6 +2,7 @@ import path from "node:path";
 import type { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
 import type { EnvironmentPreview } from "../../shared/environment.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
+import { ensureDefaultEnvironmentBinding, renderEnvironmentBindingPrompt } from "./EnvironmentBinding.js";
 import type {
   EnvironmentBundleOffer,
   EnvironmentDecision,
@@ -70,10 +71,25 @@ export interface EnvironmentManagerOptions {
  * - push bundle offer / resolution events into subscribed rooms
  * - do not yet load bundle capabilities into runtimes during registration
  */
+function environmentHierarchy(environmentId: string): string[] {
+  const separator = environmentId.indexOf(":");
+  if (separator === -1) return [environmentId];
+
+  const prefix = environmentId.slice(0, separator + 1);
+  const rest = environmentId.slice(separator + 1);
+  if (!rest) return [environmentId];
+
+  const parts = rest.split("/").filter(Boolean);
+  if (parts.length === 0) return [environmentId];
+
+  return parts.map((_, index) => `${prefix}${parts.slice(0, index + 1).join("/")}`);
+}
+
 export class EnvironmentManager {
   private readonly remembered = new Map<string, RememberedEnvironmentEntry>();
   private readonly ephemeral = new Map<string, EphemeralDecision>();
   private readonly listeners = new Map<string, EnvironmentEventListener>();
+  private readonly explicitlyEntered = new Map<string, Set<string>>();
   private readonly entered = new Map<string, Set<string>>();
   private readonly activeEnvironmentWindowMs: number;
   private readonly recentEnvironmentRetentionMs: number;
@@ -208,6 +224,7 @@ export class EnvironmentManager {
   subscribe(sessionId: string, listener: EnvironmentEventListener): void {
     this.pruneMemory();
     this.listeners.set(sessionId, listener);
+    if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
     if (!this.entered.has(sessionId)) this.entered.set(sessionId, new Set());
     for (const entry of this.remembered.values()) {
       if (entry.status !== "active") continue;
@@ -229,6 +246,7 @@ export class EnvironmentManager {
 
   unsubscribe(sessionId: string): void {
     this.listeners.delete(sessionId);
+    this.explicitlyEntered.delete(sessionId);
     this.entered.delete(sessionId);
   }
 
@@ -245,6 +263,26 @@ export class EnvironmentManager {
     return [...(this.entered.get(sessionId) ?? [])];
   }
 
+  runtimeInstructionsForSession(sessionId: string): string | undefined {
+    const entries = this.enteredEnvironments(sessionId)
+      .map((environmentId) => {
+        const remembered = this.remembered.get(environmentId);
+        const binding = ensureDefaultEnvironmentBinding(environmentId);
+        if (!binding) return null;
+        return {
+          environmentId,
+          metadata: (remembered?.record.metadata ?? {}) as Record<string, unknown>,
+          sourceName: remembered?.info.sourceName,
+          canonicalSourceUrl: remembered?.info.canonicalSourceUrl,
+          contextText: remembered?.contextText,
+          binding,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+    return renderEnvironmentBindingPrompt(entries);
+  }
+
   enterEnvironment(sessionId: string, environmentId: string): string[] {
     this.pruneMemory();
     const listener = this.listeners.get(sessionId);
@@ -253,21 +291,10 @@ export class EnvironmentManager {
     const entry = this.remembered.get(environmentId);
     if (!entry || entry.status !== "active") return [];
 
-    const skillPaths: string[] = [];
-    for (const bundle of entry.bundles) {
-      const decision = this.effectiveDecision(bundle.bundleHash);
-      if (decision !== "accept" && decision !== "approve") continue;
-      if (!bundle.bundlePath) continue;
-      for (const skillId of bundle.skills) {
-        skillPaths.push(path.join(bundle.bundlePath, "skills", skillId));
-      }
-    }
+    if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
+    this.explicitlyEntered.get(sessionId)!.add(environmentId);
 
-    if (!this.entered.has(sessionId)) this.entered.set(sessionId, new Set());
-    this.entered.get(sessionId)!.add(environmentId);
-
-    listener.onEnvironmentEntered(environmentId, skillPaths, entry.contextText);
-    return [...this.entered.get(sessionId)!];
+    return this.syncEnteredEnvironments(sessionId, listener);
   }
 
   exitEnvironment(sessionId: string, environmentId: string): string[] {
@@ -275,12 +302,11 @@ export class EnvironmentManager {
     const listener = this.listeners.get(sessionId);
     if (!listener) return this.enteredEnvironments(sessionId);
 
-    const entered = this.entered.get(sessionId);
-    if (!entered?.has(environmentId)) return this.enteredEnvironments(sessionId);
+    const explicit = this.explicitlyEntered.get(sessionId);
+    if (!explicit?.has(environmentId)) return this.enteredEnvironments(sessionId);
+    explicit.delete(environmentId);
 
-    entered.delete(environmentId);
-    listener.onEnvironmentExited(environmentId);
-    return [...entered];
+    return this.syncEnteredEnvironments(sessionId, listener);
   }
 
   diagnosticSnapshot(): DiagnosticEnvironmentEntry[] {
@@ -345,6 +371,54 @@ export class EnvironmentManager {
     });
 
     return list;
+  }
+
+  private syncEnteredEnvironments(sessionId: string, listener: EnvironmentEventListener): string[] {
+    if (!this.entered.has(sessionId)) this.entered.set(sessionId, new Set());
+    const current = this.entered.get(sessionId)!;
+    const next = this.computeEffectiveEnteredSet(sessionId);
+
+    for (const environmentId of next) {
+      if (current.has(environmentId)) continue;
+      const entry = this.remembered.get(environmentId);
+      if (!entry || entry.status !== "active") continue;
+
+      ensureDefaultEnvironmentBinding(environmentId);
+      listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry), entry.contextText);
+    }
+
+    for (const environmentId of current) {
+      if (next.has(environmentId)) continue;
+      listener.onEnvironmentExited(environmentId);
+    }
+
+    this.entered.set(sessionId, next);
+    return [...next];
+  }
+
+  private computeEffectiveEnteredSet(sessionId: string): Set<string> {
+    const effective = new Set<string>();
+    for (const environmentId of this.explicitlyEntered.get(sessionId) ?? []) {
+      for (const candidateId of environmentHierarchy(environmentId)) {
+        const entry = this.remembered.get(candidateId);
+        if (!entry || entry.status !== "active") continue;
+        effective.add(candidateId);
+      }
+    }
+    return effective;
+  }
+
+  private skillPathsForEntry(entry: RememberedEnvironmentEntry): string[] {
+    const skillPaths: string[] = [];
+    for (const bundle of entry.bundles) {
+      const decision = this.effectiveDecision(bundle.bundleHash);
+      if (decision !== "accept" && decision !== "approve") continue;
+      if (!bundle.bundlePath) continue;
+      for (const skillId of bundle.skills) {
+        skillPaths.push(path.join(bundle.bundlePath, "skills", skillId));
+      }
+    }
+    return skillPaths;
   }
 
   private broadcastBundleOffer(offer: EnvironmentBundleOffer): void {

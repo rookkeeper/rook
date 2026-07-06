@@ -1104,6 +1104,7 @@ final class RookMacModel: ObservableObject {
         observeCurrentEnvironments(app: app, title: title)
     }
 
+
     /// In-app context change (e.g. switching browser pages or editor tabs) —
     /// refresh the bridge /context and update the in-memory environment cache.
     private func handleContextRefresh(app: ForegroundApp, title: String?) {
