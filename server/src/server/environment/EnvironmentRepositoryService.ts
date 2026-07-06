@@ -55,6 +55,7 @@ export class EnvironmentRepositoryService {
         skills: bundle.skills,
         mcpServers: bundle.mcpServers,
         apps: bundle.apps,
+        agentsMd: bundle.agentsMd,
         errors: bundle.errors,
       });
     }
@@ -97,6 +98,11 @@ async function hashBundle(bundle: EnvironmentBundle): Promise<string> {
           hash.update("\n\u0000\n");
         }
       }
+    }
+    if (bundle.agentsMd) {
+      hash.update("AGENTS.md\n");
+      hash.update(bundle.agentsMd);
+      hash.update("\n\u0000\n");
     }
   }
 

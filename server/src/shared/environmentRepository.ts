@@ -35,6 +35,8 @@ export interface EnvironmentBundle {
   skills: BundleArtifact[];
   mcpServers: BundleArtifact[];
   apps: BundleArtifact[];
+  /** Raw content of AGENTS.md at the bundle root, when present. */
+  agentsMd?: string;
   valid: boolean;
   errors: RepositoryReadError[];
 }

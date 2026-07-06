@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { SERVER_ROOT, REPO_ROOT } from "../paths.js";
 import { BaseAgent, type BaseAgentOptions } from "./BaseAgent.js";
+import type { JsonRpcMessage } from "../../shared/acp.js";
 import type { AgentRestartMetadata } from "./sessionLog.js";
 
 export interface PiAgentOptions {
@@ -95,6 +96,14 @@ function toBaseAgentOptions(options: PiAgentOptions, restartMetadata?: AgentRest
 export class PiAgent extends BaseAgent {
   constructor(options: PiAgentOptions = {}, restartMetadata?: AgentRestartMetadata) {
     super(toBaseAgentOptions(options, restartMetadata), restartMetadata);
+  }
+
+  protected override shouldIgnoreServerMessage(message: JsonRpcMessage): boolean {
+    if (!("method" in message) || message.method !== "session/update") return false;
+    const params = message.params as { update?: { sessionUpdate?: unknown; content?: { text?: unknown } } } | undefined;
+    if (params?.update?.sessionUpdate !== "agent_message_chunk") return false;
+    const text = params.update.content?.text;
+    return typeof text === "string" && text.startsWith("pi v") && text.includes("Skills");
   }
 
   override async sendSteeringMessage(userMessage: string): Promise<void> {

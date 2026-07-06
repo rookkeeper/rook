@@ -410,8 +410,8 @@ describe("EnvironmentManager", () => {
     // No offers for already-approved bundles.
     expect(listener.onEnvironmentOffered).not.toHaveBeenCalled();
 
-    const defaultSkillsDir = path.join(tempHome, ".rook", "environment-repository", "web", "example.com", ".bundles", "default", "skills");
-    expect(existsSync(defaultSkillsDir)).toBe(true);
+    const personalSkillsDir = path.join(tempHome, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills");
+    expect(existsSync(personalSkillsDir)).toBe(true);
   });
 
   it("exits an environment and calls onEnvironmentExited", async () => {
@@ -648,18 +648,94 @@ describe("EnvironmentManager", () => {
     manager.enterEnvironment("s1", "app:md.obsidian/WorkVault");
 
     const instructions = manager.runtimeInstructionsForSession("s1");
-    expect(instructions).toContain("Environment-specific skill authoring");
+    // Rook identity prompt is included.
+    expect(instructions).toContain("You are Rook");
+    // Environment prompt.
+    expect(instructions).toContain("Attaching memories");
     expect(instructions).toContain("`web:example.com`");
     expect(instructions).toContain("`web:example.com/stuff`");
     expect(instructions).toContain("`app:md.obsidian`");
     expect(instructions).toContain("`app:md.obsidian/WorkVault`");
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "web", "example.com", ".bundles", "default", "skills"));
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "web", "example.com", "stuff", ".bundles", "default", "skills"));
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "app", "md.obsidian", ".bundles", "default", "skills"));
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "app", "md.obsidian", "WorkVault", ".bundles", "default", "skills"));
+    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills"));
+    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "web", "example.com", "stuff", ".bundles", "personal", "skills"));
+    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "app", "md.obsidian", ".bundles", "personal", "skills"));
+    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "app", "md.obsidian", "WorkVault", ".bundles", "personal", "skills"));
     expect(instructions).toContain("https://example.com/stuff");
     expect(instructions).toContain("The user is reading the support docs.");
     expect(instructions).toContain('"vault": "WorkVault"');
+  });
+
+  it("injects AGENTS.md content into the runtime prompt", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#default",
+          bundleId: "default",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/default",
+          skills: [],
+          mcpServers: [],
+          apps: [],
+          agentsMd: "# Example Instructions\n\nAlways be polite.",
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-1",
+      },
+    ] as any);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.enterEnvironment("s1", "web:example.com");
+
+    const instructions = manager.runtimeInstructionsForSession("s1");
+    expect(instructions).toContain("#### Environment instructions");
+    expect(instructions).toContain("# Example Instructions");
+    expect(instructions).toContain("Always be polite.");
+  });
+
+  it("omits AGENTS.md section when no bundles have it", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#default",
+          bundleId: "default",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/default",
+          skills: [],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-1",
+      },
+    ] as any);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    manager.enterEnvironment("s1", "web:example.com");
+
+    const instructions = manager.runtimeInstructionsForSession("s1");
+    expect(instructions).not.toContain("#### Environment instructions");
   });
 
   it("offers undecided bundles when entering, and loads skills after approval", async () => {

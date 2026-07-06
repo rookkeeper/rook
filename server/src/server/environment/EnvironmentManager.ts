@@ -2,7 +2,9 @@ import path from "node:path";
 import type { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
 import type { EnvironmentPreview } from "../../shared/environment.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
-import { ensureDefaultEnvironmentBinding, renderEnvironmentBindingPrompt } from "./EnvironmentBinding.js";
+import { ensurePersonalEnvironmentBinding } from "./EnvironmentBinding.js";
+import { renderEnvironmentPrompt } from "./EnvironmentPromptTemplate.js";
+import { renderRookIdentityPrompt } from "./RookIdentityPrompt.js";
 import { SessionDecisionRegistry } from "./SessionDecisionRegistry.js";
 import type {
   EnvironmentDecision,
@@ -20,6 +22,7 @@ interface RememberedBundleEntry {
   skills: string[];
   mcpServers: string[];
   apps: string[];
+  agentsMd?: string;
 }
 
 interface RememberedEnvironmentEntry {
@@ -131,6 +134,7 @@ export class EnvironmentManager {
       skills: bundle.skills.map((artifact) => artifact.id).sort((a, b) => a.localeCompare(b)),
       mcpServers: bundle.mcpServers.map((artifact) => artifact.id).sort((a, b) => a.localeCompare(b)),
       apps: bundle.apps.map((artifact) => artifact.id).sort((a, b) => a.localeCompare(b)),
+      agentsMd: bundle.agentsMd,
     }));
     const bundleIds = bundles.map((bundle) => bundle.bundleId);
     const bundleCollectionPaths = [...new Set(
@@ -180,6 +184,35 @@ export class EnvironmentManager {
       this.broadcastBundleResolution(env.id, previousBundle.bundleId, previousBundle.bundleHash, "unavailable");
     }
     // Offers are deferred until a session enters the environment (see syncEnteredEnvironments).
+
+    // Auto-register any hierarchy parents that aren't already active so
+    // computeEffectiveEnteredSet can cascade entry into them. Parents get a
+    // minimal no-bundle entry (same info / contextText as the child).
+    for (const parentId of environmentHierarchy(env.id)) {
+      if (parentId === env.id) continue;
+      const parent = this.remembered.get(parentId);
+      if (parent?.status === "active") continue;
+
+      const parentEntry: RememberedEnvironmentEntry = {
+        record: { id: parentId, metadata: { ...env.metadata, registeredAt: nowIso } },
+        // Strip sourceName so the parent's label in the UI won't be a duplicate
+        // of the child's. canonicalSourceUrl is still useful and non-confusing.
+        info: { canonicalSourceUrl: info.canonicalSourceUrl },
+        registeredAt: nowIso,
+        lastTouchedAt: nowIso,
+        activeUntil,
+        status: "active",
+        bundles: [],
+        bundleIds: [],
+        bundleCollectionPaths: [],
+        ...(contextText ? { contextText } : {}),
+      };
+      this.remembered.set(parentId, parentEntry);
+      this.logger.info(
+        { environmentId: parentId, parentOf: env.id, registeredAt: nowIso, activeUntil },
+        "environment auto-registered (parent)",
+      );
+    }
   }
 
   /**
@@ -269,20 +302,30 @@ export class EnvironmentManager {
     const entries = this.enteredEnvironments(sessionId)
       .map((environmentId) => {
         const remembered = this.remembered.get(environmentId);
-        const binding = ensureDefaultEnvironmentBinding(environmentId);
+        const binding = ensurePersonalEnvironmentBinding(environmentId);
         if (!binding) return null;
+
+        // Gather AGENTS.md content from every remembered bundle that has it.
+        const agentsMdBundles = (remembered?.bundles ?? [])
+          .filter((b) => b.agentsMd)
+          .map((b) => ({ bundleId: b.bundleId, content: b.agentsMd! }));
+
         return {
           environmentId,
           metadata: (remembered?.record.metadata ?? {}) as Record<string, unknown>,
           sourceName: remembered?.info.sourceName,
           canonicalSourceUrl: remembered?.info.canonicalSourceUrl,
           contextText: remembered?.contextText,
-          binding,
+          bindingDir: binding.personalBundleDir,
+          skillsDir: binding.skillsDir,
+          existingSkills: binding.existingSkills,
+          agentsMdBundles,
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
-    return renderEnvironmentBindingPrompt(entries);
+    const envPrompt = renderEnvironmentPrompt(entries);
+    return [renderRookIdentityPrompt(), envPrompt].filter(Boolean).join("\n\n");
   }
 
   enterEnvironment(sessionId: string, environmentId: string): string[] {
@@ -385,7 +428,7 @@ export class EnvironmentManager {
       const entry = this.remembered.get(environmentId);
       if (!entry || entry.status !== "active") continue;
 
-      ensureDefaultEnvironmentBinding(environmentId);
+      ensurePersonalEnvironmentBinding(environmentId);
       listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sessionId), entry.contextText);
 
       // Offer undecided bundles only when this session enters the environment.

@@ -79,6 +79,39 @@ describe("DirectoryEnvironmentRepository", () => {
     expect(result.errors.some((error) => error.code === "invalid_bundle_contents")).toBe(true);
   });
 
+  it("reads AGENTS.md from the bundle root", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rook-env-repo-"));
+    tempDirs.push(root);
+
+    const bundleDir = path.join(root, "web", "example.com", ".bundles", "default");
+    await mkdir(bundleDir, { recursive: true });
+    const skillDir = path.join(bundleDir, "skills", "my-skill");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(path.join(skillDir, "SKILL.md"), "---\nname: my-skill\ndescription: ok\n---\n");
+    await writeFile(path.join(bundleDir, "AGENTS.md"), "# Environment Instructions\n\nBe helpful.");
+
+    const repo = new DirectoryEnvironmentRepository(root);
+    const result = await repo.getBundles("web:example.com");
+
+    expect(result.bundles[0]?.agentsMd).toBe("# Environment Instructions\n\nBe helpful.");
+    expect(result.bundles[0]?.valid).toBe(true);
+  });
+
+  it("handles missing AGENTS.md gracefully", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rook-env-repo-"));
+    tempDirs.push(root);
+
+    const skillDir = path.join(root, "web", "example.com", ".bundles", "default", "skills", "my-skill");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(path.join(skillDir, "SKILL.md"), "---\nname: my-skill\ndescription: ok\n---\n");
+
+    const repo = new DirectoryEnvironmentRepository(root);
+    const result = await repo.getBundles("web:example.com");
+
+    expect(result.bundles[0]?.agentsMd).toBeUndefined();
+    expect(result.bundles[0]?.valid).toBe(true);
+  });
+
   it("supports symlinked skill directories", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "rook-env-repo-"));
     tempDirs.push(root);

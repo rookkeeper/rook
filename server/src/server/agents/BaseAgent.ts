@@ -469,8 +469,8 @@ export class BaseAgent {
     this.writeToProcess({ jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) });
   }
 
-  protected shouldIgnoreServerMessage(message: JsonRpcMessage): boolean {
-    return this.isPiAcpStartupInfo(message);
+  protected shouldIgnoreServerMessage(_message: JsonRpcMessage): boolean {
+    return false;
   }
 
   protected handleStdoutLine(line: string): void {
@@ -614,14 +614,5 @@ export class BaseAgent {
     } as unknown as AcpSessionUpdateNotification);
   }
 
-  private isPiAcpStartupInfo(message: JsonRpcMessage): boolean {
-    if (!this.isReplayingSessionLoad && !this.started) {
-      // fall through to text sniffing below
-    }
-    if (!("method" in message) || message.method !== "session/update") return false;
-    const params = message.params as { update?: { sessionUpdate?: unknown; content?: { text?: unknown } } } | undefined;
-    if (params?.update?.sessionUpdate !== "agent_message_chunk") return false;
-    const text = params.update.content?.text;
-    return typeof text === "string" && text.startsWith("pi v") && text.includes("Skills");
-  }
+
 }

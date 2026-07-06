@@ -1,5 +1,6 @@
 import path from "node:path";
 import { readdir, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import type {
   BundleArtifact,
   EnvironmentBundle,
@@ -103,6 +104,7 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
     const unknownEntries = entries.filter((entry) => !RECOGNIZED_CONTENT_DIRS.includes(entry.name as RecognizedContentDir));
     for (const entry of unknownEntries) {
       if (entry.name === ".manifest") continue;
+      if (entry.name === "AGENTS.md") continue;
       errors.push({
         code: "invalid_bundle_directory",
         message: `Unrecognized bundle entry ${entry.name}`,
@@ -119,6 +121,23 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
       if (artifacts.length > 0) groups.set(groupName, artifacts);
     }
 
+    // AGENTS.md is a flat file at the bundle root (not a directory of artifacts).
+    let agentsMd: string | undefined;
+    if (existsSync(path.join(bundleDir, "AGENTS.md"))) {
+      try {
+        agentsMd = await readFile(path.join(bundleDir, "AGENTS.md"), "utf8");
+      } catch {
+        errors.push({
+          code: "unreadable_path",
+          message: `Could not read AGENTS.md in bundle ${bundleId}`,
+          repository: this.repositoryId,
+          environmentId,
+          bundleId,
+          path: path.join(bundleDir, "AGENTS.md"),
+        });
+      }
+    }
+
     const bundle: EnvironmentBundle = {
       id: `${environmentId}#${bundleId}`,
       bundleId,
@@ -128,6 +147,7 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
       skills: groups.get("skills") ?? [],
       mcpServers: groups.get("mcp-servers") ?? [],
       apps: groups.get("apps") ?? [],
+      agentsMd,
       valid: errors.length === 0 && groups.size > 0,
       errors,
     };
