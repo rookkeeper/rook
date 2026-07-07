@@ -8,7 +8,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const MAX_LINES = 200;
@@ -191,7 +191,7 @@ function trimLogFile(logFile: string) {
 export default function promptTraceLogger(pi: ExtensionAPI) {
   const logFile = process.env.ROOK_PI_TRACE_LOG_PATH?.trim()
     ? process.env.ROOK_PI_TRACE_LOG_PATH
-    : join(process.cwd(), ".var", "pi-traces.jsonl");
+    : "/tmp/pi-traces.jsonl";
   mkdirSync(dirname(logFile), { recursive: true });
   if (!existsSync(logFile)) writeFileSync(logFile, "", "utf8");
 
