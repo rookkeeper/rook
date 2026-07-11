@@ -150,7 +150,7 @@ class RookApi(
     }
 
     /**
-     * Ask the server which `loc:` environments are likely available at the given
+     * Ask the server which `location:` environments are likely available at the given
      * location. Identification only — does not register/enter anything.
      */
     suspend fun identifyAvailableEnvironments(request: IdentifyAvailableRequest): List<EnvironmentCandidate> {

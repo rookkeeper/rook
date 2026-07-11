@@ -164,11 +164,11 @@ class RecordingService : Service(), SensorEventListener {
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
-    private fun writeGps(loc: Location) {
-        val alt = if (loc.hasAltitude()) loc.altitude.toString() else ""
-        val speed = if (loc.hasSpeed()) loc.speed.toString() else ""
-        val acc = if (loc.hasAccuracy()) loc.accuracy.toString() else ""
-        writeRow("${loc.elapsedRealtimeNanos},gps,${loc.latitude},${loc.longitude},$alt,$speed,$acc,,,")
+    private fun writeGps(location: Location) {
+        val alt = if (location.hasAltitude()) location.altitude.toString() else ""
+        val speed = if (location.hasSpeed()) location.speed.toString() else ""
+        val acc = if (location.hasAccuracy()) location.accuracy.toString() else ""
+        writeRow("${location.elapsedRealtimeNanos},gps,${location.latitude},${location.longitude},$alt,$speed,$acc,,,")
     }
 
     private fun schedulePeriodicFlush() {

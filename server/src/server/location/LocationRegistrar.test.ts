@@ -30,25 +30,25 @@ describe("LocationRegistrar", () => {
     const cs = contextStore();
     const reg = new LocationRegistrar(s, cs, writeStub);
     await reg.sync([
-      cand("loc:cicis.com/a", { website: "https://cicis.com/x" }),
-      cand("loc:gamestop.com/b"),
+      cand("location:cicis.com/a", { website: "https://cicis.com/x" }),
+      cand("location:gamestop.com/b"),
     ]);
 
     expect(s.registerAvailableEnvironment).toHaveBeenCalledTimes(2);
     // the context bundle is served through the repository, not as extraSkillPaths
-    expect(cs.setContextBundle).toHaveBeenCalledWith("loc:cicis.com/a", "/tmp/ctx");
+    expect(cs.setContextBundle).toHaveBeenCalledWith("location:cicis.com/a", "/tmp/ctx");
     // current gets canonicalSourceUrl + contextText + accept
     expect(s.registerAvailableEnvironment).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ id: "loc:cicis.com/a", metadata: expect.objectContaining({ current: true }) }),
-      expect.objectContaining({ sourceName: "loc:cicis.com/a", canonicalSourceUrl: "https://cicis.com/x" }),
-      expect.stringContaining("loc:cicis.com/a"),
+      expect.objectContaining({ id: "location:cicis.com/a", metadata: expect.objectContaining({ current: true }) }),
+      expect.objectContaining({ sourceName: "location:cicis.com/a", canonicalSourceUrl: "https://cicis.com/x" }),
+      expect.stringContaining("location:cicis.com/a"),
     );
-    expect(s.decideEnvironment).toHaveBeenCalledWith("loc:cicis.com/a", "accept");
+    expect(s.decideEnvironment).toHaveBeenCalledWith("location:cicis.com/a", "accept");
     // neighbor: no extra skills, current:false
     expect(s.registerAvailableEnvironment).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ id: "loc:gamestop.com/b", metadata: expect.objectContaining({ current: false }) }),
+      expect.objectContaining({ id: "location:gamestop.com/b", metadata: expect.objectContaining({ current: false }) }),
       expect.anything(),
     );
   });
@@ -57,10 +57,10 @@ describe("LocationRegistrar", () => {
     const s = sink();
     const cs = contextStore();
     const reg = new LocationRegistrar(s, cs, writeStub);
-    const set = [cand("loc:a/1"), cand("loc:b/2")];
+    const set = [cand("location:a/1"), cand("location:b/2")];
     await reg.sync(set);
     s.registerAvailableEnvironment.mockClear();
-    await reg.sync([cand("loc:a/1"), cand("loc:b/2")]);
+    await reg.sync([cand("location:a/1"), cand("location:b/2")]);
     expect(s.registerAvailableEnvironment).not.toHaveBeenCalled();
   });
 
@@ -68,12 +68,12 @@ describe("LocationRegistrar", () => {
     const s = sink();
     const cs = contextStore();
     const reg = new LocationRegistrar(s, cs, writeStub);
-    await reg.sync([cand("loc:a/1"), cand("loc:b/2")]);
+    await reg.sync([cand("location:a/1"), cand("location:b/2")]);
     s.registerAvailableEnvironment.mockClear();
-    await reg.sync([cand("loc:c/3")]);
+    await reg.sync([cand("location:c/3")]);
     expect(s.registerAvailableEnvironment).toHaveBeenCalledTimes(1);
     expect(s.registerAvailableEnvironment).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "loc:c/3" }),
+      expect.objectContaining({ id: "location:c/3" }),
       expect.anything(),
       expect.any(String),
     );
@@ -83,7 +83,7 @@ describe("LocationRegistrar", () => {
     const s = sink();
     const cs = contextStore();
     const reg = new LocationRegistrar(s, cs, writeStub);
-    await reg.sync([cand("loc:a/1")]);
+    await reg.sync([cand("location:a/1")]);
     s.registerAvailableEnvironment.mockClear();
     await reg.sync([]);
     expect(s.registerAvailableEnvironment).not.toHaveBeenCalled();
@@ -93,7 +93,7 @@ describe("LocationRegistrar", () => {
     const s = sink();
     const cs = contextStore();
     const reg = new LocationRegistrar(s, cs, writeStub);
-    await reg.sync([cand("loc:a/1")], { isStationary: false, speedMetersPerSecond: 20, dwellSeconds: 2 });
+    await reg.sync([cand("location:a/1")], { isStationary: false, speedMetersPerSecond: 20, dwellSeconds: 2 });
     expect(s.registerAvailableEnvironment).not.toHaveBeenCalled();
   });
 
@@ -101,10 +101,10 @@ describe("LocationRegistrar", () => {
     const s = sink();
     const cs = contextStore();
     const reg = new LocationRegistrar(s, cs, writeStub);
-    await reg.sync([cand("loc:a/1")], { isStationary: true });
+    await reg.sync([cand("location:a/1")], { isStationary: true });
     expect(s.registerAvailableEnvironment).toHaveBeenCalledTimes(1);
     s.registerAvailableEnvironment.mockClear();
-    await reg.sync([cand("loc:b/2")], { isStationary: false, speedMetersPerSecond: 18 });
+    await reg.sync([cand("location:b/2")], { isStationary: false, speedMetersPerSecond: 18 });
     expect(s.registerAvailableEnvironment).not.toHaveBeenCalled();
   });
 });

@@ -116,10 +116,10 @@ fun PlacesScreen(viewModel: RookViewModel) {
                     )
                     Text("${radius.toInt()} m", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = PanelPalette.textMuted)
                 }
-                val loc = currentLocation
-                if (loc != null) {
+                val location = currentLocation
+                if (location != null) {
                     Text(
-                        String.format(Locale.US, "Here: %.4f, %.4f", loc.latitude, loc.longitude),
+                        String.format(Locale.US, "Here: %.4f, %.4f", location.latitude, location.longitude),
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                         color = PanelPalette.textMuted
@@ -162,7 +162,7 @@ fun PlacesScreen(viewModel: RookViewModel) {
 
         Text(
             "Define a place here, and create a matching skill bundle on the server at " +
-                "environment-repository/loc/<slug>/. When you arrive, Rook offers that place's skills.",
+                "environment-repository/location/<slug>/. When you arrive, Rook offers that place's skills.",
             fontSize = 11.sp,
             color = PanelPalette.textMuted
         )
@@ -181,7 +181,7 @@ private fun PlaceRow(place: Place, isCurrent: Boolean, hasSkills: Boolean?, view
                 color = if (isCurrent) PanelPalette.success else PanelPalette.textNormal
             )
             Text(
-                "loc:${place.id} · ${place.radius.toInt()} m",
+                "location:${place.id} · ${place.radius.toInt()} m",
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
                 color = PanelPalette.textMuted

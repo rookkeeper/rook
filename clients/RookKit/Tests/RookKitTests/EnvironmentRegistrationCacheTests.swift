@@ -55,14 +55,14 @@ final class EnvironmentRegistrationCacheTests: XCTestCase {
     func testServerReannounceReRegistersEverythingAndResetsReportDeadline() {
         var cache = EnvironmentRegistrationCache(ttl: 285, reportInterval: 300)
         let start = Date(timeIntervalSince1970: 1_000)
-        _ = cache.encounter([candidate("app:one"), candidate("web:two/child")], now: start)
+        _ = cache.encounter([candidate("mac:one"), candidate("web:two/child")], now: start)
 
         let reannounceAt = start.addingTimeInterval(50)
         let actions = cache.reannounceAll(now: reannounceAt)
 
         XCTAssertEqual(actions.map(\.kind), [.register, .register])
-        XCTAssertEqual(Set(actions.map(\.id)), ["app:one", "web:two/child"])
-        XCTAssertEqual(cache.states["app:one"]?.nextReportAt, reannounceAt.addingTimeInterval(300))
+        XCTAssertEqual(Set(actions.map(\.id)), ["mac:one", "web:two/child"])
+        XCTAssertEqual(cache.states["mac:one"]?.nextReportAt, reannounceAt.addingTimeInterval(300))
         XCTAssertEqual(cache.states["web:two/child"]?.nextReportAt, reannounceAt.addingTimeInterval(300))
     }
 

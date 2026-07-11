@@ -142,23 +142,23 @@ class RookViewModelReduceTest {
     fun environmentOfferedSetsPendingOfferAndIgnoresDuplicate() {
         val viewModel = RookViewModel()
 
-        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOffered(offer("loc:x", bundleId = "b1")))
-        assertEquals("loc:x", viewModel.pendingOffer.value?.environmentId)
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOffered(offer("location:x", bundleId = "b1")))
+        assertEquals("location:x", viewModel.pendingOffer.value?.environmentId)
 
         // A re-offer of the same environment id is ignored (keeps the first).
-        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOffered(offer("loc:x", bundleId = "b2")))
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOffered(offer("location:x", bundleId = "b2")))
         assertEquals("b1", viewModel.pendingOffer.value?.bundleId)
     }
 
     @Test
     fun environmentOfferResolvedClearsOnlyOnMatchingHash() {
         val viewModel = RookViewModel()
-        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOffered(offer("loc:x", hash = "hash1")))
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOffered(offer("location:x", hash = "hash1")))
 
-        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOfferResolved("loc:x", "wrong"))
-        assertEquals("loc:x", viewModel.pendingOffer.value?.environmentId)
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOfferResolved("location:x", "wrong"))
+        assertEquals("location:x", viewModel.pendingOffer.value?.environmentId)
 
-        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOfferResolved("loc:x", "hash1"))
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentOfferResolved("location:x", "hash1"))
         assertEquals(null, viewModel.pendingOffer.value)
     }
 
@@ -166,8 +166,8 @@ class RookViewModelReduceTest {
     fun environmentEnteredAppendsBannerOnceThenDedups() {
         val viewModel = RookViewModel()
 
-        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentEntered("loc:x"))
-        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentEntered("loc:x"))
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentEntered("location:x"))
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentEntered("location:x"))
 
         assertEquals(1, viewModel.blocks.value.count { it.kind is ChatBlockKind.Environment })
     }
@@ -176,7 +176,7 @@ class RookViewModelReduceTest {
     fun environmentExitedAppendsSystemBlockWithError() {
         val viewModel = RookViewModel()
 
-        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentExited("loc:x", "boom"))
+        viewModel.handleSocketEvent(AcpClientEvent.EnvironmentExited("location:x", "boom"))
 
         val system = viewModel.blocks.value.last().kind as ChatBlockKind.System
         assertTrue(system.text.contains("boom"))

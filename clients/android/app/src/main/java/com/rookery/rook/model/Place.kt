@@ -5,8 +5,8 @@ import kotlinx.serialization.Serializable
 import java.util.Locale
 
 /**
- * A user-defined place. `id` is the slug used to build the environment id `loc:<id>`
- * and to resolve `environment-repository/loc/<id>/`.
+ * A user-defined place. `id` is the slug used to build the environment id `location:<id>`
+ * and to resolve `environment-repository/location/<id>/`.
  */
 @Serializable
 data class Place(

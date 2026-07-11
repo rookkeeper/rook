@@ -86,7 +86,7 @@ export async function registerEnvironmentRoutes(
     };
   }
 
-  // Read-only: reverse-resolve a coordinate to candidate `loc:` environments. No side effects.
+  // Read-only: reverse-resolve a coordinate to candidate `location:` environments. No side effects.
   app.post<{ Body: Record<string, unknown> }>("/api/environments/identify", async (request, reply) => {
     const identifyRequest = parseIdentifyRequest(request.body ?? {});
     if (!identifyRequest) {

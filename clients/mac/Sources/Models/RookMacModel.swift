@@ -1111,13 +1111,13 @@ final class RookMacModel: ObservableObject {
             var vaultMetadata = appMetadata
             vaultMetadata["vaultName"] = .string(vault)
             candidates.append(EnvironmentCandidate(
-                id: "app:\(bundleId)/\(Self.encodeEnvironmentPathComponent(vault))",
+                id: "mac:\(bundleId)/\(Self.encodeEnvironmentPathComponent(vault))",
                 sourceName: "\(appName) · \(vault)",
                 metadata: vaultMetadata
             ))
         }
         candidates.append(EnvironmentCandidate(
-            id: "app:\(bundleId)",
+            id: "mac:\(bundleId)",
             sourceName: appName,
             metadata: appMetadata
         ))
@@ -1178,7 +1178,7 @@ final class RookMacModel: ObservableObject {
 
         var lines: [String] = []
         lines.append("[RAW-CONTEXT] reason=\(reason)")
-        lines.append("  app:          \(app.name)  bundleId=\(app.bundleId)  pid=\(app.pid)")
+        lines.append("  mac:          \(app.name)  bundleId=\(app.bundleId)  pid=\(app.pid)")
         lines.append("  isBrowser:    \(isBrowser)")
         lines.append("  windowTitle:  \(title.map { "\"\($0)\"" } ?? "(null)")")
         if isBrowser {
@@ -1212,7 +1212,7 @@ final class RookMacModel: ObservableObject {
 
     private func observeCurrentEnvironments(app: ForegroundApp, title: String?) {
         let candidates = deriveForegroundEnvironmentCandidates(app: app, title: title)
-        let appCandidates = candidates.filter { $0.id.hasPrefix("app:") }
+        let appCandidates = candidates.filter { $0.id.hasPrefix("mac:") }
         let webCandidates = candidates.filter { $0.id.hasPrefix("web:") }
         foregroundEnvironmentId = appCandidates.last?.id
         foregroundSiteEnvironmentId = webCandidates.last?.id

@@ -756,7 +756,7 @@ class RookViewModel(
         scope.launch {
             val status = mutableMapOf<String, Boolean>()
             for (place in store.places.value) {
-                val preview = runCatching { api.environmentPreview("loc:${place.id}") }.getOrNull()
+                val preview = runCatching { api.environmentPreview("location:${place.id}") }.getOrNull()
                 status[place.id] = preview?.bundles?.isNotEmpty() == true
             }
             _placeSkillStatus.value = status
@@ -814,10 +814,10 @@ class RookViewModel(
         }
     }
 
-    // On region enter/exit: only register loc:<slug> when the server preview has bundles.
+    // On region enter/exit: only register location:<slug> when the server preview has bundles.
     private fun handlePlace(place: Place?) {
         _currentPlaceName.value = place?.name
-        val envId = place?.let { "loc:${it.id}" }
+        val envId = place?.let { "location:${it.id}" }
         if (envId == _placeEnvironmentId.value) return
         _placeEnvironmentId.value = envId
         if (place == null || envId == null) return // leaving: state cleared, no REST
@@ -841,7 +841,7 @@ class RookViewModel(
     // On offline->online, re-register the current geofenced place env (mirrors RookModel).
     private fun reannouncePlaceEnvironment() {
         val envId = _placeEnvironmentId.value ?: return
-        val place = locationController?.placeStore?.places?.value?.firstOrNull { "loc:${it.id}" == envId } ?: return
+        val place = locationController?.placeStore?.places?.value?.firstOrNull { "location:${it.id}" == envId } ?: return
         scope.launch {
             val metadata = buildJsonObject {
                 put("slug", place.id)

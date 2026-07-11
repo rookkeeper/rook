@@ -1,14 +1,14 @@
 # Rook for iPhone (native SwiftUI)
 
 A native iOS app that makes [Rook](../../README.md) **location-aware**: as
-you arrive at a place you've defined, Rook registers `loc:<slug>` with the
+you arrive at a place you've defined, Rook registers `location:<slug>` with the
 server and the agent gains that place's skills — the physical-location analog of
-the Chrome extension's `web:<slug>` and the Mac menu bar app's `app:<slug>`.
+the Chrome extension's `web:<slug>` and the Mac menu bar app's `mac:<slug>`.
 
 The iPhone is a **fourth environment provider**. Its signal is GPS/geofence
 instead of a frontmost app or a browser tab, but it speaks the same REST + ACP
-contract to `:3000` and needs **zero server changes** — `loc:office` resolves
-to `environment-repository/loc/office/` exactly the way
+contract to `:3000` and needs **zero server changes** — `location:office` resolves
+to `environment-repository/location/office/` exactly the way
 `web:en.wikipedia.org/wiki/Main_Page` resolves to
 `environment-repository/web/en.wikipedia.org/wiki/Main_Page/`.
 
@@ -21,7 +21,7 @@ binding, and bearer-token auth, start with [docs/setup.md](../../docs/setup.md).
 
 - **Location → skills (the core loop).** Define places (name + GPS center +
   radius). `LocationProvider` monitors each as a `CLCircularRegion`. Entering a
-  region builds `loc:<slug>`, pre-checks the server for matching bundles
+  region builds `location:<slug>`, pre-checks the server for matching bundles
   (`GET /api/environments/preview`), and if any exist registers the environment
   (`POST /api/environments/register`) with `slug`, `latitude`, `longitude`, and
   `radiusMeters` metadata. The server pushes a bundle offer over the session websocket; you
@@ -50,7 +50,7 @@ binding, and bearer-token auth, start with [docs/setup.md](../../docs/setup.md).
 - **Auto-detect frequented places.** `CLVisit` monitoring suggests places you
   spend time at but haven't named; the Places screen lets you promote a
   suggestion into a real geofenced place. Each place shows whether the server
-  has a matching `loc/<slug>` skill bundle, so a slug mismatch is visible.
+  has a matching `location/<slug>` skill bundle, so a slug mismatch is visible.
 - **Settings / capabilities.** The gear opens one screen to set the server
   address, grant Voice (mic + speech), and manage Location — including the
   "Always" upgrade that background geofencing requires.
@@ -100,12 +100,12 @@ dropped.
 
 ### The location → skill loop
 
-Mirrors `RookMacModel.handleForegroundApp`, with place in place of app:
+Mirrors `RookMacModel.handleForegroundApp`, with place in place of mac:
 
 1. You define places → `PlaceStore`; `LocationProvider` monitors their regions
    (Always auth recommended for background entry).
 2. **Region enter** (foreground, background, or on relaunch): build
-   `loc:<slug>`, pre-check skills via `GET /api/environments/preview`. If
+   `location:<slug>`, pre-check skills via `GET /api/environments/preview`. If
    non-empty, `register`; if empty, skip (no empty offer).
 3. Server pushes `environment_offer_available` → `EnvironmentOfferSheet` → you
    decide on the offered bundle → `POST /api/environments/decision`.
@@ -115,11 +115,11 @@ Mirrors `RookMacModel.handleForegroundApp`, with place in place of app:
 
 ## Place skill bundles
 
-A place maps to skills iff `environment-repository/loc/<slug>/<skill>/SKILL.md`
+A place maps to skills iff `environment-repository/location/<slug>/<skill>/SKILL.md`
 exists at the repo root — no server code involved. The shipped example:
 
 ```
-environment-repository/loc/office/office-companion/SKILL.md
+environment-repository/location/office/office-companion/SKILL.md
 ```
 
 Define a place named "Office" (slug `office`) and entering its geofence offers
