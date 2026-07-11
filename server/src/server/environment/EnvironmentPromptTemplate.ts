@@ -102,7 +102,7 @@ There can be **multiple environments and multiple skills**. You must verify exac
 
 Examples of clarifying questions you should ask:
 
-- "You're currently in both \`web:example.com\` and \`app:slack\`. Which environment should this be attached to?"
+- "You're currently in both \`web:example.com\` and \`mac:slack\`. Which environment should this be attached to?"
 - "The personal bundle already has a skill called \`api-explorer\`. Do you want me to update that skill, or create a new one?"
 - "Here are the environments/skills you might be thinking of -- is this the one?"
 

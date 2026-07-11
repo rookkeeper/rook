@@ -111,26 +111,26 @@ immediately and start a configurable 5-minute local TTL window.
 
 Tracked foreground environments include:
 
-- frontmost regular apps as `app:<bundleId>`
-- richer foreground-derived app environments such as `app:md.obsidian/<vault>`
+- frontmost regular apps as `mac:<bundleId>`
+- richer foreground-derived app environments such as `mac:md.obsidian/<vault>`
 - frontmost browser pages as deepest `web:<host>/<path>` ids
 
 Examples:
 
-- frontmost Slack → `app:com.tinyspeck.slackmacgap`
-- Obsidian in the `Peeps` vault → `app:md.obsidian/Peeps`
+- frontmost Slack → `mac:com.tinyspeck.slackmacgap`
+- Obsidian in the `Peeps` vault → `mac:md.obsidian/Peeps`
 - `https://en.wikipedia.org/wiki/Main_Page?foo=bar` →
   `web:en.wikipedia.org/wiki/Main_Page`
 
 The Mac app registers the exact encountered ID it sees at the moment, such as:
 
-- `app:com.tinyspeck.slackmacgap`
-- `app:md.obsidian/Peeps`
+- `mac:com.tinyspeck.slackmacgap`
+- `mac:md.obsidian/Peeps`
 - `web:en.wikipedia.org/wiki/Main_Page`
 
 For Obsidian, vault parsing is title-based and works backwards so note names may
 contain dashes safely. For plain apps the base identity is the bundle id:
-`app:<bundleId>`.
+`mac:<bundleId>`.
 
 Each newly encountered environment registers with a fresh `registeredAt`
 timestamp (`POST /api/environments/register`). If the same cached environment
@@ -205,7 +205,7 @@ of primitives:
 `/ax-elements` frames): `move`/`click`/`doubleClick` `{x,y}`, `type` `{text}`,
 `key` `{key, modifiers?}` (e.g. `{"key":"return","modifiers":["cmd"]}`).
 
-Two paths, by app:
+Two paths, by control strategy:
 
 - **AX-driven control** (native apps, text-only models like DeepSeek V4 Pro):
   read `/ax-elements`, pick one by `id`, `POST /input {action:"click", x:centerX,
@@ -226,7 +226,7 @@ shell access (so it could `osascript`/`cliclick` regardless), but routing
 control through this one toggle gives a single, visible kill switch. Turn it off
 when you're not actively supervising.
 
-The shipped `environment-repository/app/slack/` bundle is a worked example:
+The shipped `environment-repository/mac/slack/` bundle is a worked example:
 focusing Slack offers a skill that reads `/context` to learn the current
 channel and uses `slack://` deep links + AppleScript through the bridge to
 navigate and draft messages.

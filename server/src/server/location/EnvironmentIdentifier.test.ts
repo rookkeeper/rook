@@ -27,12 +27,12 @@ function makeIdentifier(knownIds: string[] = []) {
 }
 
 describe("EnvironmentIdentifier", () => {
-  it("returns ranked candidates with stable loc: ids", async () => {
+  it("returns ranked candidates with stable location: ids", async () => {
     const identifier = makeIdentifier();
     const candidates = await identifier.identifyAvailableEnvironments({ ...TEST_COORD, isStationary: true });
 
     expect(candidates.length).toBeGreaterThanOrEqual(2);
-    expect(candidates[0].environmentId).toBe("loc:target.com/123-main-st-springfield-il");
+    expect(candidates[0].environmentId).toBe("location:target.com/123-main-st-springfield-il");
     expect(candidates[0].displayName).toBe("Target");
     expect(candidates[0].storeNumber).toBe("1842");
     // Sorted descending by confidence.
@@ -42,10 +42,10 @@ describe("EnvironmentIdentifier", () => {
   });
 
   it("reports hasKnownEnvironment from the repository", async () => {
-    const identifier = makeIdentifier(["loc:target.com/123-main-st-springfield-il"]);
+    const identifier = makeIdentifier(["location:target.com/123-main-st-springfield-il"]);
     const candidates = await identifier.identifyAvailableEnvironments(TEST_COORD);
-    const target = candidates.find((c) => c.environmentId === "loc:target.com/123-main-st-springfield-il");
-    const starbucks = candidates.find((c) => c.environmentId === "loc:starbucks.com/119-main-st-springfield-il");
+    const target = candidates.find((c) => c.environmentId === "location:target.com/123-main-st-springfield-il");
+    const starbucks = candidates.find((c) => c.environmentId === "location:starbucks.com/119-main-st-springfield-il");
 
     expect(target?.hasKnownEnvironment).toBe(true);
     expect(target?.matchReasons).toContain("known_environment");
@@ -55,7 +55,7 @@ describe("EnvironmentIdentifier", () => {
   it("includes mocked possibleSkills for known operators", async () => {
     const identifier = makeIdentifier();
     const candidates = await identifier.identifyAvailableEnvironments(TEST_COORD);
-    const target = candidates.find((c) => c.environmentId === "loc:target.com/123-main-st-springfield-il");
+    const target = candidates.find((c) => c.environmentId === "location:target.com/123-main-st-springfield-il");
     expect(target?.possibleSkills).toContain("store-navigation");
   });
 
@@ -84,7 +84,7 @@ describe("EnvironmentIdentifier", () => {
       raw: { website: "https://www.homedepot.com/l/Cleveland/TN/Cleveland/37312/743", state: "TN", zip: "37312" },
     });
     const [c] = await identifier.identifyAvailableEnvironments({ latitude: 35.21, longitude: -84.85 });
-    expect(c.environmentId).toBe("loc:homedepot.com/tn-37312-546-paul-huff-pkwy-nw");
+    expect(c.environmentId).toBe("location:homedepot.com/tn-37312-546-paul-huff-pkwy-nw");
     expect(c.storeNumber).toBe("743");
     expect(c.matchReasons).toContain("operator_store_match");
     expect(c.latitude).toBe(35.21);
@@ -103,7 +103,7 @@ describe("EnvironmentIdentifier", () => {
       raw: { website: "https://www.cicis.com/locations/tn-nashville-5705-nolensville-pike", state: "TN", zip: "37211" },
     });
     const [c] = await identifier.identifyAvailableEnvironments({ latitude: 36.06, longitude: -86.7 });
-    expect(c.environmentId).toBe("loc:cicis.com/tn-37211-5705-nolensville-pike");
+    expect(c.environmentId).toBe("location:cicis.com/tn-37211-5705-nolensville-pike");
     expect(c.storeNumber).toBeUndefined();
     expect(c.matchReasons).not.toContain("operator_store_match");
   });

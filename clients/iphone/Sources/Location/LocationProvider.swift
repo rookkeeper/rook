@@ -3,7 +3,7 @@ import CoreMotion
 import Foundation
 
 /// Context captured when the device appears to have meaningfully arrived
-/// somewhere, used to ask the server which `loc:` environments are available.
+/// somewhere, used to ask the server which `location:` environments are available.
 struct ArrivalContext {
     let coordinate: CLLocationCoordinate2D
     let horizontalAccuracy: Double?
@@ -16,7 +16,7 @@ struct ArrivalContext {
 /// `ForegroundAppMonitor`. Monitors geofenced places (CLCircularRegion region
 /// monitoring, which relaunches the app on entry when Always-authorized) and
 /// emits `onRegionChange` with the entered place (or `nil` on leaving all
-/// regions). The model turns that into `loc:<slug>` register/unregister.
+/// regions). The model turns that into `location:<slug>` register/unregister.
 @MainActor
 final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDelegate {
     var onRegionChange: ((Place?) -> Void)?

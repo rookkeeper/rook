@@ -58,12 +58,22 @@ Environment ids use:
 <type>:<uri-like-path>
 ```
 
+Current top-level environment types we want to standardize around:
+- `location`
+- `web`
+- `project`
+- `mac`
+- `iphone`
+- `android`
+- `windows`
+
 Examples:
-- `app:md.obsidian`
-- `app:md.obsidian/reading_vault`
+- `mac:md.obsidian`
+- `mac:md.obsidian/reading_vault`
 - `web:example.com`
 - `web:example.com/stuff`
-- `loc:office`
+- `location:office`
+- `project:the-rooks-nest/rook`
 
 ## Filesystem shape
 
@@ -71,16 +81,22 @@ Top level is organized by environment type:
 
 ```text
 environment-repository/
-├── app/
-├── loc/
-└── web/
+├── android/
+├── iphone/
+├── location/
+├── mac/
+├── project/
+├── web/
+└── windows/
 ```
 
 Environment ids map directly to nested directories under those type roots.
 
 Examples:
-- `app:md.obsidian` → `app/md.obsidian/`
-- `app:md.obsidian/reading_vault` → `app/md.obsidian/reading_vault/`
+- `mac:md.obsidian` → `mac/md.obsidian/`
+- `mac:md.obsidian/reading_vault` → `mac/md.obsidian/reading_vault/`
+- `location:office` → `location/office/`
+- `project:the-rooks-nest/rook` → `project/the-rooks-nest/rook/`
 - `web:example.com` → `web/example.com/`
 
 ## Bundles
@@ -125,7 +141,7 @@ A bundle may contain only the content groups it needs.
 
 ```text
 environment-repository/
-├── app/
+├── mac/
 │   └── md.obsidian/
 │       ├── .bundles/
 │       │   └── using-obsidian/
@@ -149,7 +165,7 @@ environment-repository/
 │           │               ├── scripts/
 │           │               └── SKILL.md
 │           └── .manifest
-├── loc/
+├── location/
 └── web/
 ```
 

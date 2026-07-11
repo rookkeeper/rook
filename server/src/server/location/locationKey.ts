@@ -15,7 +15,7 @@ export interface LocationKeyInput {
 }
 
 export interface LocationKey {
-  /** Path component for the environment id (after `loc:<domain>/`). */
+  /** Path component for the environment id (after `location:<domain>/`). */
   key: string;
   /** How the key was derived. */
   kind: "address" | "geo";

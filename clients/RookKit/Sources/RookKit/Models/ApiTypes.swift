@@ -62,7 +62,7 @@ public struct EnvironmentArtifactPreview: Codable, Equatable, Identifiable {
     }
 }
 
-/// Phone -> server payload asking which `loc:` environments are likely
+/// Phone -> server payload asking which `location:` environments are likely
 /// available at the current location (issue #42, phase 1).
 public struct IdentifyAvailableRequest: Encodable, Equatable {
     public var latitude: Double

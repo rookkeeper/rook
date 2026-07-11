@@ -96,7 +96,7 @@ This is intentionally always-on for now so we can inspect prompt construction wh
 When a session enters an environment, Rook also creates the user-local binding bundle skeleton for that environment under:
 - `~/.rook/environment-repository/<kind>/<path>/.bundles/default/skills/`
 
-Pi restarts for entered environments append startup instructions that point at those per-environment skill roots and list the currently entered environments plus their metadata. Entering a hierarchical environment (for example `app:md.obsidian/Rooknanigans`) also enters its active parent environments (for example `app:md.obsidian`) so broader app-level skills and instructions stay in scope.
+Pi restarts for entered environments append startup instructions that point at those per-environment skill roots and list the currently entered environments plus their metadata. Entering a hierarchical environment (for example `mac:md.obsidian/Rooknanigans`) also enters its active parent environments (for example `mac:md.obsidian`) so broader app-level skills and instructions stay in scope.
 
 Use this repo for the launcher-side configuration, mainly through:
 - `~/.rook/config/agent-profiles.json` to choose which Pi package to launch and with which args
@@ -160,7 +160,7 @@ The goal is not perfect purity yet; this is the direction to follow when adding 
 - `GET /api/agent/sessions?agent=<id>`: list saved sessions for an agent.
 - `GET /api/agent/session/recent`: fetch the most recent saved session record across agents.
 - `POST /api/agent/start`: start, reuse, or restart a session runtime.
-- `POST /api/environments/register { id, metadata?, canonicalSourceUrl?, sourceName? }`: mark an environment available. If `id` is hierarchical (for example `app:md.obsidian/Peeps` or `web:en.wikipedia.org/wiki/Main_Page`), the server also treats all parent prefixes as available. Server bootstrap wires in a small JSONL capture sink that ensures `IGNORED/environment_metadata_captures/` exists and appends each explicit registration there for later inspection.
+- `POST /api/environments/register { id, metadata?, canonicalSourceUrl?, sourceName? }`: mark an environment available. If `id` is hierarchical (for example `mac:md.obsidian/Peeps` or `web:en.wikipedia.org/wiki/Main_Page`), the server also treats all parent prefixes as available. Server bootstrap wires in a small JSONL capture sink that ensures `IGNORED/environment_metadata_captures/` exists and appends each explicit registration there for later inspection.
 - `POST /api/environments/decision { environmentId, bundleHash, decision }`: record `accept | approve | ignore | reject` for an offered bundle.
 - `GET /api/environments/preview?environmentId=...`: return full bundle/file preview data for inspection tooling and future richer review UI.
 - `GET /api/diagnostics/environments`: return active/recent environment diagnostics including discovered bundles.

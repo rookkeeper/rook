@@ -1,7 +1,7 @@
 # Location Environment Awareness
 
 Status: implemented (issue [#42](https://github.com/arcturus-labs/rookery/issues/42)).
-Scope: turning "the user has arrived somewhere" into available `loc:` environments the
+Scope: turning "the user has arrived somewhere" into available `location:` environments the
 Rook agent can act on.
 
 This is the human-facing product note — what the feature does, what it assumes, where it's
@@ -22,7 +22,7 @@ when it's ambiguous) with a row of business favicons.
 The agent receives a place two ways: its **skills** load on demand, and a concise
 **best-guess + nearby** summary is pushed into the agent's context so it can answer "where
 am I?" directly. The geo provider is **swappable** (ptiles today; a Google Places /
-Foursquare `PoiLookupProvider` would be a single class) — the `loc:` scheme and
+Foursquare `PoiLookupProvider` would be a single class) — the `location:` scheme and
 registration are provider-agnostic.
 
 ## Assumptions
@@ -34,7 +34,7 @@ registration are provider-agnostic.
   in-memory state shared by all SessionRooms.
 - **Domain ≈ operator identity**; most businesses have a street address, which (with state
   + zip) is the stable, address-based id base. A home or any personal place can be injected
-  with the same `loc:` scheme (e.g. `loc:home`).
+  with the same `location:` scheme (e.g. `location:home`).
 
 ## Limitations (as-built)
 
@@ -44,10 +44,10 @@ registration are provider-agnostic.
   runtime (`interruptActiveRun`); the transcript is preserved but a mid-reply arrival cuts
   that reply short (~a couple seconds). Pre-existing for all environment changes; location
   auto-enter just triggers it more often.
-- **No authored `loc:` skills yet** — only the synthesized location-context bundle and a
+- **No authored `location:` skills yet** — only the synthesized location-context bundle and a
   mocked skill suggester (placeholder for #22).
 - **Geo-fallback id collisions.** Addressless businesses sharing a building centroid can map
-  to the same `loc:<domain>/<lat,lng>` id (rare; geo only applies with no address).
+  to the same `location:<domain>/<lat,lng>` id (rare; geo only applies with no address).
 
 ## Dwell tuning
 
@@ -64,7 +64,7 @@ requested on first launch); without it the speed + server dwell gate still apply
 
 ## Follow-up work
 
-- **Skills at scale (#22).** Author `loc:` skills at the operator/domain level so every
+- **Skills at scale (#22).** Author `location:` skills at the operator/domain level so every
   branch inherits them; replace the mocked suggester.
 - **Bundles incl. MCP (#5).** Generalize the runtime bridge from skills to bundles so a
   place can carry MCP servers as well as skills.
@@ -76,7 +76,7 @@ requested on first launch); without it the speed + server dwell gate still apply
   push, with cost/consent guards ("remind me to buy milk at the next grocery store").
 - **Voice as a (meta-)environment.** The interaction modality (voice vs text) is itself an
   environment factor that could carry skills via the same model (`mode:voice`), composing
-  with `loc:`. A `VoiceController` already exists in `clients/RookKit`.
+  with `location:`. A `VoiceController` already exists in `clients/RookKit`.
 - **Capability-gated skills (e.g. store hours).** A store-specific website could drive a
   "look up hours" skill, but doing it right needs a per-agent capability model and
   per-session skill scoping (neither exists yet). The website URL is already in the pushed

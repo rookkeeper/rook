@@ -20,7 +20,7 @@ struct PlacesScreen: View {
                         }
                         suggestionsList
                         placesList
-                        Text("Define a place here, and create a matching skill bundle on the server at environment-repository/loc/<slug>/. When you arrive, Rook offers that place's skills.")
+                        Text("Define a place here, and create a matching skill bundle on the server at environment-repository/location/<slug>/. When you arrive, Rook offers that place's skills.")
                             .font(.caption2)
                             .foregroundStyle(PanelPalette.textMuted)
                             .padding(.horizontal, 4)
@@ -78,8 +78,8 @@ struct PlacesScreen: View {
                     .foregroundStyle(PanelPalette.textMuted)
             }
 
-            if let loc = model.locationProvider.currentLocation {
-                Text(String(format: "Here: %.4f, %.4f", loc.coordinate.latitude, loc.coordinate.longitude))
+            if let location = model.locationProvider.currentLocation {
+                Text(String(format: "Here: %.4f, %.4f", location.coordinate.latitude, location.coordinate.longitude))
                     .font(.caption2.monospaced())
                     .foregroundStyle(PanelPalette.textMuted)
             } else {
@@ -162,7 +162,7 @@ struct PlacesScreen: View {
                                 Text(place.name)
                                     .font(.body.weight(.medium))
                                     .foregroundStyle(PanelPalette.textNormal)
-                                Text("loc:\(place.id) · \(Int(place.radius)) m")
+                                Text("location:\(place.id) · \(Int(place.radius)) m")
                                     .font(.caption2.monospaced())
                                     .foregroundStyle(PanelPalette.textMuted)
                                 skillBadge(for: place)
@@ -206,14 +206,14 @@ struct PlacesScreen: View {
     }
 
     private func saveCurrent() {
-        guard let loc = model.locationProvider.currentLocation else {
+        guard let location = model.locationProvider.currentLocation else {
             model.locationProvider.requestCurrentLocation()
             return
         }
         model.placeStore.add(
             name: newName,
-            latitude: loc.coordinate.latitude,
-            longitude: loc.coordinate.longitude,
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude,
             radius: radius
         )
         model.refreshMonitoredPlaces()

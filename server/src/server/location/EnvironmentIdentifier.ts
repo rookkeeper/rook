@@ -19,7 +19,7 @@ export interface EnvironmentIdentifierDeps {
 const SEARCH_RADIUS_METERS = 150;
 
 /**
- * Turns a dwell + lat/long request into a ranked list of candidate `loc:`
+ * Turns a dwell + lat/long request into a ranked list of candidate `location:`
  * environments (issue #42, phase 1). Identification only — does not register
  * or enter environments.
  */
@@ -53,7 +53,7 @@ export class EnvironmentIdentifier {
       buildingCentroidLat: typeof poi.raw?.buildingCentroidLat === "number" ? poi.raw.buildingCentroidLat : undefined,
       buildingCentroidLon: typeof poi.raw?.buildingCentroidLon === "number" ? poi.raw.buildingCentroidLon : undefined,
     });
-    const environmentId = `loc:${domain}/${lk.key}`;
+    const environmentId = `location:${domain}/${lk.key}`;
 
     // Store number is optional metadata only: authoritative provider value, else parsed
     // from the chain's store-locator URL.

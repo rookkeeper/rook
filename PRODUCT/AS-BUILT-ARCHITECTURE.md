@@ -23,8 +23,8 @@ The repo is organized into focused top-level packages: `server/` and a `clients/
 ```text
 Host clients / providers                         registers environment kind
   ├─ Obsidian plugin
-  ├─ macOS menu bar app (native Swift)           app:<slug>, web:<slug>   (foreground encounters, plus close detection)
-  └─ iPhone app (native Swift)                   loc:<slug> (GPS geofence)
+  ├─ macOS menu bar app (native Swift)           mac:<slug>, web:<slug>   (foreground encounters, plus close detection)
+  └─ iPhone app (native Swift)                   location:<slug> (GPS geofence)
             │
             ▼
 server/ (Fastify)
@@ -66,8 +66,8 @@ See also: [`PRODUCT/agent-client-protocol.md`](./agent-client-protocol.md)
 |---|---|
 | `server/` | Main backend at `:3000`; server, runtime orchestration, environment approvals |
 | `server/src/shared/` | Server-local ACP types, environment DTOs, agent/session contracts |
-| `clients/mac/` | Native macOS client and environment provider (`app:<slug>`) |
-| `clients/iphone/` | Native iOS client and location environment provider (`loc:<slug>`) |
+| `clients/mac/` | Native macOS client and environment provider (`mac:<slug>`) |
+| `clients/iphone/` | Native iOS client and location environment provider (`location:<slug>`) |
 | `clients/RookKit/` | Shared Swift package (iOS + macOS) backing both native Swift clients |
 | `environment-repository/` | Local environment bundle content keyed by `<kind>/<path>` |
 | `PRODUCT/` | Product and architecture notes |
@@ -172,13 +172,16 @@ Examples:
 
 - `web:<host>/<path>` (browser URL-derived site/page context)
 - `web:example.com`
-- `app:<bundleId>` (macOS menu bar app — encountered Mac app identity)
-- `app:md.obsidian/<vault>` (macOS menu bar app — Obsidian vault context)
+- `mac:<bundleId>` (macOS menu bar app — encountered Mac app identity)
+- `mac:md.obsidian/<vault>` (macOS menu bar app — Obsidian vault context)
 - `web:<host>/<path>` (macOS menu bar app — active browser URL, protocol/query stripped)
-- `loc:<slug>` (iPhone app — current GPS geofence)
-- `loc:<domain>/<state-zip-street>` (iPhone — a business identified from the user's coordinate; address-based key, store number is metadata only; see §6.6)
+- `location:<slug>` (iPhone app — current GPS geofence)
+- `location:<domain>/<state-zip-street>` (iPhone — a business identified from the user's coordinate; address-based key, store number is metadata only; see §6.6)
+- `project:the-rooks-nest/rook` (cross-surface work/project context)
 
-An environment maps to a directory in `environment-repository/` and provides zero or more `.bundles/<bundle-id>/` directories. The kind (`web`, `app`, `loc`, …) is just the part before the first colon; the directory-backed repository resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new bundle content on disk.
+The current top-level kinds are `location`, `web`, `project`, `mac`, `iphone`, `android`, and `windows`.
+
+An environment maps to a directory in `environment-repository/` and provides zero or more `.bundles/<bundle-id>/` directories. The kind is just the part before the first colon; the directory-backed repository resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new bundle content on disk.
 
 ### 6.2 Environment repository
 
@@ -245,9 +248,9 @@ That remains consistent with:
 - [`PRODUCT/relationship-or-environments-skills-and-agent.md`](./relationship-or-environments-skills-and-agent.md)
 - [`PRODUCT/narrow-skills-environment-bridge.md`](./narrow-skills-environment-bridge.md)
 
-### 6.6 Location identification (`loc:`)
+### 6.6 Location identification (`location:`)
 
-Beyond providers that already know their environment id, the iPhone can turn a raw coordinate into available `loc:` environments. On a settled (non-driving) `CLVisit` arrival the phone POSTs `/api/environments/register-location`; `server/src/server/location/` reverse-resolves the coordinate to nearby businesses (the swappable `PoiLookupProvider`, today backed by ptiles fetched directly from the upstream host — an internal detail, no public route), normalizes them to stable address-based `loc:<domain>/…` ids, and `LocationRegistrar` writes the ranked set into the same in-memory active/recent cache as every other provider (§6.3–6.4). A read-only `/api/environments/identify` returns the same candidates without registering.
+Beyond providers that already know their environment id, the iPhone can turn a raw coordinate into available `location:` environments. On a settled (non-driving) `CLVisit` arrival the phone POSTs `/api/environments/register-location`; `server/src/server/location/` reverse-resolves the coordinate to nearby businesses (the swappable `PoiLookupProvider`, today backed by ptiles fetched directly from the upstream host — an internal detail, no public route), normalizes them to stable address-based `location:<domain>/…` ids, and `LocationRegistrar` writes the ranked set into the same in-memory active/recent cache as every other provider (§6.3–6.4). A read-only `/api/environments/identify` returns the same candidates without registering.
 
 Two delivery channels carry a place to the agent: its **skills** load on-demand through the repository facade (the synthesized location-context bundle is served by a programmatic `LocationContextRepository`, no special-cased paths), and a concise **best-guess + nearby** context is *pushed* into the agent via the shared `AgentContext`/`setContextEntry` (§6.5) so it always knows where it is.
 
@@ -276,7 +279,7 @@ Current ecosystem around `:3000`:
 - there is no current in-repo Chrome extension package
 - **Obsidian plugin**: embeds the app in a sidebar view
 - **macOS menu bar app**: native SwiftUI client with the same backend; registers newly seen user-visible app/page encounters, including `web:<slug>` environments from the active browser, re-registers them every 5 minutes while still in its local TTL cache, and otherwise lets the server age them out
-- **iPhone app**: native SwiftUI client that registers `loc:<slug>` environments from GPS geofences, making the agent location-aware (skills load as you arrive at a defined place). It also drives ptiles-based business discovery on arrival, registering `loc:<domain>/…` environments — see [`location-environment-awareness.md`](./location-environment-awareness.md). Adds Live Activity / Dynamic Island presence and on-device voice.
+- **iPhone app**: native SwiftUI client that registers `location:<slug>` environments from GPS geofences, making the agent location-aware (skills load as you arrive at a defined place). It also drives ptiles-based business discovery on arrival, registering `location:<domain>/…` environments — see [`location-environment-awareness.md`](./location-environment-awareness.md). Adds Live Activity / Dynamic Island presence and on-device voice.
 
 The two native Swift clients share one cross-platform layer — models, the REST/ACP-WebSocket clients, the design system and chat-block views, voice, and Live Activity attributes — through the `clients/RookKit` Swift package, so they stay protocol- and design-consistent with a single source of truth.
 
@@ -334,7 +337,7 @@ Current major routes:
 - `POST /api/agent/start`
 - `POST /api/environments/register`
 - `POST /api/environments/decision` (bundle-level 2×2 decision keyed by exact bundle hash)
-- `POST /api/environments/identify` (read-only: coordinate → candidate `loc:` environments)
+- `POST /api/environments/identify` (read-only: coordinate → candidate `location:` environments)
 - `POST /api/environments/register-location` (identify + register/auto-enter the dwell set)
 - `GET /api/environments/preview`
 - `GET /api/diagnostics/environments` (development-only grouped diagnostics: dumps active + recent environment memory)

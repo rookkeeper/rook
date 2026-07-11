@@ -52,7 +52,7 @@ data class EnvironmentArtifactPreview(
     val sortedFilePaths: List<String> get() = files.keys.sorted()
 }
 
-// Phone -> server payload asking which loc: environments are likely available at the
+// Phone -> server payload asking which location: environments are likely available at the
 // current location (issue #42, phase 1).
 @Serializable
 data class IdentifyAvailableRequest(

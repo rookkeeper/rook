@@ -56,7 +56,7 @@ class LocationController private constructor(private val appContext: Context) {
     /** One-shot current fix for the "save this place" flow (PlacesScreen). */
     fun requestCurrentLocation() {
         if (currentAuthStatus() == LocationAuthStatus.DENIED) return
-        locationSource.requestCurrent { loc -> if (loc != null) _currentLocation.value = loc }
+        locationSource.requestCurrent { location -> if (location != null) _currentLocation.value = location }
     }
 
     private val settings = appContext.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)

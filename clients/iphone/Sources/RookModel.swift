@@ -63,7 +63,7 @@ final class RookModel: ObservableObject {
     // slug → whether the server has a matching skill bundle (nil = not yet checked).
     // Surfaces slug↔bundle mismatches in the Places screen.
     @Published var placeSkillStatus: [String: Bool] = [:]
-    // Candidate loc: environments returned by the server for the current arrival
+    // Candidate location: environments returned by the server for the current arrival
     // (issue #42, phase 1). Return-only: surfaced, not auto-registered.
     @Published var nearbyCandidates: [EnvironmentCandidate] = []
 
@@ -283,7 +283,7 @@ final class RookModel: ObservableObject {
     }
 
     /// Pre-check each place against the server so the Places screen can show
-    /// whether a matching `environment-repository/loc/<slug>/` bundle exists —
+    /// whether a matching `environment-repository/location/<slug>/` bundle exists —
     /// otherwise a slug mismatch is invisible until you physically arrive.
     func refreshPlaceSkillStatus() {
         guard serverState == .online else {
@@ -292,14 +292,14 @@ final class RookModel: ObservableObject {
         Task {
             var status: [String: Bool] = [:]
             for place in placeStore.places {
-                let preview = try? await api.environmentPreview(environmentId: "loc:\(place.id)")
+                let preview = try? await api.environmentPreview(environmentId: "location:\(place.id)")
                 status[place.id] = !(preview?.bundles.isEmpty ?? true)
             }
             placeSkillStatus = status
         }
     }
 
-    /// Ask the server which `loc:` environments are likely available at an
+    /// Ask the server which `location:` environments are likely available at an
     /// arrival that passed the dwell/motion gate. Identification only — the
     /// candidates are surfaced, not auto-registered (issue #42, phase 1).
     private func identifyEnvironments(at context: ArrivalContext) {
@@ -337,7 +337,7 @@ final class RookModel: ObservableObject {
     /// on-disk skill-bundle guard, done via the preview endpoint).
     private func handlePlace(_ place: Place?) {
         currentPlaceName = place?.name
-        let envId = place.map { "loc:\($0.id)" }
+        let envId = place.map { "location:\($0.id)" }
         guard envId != placeEnvironmentId else {
             return
         }

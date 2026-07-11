@@ -1,6 +1,6 @@
 # Relationship between Sessions and Environments
 
-An environment is a context the user finds themselves in — a website, a physical location, an app, or any other recognizable domain. Each environment can have zero or more **capability bundles** associated with it. A bundle contains skills, MCP servers, and app instructions that an agent can use while the user is in that environment.
+An environment is a context the user finds themselves in — a website, a physical location, a project, a Mac app surface, or any other recognizable domain. Each environment can have zero or more **capability bundles** associated with it. A bundle contains skills, MCP servers, and app instructions that an agent can use while the user is in that environment.
 
 ## Bundle decisions are app-wide, not per-session
 
@@ -24,7 +24,7 @@ This means:
 The product doc previously considered per-session decisions to avoid cross-contamination (e.g., Lowe's skills leaking into a coding session). The resolution is:
 
 1. Sessions don't auto-enter environments from mere availability — they only enter environments the user or agent explicitly joins.
-2. Entering a hierarchical child environment implicitly enters its active parent environments too (for example entering `app:md.obsidian/Rooknanigans` also enters `app:md.obsidian`).
+2. Entering a hierarchical child environment implicitly enters its active parent environments too (for example entering `mac:md.obsidian/Rooknanigans` also enters `mac:md.obsidian`).
 3. The agent can help decide whether to enter an environment based on the current session's context.
 4. The UI provides affordances to see and manage which environments are active for a session.
 

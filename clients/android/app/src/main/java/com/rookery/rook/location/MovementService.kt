@@ -170,7 +170,7 @@ class MovementService : Service(), SensorEventListener {
             .minByOrNull { Geo.metersBetween(it.latitude, it.longitude, location.latitude, location.longitude) }
         if (place?.id != currentRegion?.id) {
             currentRegion = place
-            // Region registration (preview → register loc:<slug>) needs the ViewModel; when
+            // Region registration (preview → register location:<slug>) needs the ViewModel; when
             // headless it re-announces on next app open. ponytail: dead-process region
             // register is deferred to reconnect, arrival identify still fires below.
             controller.emitRegionChange(place)

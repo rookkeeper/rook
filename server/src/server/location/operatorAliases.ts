@@ -1,6 +1,6 @@
 /**
  * Normalizes business/operator names from POI providers into stable operator
- * domains used to build `loc:` environment IDs. Real systems will need a much
+ * domains used to build `location:` environment IDs. Real systems will need a much
  * larger alias table; this is a pragmatic MVP seed.
  */
 const OPERATOR_DOMAINS: Record<string, string> = {
@@ -22,7 +22,7 @@ function normalizeKey(name: string): string {
 /**
  * Resolve an operator/business name to a stable domain. Returns the known
  * domain for recognized chains, otherwise a slugified fallback domain so
- * unknown businesses still get a deterministic `loc:` id.
+ * unknown businesses still get a deterministic `location:` id.
  */
 export function operatorDomain(name: string): string {
   const key = normalizeKey(name);

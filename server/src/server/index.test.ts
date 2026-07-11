@@ -482,7 +482,7 @@ describe("server", () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json() as { candidates: Array<{ environmentId: string }> };
-    expect(body.candidates[0]?.environmentId).toBe("loc:target.com/123-main-st-springfield-il");
+    expect(body.candidates[0]?.environmentId).toBe("location:target.com/123-main-st-springfield-il");
 
     await app.close();
   });
@@ -512,7 +512,7 @@ describe("server", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json() as { candidates: Array<{ environmentId: string; confidence: number }> };
     expect(body.candidates.length).toBeGreaterThanOrEqual(1);
-    expect(body.candidates[0].environmentId).toBe("loc:target.com/123-main-st-springfield-il");
+    expect(body.candidates[0].environmentId).toBe("location:target.com/123-main-st-springfield-il");
     await app.close();
   });
 

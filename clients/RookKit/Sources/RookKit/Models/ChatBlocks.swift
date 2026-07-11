@@ -155,7 +155,7 @@ public struct AcpPermissionToolCall: Equatable {
     }
 }
 
-/// Friendly banner shown when the agent enters a `loc:` business environment.
+/// Friendly banner shown when the agent enters a `location:` business environment.
 /// `displayName` is the entered business's name (nil -> generic fallback text);
 /// `websites` are website URLs (entered business first) used to render a favicon row.
 public struct EnvironmentBanner: Equatable {

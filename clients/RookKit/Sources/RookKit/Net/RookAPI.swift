@@ -151,7 +151,7 @@ public struct RookAPI {
         )
     }
 
-    /// Read-only: ask which `loc:` environments are likely at the given location.
+    /// Read-only: ask which `location:` environments are likely at the given location.
     /// Returns candidates without registering or entering anything.
     public func identifyEnvironments(_ request: IdentifyAvailableRequest) async throws -> [EnvironmentCandidate] {
         try await postLocation(path: "api/environments/identify", request)

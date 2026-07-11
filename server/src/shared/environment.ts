@@ -15,6 +15,18 @@ export interface EnvironmentPreview {
   bundles: EnvironmentBundlePreview[];
 }
 
+export const ENVIRONMENT_KINDS = [
+  "location",
+  "web",
+  "project",
+  "mac",
+  "iphone",
+  "android",
+  "windows",
+] as const;
+
+export type EnvironmentKind = typeof ENVIRONMENT_KINDS[number];
+
 /**
  * The 2×2 decision model:
  * - "approve" = permanently approve (persists in SQLite, survives restarts)
@@ -55,7 +67,7 @@ export interface EnvironmentLifecyclePayload {
 export type IdentifySource = "visit" | "region" | "manual";
 
 /**
- * Phone -> server payload for identifying which `loc:` environments are
+ * Phone -> server payload for identifying which `location:` environments are
  * likely available at the user's current location (issue #42, phase 1).
  */
 export interface IdentifyAvailableRequest {
@@ -71,14 +83,14 @@ export interface IdentifyAvailableRequest {
 
 /** A ranked candidate environment near the requested coordinate. */
 export interface EnvironmentCandidate {
-  /** Stable URL-like id, e.g. `loc:target.com/tn-37000-1-main-st` or `loc:target.com`. */
+  /** Stable URL-like id, e.g. `location:target.com/tn-37000-1-main-st` or `location:target.com`. */
   environmentId: string;
   displayName: string;
   operator?: string;
   /** Optional store/branch number metadata (provider value or parsed from the website). */
   storeNumber?: string;
   address?: string;
-  /** Business coordinate — the path from the loc: id back to a location. */
+  /** Business coordinate — the path from the location: id back to a location. */
   latitude?: number;
   longitude?: number;
   /** Business website, when available (lets the agent reach its link metadata). */

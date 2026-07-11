@@ -82,7 +82,7 @@ export async function writeTraceMap(gpxPath: string, stride: number, outPath: st
       latitude: top.lat, longitude: top.lon,
       buildingCentroidLat: building?.centroidLat, buildingCentroidLon: building?.centroidLon,
     });
-    const locId = `loc:${domain}/${lk.key}`;
+    const locId = `location:${domain}/${lk.key}`;
     businessFeatures.push(pointFeature(top.lon, top.lat, { kind: "business", name: top.name, locId, address: top.address ?? "" }));
     matchedPoints.push(pointFeature(p.lon, p.lat, { kind: "query", name: top.name, locId }));
   }

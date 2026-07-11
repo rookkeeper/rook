@@ -591,15 +591,15 @@ describe("EnvironmentManager", () => {
     const listener = mockListener();
     manager.subscribe("s1", listener);
 
-    await manager.registerAvailableEnvironment({ id: "app:md.obsidian", metadata: { bundleId: "md.obsidian" } }, { sourceName: "Obsidian" });
-    await manager.registerAvailableEnvironment({ id: "app:md.obsidian/Rooknanigans", metadata: { vaultName: "Rooknanigans" } }, { sourceName: "Obsidian · Rooknanigans" });
+    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian", metadata: { bundleId: "md.obsidian" } }, { sourceName: "Obsidian" });
+    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian/Rooknanigans", metadata: { vaultName: "Rooknanigans" } }, { sourceName: "Obsidian · Rooknanigans" });
 
-    const entered = manager.enterEnvironment("s1", "app:md.obsidian/Rooknanigans");
+    const entered = manager.enterEnvironment("s1", "mac:md.obsidian/Rooknanigans");
 
-    expect(entered).toEqual(["app:md.obsidian", "app:md.obsidian/Rooknanigans"]);
-    expect(manager.enteredEnvironments("s1")).toEqual(["app:md.obsidian", "app:md.obsidian/Rooknanigans"]);
-    expect(listener.onEnvironmentEntered).toHaveBeenNthCalledWith(1, "app:md.obsidian", [], undefined);
-    expect(listener.onEnvironmentEntered).toHaveBeenNthCalledWith(2, "app:md.obsidian/Rooknanigans", [], undefined);
+    expect(entered).toEqual(["mac:md.obsidian", "mac:md.obsidian/Rooknanigans"]);
+    expect(manager.enteredEnvironments("s1")).toEqual(["mac:md.obsidian", "mac:md.obsidian/Rooknanigans"]);
+    expect(listener.onEnvironmentEntered).toHaveBeenNthCalledWith(1, "mac:md.obsidian", [], undefined);
+    expect(listener.onEnvironmentEntered).toHaveBeenNthCalledWith(2, "mac:md.obsidian/Rooknanigans", [], undefined);
   });
 
   it("leaving a child environment also leaves inherited parent entries when no longer needed", async () => {
@@ -607,18 +607,18 @@ describe("EnvironmentManager", () => {
     const listener = mockListener();
     manager.subscribe("s1", listener);
 
-    await manager.registerAvailableEnvironment({ id: "app:md.obsidian", metadata: {} });
-    await manager.registerAvailableEnvironment({ id: "app:md.obsidian/Rooknanigans", metadata: {} });
+    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian", metadata: {} });
+    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian/Rooknanigans", metadata: {} });
 
-    manager.enterEnvironment("s1", "app:md.obsidian/Rooknanigans");
+    manager.enterEnvironment("s1", "mac:md.obsidian/Rooknanigans");
     vi.mocked(listener.onEnvironmentExited).mockClear();
 
-    const remaining = manager.exitEnvironment("s1", "app:md.obsidian/Rooknanigans");
+    const remaining = manager.exitEnvironment("s1", "mac:md.obsidian/Rooknanigans");
 
     expect(remaining).toEqual([]);
     expect(manager.enteredEnvironments("s1")).toEqual([]);
-    expect(listener.onEnvironmentExited).toHaveBeenNthCalledWith(1, "app:md.obsidian");
-    expect(listener.onEnvironmentExited).toHaveBeenNthCalledWith(2, "app:md.obsidian/Rooknanigans");
+    expect(listener.onEnvironmentExited).toHaveBeenNthCalledWith(1, "mac:md.obsidian");
+    expect(listener.onEnvironmentExited).toHaveBeenNthCalledWith(2, "mac:md.obsidian/Rooknanigans");
   });
 
   it("environmentList sorts entered first, then active by recency", async () => {
@@ -673,21 +673,21 @@ describe("EnvironmentManager", () => {
     );
     await manager.registerAvailableEnvironment(
       {
-        id: "app:md.obsidian",
+        id: "mac:md.obsidian",
         metadata: { bundleId: "md.obsidian" },
       },
       { sourceName: "Obsidian" },
     );
     await manager.registerAvailableEnvironment(
       {
-        id: "app:md.obsidian/WorkVault",
+        id: "mac:md.obsidian/WorkVault",
         metadata: { vault: "WorkVault" },
       },
       { sourceName: "Obsidian" },
     );
 
     manager.enterEnvironment("s1", "web:example.com/stuff");
-    manager.enterEnvironment("s1", "app:md.obsidian/WorkVault");
+    manager.enterEnvironment("s1", "mac:md.obsidian/WorkVault");
 
     const instructions = manager.runtimeInstructionsForSession("s1");
     // Rook identity prompt is included.
@@ -696,12 +696,12 @@ describe("EnvironmentManager", () => {
     expect(instructions).toContain("Attaching memories");
     expect(instructions).toContain("`web:example.com`");
     expect(instructions).toContain("`web:example.com/stuff`");
-    expect(instructions).toContain("`app:md.obsidian`");
-    expect(instructions).toContain("`app:md.obsidian/WorkVault`");
+    expect(instructions).toContain("`mac:md.obsidian`");
+    expect(instructions).toContain("`mac:md.obsidian/WorkVault`");
     expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills"));
     expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "web", "example.com", "stuff", ".bundles", "personal", "skills"));
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "app", "md.obsidian", ".bundles", "personal", "skills"));
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "app", "md.obsidian", "WorkVault", ".bundles", "personal", "skills"));
+    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "mac", "md.obsidian", ".bundles", "personal", "skills"));
+    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "mac", "md.obsidian", "WorkVault", ".bundles", "personal", "skills"));
     expect(instructions).toContain("https://example.com/stuff");
     expect(instructions).toContain("The user is reading the support docs.");
     expect(instructions).toContain('"vault": "WorkVault"');

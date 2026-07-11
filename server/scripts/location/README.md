@@ -1,6 +1,6 @@
 # Location validation scripts
 
-Diagnostic/validation tooling for the `loc:` geo-identification feature. None of these run
+Diagnostic/validation tooling for the `location:` geo-identification feature. None of these run
 in the test suite; they hit the live ptiles host and write results under `.var/` (gitignored).
 Run from the `server/` directory via the npm aliases below.
 
