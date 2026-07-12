@@ -73,7 +73,7 @@ Optional helper for the phone launcher.
 ROOK_REMOTE_HOSTNAME=your-computer.example.net
 ```
 
-If set, `./scripts/run-rook.sh ios` (alias: `phone`) uses this hostname automatically.
+If set, `./scripts/run-rook.sh iphone` (and `iphone-next`) use this hostname automatically.
 
 Use this when:
 - your phone should connect by hostname rather than raw IP
@@ -86,17 +86,10 @@ If neither is set, it stops and tells you what to configure.
 You can also skip both env vars and pass the address directly for a one-off run:
 
 ```bash
-./scripts/run-rook.sh ios --server-url http://your-computer.example.net:3000
+./scripts/run-rook.sh iphone --server-url http://your-computer.example.net:3000
 ```
 
-The Android launcher doesn't need any of this by default — `./scripts/run-rook.sh android`
-uses `adb reverse` to reach the server over the USB/adb connection regardless of network
-setup. `--server-url` works the same way there too, for pointing an emulator or device at a
-specific remote server instead:
-
-```bash
-./scripts/run-rook.sh android --server-url http://your-computer.example.net:3000
-```
+The Android launcher target is currently just a placeholder while `run-rook.sh` is being split up, so use the manual Android bring-up flow in `clients/android/README.md` for now.
 
 ### `ROOK_AUTH_TOKEN`
 Optional bearer token for all client access.
@@ -136,7 +129,7 @@ ROOK_AUTH_TOKEN=replace-with-a-long-random-string
 Then launch with:
 
 ```bash
-./scripts/run-rook.sh mac phone
+./scripts/run-rook.sh mac iphone
 ```
 
 The launcher passes the server URL and auth token through to the iPhone app. Keep the phone unlocked while the script installs and opens the app; otherwise iOS will deny the launch request.

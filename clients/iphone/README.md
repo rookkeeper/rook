@@ -135,21 +135,17 @@ Prerequisites: Xcode, [xcodegen](https://github.com/yonaskolb/XcodeGen)
 Fast paths from the repo root:
 
 ```zsh
-./scripts/run-rook.sh sim
-./scripts/run-rook.sh ios      # alias: phone
+./scripts/run-rook.sh iphone
+./scripts/run-rook.sh iphone-next
 ./scripts/run-rook.sh stop     # shut down server + launched app(s)
 
 # point at a specific server instead of the default/auto-detected one
-./scripts/run-rook.sh ios --server-url http://your-mac.tailxxxx.ts.net:3000
-
-# simulator only: fire a synthetic DEBUG arrival at a fixed lat/lon (CLVisit
-# doesn't fire in the Simulator, so this is how you exercise that flow there)
-./scripts/run-rook.sh sim --simulate-arrival "36.150050893287066,-86.80588018981916"
+./scripts/run-rook.sh iphone --server-url http://your-mac.tailxxxx.ts.net:3000
 ```
 
-`run-rook.sh sim` starts the server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, installs the fresh app into the selected simulator, and launches it with `ROOK_SERVER_BASE_URL=http://127.0.0.1:3000` (or `--server-url`, if passed).
+`run-rook.sh iphone` builds and launches the current physical-iPhone client, using `--server-url` if given, else `ROOK_REMOTE_HOSTNAME` or `ROOK_BIND_IP` to determine a server address your phone can reach. The server itself still binds localhost for the Mac app; `ROOK_BIND_IP` adds the second remote listener. It intentionally does **not** hardcode a development team into `project.yml`; pass `--team` / `ROOK_IOS_DEVELOPMENT_TEAM` when needed, or let the script auto-detect your local team for personal use. Keep the phone unlocked while the launcher installs and opens the app; otherwise iOS denies the launch request.
 
-`run-rook.sh ios` (alias: `phone`) does the same for a paired physical iPhone, using `--server-url` if given, else `ROOK_REMOTE_HOSTNAME` or `ROOK_BIND_IP` to determine a server address your phone can reach. The server itself still binds localhost for the Mac app; `ROOK_BIND_IP` adds the second remote listener. It intentionally does **not** hardcode a development team into `project.yml`; pass `--team` / `ROOK_IOS_DEVELOPMENT_TEAM` when needed, or let the script auto-detect your local team for personal use. Keep the phone unlocked when the launcher installs and opens the app; otherwise iOS denies the launch request.
+`run-rook.sh iphone-next` is the equivalent launcher for the next-generation iPhone client under `clients-next/iphone/`.
 
 Manual steps:
 
@@ -190,7 +186,7 @@ Recommended flow:
 1. Set up your preferred VPN or private remote network between the Mac and iPhone.
 2. Make sure the Mac has a reachable hostname or IP address on that network.
 3. Start the Rook server on the Mac.
-4. Launch the iPhone app with `./scripts/run-rook.sh ios`, or manually set the
+4. Launch the iPhone app with `./scripts/run-rook.sh iphone`, or manually set the
    server URL in Rook's Settings screen.
 
 A quick option is Tailscale:

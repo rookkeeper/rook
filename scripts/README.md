@@ -2,6 +2,8 @@
 
 All scripts run from the repo root and follow a consistent pattern: self-contained `.sh` files with supporting libraries tucked into `lib/<script-name>/`.
 
+`run-rook.sh` now follows that split too: target-specific functionality lives under `scripts/lib/run-rook/`.
+
 ## Script index
 
 ### `run-rook.sh` — build and launch the server + clients
@@ -9,15 +11,18 @@ All scripts run from the repo root and follow a consistent pattern: self-contain
 The primary development entry point. Starts the server (if needed) and builds + launches native clients.
 
 ```bash
-./scripts/run-rook.sh server              # start the server
-./scripts/run-rook.sh mac                 # build and launch the macOS menu-bar app
-./scripts/run-rook.sh sim                 # build and launch in iPhone simulator
-./scripts/run-rook.sh phone               # build and deploy to a physical iPhone
-./scripts/run-rook.sh mac sim             # run multiple targets
-./scripts/run-rook.sh stop                # stop everything (server, apps, simulators)
+./scripts/run-rook.sh server                    # start the server
+./scripts/run-rook.sh mac                       # build and launch the current macOS client
+./scripts/run-rook.sh iphone                    # build and deploy the current iPhone client
+./scripts/run-rook.sh mac-next                  # build and launch the next macOS client
+./scripts/run-rook.sh iphone-next               # build and deploy the next iPhone client
+./scripts/run-rook.sh android                   # placeholder target for now
+./scripts/run-rook.sh server mac iphone         # run multiple current targets
+./scripts/run-rook.sh server mac-next iphone-next
+./scripts/run-rook.sh stop                      # stop everything (server + launched apps)
 ```
 
-Flags: `--simulator NAME_OR_UDID`, `--device NAME_OR_UDID`, `--team TEAM_ID`, `--reset-permissions`
+Flags: `--device NAME_OR_UDID`, `--team TEAM_ID`, `--server-url URL`, `--reset-permissions`, `--simulate-arrival "LAT,LON"`
 
 ### `run-tests.sh` — run all test suites
 
@@ -110,13 +115,18 @@ Runs any command, voiced by `say`. Used during screen recordings to signal when 
 lib/
 ├── dump-environment-decisions/         # TypeScript tool to read the decisions DB
 │   └── dump-environment-decisions.ts
-└── interact-with-remote-agent/         # Remote agent CLI + shared ACP types/helpers
-    ├── interact-with-remote-agent.ts   # Main CLI entry point
-    ├── remoteAgent.ts                  # WebSocket-based remote agent client
-    ├── acpClientTypes.ts               # ACP client event type definitions
-    ├── acp.ts                          # Re-exports from server/src/shared/acp
-    ├── agent.ts                        # Re-exports from server/src/shared/agent
-    └── environment.ts                  # Re-exports from server/src/shared/environment
+├── interact-with-remote-agent/         # Remote agent CLI + shared ACP types/helpers
+│   ├── interact-with-remote-agent.ts   # Main CLI entry point
+│   ├── remoteAgent.ts                  # WebSocket-based remote agent client
+│   ├── acpClientTypes.ts               # ACP client event type definitions
+│   ├── acp.ts                          # Re-exports from server/src/shared/acp
+│   ├── agent.ts                        # Re-exports from server/src/shared/agent
+│   └── environment.ts                  # Re-exports from server/src/shared/environment
+└── run-rook/                           # Shared bash helpers + per-target launch logic
+    ├── common.sh
+    ├── mac.sh
+    ├── iphone.sh
+    └── android.sh
 ```
 
 Each `lib/<script-name>/` subdirectory is self-contained: it contains only the TypeScript modules and type definitions that the corresponding shell script needs. No library code is shared across scripts.
