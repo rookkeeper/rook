@@ -18,19 +18,43 @@ export interface PiAgentOptions {
 }
 
 const DEFAULT_ARGS: string[] = [];
-const PI_ACP_ENTRYPOINT = path.join(SERVER_ROOT, "node_modules", "pi-acp", "dist", "index.js");
-const GENERATED_LAUNCHER_DIR = path.join(REPO_ROOT, ".var", "rook", "generated", "pi-launchers");
+const PI_ACP_ENTRYPOINT = path.join(
+  SERVER_ROOT,
+  "node_modules",
+  "pi-acp",
+  "dist",
+  "index.js",
+);
+const GENERATED_LAUNCHER_DIR = path.join(
+  REPO_ROOT,
+  ".var",
+  "rook",
+  "generated",
+  "pi-launchers",
+);
 
 function uniqueNonEmpty(values: string[] | undefined): string[] {
   return [...new Set((values ?? []).filter((value) => value.length > 0))];
 }
 
-function ensurePiLauncher(options: { command: string; args: string[]; skillPaths: string[]; extensionPaths: string[]; appendSystemPrompt?: string }): string {
+function ensurePiLauncher(options: {
+  command: string;
+  args: string[];
+  skillPaths: string[];
+  extensionPaths: string[];
+  appendSystemPrompt?: string;
+}): string {
   mkdirSync(GENERATED_LAUNCHER_DIR, { recursive: true });
 
   const launcherSpec = JSON.stringify(options);
-  const digest = createHash("sha256").update(launcherSpec).digest("hex").slice(0, 12);
-  const launcherPath = path.join(GENERATED_LAUNCHER_DIR, `pi-launch-${digest}.mjs`);
+  const digest = createHash("sha256")
+    .update(launcherSpec)
+    .digest("hex")
+    .slice(0, 12);
+  const launcherPath = path.join(
+    GENERATED_LAUNCHER_DIR,
+    `pi-launch-${digest}.mjs`,
+  );
   const launcherSource = `#!/usr/bin/env node
 import { spawn } from "node:child_process";
 
@@ -51,7 +75,10 @@ const child = spawn(piBinary, [...baseArgs, ...forwardedArgs, ...appendSystemPro
 });
 
 child.on("exit", (code, signal) => {
-  if (signal) process.kill(process.pid, signal);
+  if (signal) {
+    const sigNum = {SIGKILL: 9, SIGTERM: 15, SIGINT: 2}[signal] ?? 1;
+    process.exit(128 + sigNum);
+  }
   else process.exit(code ?? 0);
 });
 
@@ -66,7 +93,10 @@ child.on("error", (error) => {
   return launcherPath;
 }
 
-function toBaseAgentOptions(options: PiAgentOptions, restartMetadata?: AgentRestartMetadata): BaseAgentOptions {
+function toBaseAgentOptions(
+  options: PiAgentOptions,
+  restartMetadata?: AgentRestartMetadata,
+): BaseAgentOptions {
   const skillPaths = uniqueNonEmpty(options.skillPaths);
   const extensionPaths = uniqueNonEmpty(options.extensionPaths);
   const cwd = options.cwd ?? REPO_ROOT;
@@ -87,14 +117,18 @@ function toBaseAgentOptions(options: PiAgentOptions, restartMetadata?: AgentRest
       ROOK_PI_TRACE_LOG_PATH: "/tmp/pi-traces.jsonl",
     },
     cwd,
-    sessionCwd: typeof restartMetadata?.cwd === "string" ? restartMetadata.cwd : cwd,
+    sessionCwd:
+      typeof restartMetadata?.cwd === "string" ? restartMetadata.cwd : cwd,
     startupTimeoutMs: options.startupTimeoutMs,
     agentName: options.agentName,
   };
 }
 
 export class PiAgent extends BaseAgent {
-  constructor(options: PiAgentOptions = {}, restartMetadata?: AgentRestartMetadata) {
+  constructor(
+    options: PiAgentOptions = {},
+    restartMetadata?: AgentRestartMetadata,
+  ) {
     super(toBaseAgentOptions(options, restartMetadata), restartMetadata);
   }
 
@@ -118,10 +152,16 @@ export class PiAgent extends BaseAgent {
 
     this.emitUserMessageChunk(trimmed);
     try {
-      await this.sendRequest("_rookery/steering_prompt", { sessionId: this.sessionId, text: trimmed });
+      await this.sendRequest("_rookery/steering_prompt", {
+        sessionId: this.sessionId,
+        text: trimmed,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("Method not found") || message.includes("Cannot send steering prompt without an active turn")) {
+      if (
+        message.includes("Method not found") ||
+        message.includes("Cannot send steering prompt without an active turn")
+      ) {
         await super.sendSteeringMessage(trimmed);
         return;
       }
