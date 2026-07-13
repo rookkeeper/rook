@@ -23,7 +23,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.rookery.Rook
         PRODUCT_NAME: Rook
         TARGETED_DEVICE_FAMILY: "1"
-        GENERATE_INFOPLIST_FILE: "YES"
+        GENERATE_INFOPLIST_FILE: "NO"
+        INFOPLIST_FILE: Sources/Info.plist
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: "NO"
 schemes:
   Rook:

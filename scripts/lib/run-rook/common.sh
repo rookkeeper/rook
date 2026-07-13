@@ -17,7 +17,13 @@ health_ok() {
   if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
     curl_args+=( -H "Authorization: Bearer $SERVER_AUTH_TOKEN" )
   fi
-  curl "${curl_args[@]}" "$SERVER_HEALTH_URL" >/dev/null 2>&1
+  local body
+  body="$(curl "${curl_args[@]}" "$SERVER_HEALTH_URL" 2>/dev/null)" || return 1
+  if [[ "$SERVER_KIND" == "next" ]]; then
+    grep -q '"service":"rook-next"' <<<"$body"
+  else
+    ! grep -q '"service":"rook-next"' <<<"$body"
+  fi
 }
 
 listener_is_localhost_only() {
@@ -46,35 +52,39 @@ wait_for_health() {
 
 start_server_in_background() {
   need_cmd npm
-  log "starting server in background (log: $SERVER_LOG)"
+  log "starting ${SERVER_KIND} server in background (log: $SERVER_LOG)"
   (
-    cd "$REPO_ROOT"
+    cd "$SERVER_PACKAGE_DIR"
     nohup npm run dev >"$SERVER_LOG" 2>&1 &
     echo $! >"$SERVER_PIDFILE"
   )
 }
 
 ensure_server_deps() {
-  local server_dir="$REPO_ROOT/server"
+  local server_dir="$SERVER_PACKAGE_DIR"
   if [[ -d "$server_dir/node_modules" ]] && [[ -f "$server_dir/node_modules/tsx/dist/cli.mjs" ]]; then
     return 0
   fi
   need_cmd npm
-  log "installing server dependencies (npm install)"
+  log "installing ${SERVER_KIND} server dependencies (npm install)"
   (cd "$server_dir" && npm install --no-audit --no-fund)
 }
 
-kill_server_if_owned() {
-  if [[ -f "$SERVER_PIDFILE" ]]; then
-    local pid
-    pid="$(cat "$SERVER_PIDFILE" 2>/dev/null || true)"
-    if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
-      log "stopping server pid $pid"
-      kill "$pid" || true
-      sleep 1
-    fi
-    rm -f "$SERVER_PIDFILE"
+kill_server_pidfile() {
+  local pidfile="$1"
+  [[ -f "$pidfile" ]] || return 0
+  local pid
+  pid="$(cat "$pidfile" 2>/dev/null || true)"
+  if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
+    log "stopping server pid $pid"
+    kill "$pid" || true
+    sleep 1
   fi
+  rm -f "$pidfile"
+}
+
+kill_server_if_owned() {
+  kill_server_pidfile "$SERVER_PIDFILE"
 }
 
 kill_server_on_port() {
@@ -88,7 +98,7 @@ kill_server_on_port() {
 
 start_server() {
   if health_ok; then
-    log "server already healthy at ${SERVER_HEALTH_URL}"
+    log "${SERVER_KIND} server already healthy at ${SERVER_HEALTH_URL}"
   else
     if lsof -nP -iTCP:"$SERVER_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
       die "port ${SERVER_PORT} is already in use, but /api/health is not healthy"
@@ -99,7 +109,7 @@ start_server() {
       tail -n 80 "$SERVER_LOG" >&2 || true
       die "server did not become healthy"
     fi
-    log "server is healthy"
+    log "${SERVER_KIND} server is healthy"
   fi
 
   if (( HAS_IPHONE_TARGET )) && listener_is_localhost_only; then
@@ -130,7 +140,8 @@ stop_android_app() {
 stop_everything() {
   log "stopping managed Rook resources"
 
-  kill_server_if_owned
+  kill_server_pidfile "$CURRENT_SERVER_PIDFILE"
+  kill_server_pidfile "$NEXT_SERVER_PIDFILE"
 
   local pids
   pids="$(lsof -tiTCP:"$SERVER_PORT" -sTCP:LISTEN 2>/dev/null || true)"
@@ -184,7 +195,7 @@ PY
 stop_requested_targets() {
   (( HAS_MAC_TARGET )) && stop_mac_app
   (( HAS_ANDROID_TARGET )) && stop_android_app
-  if (( HAS_SERVER_TARGET )); then
+  if (( HAS_SERVER_TARGET || HAS_SERVER_NEXT_TARGET )); then
     kill_server_if_owned
     kill_server_on_port
   fi
@@ -393,8 +404,16 @@ open_mac_app_bundle() {
   need_cmd open
   local app_path="$1"
   log "opening $(basename "$app_path") through LaunchServices"
+  if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
+    launchctl setenv ROOK_AUTH_TOKEN "$SERVER_AUTH_TOKEN"
+  fi
+  launchctl setenv ROOK_SERVER_BASE_URL "http://127.0.0.1:${SERVER_PORT}"
   open -n "$app_path"
   sleep 1
+  launchctl unsetenv ROOK_SERVER_BASE_URL
+  if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
+    launchctl unsetenv ROOK_AUTH_TOKEN
+  fi
   activate_mac_app "$app_path"
 }
 
@@ -515,4 +534,8 @@ EOF
 
 run_rook_target_server() {
   log "server ready: ${SERVER_HEALTH_URL%/api/health}"
+}
+
+run_rook_target_server_next() {
+  log "server-next ready: ${SERVER_HEALTH_URL%/api/health}"
 }

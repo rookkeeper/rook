@@ -8,11 +8,15 @@ public struct HelloWorldScreen: View {
     public var body: some View {
         VStack(spacing: 16) {
             Text(model.message)
-                .font(.largeTitle)
-            Button("Hello") {
-                model.showWorld()
+                .font(.title2)
+                .multilineTextAlignment(.center)
+            Button(model.isLoading ? "Loading…" : "Hello") {
+                Task {
+                    await model.showWorldAndFetchHealth()
+                }
             }
             .buttonStyle(.borderedProminent)
+            .disabled(model.isLoading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)

@@ -1,9 +1,8 @@
 import Testing
 @testable import RookKit
 
-@Test func helloButtonChangesMessageToWorld() {
+@Test func helloWorldModelStartsAtHello() {
     let model = HelloWorldModel()
     #expect(model.message == "Hello")
-    model.showWorld()
-    #expect(model.message == "World")
+    #expect(model.isLoading == false)
 }

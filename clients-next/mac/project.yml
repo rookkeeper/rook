@@ -24,7 +24,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rookery.Rook
         PRODUCT_NAME: Rook
-        GENERATE_INFOPLIST_FILE: "YES"
+        GENERATE_INFOPLIST_FILE: "NO"
+        INFOPLIST_FILE: Sources/Info.plist
         MACOSX_DEPLOYMENT_TARGET: "14.0"
 schemes:
   Rook:

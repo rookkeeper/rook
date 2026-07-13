@@ -12,11 +12,12 @@ fi
 
 RUN_ROOT="$REPO_ROOT/.var/run-rook"
 BUILD_ROOT="$RUN_ROOT/build"
-SERVER_LOG="$RUN_ROOT/server.log"
-SERVER_PIDFILE="$RUN_ROOT/server.pid"
+CURRENT_SERVER_LOG="$RUN_ROOT/server.log"
+CURRENT_SERVER_PIDFILE="$RUN_ROOT/server.pid"
+NEXT_SERVER_LOG="$RUN_ROOT/server-next.log"
+NEXT_SERVER_PIDFILE="$RUN_ROOT/server-next.pid"
 SERVER_PORT="${ROOK_SERVER_PORT:-7665}"
 SERVER_BIND_HOST="127.0.0.1"
-SERVER_HEALTH_URL="http://${SERVER_BIND_HOST}:${SERVER_PORT}/api/health"
 SERVER_AUTH_TOKEN="${ROOK_AUTH_TOKEN:-}"
 DEFAULT_IOS_APP_BUNDLE_ID="com.rookery.Rook"
 DEFAULT_IOS_WIDGET_BUNDLE_ID="${DEFAULT_IOS_APP_BUNDLE_ID}.RookWidgets"
@@ -37,23 +38,25 @@ usage() {
   cat <<'EOF'
 Usage:
   ./scripts/run-rook.sh server
+  ./scripts/run-rook.sh server-next
   ./scripts/run-rook.sh mac
   ./scripts/run-rook.sh iphone [--device NAME_OR_UDID] [--team TEAM_ID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
   ./scripts/run-rook.sh mac-next
   ./scripts/run-rook.sh iphone-next [--device NAME_OR_UDID] [--team TEAM_ID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
   ./scripts/run-rook.sh android
   ./scripts/run-rook.sh server mac iphone
-  ./scripts/run-rook.sh server mac-next iphone-next
+  ./scripts/run-rook.sh server-next mac-next iphone-next
   ./scripts/run-rook.sh stop
 
 What it does:
-  - starts the Rook server if needed
+  - starts the selected Rook server if needed
   - rebuilds / launches the selected target(s)
   - keeps the server target behavior the same as before
 
 Notes:
   - you can pass multiple targets; they run in the order given
   - mac uses localhost by default
+  - `server-next` runs the minimal `server-next/` playground server
   - iphone / iphone-next use ROOK_REMOTE_HOSTNAME, ROOK_BIND_IP, or a non-localhost
     ROOK_SERVER_HOST by default; pass --server-url to override
   - android is currently a placeholder target
@@ -73,7 +76,7 @@ SIMULATE_ARRIVAL=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    server|mac|iphone|android|mac-next|iphone-next|stop)
+    server|server-next|mac|iphone|android|mac-next|iphone-next|stop)
       TARGETS+=("$1")
       shift
       ;;
@@ -110,18 +113,50 @@ done
 [[ ${#TARGETS[@]} -gt 0 ]] || { usage; exit 2; }
 
 HAS_SERVER_TARGET=0
+HAS_SERVER_NEXT_TARGET=0
 HAS_IPHONE_TARGET=0
 HAS_MAC_TARGET=0
 HAS_ANDROID_TARGET=0
+HAS_NEXT_CLIENT_TARGET=0
+HAS_CURRENT_CLIENT_TARGET=0
 for target in "${TARGETS[@]}"; do
   case "$target" in
     server) HAS_SERVER_TARGET=1 ;;
+    server-next) HAS_SERVER_NEXT_TARGET=1 ;;
+    iphone|mac) HAS_CURRENT_CLIENT_TARGET=1 ;;
+    iphone-next|mac-next) HAS_NEXT_CLIENT_TARGET=1 ;;
     iphone|iphone-next) HAS_IPHONE_TARGET=1 ;;
     mac|mac-next) HAS_MAC_TARGET=1 ;;
     android) HAS_ANDROID_TARGET=1 ;;
     stop) ;;
   esac
 done
+
+if (( HAS_SERVER_TARGET && HAS_SERVER_NEXT_TARGET )); then
+  die "server and server-next cannot be used together"
+fi
+if (( HAS_CURRENT_CLIENT_TARGET && HAS_NEXT_CLIENT_TARGET )); then
+  die "current and next Apple client targets cannot be mixed in one run"
+fi
+if (( HAS_SERVER_NEXT_TARGET && HAS_CURRENT_CLIENT_TARGET )); then
+  die "server-next cannot be combined with current Apple client targets"
+fi
+if (( HAS_SERVER_TARGET && HAS_NEXT_CLIENT_TARGET )); then
+  die "server cannot be combined with next Apple client targets; use server-next"
+fi
+
+if (( HAS_SERVER_NEXT_TARGET || HAS_NEXT_CLIENT_TARGET )); then
+  SERVER_KIND="next"
+  SERVER_PACKAGE_DIR="$REPO_ROOT/server-next"
+  SERVER_LOG="$NEXT_SERVER_LOG"
+  SERVER_PIDFILE="$NEXT_SERVER_PIDFILE"
+else
+  SERVER_KIND="current"
+  SERVER_PACKAGE_DIR="$REPO_ROOT/server"
+  SERVER_LOG="$CURRENT_SERVER_LOG"
+  SERVER_PIDFILE="$CURRENT_SERVER_PIDFILE"
+fi
+SERVER_HEALTH_URL="http://${SERVER_BIND_HOST}:${SERVER_PORT}/api/health"
 
 if (( ${#TARGETS[@]} > 1 )); then
   for target in "${TARGETS[@]}"; do
@@ -147,6 +182,9 @@ for TARGET in "${TARGETS[@]}"; do
   case "$TARGET" in
     server)
       run_rook_target_server
+      ;;
+    server-next)
+      run_rook_target_server_next
       ;;
     mac)
       run_rook_target_mac

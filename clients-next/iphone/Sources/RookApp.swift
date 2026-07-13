@@ -5,7 +5,7 @@ import RookKit
 struct RookApp: App {
     var body: some Scene {
         WindowGroup {
-            HelloWorldScreen()
+            AcpPlaygroundScreen()
         }
     }
 }

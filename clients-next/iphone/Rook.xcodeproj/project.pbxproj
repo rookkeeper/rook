@@ -15,6 +15,7 @@
 		2970A475DCF3F26A17C649E2 /* Rook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Rook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookApp.swift; sourceTree = "<group>"; };
 		4AC9D0D68548AE9E330CAABA /* RookKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = RookKit; path = ../RookKit; sourceTree = SOURCE_ROOT; };
+		B08909E5BDA34D380AF7B25F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -49,6 +50,7 @@
 		64235206901FF0219CF88D93 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				B08909E5BDA34D380AF7B25F /* Info.plist */,
 				3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */,
 			);
 			path = Sources;
@@ -134,7 +136,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -273,7 +276,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

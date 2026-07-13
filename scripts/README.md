@@ -3,6 +3,7 @@
 All scripts run from the repo root and follow a consistent pattern: self-contained `.sh` files with supporting libraries tucked into `lib/<script-name>/`.
 
 `run-rook.sh` now follows that split too: target-specific functionality lives under `scripts/lib/run-rook/`.
+It can also launch either the main server or the minimal `server-next/` playground server.
 
 ## Script index
 
@@ -11,14 +12,15 @@ All scripts run from the repo root and follow a consistent pattern: self-contain
 The primary development entry point. Starts the server (if needed) and builds + launches native clients.
 
 ```bash
-./scripts/run-rook.sh server                    # start the server
+./scripts/run-rook.sh server                    # start the main server
+./scripts/run-rook.sh server-next               # start the minimal next server
 ./scripts/run-rook.sh mac                       # build and launch the current macOS client
 ./scripts/run-rook.sh iphone                    # build and deploy the current iPhone client
 ./scripts/run-rook.sh mac-next                  # build and launch the next macOS client
 ./scripts/run-rook.sh iphone-next               # build and deploy the next iPhone client
 ./scripts/run-rook.sh android                   # placeholder target for now
 ./scripts/run-rook.sh server mac iphone         # run multiple current targets
-./scripts/run-rook.sh server mac-next iphone-next
+./scripts/run-rook.sh server-next mac-next iphone-next
 ./scripts/run-rook.sh stop                      # stop everything (server + launched apps)
 ```
 

@@ -1,6 +1,6 @@
 # Agent Client Protocol
 
-Rookery uses [Agent Client Protocol (ACP)](https://agentclientprotocol.com/get-started/introduction) as the wire format between clients and agent runtimes — the same problem space as LSP, but for coding agents.
+Rookery uses [Agent Client Protocol (ACP)](https://agentclientprotocol.com/get-started/introduction) as the wire format between clients and agent runtimes — the same problem space as LSP, but for coding agents. [Read details in llms.txt](https://agentclientprotocol.com/llms.txt) 
 
 ## Where ACP shows up
 
