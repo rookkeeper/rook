@@ -1,62 +1,58 @@
-# Rookery - As-Built Architecture
+# Rook - As-Built Architecture
 
-**Last Updated**: 2026-07-07
+**Last Updated**: 2026-07-14
 
 This document is the short, current architecture description for the repo as it exists today. It intentionally avoids historical detail and low-level implementation notes.
 
 ## 1. System summary
 
-Rookery is a local-first monorepo centered on one service at `127.0.0.1:3000`:
+Rook is a local-first monorepo centered on one service at `127.0.0.1:7665`:
 
 - the server always binds loopback for on-machine clients
 - it may also expose a second listener on a configured remote/VPN address for phone access
 - when configured, bearer auth is required for all client access, including localhost
 
 - a **Fastify server**
-- a **WebSocket ACP bridge** to agent runtimes
-- an **environment manager** that can hot-load environment-linked skills into a session
-
-The repo is organized into focused top-level packages: `server/` and a `clients/` directory holding the remaining native app packages.
+- a single connection-level **ACP WebSocket facade** (`/api/ws`)
+- an **AgentRuntimeManager** that lazily manages per-session runtime subprocesses
+- an **environment manager** that hot-loads environment-linked skills into sessions
 
 ## 2. Top-level shape
 
 ```text
 Host clients / providers                         registers environment kind
-  ├─ Obsidian plugin
-  ├─ macOS menu bar app (native Swift)           mac:<slug>, web:<slug>   (foreground encounters, plus close detection)
-  └─ iPhone app (native Swift)                   location:<slug> (GPS geofence)
+  ├─ macOS menu bar app (native Swift)           mac:<slug>, web:<slug>
+  ├─ iPhone app (native Swift)                   location:<slug>
+  ├─ Android app (Kotlin/Compose)                (same REST + ACP contract)
+  └─ rook CLI (Node.js)                          development/debugging client
             │
             ▼
 server/ (Fastify)
-  ├─ REST API for agent/session/environment control
-  ├─ WebSocket endpoint carrying ACP JSON-RPC
-  ├─ SessionRoomManager / SessionRoom runtime orchestration
+  ├─ ACP WebSocket facade (/api/ws)
+  ├─ Environment HTTP API (register, preview, decision, entry/exit)
+  ├─ AgentRuntimeManager (lazy per-session runtime catalog)
   ├─ EnvironmentManager
-  └─ ACP subprocess agents
-        ├─ PiAgent
-        ├─ ClaudeAgent
-        ├─ CursorAgent
-        └─ generic ACP agent
+  └─ SessionRuntime subprocesses
+        ├─ Pi ACP bridge (pi-acp)
+        ├─ Claude ACP bridge
+        ├─ Cursor ACP bridge
+        ├─ generic ACP
+        └─ MockAcpAgent (testing)
 
-server/src/shared  ← server-local TypeScript contracts: ACP types, environment DTOs, agent/session DTOs
-clients/RookKit    ← shared Swift package (iOS + macOS) backing the two native Swift clients
+clients/RookKit    ← shared Swift package (iOS + macOS)
+clients/cli        ← minimal ACP-first debugging client
 ```
 
 ## 3. Core architectural idea
 
-Rookery has two important protocol boundaries:
+Rook has two important protocol boundaries:
 
-1. **Client ↔ server:** ACP over WebSocket
-2. **Server ↔ agent runtime:** ACP over stdio subprocesses
+1. **Client ↔ server:** ACP over WebSocket — one connection per client, session-agnostic
+2. **Server ↔ agent runtime:** ACP over stdio subprocesses — one process per session
 
-That is the main simplifying idea in the current architecture.
+The server is a single ACP-compliant agent from the client's perspective. Internally it's a broker that lazily manages per-session runtime subprocesses.
 
-The server is not trying to invent a new agent protocol. It is a coordinator that:
-
-- creates and resumes sessions
-- manages live room lifecycle
-- forwards ACP updates between clients and runtimes
-- adds Rookery-specific behavior around environments, approvals, and steering prompts
+The chat connection is 100% ACP-compliant — no `_rookery/steering_prompt`, no proprietary session updates.
 
 See also: [`PRODUCT/agent-client-protocol.md`](./agent-client-protocol.md)
 
@@ -64,12 +60,12 @@ See also: [`PRODUCT/agent-client-protocol.md`](./agent-client-protocol.md)
 
 | Package | Current role |
 |---|---|
-| `server/` | Main backend at `:3000`; server, runtime orchestration, environment approvals |
-| `server/src/shared/` | Server-local ACP types, environment DTOs, agent/session contracts |
-| `clients/mac/` | Native macOS client and environment provider (`mac:<slug>`) |
+| `server/` | Main backend at `:7665`; ACP facade, runtime orchestration, environment manager |
+| `clients/mac/` | Native macOS client and environment provider (`mac:<slug>`, `web:<slug>`) |
 | `clients/iphone/` | Native iOS client and location environment provider (`location:<slug>`) |
-| `clients/cli/` | Minimal ACP-first command-line client for fast session/runtime debugging |
-| `clients/RookKit/` | Shared Swift package (iOS + macOS) backing both native Swift clients |
+| `clients/android/` | Native Android client |
+| `clients/cli/` | Minimal ACP-first CLI for fast session/runtime debugging |
+| `clients/RookKit/` | Shared Swift package (iOS + macOS) |
 | `environment-repository/` | Local environment bundle content keyed by `<kind>/<path>` |
 | `PRODUCT/` | Product and architecture notes |
 
@@ -81,322 +77,179 @@ See also: [`PRODUCT/agent-client-protocol.md`](./agent-client-protocol.md)
 
 It wires together:
 
-- `SessionRoomManager`
-- `EnvironmentManager`
-- `EnvironmentDecisionStore`
-- `EnvironmentRepository`
-- `DirectoryEnvironmentRepository`
-- `CompositeEnvironmentRepository`
-- `EnvironmentRepositoryService`
-- REST routes
-- WebSocket ACP route
-- React app hosting
+- `AgentRuntimeManager` — service layer: runtime catalog, per-session lifecycle
+- `EnvironmentManager` — environment availability, decisions, bundle discovery
+- `EnvironmentDecisionStore` — SQLite-backed persistent decisions
+- `SqliteSessionRepository` — session persistence and environment membership
+- `RookDatastore` — shared SQLite connection
+- `EnvironmentRepository` / `DirectoryEnvironmentRepository` / `CompositeEnvironmentRepository` — bundle content resolution
+- REST routes: runtime enumeration, environment registration/decision/preview, session environments
+- ACP WebSocket facade
 
-The server is now API/websocket-only; native clients and debug scripts connect to it directly.
+Network exposure:
+- loopback listener for localhost/macOS clients
+- optional second listener on configured remote/VPN address for phone access
+- bearer auth enforced for all HTTP + WebSocket when configured
 
-Network exposure model as built:
-- localhost/macOS clients talk to the loopback listener
-- remote phone access is served by a second remote listener rather than broad `0.0.0.0` binding
-- auth is enforced for all HTTP + WebSocket access when configured
+### 5.2 AgentRuntimeManager
 
-### 5.2 Session rooms
+`AgentRuntimeManager` is the orchestration layer. It:
 
-A **SessionRoom** is the live coordinator for one agent session.
+- loads the configured runtime catalog from `~/.rook/config/agent-runtimes.json`
+- lazily creates one `SessionRuntime` per public session (not per configured runtime)
+- maps stable Rook-generated UUID session IDs to runtime-local IDs
+- presents a unified cross-runtime `session/list`
+- subscribes per-session to `EnvironmentManager` for environment-driven restarts
+- applies session-specific skill/extension paths on runtime launch
 
-A room owns:
+### 5.3 SessionRuntime
 
-- the current `BaseAgent` runtime
-- websocket subscribers
-- room-local environment state
-- serialized execution for prompts and runtime rebuilds
-- idle shutdown behavior
+A `SessionRuntime` is one ACP subprocess lifecycle for one session:
 
-`SessionRoomManager` keeps exactly one live room per session id.
+- spawns the underlying ACP subprocess (Pi ACP bridge, Claude ACP bridge, etc.)
+- creates, loads, and restarts ACP sessions
+- forwards ACP requests and notifications
+- serializes prompt and restart work
 
-When the last client disconnects, the room waits for a short idle timeout and then stops the runtime.
+Provider differences are composed launch strategies in `runtimeLaunchPlan.ts`, not subclasses.
 
-### 5.3 Agent runtime layer
+### 5.4 Runtime configuration
 
-`BaseAgent` is the common ACP subprocess runtime.
+Runtimes are explicitly configured in `~/.rook/config/agent-runtimes.json`. There are no implicit parent/base definitions. Supported types: `pi`, `claude`, `cursor`, `acp`.
 
-Responsibilities:
+Configured profiles include `MockAcpAgent` (an `acp`-type test runtime at `test-fixtures/mockAcpServer.mjs`) for fast CLI-driven debugging.
 
-- spawn the subprocess
-- create or load ACP sessions
-- forward `session/update` notifications to the room
-- forward permission requests to the client
-- send prompts, cancel requests, mode changes, and config changes
-- persist enough restart metadata to recreate a stopped session later
+### 5.5 Pi integration
 
-Concrete adapters:
-
-- `PiAgent`
-- `ClaudeAgent`
-- `CursorAgent`
-- generic ACP profiles loaded from config
-
-### 5.4 Pi integration
-
-Pi is no longer integrated through the older Pi-specific JSONL RPC path.
-
-Current design:
-
-- `PiAgent` is an ACP agent
-- it launches `pi-acp`
+- the server launches `pi-acp` as the ACP stdio bridge
 - `pi-acp` in turn launches `pi`
-- a small generated launcher injects Pi args, skill paths, extension paths, and any environment-specific appended system prompt text
-- the default profile still points Pi at the sibling `../my-agent/` package
-- every Pi session also gets the repo-local `skills/create-skills` skill at startup so the runtime always knows how to author new skills
-
-Generated Pi launch helpers are written under:
-
-- `.var/rook/generated/pi-launchers/`
-
-### 5.5 Agent discovery
-
-Agents come from two places:
-
-- built-in parents: `PiAgent`, `ClaudeAgent`, `CursorAgent`
-- configured profiles from `~/.rook/config/agent-profiles.json`
-
-Profiles let the app expose multiple concrete agents while reusing the shared runtime architecture.
+- a generated launcher (`runtimeLaunchPlan.ts`) injects Pi args, skill paths, extension paths, and environment-specific appended system prompts
+- generated launch helpers write to `.var/rook/generated/pi-launchers/`
 
 ## 6. Environment architecture
 
 ### 6.1 What an environment is
 
-An **environment** is a context the user is currently "in", identified as:
+An **environment** is a context the user is currently "in", identified as `<kind>:<path>`.
 
-- `<kind>:<path>`
+Examples: `mac:<bundleId>`, `web:<host>/<path>`, `location:<slug>`, `location:<domain>/<state-zip-street>`.
 
-Examples:
+An environment maps to a directory in `environment-repository/` and provides zero or more `.bundles/<bundle-id>/` directories.
 
-- `web:<host>/<path>` (browser URL-derived site/page context)
-- `web:example.com`
-- `mac:<bundleId>` (macOS menu bar app — encountered Mac app identity)
-- `mac:md.obsidian/<vault>` (macOS menu bar app — Obsidian vault context)
-- `web:<host>/<path>` (macOS menu bar app — active browser URL, protocol/query stripped)
-- `location:<slug>` (iPhone app — current GPS geofence)
-- `location:<domain>/<state-zip-street>` (iPhone — a business identified from the user's coordinate; address-based key, store number is metadata only; see §6.6)
-- `project:the-rooks-nest/rook` (cross-surface work/project context)
-
-The current top-level kinds are `location`, `web`, `project`, `mac`, `iphone`, `android`, and `windows`.
-
-An environment maps to a directory in `environment-repository/` and provides zero or more `.bundles/<bundle-id>/` directories. The kind is just the part before the first colon; the directory-backed repository resolves `<kind>:<path>` to `environment-repository/<kind>/<path>/`, so a new provider kind needs no server change — only new bundle content on disk.
-
-### 6.2 Environment repository
-
-`DirectoryEnvironmentRepository` resolves an environment id to a local directory and reads:
-
-- `.bundles/<bundle-id>/` directories
-- grouped `skills/`, `mcp-servers/`, and `apps/` text artifacts
-- bundle-organized content for runtime bridging and preview rendering
-
-`CompositeEnvironmentRepository` unions the monorepo repository with the user-local `~/.rook/environment-repository/` root, and `EnvironmentRepositoryService` is the thin service wrapper that higher layers call.
-
-Current storage model is simple: local disk only.
-
-### 6.3 Environment manager
-
-`EnvironmentManager` currently tracks:
-
-| Concept | Meaning |
-|---|---|
-| **active** | recently registered and still within the active window |
-| **recent** | seen recently, but now past the active window |
-| **decision** | allow/reject choice for an exact bundle-content hash |
-
-Decision model remains:
+### 6.2 Decision model
 
 - `accept`: allow once
 - `approve`: allow persistently
 - `ignore`: dismiss once
 - `reject`: reject persistently
 
-Storage model:
+Persistent decisions are SQLite-backed, keyed by bundle-content hash.
 
-- active/recent environment memory lives in process memory
-- discovered bundles and their exact-content hashes live alongside each remembered environment in memory
-- ephemeral decisions (`accept`, `ignore`) live in memory
-- persistent decisions (`approve`, `reject`) live in SQLite keyed by bundle-content hash
-- optional registration-capture sinks can be wired in at server bootstrap; the current default sink creates `IGNORED/environment_metadata_captures/` and appends JSONL registration records there
+### 6.3 How environments affect sessions
 
-### 6.4 How environments affect sessions
+1. Providers call `POST /api/environments/register`
+2. `EnvironmentManager` resolves bundles, hashes content, offers to subscribed sessions
+3. `AgentRuntimeManager` applies approved skill paths to session launch configuration
+4. On environment change, only the affected session's runtime restarts
+5. The replacement process must successfully `session/load` the existing ACP session before the old process retires
 
-When an environment becomes available:
+### 6.4 Environment offers (ACP extension)
 
-1. providers call `/api/environments/register`
-2. the Mac provider does this immediately on foreground encounter, and also on wake/server-reconnect reconciliation for currently visible environments
-3. `EnvironmentManager` stores the exact registration in memory with its latest touch time
-4. on registration, it also consults the repository, resolves any valid bundles, hashes their text contents, and remembers the bundle ids plus `.bundles/` collection path(s) associated with that environment
-5. any active, undecided bundles are offered to subscribed sessions for review
-6. once a session enters an environment, `EnvironmentManager` creates the user-local binding bundle skeleton at `~/.rook/environment-repository/<kind>/<path>/.bundles/default/skills/`
-7. entered sessions rebuild their runtimes with the approved environment skills, and Pi runtimes also get appended startup instructions that explain where those per-environment skill roots live and list the currently entered environments plus metadata
-8. the environment is counted as **active** for a configurable active window (currently 5m15s)
-9. when an environment is no longer refreshed, it naturally ages from **active** to **recent** and any pending bundle offers resolve as unavailable
-10. inactive/recent entries remain in memory for a longer retention window (currently 30 minutes), then are forgotten
+Environment offers use a negotiated ACP extension under the owned namespace `com.the-rooks-nest`:
 
-### 6.5 Environment-to-agent bridge
+- `_com.the-rooks-nest/environment_offer` notification
+- `_com.the-rooks-nest/environment_offer_resolve` request
+- `_com.the-rooks-nest/environment_offer_resolved` notification
 
-The product intent is still:
+Support is advertised in `initialize` capability `_meta`.
 
-- the agent should not be deeply coupled to environment internals
-- environments contribute **skills**
-- interaction with the environment stays narrow and explicit
+### 6.5 Location identification
 
-That remains consistent with:
-
-- [`PRODUCT/relationship-or-environments-skills-and-agent.md`](./relationship-or-environments-skills-and-agent.md)
-- [`PRODUCT/narrow-skills-environment-bridge.md`](./narrow-skills-environment-bridge.md)
-
-### 6.6 Location identification (`location:`)
-
-Beyond providers that already know their environment id, the iPhone can turn a raw coordinate into available `location:` environments. On a settled (non-driving) `CLVisit` arrival the phone POSTs `/api/environments/register-location`; `server/src/server/location/` reverse-resolves the coordinate to nearby businesses (the swappable `PoiLookupProvider`, today backed by ptiles fetched directly from the upstream host — an internal detail, no public route), normalizes them to stable address-based `location:<domain>/…` ids, and `LocationRegistrar` writes the ranked set into the same in-memory active/recent cache as every other provider (§6.3–6.4). A read-only `/api/environments/identify` returns the same candidates without registering.
-
-Two delivery channels carry a place to the agent: its **skills** load on-demand through the repository facade (the synthesized location-context bundle is served by a programmatic `LocationContextRepository`, no special-cased paths), and a concise **best-guess + nearby** context is *pushed* into the agent via the shared `AgentContext`/`setContextEntry` (§6.5) so it always knows where it is.
-
-Full as-built detail — assumptions, limitations, and follow-ups — lives in [`PRODUCT/location-environment-awareness.md`](./location-environment-awareness.md).
+On arrival, the iPhone POSTs `/api/environments/register-location`. The server reverse-resolves coordinates to nearby businesses, normalizes to `location:<domain>/…` IDs, and registers them into the active/recent cache.
 
 ## 7. Client architecture
 
-### 7.1 Web client
+The two native Swift clients share one cross-platform layer (`clients/RookKit`) — models, ACP WebSocket client, design system, chat blocks, voice, and Live Activity.
 
-The former browser app has been removed from the active architecture.
+The CLI client (`clients/cli/`) is a fast development/debugging tool that talks ACP directly.
 
-Main responsibilities are unchanged: agent selection, session lifecycle, ACP websocket communication, streaming conversation rendering, tool/permission/plan/usage/mode/config handling, queued messages, and environment approval UI.
+### 7.1 macOS menu bar app
 
-The client is structured around:
-- primary user-facing clients are now the native macOS and iPhone apps plus repo-level debug scripts
-- platform-adaptive rendering seams (markdown, controls)
-- the server remains the sole TypeScript runtime package
+- unified Sessions home screen (session list + New Chat form)
+- foreground-app environment provider (`mac:<bundleId>`, `web:<host>/<path>`)
+- streaming ACP chat with text, thinking, tools, permissions, plans
 
-- `clients/RookKit/` remains the shared Swift layer for the two native clients
+### 7.2 iPhone app
 
-### 7.2 Other clients/providers
+- unified Sessions home screen
+- location environment provider (`location:<slug>`) via CoreLocation geofencing
+- Live Activity / Dynamic Island
+- on-device voice (speech recognition + synthesis)
 
-Current ecosystem around `:3000`:
+### 7.3 Android app
 
-- there is no current in-repo browser chat client hosted by the server; `buildServer({ enableClient })` keeps `enableClient` only as a legacy no-op
-- there is no current in-repo Chrome extension package
-- **Obsidian plugin**: embeds the app in a sidebar view
-- **macOS menu bar app**: native SwiftUI client with the same backend; registers newly seen user-visible app/page encounters, including `web:<slug>` environments from the active browser, re-registers them every 5 minutes while still in its local TTL cache, and otherwise lets the server age them out
-- **iPhone app**: native SwiftUI client that registers `location:<slug>` environments from GPS geofences, making the agent location-aware (skills load as you arrive at a defined place). It also drives ptiles-based business discovery on arrival, registering `location:<domain>/…` environments — see [`location-environment-awareness.md`](./location-environment-awareness.md). Adds Live Activity / Dynamic Island presence and on-device voice.
+- same unified Sessions home model
+- Compose chat blocks mapping standard ACP updates
 
-The two native Swift clients share one cross-platform layer — models, the REST/ACP-WebSocket clients, the design system and chat-block views, voice, and Live Activity attributes — through the `clients/RookKit` Swift package, so they stay protocol- and design-consistent with a single source of truth.
+### 7.4 CLI client
+
+- `rook exec --runtime <id> <prompt>` — one-shot turn against any runtime
+- `rook exec --sessionId <id> <prompt>` — resume and extend a session
+- `rook sessions` — list sessions with metadata
+- `rook --transcript --sessionId <id>` — dump raw ACP transcript
+- `rook --runtime <id>` — interactive chat mode
 
 ## 8. Live message flow
 
-### 8.1 Starting a session
+### 8.1 Connecting
 
 ```text
 client
-  -> POST /api/agent/start
-  -> create or reuse SessionRoom
-  -> room has runtime + session metadata
+  -> WebSocket connect to /api/ws
+  -> initialize (returns runtime catalog, capabilities)
 ```
-
-If a prior session record exists but no live room exists, the server recreates the runtime from saved restart metadata.
 
 ### 8.2 Running a prompt
 
 ```text
-client websocket ACP request: session/prompt
-  -> websocketRoute
-  -> SessionRoom.run()
-  -> BaseAgent.run()
-  -> ACP subprocess
+client ACP request: session/prompt
+  -> acpFacadeRoute
+  -> AgentRuntimeManager.requestForSession()
+  -> SessionRuntime (stdio to ACP subprocess)
   -> session/update notifications
-  -> SessionRoom subscribers
-  -> connected clients
+  -> AgentRuntimeManager subscribers
+  -> connected client
 ```
 
-The room serializes prompt execution so overlapping turns do not race.
+### 8.3 Resuming a session
 
-### 8.3 Restoring history
+```text
+client ACP request: session/load
+  -> AgentRuntimeManager.restoreEnvironmentMembership()
+  -> SessionRuntime.request("session/load", ...)
+  -> runtime replays session history via session/update notifications
+  -> client receives transcript
+```
 
-Transcript restoration is primarily agent-owned now.
-
-On resumed sessions, `BaseAgent` uses ACP `session/load`, and restored history comes from the runtime rather than from a Rookery-owned replay log.
-
-### 8.4 Cancel and send-now
-
-- normal stop uses ACP `session/cancel`
-- send-now uses a Rookery extension request: `_rookery/steering_prompt`
-
-This preserves the product behavior while keeping provider-specific steering inside the runtime layer.
+`session/cancel` uses standard ACP cancel. There is no `_rookery/steering_prompt`.
 
 ## 9. API surface
 
 ### 9.1 REST
 
-Current major routes:
-
 - `GET /api/health`
-- `GET /api/agents`
-- `GET /api/agent/sessions?agent=<id>`
-- `GET /api/agent/session/recent`
-- `POST /api/agent/start`
+- `GET /api/agent_runtimes` — configured runtime catalog
+- `POST /api/session/environments` — enter/leave environments for a session
 - `POST /api/environments/register`
-- `POST /api/environments/decision` (bundle-level 2×2 decision keyed by exact bundle hash)
-- `POST /api/environments/identify` (read-only: coordinate → candidate `location:` environments)
-- `POST /api/environments/register-location` (identify + register/auto-enter the dwell set)
+- `POST /api/environments/decision`
 - `GET /api/environments/preview`
-- `GET /api/diagnostics/environments` (development-only grouped diagnostics: dumps active + recent environment memory)
+- `POST /api/environments/register-location`
+- `GET /api/diagnostics/environments`
 
 ### 9.2 WebSocket
 
-- `GET /api/ws?sessionId=...`
+- `GET /api/ws` — connection-level ACP endpoint (no session query parameter)
 
-The websocket carries ACP JSON-RPC messages.
+Supported ACP methods: `initialize`, `session/list`, `session/new`, `session/load`, `session/resume`, `session/prompt`, `session/cancel`, `session/set_mode`, `session/set_config_option`, `session/close`.
 
-Supported behaviors include:
-
-- `session/prompt`
-- `session/cancel`
-- `session/set_mode`
-- `session/set_config_option`
-- `_rookery/steering_prompt`
-- permission request/response relay
-- `session/update` fan-out from the runtime
-
-## 10. Persistence and local state
-
-Current local mutable state is under `.var/rook/`.
-
-Important pieces:
-
-- `environment-decisions.sqlite` - persistent bundle approvals/rejections keyed by exact bundle hash
-- generated Pi launchers
-- session records in `sessionLog.ts` backing saved/restartable sessions
-
-The important architecture change versus older versions is:
-
-- Rookery is **not** the primary durable transcript store anymore
-- live conversation history is restored via ACP `session/load`
-
-## 11. Current shared contracts
-
-TypeScript protocol/domain contracts now live directly under `server/src/shared/`.
-
-Important files:
-
-- `server/src/shared/acp.ts` — ACP JSON-RPC types
-- `server/src/shared/agent.ts` — session metadata and agent-facing shared types
-- `server/src/shared/environment.ts` — environment ids, decisions, and preview types
-
-The debug bridge CLI and the server import from `server/src/shared/`. The server also retains locally-scoped shared helpers (`realtime.ts`) that carry server-side logic.
-
-## 12. Architecture constraints that matter right now
-
-1. **One live room per session id.**
-2. **ACP is the primary protocol on both sides of the server.**
-3. **Environment bundle decisions are keyed by exact bundle-content hash, and current environment availability is process-local memory.**
-4. **`EnvironmentManager` currently discovers/hashes/offers bundles on registration rather than rebuilding runtimes.**
-5. **Session restoration depends on saved restart metadata plus ACP `session/load`.**
-6. **Pi-specific behavior should stay inside `PiAgent` or `pi-acp`, not leak into the client.**
-
-## 13. Recommended mental model
-
-The shortest accurate model of the current system is:
-
-> Rookery is a localhost ACP router/orchestrator with native clients, a room-based session lifecycle, and an environment system that currently caches/logs active and recent environments in memory.
+Supported ACP extension: `_com.the-rooks-nest/environment_offer*` (negotiated via `initialize` capabilities).

@@ -189,6 +189,15 @@ async function handleMessage(message) {
     write({ jsonrpc: '2.0', id: message.id, result: { sessions: [...sessions.values()].map((session) => ({ sessionId: session.sessionId, title: 'mock', updatedAt: new Date().toISOString() })) } });
     return;
   }
+
+  if (message.method === 'session/close') {
+    write({ jsonrpc: '2.0', id: message.id, result: { ok: true } });
+    return;
+  }
+
+  if (message.id != null) {
+    write({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: `Unknown method: ${message.method}` } });
+  }
 }
 
 async function handleLoad(message) {

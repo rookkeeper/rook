@@ -186,6 +186,18 @@ What is not yet the focus:
 - final session visuals
 - toasts, error UX, and other product-grade affordances
 
+### Session replay learnings
+
+When a native client resumes a session via `session/load`, the runtime may stream session history as `session/update` notifications. If the client clears its chat blocks AFTER `session/load` returns, the replayed history is wiped. The correct pattern:
+
+1. Clear UI state BEFORE `session/load`.
+2. Buffer replay events separately from active-turn streaming state — user messages, assistant text, thinking blocks, and tool calls each need their own accumulation buffers so they form distinct blocks rather than merging into one streaming block.
+3. Keep `isRunning = false` during replay so the UI status indicator doesn't glow.
+
+### CLI client as a debugging tool
+
+A minimal Node.js CLI client (`clients/cli/`) proved invaluable for rapid iteration. It talks ACP directly — no native UI rebuilds needed — and can create/load/list/dump sessions, send prompts, and stream colored output. Combined with the `MockAcpAgent` runtime (configured in `agent-runtimes.json`), the CLI enables end-to-end testing of server behavior, ACP message routing, and session state before touching any native client code. Its `--transcript` flag dumps the raw ACP session transcript, making it easy to compare expected vs actual replay output when debugging native client rendering.
+
 ## Summary
 
 The main architectural learning is that Rook should move toward:

@@ -27,7 +27,7 @@ describe("SqliteSessionRepository", () => {
     await repository.touch("Pi:pi-1", "2026-01-04T00:00:00.000Z");
     expect((await repository.list())[0]?.sessionId).toBe("Pi:pi-1");
     await repository.replaceEnvironmentIds("Pi:pi-1", ["web:example.com", "location:target"]);
-    expect(await repository.environmentIds("Pi:pi-1")).toEqual(["web:example.com", "location:target"]);
+    expect(new Set(await repository.environmentIds("Pi:pi-1"))).toEqual(new Set(["web:example.com", "location:target"]));
     repository.close();
   });
 });

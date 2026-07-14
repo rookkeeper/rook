@@ -12,13 +12,10 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
 
 ## Features
 
-- **Agent picker** - `GET /api/agents`, rendered as a tree (profiles indented
-  under their parent agent).
-- **Sessions** - per-agent session history with running/stopped state, resume
-  any session, or start a named new chat (`POST /api/agent/start`).
-- **Auto-resume** - on launch the app rejoins the most recent session
-  (`GET /api/agent/session/recent`), like the web client.
-- **Streaming chat** — `session/prompt` over `ws://127.0.0.1:3000/api/ws`;
+- **Agent picker** - unified Sessions home screen listing all sessions across runtimes, with a New Chat form that selects a configured runtime.
+- **Sessions** - session history ordered by most recently updated; resume any session by clicking it. Session creation and loading use ACP (`session/new`, `session/load`) over the connection-level WebSocket.
+- **Auto-resume** - on launch the app rejoins the most recent session via ACP `session/load`.
+- **Streaming chat** — `session/prompt` over `ws://127.0.0.1:7665/api/ws`;
   renders agent text, thinking (collapsible), tool calls with normalized raw
   input/output (including auto-rendering well-formed JSON tool arguments as
   human-readable YAML), and assistant markdown with native drag-selection,
@@ -30,8 +27,7 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
   `current_mode_update`), and config options
   (`session/set_config_option` / `config_option_update`).
 - **Message queueing** — messages sent while the agent is busy queue and
-  auto-send after the current turn (120 ms gap), matching the web client, with
-  queue edit / delete / send-now controls (`_rookery/steering_prompt`).
+  auto-send after the current turn (120 ms gap). Queued messages can be edited or deleted.
 - **Environment offers** - `environment_offer_available` events open a native
   bundle-level approval view showing the offered bundle name plus the names of
   any bundled skills, MCP servers, and apps, with the four 2×2 decisions
@@ -330,7 +326,7 @@ defaults write com.rookery.Rook ShowPanelWindow -bool false  # off
   empty thread (the app notes this inline).
 - Rooms idle-stop ~15 s after their last client disconnects. The app keeps its
   socket open while a session is current - including while the panel is
-  closed - and transparently restarts the room (re-`POST /api/agent/start`)
+  closed - and transparently reloads the session (ACP `session/load`)
   when reconnecting.
 - Intentional socket teardowns (switching sessions) are silent; only genuine
   transport failures trigger the reconnect path, and a successful connection

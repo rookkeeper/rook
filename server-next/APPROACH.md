@@ -415,6 +415,27 @@ Do this in coherent vertical slices; do not leave protocol compatibility shims b
 - Compatibility support for old session REST endpoints or old WebSocket query semantics
 - Reintroducing custom ACP methods/updates as shortcuts for environment or runtime state
 
+## Additional learnings during port
+
+### CLI client as a debugging tool
+
+A minimal Node.js CLI client (`clients/cli/`) proved invaluable for rapid iteration:
+
+- `rook exec --runtime <id> <prompt>` — one-shot turns against any configured runtime
+- `rook exec --sessionId <id> <prompt>` — resume and extend an existing session
+- `rook sessions` — list all sessions with metadata
+- `rook --transcript --sessionId <id>` — dump the raw ACP session transcript
+- `--title` enables named sessions for easy identification in the native clients
+- `--last-message-only` suppresses streaming output, useful for scripting
+
+The CLI talks ACP directly — no native UI rebuilds needed. Combined with the configured `MockAcpAgent` runtime (which stores transcripts and replays on load), it enables fast test-driven debugging of server behavior, ACP message routing, and session state before touching any native client code.
+
+### Session replay: clear-before-load, not after
+
+When a native client resumes a session via `session/load`, the runtime may stream session history as `session/update` notifications. If the client clears its chat blocks AFTER `session/load` returns (the natural tendency in an `enterChat`-style helper), the replayed history is wiped.
+
+The correct pattern: clear state BEFORE `session/load`, buffer incoming replay events separately from active-turn streaming state (so user/assistant/thinking/tool sections remain distinct blocks, not merged streaming blocks), and keep `isRunning = false` during replay so the UI status indicator stays "Ready."
+
 ## Definition of done
 
 The port is complete when:
