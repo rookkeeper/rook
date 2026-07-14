@@ -86,47 +86,9 @@ class RookApi(
     suspend fun health(timeoutMs: Long = 1500): Boolean = healthResult(timeoutMs) is RookHealthResult.Ok
 
     suspend fun agents(): List<AgentDefinition> {
-        @Serializable data class AgentsResponse(val agents: List<AgentDefinition>)
-        val body = getJson("api/agents")
-        return json.decodeFromJsonElement(AgentsResponse.serializer(), body).agents
-    }
-
-    suspend fun sessions(agent: String): List<AgentSessionSummary> {
-        val body = getJson("api/agent/sessions", mapOf("agent" to agent))
-        val items = body["sessions"] as? JsonArray ?: return emptyList()
-        return items.map { AgentSessionSummary(it.jsonObject) }
-    }
-
-    suspend fun recentSession(): AgentSessionSummary? {
-        val body = getJson("api/agent/session/recent")
-        val session = body["session"] ?: return null
-        if (session is JsonNull) return null
-        return AgentSessionSummary(session.jsonObject)
-    }
-
-    suspend fun startSession(agent: String, sessionName: String?): AgentSessionSummary {
-        val payload = buildJsonObject {
-            put("agent", agent)
-            if (!sessionName.isNullOrEmpty()) put("sessionName", sessionName)
-        }
-        return start(payload)
-    }
-
-    suspend fun resumeSession(session: AgentSessionSummary): AgentSessionSummary {
-        val payload = buildJsonObject {
-            put("agent", session.agent)
-            put("session", session.raw)
-        }
-        return start(payload)
-    }
-
-    private suspend fun start(payload: JsonObject): AgentSessionSummary {
-        val body = postJson("api/agent/start", payload)
-        val session = body["session"]
-        if (session == null || session is JsonNull) {
-            throw RookApiException("Server returned no session")
-        }
-        return AgentSessionSummary(session.jsonObject)
+        @Serializable data class RuntimeResponse(val runtimes: List<AgentDefinition>)
+        val body = getJson("api/agent_runtimes")
+        return json.decodeFromJsonElement(RuntimeResponse.serializer(), body).runtimes
     }
 
     suspend fun environmentPreview(environmentId: String): EnvironmentPreview {
@@ -162,7 +124,7 @@ class RookApi(
 
     /**
      * Committing variant: identify, then register/auto-enter the dwell set into the
-     * SessionRoom/agent. This is what the arrival path (classifier Stationary) calls.
+     * current session/runtime flow. This is what the arrival path (classifier Stationary) calls.
      */
     suspend fun registerLocation(request: IdentifyAvailableRequest): List<EnvironmentCandidate> {
         @Serializable data class IdentifyResponse(val candidates: List<EnvironmentCandidate>)
@@ -183,18 +145,19 @@ class RookApi(
     }
 
     suspend fun enterEnvironment(sessionId: String, environmentId: String): List<String> =
-        enterExit("api/environments/enter", sessionId, environmentId)
+        updateSessionEnvironments(sessionId, listOf(environmentId), emptyList())
 
     suspend fun exitEnvironment(sessionId: String, environmentId: String): List<String> =
-        enterExit("api/environments/exit", sessionId, environmentId)
+        updateSessionEnvironments(sessionId, emptyList(), listOf(environmentId))
 
-    private suspend fun enterExit(path: String, sessionId: String, environmentId: String): List<String> {
+    suspend fun updateSessionEnvironments(sessionId: String, enterEnvironmentIds: List<String>, leaveEnvironmentIds: List<String>): List<String> {
         @Serializable data class EnterResponse(val ok: Boolean = false, val entered: List<String> = emptyList())
         val body = postJson(
-            path,
+            "api/session/environments",
             buildJsonObject {
                 put("sessionId", sessionId)
-                put("environmentId", environmentId)
+                put("enterEnvironmentIds", json.encodeToJsonElement(ListSerializer(String.serializer()), enterEnvironmentIds))
+                put("leaveEnvironmentIds", json.encodeToJsonElement(ListSerializer(String.serializer()), leaveEnvironmentIds))
             }
         )
         return json.decodeFromJsonElement(EnterResponse.serializer(), body).entered

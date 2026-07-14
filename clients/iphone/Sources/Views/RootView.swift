@@ -13,8 +13,6 @@ struct RootView: View {
 
             if model.currentSession != nil && model.chatVisible {
                 ChatScreen(model: model)
-            } else if let agentId = model.selectedAgentId {
-                SessionsScreen(model: model, agentId: agentId)
             } else {
                 AgentPickerScreen(model: model)
             }

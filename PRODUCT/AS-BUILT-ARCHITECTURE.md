@@ -68,6 +68,7 @@ See also: [`PRODUCT/agent-client-protocol.md`](./agent-client-protocol.md)
 | `server/src/shared/` | Server-local ACP types, environment DTOs, agent/session contracts |
 | `clients/mac/` | Native macOS client and environment provider (`mac:<slug>`) |
 | `clients/iphone/` | Native iOS client and location environment provider (`location:<slug>`) |
+| `clients/cli/` | Minimal ACP-first command-line client for fast session/runtime debugging |
 | `clients/RookKit/` | Shared Swift package (iOS + macOS) backing both native Swift clients |
 | `environment-repository/` | Local environment bundle content keyed by `<kind>/<path>` |
 | `PRODUCT/` | Product and architecture notes |

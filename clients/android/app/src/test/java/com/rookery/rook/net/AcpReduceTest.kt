@@ -212,4 +212,58 @@ class AcpReduceTest {
         job.join()
         assertEquals(AcpClientEvent.UserMessageChunk("different"), events.single())
     }
+
+    @Test
+    fun environmentOfferNotificationEmitsEnvironmentOffered() = runTest {
+        val socket = AcpSocket()
+        val events = mutableListOf<AcpClientEvent>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            socket.events.take(1).toList(events)
+        }
+
+        socket.handleFrame(
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("method", "_com.the-rooks-nest/environment_offer")
+                putJsonObject("params") {
+                    put("environmentId", "location:store")
+                    put("bundleId", "bundle-1")
+                    put("bundleHash", "hash-1")
+                    put("sourceName", "Store")
+                    putJsonArray("skills") { }
+                    putJsonArray("mcpServers") { }
+                    putJsonArray("apps") { }
+                }
+            }
+        )
+
+        job.join()
+        val event = events.single() as AcpClientEvent.EnvironmentOffered
+        assertEquals("location:store", event.offer.environmentId)
+        assertEquals("bundle-1", event.offer.bundleId)
+        assertEquals("hash-1", event.offer.bundleHash)
+    }
+
+    @Test
+    fun environmentOfferResolvedNotificationEmitsResolvedEvent() = runTest {
+        val socket = AcpSocket()
+        val events = mutableListOf<AcpClientEvent>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            socket.events.take(1).toList(events)
+        }
+
+        socket.handleFrame(
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("method", "_com.the-rooks-nest/environment_offer_resolved")
+                putJsonObject("params") {
+                    put("environmentId", "location:store")
+                    put("bundleHash", "hash-1")
+                }
+            }
+        )
+
+        job.join()
+        assertEquals(AcpClientEvent.EnvironmentOfferResolved("location:store", "hash-1"), events.single())
+    }
 }

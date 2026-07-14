@@ -11,7 +11,7 @@ public struct AgentDefinition: Codable, Equatable, Identifiable {
 }
 
 /// Wraps the raw session record JSON so resume can send the record back to
-/// `POST /api/agent/start` verbatim, including fields this app doesn't model.
+/// ACP session summaries plus Rook `_meta` fields, including fields this app doesn't model.
 public struct AgentSessionSummary: Equatable, Identifiable {
     public let raw: JSONValue
 
@@ -19,14 +19,16 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         self.raw = raw
     }
 
-    public var id: String { raw["id"]?.stringValue ?? "" }
-    public var agent: String { raw["agent"]?.stringValue ?? "" }
-    public var name: String { raw["name"]?.stringValue ?? "default" }
+    public var id: String { raw["id"]?.stringValue ?? raw["sessionId"]?.stringValue ?? "" }
+    public var agent: String { raw["agent"]?.stringValue ?? raw["_meta"]?["runtimeId"]?.stringValue ?? "" }
+    public var name: String { raw["name"]?.stringValue ?? raw["title"]?.stringValue ?? "default" }
     public var running: Bool { raw["running"]?.boolValue ?? false }
     public var connectedClients: Int { Int(raw["connectedClients"]?.numberValue ?? 0) }
+    public var updatedAtISO: String? { raw["updatedAt"]?.stringValue }
+    public var startedAtISO: String? { raw["createdAt"]?.stringValue ?? raw["_meta"]?["startedAt"]?.stringValue }
 
     public var createdAt: Date? {
-        guard let iso = raw["createdAt"]?.stringValue else {
+        guard let iso = startedAtISO else {
             return nil
         }
         let withFraction = ISO8601DateFormatter()
@@ -38,9 +40,23 @@ public struct AgentSessionSummary: Equatable, Identifiable {
     }
 
     public var createdAtLabel: String {
-        guard let date = createdAt else {
-            return ""
-        }
+        formatDate(createdAt)
+    }
+
+    public var updatedAtLabel: String {
+        formatDate(dateFromISO(updatedAtISO))
+    }
+
+    private func dateFromISO(_ value: String?) -> Date? {
+        guard let iso = value else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: iso) { return date }
+        return ISO8601DateFormatter().date(from: iso)
+    }
+
+    private func formatDate(_ date: Date?) -> String {
+        guard let date else { return "" }
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short

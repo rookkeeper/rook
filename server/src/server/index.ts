@@ -18,12 +18,15 @@ import { LocationRegistrar } from "./location/LocationRegistrar.js";
 import { createUpstreamFetchRange } from "./location/ptiles/ptilesFetch.js";
 import type { PoiLookupProvider } from "./location/PoiLookupProvider.js";
 import { REPO_ROOT } from "./paths.js";
-import { SessionRoomManager } from "./realtime/SessionRoomManager.js";
-import { registerAgentRoutes } from "./routes/agentRoutes.js";
 import { registerEnvironmentRoutes } from "./routes/environmentRoutes.js";
 import { registerDiagnosticRoutes } from "./routes/diagnosticRoutes.js";
-import { registerWebsocketRoute } from "./routes/websocketRoute.js";
+import { registerRuntimeRoutes } from "./routes/runtimeRoutes.js";
+import { registerAcpFacadeRoute } from "./routes/acpFacadeRoute.js";
 import { ServerAuth } from "./auth.js";
+import { loadAgentRuntimes } from "./config/agentRuntimes.js";
+import { RookDatastore } from "./datastore/RookDatastore.js";
+import { SqliteSessionRepository } from "./datastore/SqliteSessionRepository.js";
+import { AgentRuntimeManager } from "./services/AgentRuntimeManager.js";
 import { startRemoteProxy } from "./remoteProxy.js";
 
 dotenv.config({ path: path.join(REPO_ROOT, ".env") });
@@ -72,7 +75,8 @@ export async function buildServer(options: BuildServerOptions = {}) {
     locationContextRepository,
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
-  const environmentDecisionStore = new EnvironmentDecisionStore(options.environmentDecisionStoreLocation);
+  const datastore = new RookDatastore(options.environmentDecisionStoreLocation);
+  const environmentDecisionStore = new EnvironmentDecisionStore(datastore);
   const environmentMetadataCaptureSink = new JsonlEnvironmentMetadataCaptureSink();
   await environmentMetadataCaptureSink.initialize();
   const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionStore, {
@@ -90,11 +94,8 @@ export async function buildServer(options: BuildServerOptions = {}) {
     skillSuggester: new MockBuildingSkillSuggester(),
   });
   const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
-  const roomManager = new SessionRoomManager({
-    idleTimeoutMs: options.roomIdleTimeoutMs,
-    onRoomRemoved: (sessionId) => environmentManager.unsubscribe(sessionId),
-  });
-
+  const sessionRepository = new SqliteSessionRepository(datastore);
+  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, environmentManager);
   await app.register(websocket);
 
   app.addHook("onRequest", async (request, reply) => {
@@ -105,13 +106,15 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
   app.addHook("onClose", async () => {
     environmentManager.close();
-    await roomManager.closeAll();
+    await runtimeManager.close();
+    datastore.close();
   });
 
-  await registerAgentRoutes(app, { roomManager, environmentManager });
-  await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar);
+  app.get("/api/health", async () => ({ ok: true, service: "rook" }));
+  await registerRuntimeRoutes(app, runtimeManager);
+  await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar, runtimeManager);
   await registerDiagnosticRoutes(app, environmentManager);
-  await registerWebsocketRoute(app, roomManager, auth);
+  await registerAcpFacadeRoute(app, runtimeManager, auth);
 
   return app;
 }

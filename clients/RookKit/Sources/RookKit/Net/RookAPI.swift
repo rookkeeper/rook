@@ -37,10 +37,8 @@ public struct RookAPI {
 
     public var webAppURL: URL { baseURL }
 
-    public func webSocketRequest(sessionId: String) -> URLRequest {
-        var components = URLComponents(url: webSocketURL, resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "sessionId", value: sessionId)]
-        var request = authorizedRequest(url: components.url!)
+    public func webSocketRequest() -> URLRequest {
+        var request = authorizedRequest(url: webSocketURL)
         request.timeoutInterval = 30
         return request
     }
@@ -86,51 +84,11 @@ public struct RookAPI {
     }
 
     public func agents() async throws -> [AgentDefinition] {
-        struct AgentsResponse: Codable {
-            let agents: [AgentDefinition]
+        struct RuntimeResponse: Codable {
+            let runtimes: [AgentDefinition]
         }
-        let body: AgentsResponse = try await get(path: "api/agents", query: [:])
-        return body.agents
-    }
-
-    public func sessions(agent: String) async throws -> [AgentSessionSummary] {
-        let body = try await getJSON(path: "api/agent/sessions", query: ["agent": agent])
-        guard case .array(let items)? = body["sessions"] else {
-            return []
-        }
-        return items.map(AgentSessionSummary.init(raw:))
-    }
-
-    public func recentSession() async throws -> AgentSessionSummary? {
-        let body = try await getJSON(path: "api/agent/session/recent", query: [:])
-        guard let session = body["session"], session != .null else {
-            return nil
-        }
-        return AgentSessionSummary(raw: session)
-    }
-
-    public func startSession(agent: String, sessionName: String?) async throws -> AgentSessionSummary {
-        var payload: [String: JSONValue] = ["agent": .string(agent)]
-        if let sessionName, !sessionName.isEmpty {
-            payload["sessionName"] = .string(sessionName)
-        }
-        return try await start(payload: payload)
-    }
-
-    public func resumeSession(_ session: AgentSessionSummary) async throws -> AgentSessionSummary {
-        let payload: [String: JSONValue] = [
-            "agent": .string(session.agent),
-            "session": session.raw,
-        ]
-        return try await start(payload: payload)
-    }
-
-    private func start(payload: [String: JSONValue]) async throws -> AgentSessionSummary {
-        let body = try await postJSON(path: "api/agent/start", payload: .object(payload))
-        guard let session = body["session"], session != .null else {
-            throw RookAPIError(message: "Server returned no session")
-        }
-        return AgentSessionSummary(raw: session)
+        let body: RuntimeResponse = try await get(path: "api/agent_runtimes", query: [:])
+        return body.runtimes
     }
 
     public func environmentPreview(environmentId: String) async throws -> EnvironmentPreview {
@@ -189,30 +147,24 @@ public struct RookAPI {
     }
 
     public func enterEnvironment(sessionId: String, environmentId: String) async throws -> [String] {
-        struct EnterResponse: Decodable {
-            let ok: Bool
-            let entered: [String]
-        }
-        let response: EnterResponse = try await post(
-            path: "api/environments/enter",
-            payload: .object([
-                "sessionId": .string(sessionId),
-                "environmentId": .string(environmentId),
-            ])
-        )
-        return response.entered
+        try await updateSessionEnvironments(sessionId: sessionId, enterEnvironmentIds: [environmentId], leaveEnvironmentIds: [])
     }
 
     public func exitEnvironment(sessionId: String, environmentId: String) async throws -> [String] {
-        struct ExitResponse: Decodable {
+        try await updateSessionEnvironments(sessionId: sessionId, enterEnvironmentIds: [], leaveEnvironmentIds: [environmentId])
+    }
+
+    public func updateSessionEnvironments(sessionId: String, enterEnvironmentIds: [String], leaveEnvironmentIds: [String]) async throws -> [String] {
+        struct EnvironmentResponse: Decodable {
             let ok: Bool
             let entered: [String]
         }
-        let response: ExitResponse = try await post(
-            path: "api/environments/exit",
+        let response: EnvironmentResponse = try await post(
+            path: "api/session/environments",
             payload: .object([
                 "sessionId": .string(sessionId),
-                "environmentId": .string(environmentId),
+                "enterEnvironmentIds": .array(enterEnvironmentIds.map(JSONValue.string)),
+                "leaveEnvironmentIds": .array(leaveEnvironmentIds.map(JSONValue.string)),
             ])
         )
         return response.entered

@@ -28,11 +28,11 @@ server ACP facade: GET /api/ws
 AgentRuntimeManager (service)
   ├─ SessionService / session repository
   ├─ runtime catalog from configured agent-runtimes.json
-  └─ lazy AgentRuntime instances
-        ├─ Pi ACP subprocess
-        ├─ Claude ACP subprocess
-        ├─ Cursor ACP subprocess
-        └─ generic ACP subprocess
+  └─ lazy SessionRuntime instances (one per public session)
+        ├─ composed Pi launch integration
+        ├─ composed Claude launch integration
+        ├─ composed Cursor launch integration
+        └─ composed generic ACP launch integration
 ```
 
 The real server becomes a single ACP-compliant agent from a client’s perspective. It is internally a broker for multiple configured runtimes.
@@ -58,11 +58,7 @@ The opening screen in every native client becomes a **Sessions** home screen:
 
 Creating a session selects a runtime ID, but runtime selection does not create a UI silo. Runtime is session metadata, not navigation structure.
 
-Public session IDs remain explicit and routable:
-
-```text
-<runtimeId>:<runtimeSessionId>
-```
+Public session IDs are stable Rook-generated UUIDs. The persisted record maps that durable identity to `runtimeId` and the runtime-local ACP `runtimeSessionId`.
 
 The session record persists the public ID plus `runtimeId`, `runtimeSessionId`, title, cwd, `startedAt`, and `updatedAt`. ACP does not provide a general `startedAt`; Rook owns and stores that field.
 
@@ -188,7 +184,7 @@ Delete rather than adapt:
 
 ### Remove old runtime inheritance/discovery layer
 
-The target runtime process abstraction is `AgentRuntime`, not `BaseAgent`. Delete rather than preserve:
+The target runtime process abstraction is `SessionRuntime`, not `BaseAgent`. A `SessionRuntime` is created lazily per public session and uses a composed provider integration rather than provider subclasses. Delete rather than preserve:
 
 - `BaseAgent`
 - `PiAgent`
@@ -208,19 +204,26 @@ Introduce an environment-facing service interface owned by the new session/runti
 
 ```text
 EnvironmentManager
-  -> EnvironmentSessionRuntimeService
-      -> SessionService + AgentRuntimeManager
+  -> AgentRuntimeManager (internal subscription per session)
+      -> SessionRuntime for that public session
 ```
 
-That adapter is responsible for the existing semantics:
+`AgentRuntimeManager` is responsible for the existing semantics:
 
 - subscribe/unsubscribe a session to environment availability;
-- apply accepted/approved environment skill paths to that session’s runtime configuration;
-- recreate/reload the selected runtime when an environment change requires it;
-- preserve the session’s public identity and update its persisted runtime-local identity if a runtime has to create a replacement ACP session;
+- accept one explicit non-ACP API request containing the session ID plus environment IDs to enter and leave;
+- apply accepted/approved environment skill paths to only that session’s runtime configuration;
+- start a replacement `SessionRuntime` process and successfully `session/load` its current ACP session before stopping the old process;
+- treat a failed `session/load` as an error; never silently create a replacement ACP session and lose session state;
 - retain existing environment decision rules, environment list behavior, location registration behavior, and HTTP route contracts.
 
-The adapter must not emit Rookery-specific ACP messages. Environment UI state should be obtained through the existing environment HTTP routes and refreshed after a relevant action, or through a separate non-ACP product channel only if one is later deliberately designed. It must not leak through the ACP chat protocol.
+The adapter must not emit Rookery-specific `session/update` messages. Environment offer UI uses one explicitly negotiated ACP extension under the owned reverse-domain namespace `com.the-rooks-nest`, not a fake chat update:
+
+- `_com.the-rooks-nest/environment_offer` notification
+- `_com.the-rooks-nest/environment_offer_resolve` request
+- `_com.the-rooks-nest/environment_offer_resolved` notification
+
+Support is advertised in `initialize` capability `_meta`. Offers are stored per session and replayed after reconnect/load for capable clients. Explicit environment membership remains a normal HTTP API; future agent tools call the same service method.
 
 This is the primary migration risk. It needs dedicated tests proving that environment entry/exit and restart behavior still work for Pi, Claude, Cursor, and generic ACP runtimes.
 
@@ -248,9 +251,9 @@ Suggested location: `server/src/server/services/`.
 
 Responsibilities:
 
-- `AgentRuntimeManager`: lazy runtime catalog and runtime lifecycle
+- `AgentRuntimeManager`: lazy runtime catalog and one-`SessionRuntime`-per-session lifecycle
 - `SessionService`: public session ID routing, session creation/load/list/update, ordered unified list
-- `EnvironmentSessionRuntimeService`: environment-to-session runtime coordination
+- environment/session coordination owned directly by `AgentRuntimeManager`, which subscribes to `EnvironmentManager` internally
 - any narrow configuration service needed to expose explicitly configured runtime definitions
 
 This layer owns policy and orchestration.
@@ -394,9 +397,9 @@ The existing Compose chat blocks can remain and should continue mapping standard
 Do this in coherent vertical slices; do not leave protocol compatibility shims behind.
 
 1. **Write contract tests first.** Define tests for `initialize`, explicit runtime enumeration, unified `session/list`, `session/new`, `session/load`, prompt, cancel, permission relay, reconnect, and no `_rookery` client/server messages.
-2. **Introduce SQLite session repository and schema.** Migrate no old session data automatically unless separately decided; old JSONL session records are not a compatible source of public runtime-prefixed IDs.
-3. **Add runtime config loader and runtime adapters.** Port the proven `AgentRuntimeManager`/`AgentRuntime` approach, including lazy process startup, public-ID rewriting, and runtime exit handling.
-4. **Build the service layer.** Add `SessionService` and the environment adapter before touching the public route.
+2. **Introduce SQLite session repository and schema.** Migrate no old session data automatically unless separately decided; old JSONL session records are not a compatible source of stable Rook session IDs.
+3. **Add runtime config loader and composed runtime integrations.** Port the manager approach as one lazy `SessionRuntime` per public session, including restart-safe `session/load`, public-ID rewriting, and runtime exit handling.
+4. **Build the service layer.** Attach `AgentRuntimeManager` directly to `EnvironmentManager` before touching the public route. Add the explicit session-environment API that supplies enter/leave lists.
 5. **Replace agent/session routes and `/api/ws` in one server cutover.** Delete room code, legacy agent API, BaseAgent hierarchy, steering, and Rookery ACP updates in the same change.
 6. **Port RookKit transport and unified session state.** Keep health/environment REST services intact.
 7. **Port macOS, iPhone, and Android home/session navigation.** Each gets the same unified list and title/runtime New flow.

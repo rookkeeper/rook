@@ -91,9 +91,6 @@ class RookViewModel(
     private val _agentsError = MutableStateFlow("")
     val agentsError: StateFlow<String> = _agentsError.asStateFlow()
 
-    private val _selectedAgentId = MutableStateFlow<String?>(null)
-    val selectedAgentId: StateFlow<String?> = _selectedAgentId.asStateFlow()
-
     private val _sessions = MutableStateFlow<List<AgentSessionSummary>>(emptyList())
     val sessions: StateFlow<List<AgentSessionSummary>> = _sessions.asStateFlow()
 
@@ -226,9 +223,13 @@ class RookViewModel(
                 _agents.value = api.agents()
                 _agentsError.value = ""
             } catch (e: Exception) {
-                _agentsError.value = e.message ?: "Failed to load agents"
+                _agentsError.value = e.message ?: "Failed to load runtimes"
             }
         }
+    }
+
+    private suspend fun ensureSocketConnected() {
+        socket.connect(api.webSocketUrl)
     }
 
     fun refreshHealth() {
@@ -241,6 +242,7 @@ class RookViewModel(
             }
             if (_serverState.value == ServerState.ONLINE && !wasOnline) {
                 loadAgents()
+                loadSessions("")
                 autoResumeRecentSessionIfNeeded()
                 reannouncePlaceEnvironment()
             }
@@ -257,33 +259,23 @@ class RookViewModel(
         autoResumeAttempted = true
         scope.launch {
             try {
-                val recent = api.recentSession() ?: return@launch
-                val started = api.resumeSession(recent)
-                enterChat(started, resumed = true, switchToChat = false)
-            } catch (e: Exception) {
-                // no-op: auto-resume is best-effort
+                ensureSocketConnected()
+                val recent = socket.sessionList().firstOrNull()?.let(::AgentSessionSummary) ?: return@launch
+                socket.loadSession(recent.id)
+                enterChat(recent, resumed = true, switchToChat = false)
+            } catch (_: Exception) {
             }
         }
     }
 
     // MARK: - Session lifecycle
 
-    fun openAgentSessions(agentId: String) {
-        _selectedAgentId.value = agentId
-        _sessions.value = emptyList()
-        _sessionsError.value = ""
-        loadSessions(agentId)
-    }
-
-    fun closeAgentSessions() {
-        _selectedAgentId.value = null
-    }
-
     fun loadSessions(agentId: String) {
         scope.launch {
             _sessionsLoading.value = true
             try {
-                _sessions.value = api.sessions(agentId)
+                ensureSocketConnected()
+                _sessions.value = socket.sessionList().map(::AgentSessionSummary)
                 _sessionsError.value = ""
             } catch (e: Exception) {
                 _sessionsError.value = e.message ?: "Failed to load sessions"
@@ -298,8 +290,10 @@ class RookViewModel(
         scope.launch {
             _startingSession.value = true
             try {
-                val session = api.startSession(agentId, trimmedName.ifEmpty { null })
-                enterChat(session, resumed = false)
+                ensureSocketConnected()
+                val sessionId = socket.createSession(agentId, trimmedName.ifEmpty { "session" }, System.getProperty("user.dir") ?: ".")
+                _sessions.value = socket.sessionList().map(::AgentSessionSummary)
+                _sessions.value.firstOrNull { it.id == sessionId }?.let { enterChat(it, resumed = false) }
             } catch (e: Exception) {
                 _sessionsError.value = e.message ?: "Failed to start session"
             } finally {
@@ -312,8 +306,9 @@ class RookViewModel(
         scope.launch {
             _startingSession.value = true
             try {
-                val started = api.resumeSession(session)
-                enterChat(started, resumed = true)
+                ensureSocketConnected()
+                socket.loadSession(session.id)
+                enterChat(session, resumed = true)
             } catch (e: Exception) {
                 _sessionsError.value = e.message ?: "Failed to resume session"
             } finally {
@@ -324,14 +319,12 @@ class RookViewModel(
 
     fun openChat() {
         if (_currentSession.value == null) return
-        _selectedAgentId.value = null
         _chatVisible.value = true
     }
 
     private fun enterChat(session: AgentSessionSummary, resumed: Boolean, switchToChat: Boolean = true) {
         reconnectJob?.cancel()
         reconnectJob = null
-        _selectedAgentId.value = null
         _chatVisible.value = switchToChat
         _currentSession.value = session
         _blocks.value = emptyList()
@@ -342,7 +335,7 @@ class RookViewModel(
         if (resumed) {
             appendBlock(ChatBlockKind.System("Resumed session — earlier messages aren't replayed."))
         }
-        socket.connect(session.id, api.webSocketUrl)
+        socket.selectSession(session.id)
     }
 
     fun leaveChat() {
@@ -411,8 +404,8 @@ class RookViewModel(
             if (_currentSession.value == null) return@launch
             if (api.health()) {
                 try {
-                    api.resumeSession(session)
-                    socket.connect(session.id, api.webSocketUrl)
+                    ensureSocketConnected()
+                    socket.loadSession(session.id)
                     _reconnecting.value = false
                     deliverNextQueuedIfIdle()
                 } catch (_: Exception) {
@@ -859,7 +852,7 @@ class RookViewModel(
         val offer = _pendingOffer.value ?: return
         _pendingOffer.value = null // optimistic; server also emits offer_resolved
         scope.launch {
-            runCatching { api.decideEnvironment(offer.environmentId, offer.bundleHash, decision) }
+            runCatching { socket.resolveEnvironmentOffer(offer.environmentId, offer.bundleHash, decision) }
                 .onFailure { _offerError.value = it.message ?: "Failed to record decision" }
         }
     }

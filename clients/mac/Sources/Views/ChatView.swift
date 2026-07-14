@@ -235,9 +235,6 @@ struct ChatDetail: View {
                             queueButton("Edit", systemImage: "pencil", tint: PanelPalette.secondaryText) {
                                 model.beginEditingQueuedMessage(message.id)
                             }
-                            queueButton("Send now", systemImage: "paperplane.fill", tint: PanelPalette.accent) {
-                                model.sendQueuedMessageNow(message.id)
-                            }
                             queueButton("Delete", systemImage: "trash", tint: PanelPalette.danger) {
                                 model.removeQueuedMessage(at: index)
                             }

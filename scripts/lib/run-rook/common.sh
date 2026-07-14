@@ -118,9 +118,11 @@ start_server() {
 }
 
 stop_mac_app() {
-  if pgrep -f Rook >/dev/null 2>&1; then
-    log "stopping existing Rook mac app"
-    pkill -f Rook || true
+  # Kill any running Rook processes — both the run-rook build and any stale
+  # Xcode DerivedData copies that share the same bundle ID.
+  if pgrep -f '/Rook.app/Contents/MacOS/Rook' >/dev/null 2>&1; then
+    log "stopping existing Rook mac app(s)"
+    pkill -f '/Rook.app/Contents/MacOS/Rook' || true
     sleep 1
   fi
 }
@@ -391,13 +393,7 @@ build_mac_app() {
   local app_path="$RUN_ROOK_LAST_MAC_APP_PATH"
   local url="http://127.0.0.1:${SERVER_PORT}"
   log "launching Rook with ROOK_SERVER_BASE_URL=$url"
-  if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
-    ROOK_SERVER_BASE_URL="$url" ROOK_AUTH_TOKEN="$SERVER_AUTH_TOKEN" "$app_path/Contents/MacOS/Rook" >/dev/null 2>&1 &
-  else
-    ROOK_SERVER_BASE_URL="$url" "$app_path/Contents/MacOS/Rook" >/dev/null 2>&1 &
-  fi
-  sleep 1
-  activate_mac_app "$app_path"
+  open_mac_app_bundle "$app_path"
 }
 
 open_mac_app_bundle() {

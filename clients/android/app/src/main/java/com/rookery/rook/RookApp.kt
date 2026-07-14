@@ -17,7 +17,6 @@ import com.rookery.rook.ui.ChatScreen
 import com.rookery.rook.ui.EnvironmentOfferSheet
 import com.rookery.rook.ui.EnvironmentsScreen
 import com.rookery.rook.ui.PlacesScreen
-import com.rookery.rook.ui.SessionsScreen
 import com.rookery.rook.ui.SettingsScreen
 import com.rookery.rook.ui.chat.PanelPalette
 
@@ -28,7 +27,6 @@ fun RookApp(viewModel: RookViewModel, simulateArrival: Pair<Double, Double>? = n
         simulateArrival?.let { (lat, lon) -> viewModel.simulateArrival(lat, lon) }
     }
 
-    val selectedAgentId by viewModel.selectedAgentId.collectAsState()
     val currentSession by viewModel.currentSession.collectAsState()
     val chatVisible by viewModel.chatVisible.collectAsState()
     val showSettings by viewModel.showSettings.collectAsState()
@@ -46,7 +44,6 @@ fun RookApp(viewModel: RookViewModel, simulateArrival: Pair<Double, Double>? = n
     ) {
         when {
             currentSession != null && chatVisible -> ChatScreen(viewModel)
-            selectedAgentId != null -> SessionsScreen(viewModel)
             else -> AgentPickerScreen(viewModel)
         }
     }

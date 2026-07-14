@@ -229,6 +229,8 @@ struct DetailHeader: View {
 
 private struct HomeContent: View {
     @ObservedObject var model: RookMacModel
+    @State private var newSessionName = ""
+    @State private var selectedRuntimeID = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -464,46 +466,109 @@ private struct HomeContent: View {
     }
 
     private var agentsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            newSessionCard
+            sessionsCard
+        }
+    }
+
+    private var newSessionCard: some View {
         PanelCard {
-            Text("CHAT WITH")
+            Text("NEW CHAT")
                 .font(.system(size: 10, weight: .semibold))
                 .kerning(0.6)
                 .foregroundStyle(PanelPalette.textMuted)
 
-            if !model.agentsError.isEmpty {
-                PanelMessageView(
-                    systemImage: "exclamationmark.triangle.fill",
-                    tint: PanelPalette.warning,
-                    text: model.agentsError
-                )
+            if model.agents.isEmpty {
+                Text(model.serverState == .online ? "No configured runtimes" : "Waiting for the server…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                Picker("Agent Runtime", selection: $selectedRuntimeID) {
+                    ForEach(model.agentTree, id: \.agent.id) { entry in
+                        Text(String(repeating: "  ", count: entry.depth) + entry.agent.id).tag(entry.agent.id)
+                    }
+                }
+                .onAppear {
+                    if selectedRuntimeID.isEmpty { selectedRuntimeID = model.agents.first?.id ?? "" }
+                }
             }
 
-            if model.agents.isEmpty && model.agentsError.isEmpty {
-                Text("No agents registered")
+            HStack(spacing: 8) {
+                TextField("Session name (optional)", text: $newSessionName)
+                    .textFieldStyle(.plain)
+                    .font(.callout)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(PanelPalette.backgroundPrimary.opacity(0.75)))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(PanelPalette.border))
+                    .onSubmit {
+                        guard !selectedRuntimeID.isEmpty else { return }
+                        model.startNewSession(agentId: selectedRuntimeID, name: newSessionName)
+                    }
+
+                Button {
+                    guard !selectedRuntimeID.isEmpty else { return }
+                    model.startNewSession(agentId: selectedRuntimeID, name: newSessionName)
+                } label: {
+                    Image(systemName: model.startingSession ? "hourglass" : "arrow.up")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(PanelPalette.accent))
+                }
+                .buttonStyle(.plain)
+                .disabled(model.startingSession || selectedRuntimeID.isEmpty)
+            }
+        }
+    }
+
+    private var sessionsCard: some View {
+        PanelCard {
+            HStack(spacing: 8) {
+                Text("SESSIONS")
+                    .font(.system(size: 10, weight: .semibold))
+                    .kerning(0.6)
+                    .foregroundStyle(PanelPalette.textMuted)
+                Spacer()
+                if model.sessionsLoading {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                }
+            }
+
+            if model.sessions.isEmpty && !model.sessionsLoading {
+                Text("No sessions yet — start a new chat above.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 48, alignment: .center)
             } else {
-                VStack(spacing: 0) {
-                    let tree = model.agentTree
-                    ForEach(Array(tree.enumerated()), id: \.element.agent.id) { index, entry in
-                        Button {
-                            model.openAgentSessions(entry.agent.id)
-                        } label: {
-                            AgentRow(agent: entry.agent, depth: entry.depth)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Chat with \(entry.agent.id)")
-                        .pointingHandOnHover()
-
-                        if index < tree.count - 1 {
-                            Divider()
-                                .opacity(0.45)
+                ScrollView(.vertical) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
+                            Button {
+                                model.resumeSession(session)
+                            } label: {
+                                SessionHomeRow(session: session)
+                            }
+                            .buttonStyle(.plain)
+                            .pointingHandOnHover()
+                            if index < model.sessions.count - 1 {
+                                Divider().opacity(0.45)
+                            }
                         }
                     }
                 }
+                .scrollIndicators(.visible)
+                .frame(maxHeight: sessionsMaxHeight)
             }
         }
+    }
+
+    private var sessionsMaxHeight: CGFloat {
+        let visibleRows = min(CGFloat(model.sessions.count), 7)
+        let rowHeight: CGFloat = 50
+        return visibleRows * rowHeight
     }
 
     private var serverOfflineCard: some View {
@@ -565,33 +630,33 @@ private struct HomeContent: View {
     }
 }
 
-private struct AgentRow: View {
-    var agent: AgentDefinition
-    var depth: Int
+private struct SessionHomeRow: View {
+    var session: AgentSessionSummary
 
     var body: some View {
         HStack(spacing: 9) {
-            if depth > 0 {
-                Image(systemName: "arrow.turn.down.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, CGFloat(depth) * 14)
-            }
-
-            Image(systemName: depth > 0 ? "person.crop.square" : "sparkle")
+            Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(PanelPalette.info)
                 .frame(width: 22, height: 22)
-                .background(
-                    Circle()
-                        .fill(PanelPalette.info.opacity(0.14))
-                )
+                .background(Circle().fill(PanelPalette.info.opacity(0.14)))
 
-            Text(agent.id)
-                .font(.callout)
-                .fontWeight(.medium)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(session.name)
+                    .font(.callout)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                Text(session.agent)
+                    .font(.caption)
+                    .foregroundStyle(PanelPalette.secondaryText)
+                    .lineLimit(1)
+                if !session.updatedAtLabel.isEmpty {
+                    Text("Updated \(session.updatedAtLabel)")
+                        .font(.caption2)
+                        .foregroundStyle(PanelPalette.secondaryText)
+                        .lineLimit(1)
+                }
+            }
 
             Spacer(minLength: 4)
 

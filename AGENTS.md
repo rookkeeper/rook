@@ -20,3 +20,104 @@ Use `scripts/interact-with-remote-agent.sh` to exercise the remote-agent bridge 
 
 Run Rook from the repo root with:
 - `./scripts/run-rook.sh mac server`
+
+## Debugging patterns
+
+Prefer the **rook CLI** and the **mock agent** for fast iteration — they're much quicker than rebuilding native clients or waiting for real AI runtimes. Only reach for the mac client + Codex computer‑use when the bug really is in the native UI layer.
+
+### Fast path: rook CLI + mock agent
+
+```bash
+source .env
+rook exec --runtime MockAcpAgent --auth-token "$ROOK_AUTH_TOKEN" "tell me a joke"
+rook exec --last-message-only --runtime MockAcpAgent --auth-token "$ROOK_AUTH_TOKEN" "12+34"
+rook exec --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN" "what did you just say?"
+rook --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN"   # interactive with transcript replay
+```
+
+The mock agent is in `server/src/server/agents/test-fixtures/mockAcpServer.mjs` — it stores a transcript and replays it on session load, streams thoughts/tool calls/assistant text, and handles common prompt patterns (jokes, ls, arithmetic, prime checking). Edit it to add new test scenarios.
+
+If the mock doesn't support a needed behavior, fall back to a real runtime (MyPiOpenAiAgent, MyClaudeAgent, etc.).
+
+### CLI session management
+
+List existing sessions with metadata:
+```bash
+rook sessions --auth-token "$ROOK_AUTH_TOKEN"
+rook sessions --limit 5 --auth-token "$ROOK_AUTH_TOKEN"
+```
+
+Create a **named** session for easy identification in the mac client and in codex instructions:
+```bash
+rook exec --runtime MyPiOpenAiAgent --auth-token "$ROOK_AUTH_TOKEN" --title "my-test" "do something"
+```
+`--title` only works with `--runtime` (new session creation), not with `--sessionId`.
+
+Dump the full session transcript to see exactly what the runtime sends during replay:
+```bash
+rook --transcript --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN"
+```
+
+### Testing session replay in the mac client
+
+The mac client's sessions list does **not** auto-refresh — you must restart the mac app to see newly created sessions:
+
+```bash
+./scripts/run-rook.sh mac server
+```
+
+Then use Codex to click into the session **by name**:
+
+```bash
+codex exec "Use computer use. Interact with the Rook app at /Users/johnberryman/projects/github/the-rooks-nest/rook/.var/run-rook/build/Rook/Build/Products/Debug/Rook.app. In the SESSIONS list, find the session named 'my-test' and click it. Describe what you see." 2>/dev/null
+```
+
+Common replay bugs to watch for:
+- blocks must be cleared **before** `session/load`, not after — otherwise the runtime's replay events get wiped
+- user/assistant/thinking/tool events during replay need separate buffering from active-turn streaming
+- the `isRunning` state flag must stay `false` during replay so the status dot doesn't glow
+
+### Mac client bugs: Codex + computer use
+
+When the bug is in the native macOS client UI, use Codex to interact with it.
+
+**Always specify the correct app path** — there are often multiple Rook builds on disk (Xcode DerivedData, run-rook build) sharing the same bundle ID, so tell Codex which one to use:
+
+```bash
+codex exec "Use computer use. Interact with the Rook app at /Users/johnberryman/projects/github/the-rooks-nest/rook/.var/run-rook/build/Rook/Build/Products/Debug/Rook.app. [instruction]" 2>/dev/null
+```
+
+Examples:
+```bash
+codex exec "Use computer use. Interact with the Rook app at /Users/johnberryman/projects/github/the-rooks-nest/rook/.var/run-rook/build/Rook/Build/Products/Debug/Rook.app. Tell me what screen it's on." 2>/dev/null
+codex exec "Use computer use. Interact with the Rook app at /Users/johnberryman/projects/github/the-rooks-nest/rook/.var/run-rook/build/Rook/Build/Products/Debug/Rook.app. Click the session named 'my-test' and report what you see." 2>/dev/null
+codex exec "Use computer use. Interact with the Rook app at /Users/johnberryman/projects/github/the-rooks-nest/rook/.var/run-rook/build/Rook/Build/Products/Debug/Rook.app. Type 'hi' into the chat input and press enter. Report what happens." 2>/dev/null
+```
+
+Key bits:
+- `codex exec` for non-interactive one-shot
+- `"Use computer use."` as the first sentence loads that skill
+- **always include the full app path** so Codex targets the correct build
+- **click sessions by name** not by position — the list order depends on when the app was last refreshed
+- `2>/dev/null` suppresses the noisy startup banner
+
+### Full debug workflow for replay bugs
+
+1. Create a named session with the scenario you want to test:
+   ```bash
+   rook exec --runtime MyPiOpenAiAgent --auth-token "$ROOK_AUTH_TOKEN" --title "replay-test" "ls the directory"
+   ```
+2. Verify the transcript looks right:
+   ```bash
+   rook --transcript --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN"
+   ```
+3. Restart the mac app so it picks up the new session:
+   ```bash
+   ./scripts/run-rook.sh mac server
+   ```
+4. Use Codex to click the session by name and report what it sees:
+   ```bash
+   codex exec "Use computer use. Interact with the Rook app at .../.var/run-rook/build/Rook/Build/Products/Debug/Rook.app. Click the session named 'replay-test'. Describe every message in order." 2>/dev/null
+   ```
+5. Compare the CLI transcript with Codex's report — they should match.
+

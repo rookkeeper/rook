@@ -36,19 +36,22 @@ It is responsible for:
 - presenting one unified session list across all runtimes
 - lazily starting runtimes only when they are needed
 
-### `AgentRuntime`
+### `SessionRuntime`
 
-`AgentRuntime` is the runtime adapter for one configured agent runtime.
+The real port should call the concrete runtime process a `SessionRuntime`: it is one ACP subprocess lifecycle for one public Rook session, not a shared process for every session using a profile.
 
 It is responsible for:
 
-- starting the underlying ACP subprocess
-- initializing it
+- starting, loading, and restarting the underlying ACP subprocess for its session
+- tracking that session's entered environments and effective launch configuration
 - forwarding ACP requests and notifications
 - tracking pending JSON-RPC requests
+- serializing prompt and restart work
 - surfacing runtime failure/exit conditions
 
-The important design choice is that runtimes are **lazy**. We do not eagerly boot every configured runtime on server startup.
+`AgentRuntimeManager` is still lazy, but it lazily creates **one `SessionRuntime` per active session**. This is necessary because environment skills and startup instructions are session-specific.
+
+Provider differences belong in composed launch/integration strategies (Pi, Claude, Cursor, generic ACP), not in a `SessionRuntime` subclass hierarchy.
 
 ## Public session model
 
@@ -57,7 +60,7 @@ A key learning is that the app should not treat sessions as separated by agent i
 Instead:
 
 - sessions are unified into one list
-- public session IDs are `<runtimeId>:<runtimeSessionId>`
+- public session IDs are stable Rook-generated UUIDs
 - each session still carries runtime metadata
 - creating a new session means choosing a `runtimeId`
 
@@ -140,7 +143,7 @@ Likely persisted fields include:
 - `startedAt`
 - `updatedAt`
 
-Potentially more fields will be added later as product needs become clearer.
+Potentially more fields will be added later as product needs become clearer. Session-to-environment membership is also durable state: a `session_environments` table must preserve intended entered environment IDs across a server restart.
 
 ## Client learnings
 
@@ -166,6 +169,16 @@ What is likely to be retained is the interaction model:
 - sessions ordered by time
 - ability to create a new session by choosing a runtime ID
 
+### Environment offers as a sanctioned ACP extension
+
+Environment offers are product events, not transcript updates. The client/server ACP boundary may use one explicitly negotiated extension under the owned reverse-domain namespace `com.the-rooks-nest`:
+
+- `_com.the-rooks-nest/environment_offer` notification
+- `_com.the-rooks-nest/environment_offer_resolve` request
+- `_com.the-rooks-nest/environment_offer_resolved` notification
+
+Support is advertised in `initialize` capability `_meta`. This replaces the old `_rookery_environment_event` fake `session/update` while retaining immediate offer presentation and resolution.
+
 What is not yet the focus:
 
 - polished transcript rendering
@@ -178,7 +191,7 @@ What is not yet the focus:
 The main architectural learning is that Rook should move toward:
 
 - one outward ACP-compliant server facade
-- many lazily managed internal runtimes
+- many lazily managed per-session internal runtimes
 - one unified cross-runtime session space
 - runtime selection at session creation time
 - clear API/service/repository/datastore boundaries

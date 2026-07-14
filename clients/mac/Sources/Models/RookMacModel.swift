@@ -142,6 +142,10 @@ final class RookMacModel: ObservableObject {
     private var autoResumeAttempted = false
     private var reconnectTask: Task<Void, Never>?
     private var queuedMessageCounter = 0
+    private var isReplaying = false
+    private var replayUserBuffer = ""
+    private var replayAssistantBuffer = ""
+    private var replayThinkingBuffer = ""
 
     private struct EnvironmentCandidate {
         let id: String
@@ -313,6 +317,7 @@ final class RookMacModel: ObservableObject {
             serverState = .online
             if !wasOnline {
                 await loadAgents()
+                await loadSessions()
                 reannounceRegisteredEnvironments()
                 await autoResumeRecentSessionIfNeeded()
             }
@@ -402,7 +407,7 @@ final class RookMacModel: ObservableObject {
         }
     }
 
-    // MARK: - Agents & sessions
+    // MARK: - Runtimes & sessions
 
     func loadAgents() async {
         do {
@@ -413,33 +418,33 @@ final class RookMacModel: ObservableObject {
         }
     }
 
+    private func ensureSocketConnected() async throws {
+        _ = try await socket.connect(request: api.webSocketRequest())
+    }
+
     private func autoResumeRecentSessionIfNeeded() async {
-        guard !autoResumeAttempted, currentSession == nil else {
-            return
-        }
+        guard !autoResumeAttempted, currentSession == nil else { return }
         autoResumeAttempted = true
-        guard let recent = try? await api.recentSession() else {
-            return
-        }
-        await resumeSession(recent, switchToChat: false)
-    }
-
-    func openAgentSessions(_ agentId: String) {
-        sessions = []
-        sessionsError = ""
-        panelMode = .sessions(agentId: agentId)
-        Task {
-            await loadSessions(agentId: agentId)
-        }
-    }
-
-    func loadSessions(agentId: String) async {
-        sessionsLoading = true
-        defer {
-            sessionsLoading = false
-        }
         do {
-            sessions = try await api.sessions(agent: agentId)
+            try await ensureSocketConnected()
+            if let recent = try await socket.sessionList().first {
+                prepareForSessionResume(session: recent)
+                try await socket.loadSession(recent.id)
+                finishSessionResume(session: recent)
+            }
+        } catch {
+            sessionsError = error.localizedDescription
+        }
+    }
+
+    func openAgentSessions(_ agentId: String) {}
+
+    func loadSessions(agentId _: String = "") async {
+        sessionsLoading = true
+        defer { sessionsLoading = false }
+        do {
+            try await ensureSocketConnected()
+            sessions = try await socket.sessionList()
             sessionsError = ""
         } catch {
             sessionsError = error.localizedDescription
@@ -448,19 +453,24 @@ final class RookMacModel: ObservableObject {
 
     func startNewSession(agentId: String, name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = trimmed.isEmpty ? "session" : trimmed
         startingSession = true
         Task {
-            defer {
-                startingSession = false
-            }
+            defer { startingSession = false }
             do {
-                let session = try await api.startSession(
-                    agent: agentId,
-                    sessionName: trimmed.isEmpty ? nil : trimmed
-                )
-                enterChat(session: session, resumed: false)
+                try await ensureSocketConnected()
+                let sessionId = try await socket.createSession(runtimeId: agentId, title: title, cwd: FileManager.default.currentDirectoryPath)
+                await loadSessions()
+                let session = sessions.first(where: { $0.id == sessionId })
+                    ?? AgentSessionSummary(raw: .object([
+                        "sessionId": .string(sessionId),
+                        "title": .string(title),
+                        "_meta": .object(["runtimeId": .string(agentId)]),
+                    ]))
+                enterChat(session: session, resumed: false, switchToChat: true)
             } catch {
                 sessionsError = error.localizedDescription
+                appendErrorBlock(source: "session", message: error.localizedDescription)
             }
         }
     }
@@ -468,19 +478,100 @@ final class RookMacModel: ObservableObject {
     func resumeSession(_ session: AgentSessionSummary) {
         startingSession = true
         Task {
-            defer {
-                startingSession = false
+            defer { startingSession = false }
+            do {
+                try await ensureSocketConnected()
+                prepareForSessionResume(session: session)
+                try await socket.loadSession(session.id)
+                finishSessionResume(session: session)
+            } catch {
+                sessionsError = error.localizedDescription
+                appendErrorBlock(source: "session", message: "Failed to load session: \(error.localizedDescription)")
             }
-            await resumeSession(session, switchToChat: true)
         }
     }
 
-    private func resumeSession(_ session: AgentSessionSummary, switchToChat: Bool) async {
-        do {
-            let started = try await api.resumeSession(session)
-            enterChat(session: started, resumed: true, switchToChat: switchToChat)
-        } catch {
-            sessionsError = error.localizedDescription
+    private func prepareForSessionResume(session: AgentSessionSummary) {
+        reconnectTask?.cancel()
+        currentSession = session
+        blocks = []
+        queuedMessages = []
+        isRunning = false
+        statusLine = ""
+        contextUsage = nil
+        currentModes = nil
+        configOptions = []
+        pendingPermission = nil
+        lastStopReason = nil
+        enteredEnvironments = []
+        enteredEnvironmentIds = []
+        environmentListItems = []
+        isReplaying = true
+        replayUserBuffer = ""
+        replayAssistantBuffer = ""
+        replayThinkingBuffer = ""
+        socket.selectSession(session.id)
+    }
+
+    private func finishSessionResume(session: AgentSessionSummary) {
+        isReplaying = false
+        flushReplayBuffers()
+        isRunning = false
+        panelMode = .chat
+        refreshEnvironmentList()
+    }
+
+    private func flushReplayBuffers() {
+        if !replayUserBuffer.isEmpty {
+            appendBlock(.user(text: replayUserBuffer))
+            replayUserBuffer = ""
+        }
+        if !replayThinkingBuffer.isEmpty {
+            appendBlock(.thinking(text: replayThinkingBuffer, streaming: false))
+            replayThinkingBuffer = ""
+        }
+        if !replayAssistantBuffer.isEmpty {
+            appendBlock(.assistantText(text: replayAssistantBuffer, streaming: false))
+            replayAssistantBuffer = ""
+        }
+    }
+
+    private func replayFlushIncompatibleSection(_ next: String) {
+        if next == "user" {
+            if !replayAssistantBuffer.isEmpty { flushReplaySection("assistant") }
+            if !replayThinkingBuffer.isEmpty { flushReplaySection("thinking") }
+        } else if next == "thinking" {
+            if !replayUserBuffer.isEmpty { flushReplaySection("user") }
+            if !replayAssistantBuffer.isEmpty { flushReplaySection("assistant") }
+        } else if next == "assistant" {
+            if !replayUserBuffer.isEmpty { flushReplaySection("user") }
+            if !replayThinkingBuffer.isEmpty { flushReplaySection("thinking") }
+        } else {
+            if !replayUserBuffer.isEmpty { flushReplaySection("user") }
+            if !replayThinkingBuffer.isEmpty { flushReplaySection("thinking") }
+            if !replayAssistantBuffer.isEmpty { flushReplaySection("assistant") }
+        }
+    }
+
+    private func flushReplaySection(_ section: String) {
+        switch section {
+        case "user":
+            if !replayUserBuffer.isEmpty {
+                appendBlock(.user(text: replayUserBuffer))
+                replayUserBuffer = ""
+            }
+        case "thinking":
+            if !replayThinkingBuffer.isEmpty {
+                appendBlock(.thinking(text: replayThinkingBuffer, streaming: false))
+                replayThinkingBuffer = ""
+            }
+        case "assistant":
+            if !replayAssistantBuffer.isEmpty {
+                appendBlock(.assistantText(text: replayAssistantBuffer, streaming: false))
+                replayAssistantBuffer = ""
+            }
+        default:
+            break
         }
     }
 
@@ -499,7 +590,7 @@ final class RookMacModel: ObservableObject {
         enteredEnvironments = []
         enteredEnvironmentIds = []
         environmentListItems = []
-        socket.connect(sessionId: session.id, request: api.webSocketRequest(sessionId: session.id))
+        socket.selectSession(session.id)
         if switchToChat {
             panelMode = .chat
         }
@@ -601,21 +692,6 @@ final class RookMacModel: ObservableObject {
         }
     }
 
-    func sendQueuedMessageNow(_ id: String) {
-        guard let index = queuedMessages.firstIndex(where: { $0.id == id }) else {
-            return
-        }
-        let message = queuedMessages.remove(at: index)
-        Task {
-            do {
-                try await socket.sendSteeringMessage(text: message.text)
-            } catch {
-                queuedMessages.insert(message, at: min(index, queuedMessages.count))
-                appendErrorBlock(source: "run", message: error.localizedDescription)
-            }
-        }
-    }
-
     func decidePermission(optionId: String?) {
         guard let pendingPermission else {
             return
@@ -687,15 +763,18 @@ final class RookMacModel: ObservableObject {
             guard !Task.isCancelled, let session = currentSession else {
                 return
             }
-            // The room may have idle-stopped; restart it before reattaching.
             if await api.health() {
-                _ = try? await api.resumeSession(session)
-                guard !Task.isCancelled else {
-                    return
+                do {
+                    try await ensureSocketConnected()
+                    try await socket.loadSession(session.id)
+                    guard !Task.isCancelled else { return }
+                    reconnecting = false
+                    deliverNextQueuedIfIdle()
+                } catch {
+                    if !Task.isCancelled {
+                        scheduleReconnect(delaySeconds: 3)
+                    }
                 }
-                socket.connect(sessionId: session.id, request: api.webSocketRequest(sessionId: session.id))
-                reconnecting = false
-                deliverNextQueuedIfIdle()
             } else if !Task.isCancelled {
                 scheduleReconnect(delaySeconds: 3)
             }
@@ -728,18 +807,34 @@ final class RookMacModel: ObservableObject {
     private func handleSocketEvent(_ event: AcpClientEvent) {
         switch event {
         case .userMessageChunk(let text):
-            appendBlock(.user(text: text))
+            if isReplaying {
+                replayFlushIncompatibleSection("user")
+                replayUserBuffer += text
+            } else {
+                appendBlock(.user(text: text))
+            }
         case .agentMessageChunk(let text):
-            statusLine = "Responding…"
-            appendStreamingText(text, isThinking: false)
-            if voiceModeEnabled {
-                spokenTurnBuffer += text
+            if isReplaying {
+                replayFlushIncompatibleSection("assistant")
+                replayAssistantBuffer += text
+            } else {
+                statusLine = "Responding…"
+                appendStreamingText(text, isThinking: false)
+                if voiceModeEnabled {
+                    spokenTurnBuffer += text
+                }
             }
         case .agentThoughtChunk(let text):
-            statusLine = "Thinking…"
-            appendStreamingText(text, isThinking: true)
+            if isReplaying {
+                replayFlushIncompatibleSection("thinking")
+                replayThinkingBuffer += text
+            } else {
+                statusLine = "Thinking…"
+                appendStreamingText(text, isThinking: true)
+            }
         case .toolCallStarted(let toolCallId, let title, let kind, let status, let rawInput):
-            statusLine = "Using tool: \(title)"
+            if isReplaying { replayFlushIncompatibleSection("tool") }
+            else { statusLine = "Using tool: \(title)" }
             let state = ToolBlockState(
                 toolCallId: toolCallId,
                 title: title,
@@ -750,6 +845,7 @@ final class RookMacModel: ObservableObject {
             )
             appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
         case .toolCallUpdate(let toolCallId, let status, let toolName, let output):
+            if isReplaying { replayFlushIncompatibleSection("tool") }
             updateTool(toolCallId) { tool in
                 if let toolName, tool.title.isEmpty {
                     tool.title = toolName
@@ -779,23 +875,29 @@ final class RookMacModel: ObservableObject {
                 }
             }
         case .toolInputSnapshot(let toolCallId, _, let text):
+            if isReplaying { updateTool(toolCallId) { $0.arguments = text }; return }
             toolArgBuffers[toolCallId] = text
             scheduleStreamingFlush()
         case .toolInputDelta(let toolCallId, _, let delta):
+            if isReplaying { updateTool(toolCallId) { $0.arguments += delta }; return }
             toolArgBuffers[toolCallId, default: ""] += delta
             scheduleStreamingFlush()
         case .toolCallReady(let toolCallId, _):
+            if isReplaying { updateTool(toolCallId) { $0.status = .ready }; return }
             applyStreamingFlush()
             updateTool(toolCallId) { tool in
                 tool.status = .ready
             }
         case .toolOutputSnapshot(let toolCallId, _, let text):
+            if isReplaying { updateTool(toolCallId) { $0.output = text }; return }
             toolOutputBuffers[toolCallId] = text
             scheduleStreamingFlush()
         case .toolOutputDelta(let toolCallId, _, let delta):
+            if isReplaying { updateTool(toolCallId) { $0.output += delta }; return }
             toolOutputBuffers[toolCallId, default: ""] += delta
             scheduleStreamingFlush()
         case .permissionRequest(let requestId, let toolCall, let options):
+            if isReplaying { return }
             pendingPermission = PendingPermissionRequest(requestId: requestId, toolCall: toolCall, options: options)
             statusLine = "Permission needed: \(toolCall.title)"
         case .planUpdate(let entries):
@@ -811,20 +913,20 @@ final class RookMacModel: ObservableObject {
         case .configOptionUpdate(let configOptions):
             self.configOptions = configOptions
         case .runCompleted(let stopReason):
+            if isReplaying { flushReplayBuffers(); return }
             finalizeStreamingBlocks()
             isRunning = false
             statusLine = ""
             lastStopReason = stopReason
             pendingPermission = nil
             userCancelledRun = false
-            // Speak the whole response once, only after the turn is done and the
-            // text has rendered — not streamed sentence-by-sentence.
             if voiceModeEnabled, !spokenTurnBuffer.isEmpty {
                 voice.speak(spokenTurnBuffer)
             }
             spokenTurnBuffer = ""
             deliverNextQueuedIfIdle()
         case .runFailed(let message):
+            if isReplaying { flushReplayBuffers(); return }
             finalizeStreamingBlocks()
             isRunning = false
             statusLine = ""
@@ -1727,7 +1829,7 @@ final class RookMacModel: ObservableObject {
         }
         Task {
             do {
-                try await api.decideEnvironment(environmentId: offer.environmentId, bundleHash: offer.bundleHash, decision: decision, sessionId: session.id)
+                try await socket.resolveEnvironmentOffer(environmentId: offer.environmentId, bundleHash: offer.bundleHash, decision: decision)
                 if decision == "accept" || decision == "approve" {
                     appendBlock(.system(text: "Bundle \(offer.bundleId) allowed for \(offer.environmentId)."))
                 }

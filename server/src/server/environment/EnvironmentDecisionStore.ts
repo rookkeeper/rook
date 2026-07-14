@@ -1,8 +1,6 @@
-import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import type { PermanentDecision } from "./types.js";
-import { REPO_ROOT } from "../paths.js";
+import { RookDatastore } from "../datastore/RookDatastore.js";
 
 /**
  * Repository layer for persistent bundle decisions (Approve / Reject).
@@ -16,15 +14,20 @@ import { REPO_ROOT } from "../paths.js";
  */
 export class EnvironmentDecisionStore {
   private readonly db: DatabaseSync;
+  private readonly ownedDatastore: RookDatastore | null;
 
   /**
    * @param location filesystem path to the SQLite file, or ":memory:" for tests.
    * Defaults to a gitignored runtime location under `.var`.
    */
-  constructor(location?: string) {
-    const filename = location ?? path.join(REPO_ROOT, ".var", "rook", "environment-decisions.sqlite");
-    if (filename !== ":memory:") mkdirSync(path.dirname(filename), { recursive: true });
-    this.db = new DatabaseSync(filename);
+  constructor(datastore: RookDatastore | string = new RookDatastore()) {
+    if (typeof datastore === "string") {
+      this.ownedDatastore = new RookDatastore(datastore);
+      this.db = this.ownedDatastore.db;
+    } else {
+      this.ownedDatastore = null;
+      this.db = datastore.db;
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS environment_decisions (
         bundle_hash TEXT PRIMARY KEY,
@@ -58,6 +61,6 @@ export class EnvironmentDecisionStore {
   }
 
   close(): void {
-    this.db.close();
+    this.ownedDatastore?.close();
   }
 }

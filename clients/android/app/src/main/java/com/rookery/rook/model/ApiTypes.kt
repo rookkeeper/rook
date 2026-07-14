@@ -16,32 +16,32 @@ data class AgentDefinition(
     val parentId: String?
 )
 
-// Wraps the raw session record JSON so resume can send it back to POST /api/agent/start
-// verbatim, including fields this app doesn't model.
 data class AgentSessionSummary(val raw: JsonObject) {
-    val id: String get() = raw["id"]?.stringValue ?: ""
-    val agent: String get() = raw["agent"]?.stringValue ?: ""
-    val name: String get() = raw["name"]?.stringValue ?: "default"
+    val id: String get() = raw["id"]?.stringValue ?: raw["sessionId"]?.stringValue ?: ""
+    val agent: String get() = raw["agent"]?.stringValue ?: raw["_meta"]?.jsonObject?.get("runtimeId")?.stringValue ?: ""
+    val name: String get() = raw["name"]?.stringValue ?: raw["title"]?.stringValue ?: "default"
     val running: Boolean get() = raw["running"]?.boolValue ?: false
     val connectedClients: Int get() = (raw["connectedClients"]?.numberValue ?: 0.0).toInt()
 
     val createdAt: Instant?
-        get() {
-            val iso = raw["createdAt"]?.stringValue ?: return null
-            return try {
-                Instant.parse(iso)
-            } catch (e: DateTimeParseException) {
-                null
-            }
-        }
+        get() = parseInstant(raw["createdAt"]?.stringValue ?: raw["_meta"]?.jsonObject?.get("startedAt")?.stringValue)
 
-    val createdAtLabel: String
-        get() {
-            val date = createdAt ?: return ""
-            val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
-                .withZone(ZoneId.systemDefault())
-            return formatter.format(date)
-        }
+    val updatedAt: Instant?
+        get() = parseInstant(raw["updatedAt"]?.stringValue)
+
+    val createdAtLabel: String get() = formatInstant(createdAt)
+    val updatedAtLabel: String get() = formatInstant(updatedAt)
+
+    private fun parseInstant(iso: String?): Instant? {
+        iso ?: return null
+        return try { Instant.parse(iso) } catch (_: DateTimeParseException) { null }
+    }
+
+    private fun formatInstant(instant: Instant?): String {
+        val date = instant ?: return ""
+        val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault())
+        return formatter.format(date)
+    }
 }
 
 @Serializable

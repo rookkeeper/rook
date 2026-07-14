@@ -1,6 +1,6 @@
 // Mirrors clients/RookKit/Sources/RookKit/Net/AcpSocket.swift
 //
-// JSON-RPC 2.0 websocket client for /api/ws?sessionId=.... Sends ACP requests over the
+// JSON-RPC 2.0 websocket client for connection-level /api/ws. Sends ACP requests over the
 // websocket and reduces ACP-shaped notifications into flat AcpClientEvents. Mirrors the
 // web client's behavior closely: user_message_chunk echoes and _rookery_run_*/
 // _rookery_status_changed updates are ignored; prompt completion comes from the JSON-RPC
@@ -55,6 +55,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.addJsonObject
@@ -67,7 +68,6 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import java.io.IOException
 import java.util.concurrent.TimeUnit
-import java.net.URLEncoder
 
 sealed class SocketRequestException(message: String) : Exception(message) {
     class NotConnected : SocketRequestException("Not connected to the session")
@@ -92,6 +92,9 @@ class AcpSocket(
 
     private var webSocket: WebSocket? = null
     private var sessionId: String? = null
+    private var runtimeIds: List<String> = emptyList()
+    private var defaultRuntimeId: String? = null
+    private var environmentOffersEnabled = false
     private var generation = 0
     private var requestCounter = 0
     private val pendingPromptIds = mutableSetOf<String>()
@@ -100,17 +103,39 @@ class AcpSocket(
     private val lastToolInputSnapshots = mutableMapOf<String, String>()
     private val lastToolOutputSnapshots = mutableMapOf<String, String>()
 
-    fun connect(sessionId: String, webSocketUrl: String) {
+    suspend fun connect(webSocketUrl: String): JsonObject {
+        if (webSocket != null) return buildJsonObject { }
         teardown()
         generation += 1
         val currentGeneration = generation
-        this.sessionId = sessionId
-
-        val separator = if (webSocketUrl.contains("?")) "&" else "?"
-        val urlWithQuery = "$webSocketUrl$separator" + "sessionId=" + URLEncoder.encode(sessionId, "UTF-8")
-        val request = Request.Builder().url(urlWithQuery).build()
+        val request = Request.Builder().url(webSocketUrl).build()
         webSocket = client.newWebSocket(request, Listener(currentGeneration))
         setConnected(true)
+        val initialize = sendSocketRequest(
+            "initialize",
+            buildJsonObject {
+                put("protocolVersion", 1)
+                putJsonObject("clientCapabilities") {
+                    putJsonObject("_meta") {
+                        putJsonObject("com.the-rooks-nest") { put("environmentOffers", true) }
+                    }
+                }
+                putJsonObject("clientInfo") {
+                    put("name", "rook")
+                    put("title", "Rook")
+                    put("version", "0.1.0")
+                }
+            },
+            includeSessionId = false
+        )
+        runtimeIds = initialize["_meta"]?.jsonObject?.get("runtimeIds")?.jsonArray?.mapNotNull { it.stringValue } ?: emptyList()
+        defaultRuntimeId = initialize["_meta"]?.jsonObject?.get("defaultRuntimeId")?.stringValue
+        environmentOffersEnabled = initialize["_meta"]?.jsonObject?.get("com.the-rooks-nest") != null
+        return initialize
+    }
+
+    fun selectSession(sessionId: String?) {
+        this.sessionId = sessionId
     }
 
     fun disconnect() {
@@ -169,9 +194,46 @@ class AcpSocket(
         return requestId
     }
 
-    suspend fun sendSteeringMessage(text: String) {
-        if (text.trim().isEmpty()) return
-        sendSocketRequest("_rookery/steering_prompt", buildJsonObject { put("text", text) })
+    suspend fun sessionList(): List<JsonObject> {
+        val result = sendSocketRequest("session/list", buildJsonObject { }, includeSessionId = false)
+        return result["sessions"]?.jsonArray?.mapNotNull { it as? JsonObject } ?: emptyList()
+    }
+
+    suspend fun createSession(runtimeId: String, title: String, cwd: String): String {
+        val result = sendSocketRequest(
+            "session/new",
+            buildJsonObject {
+                put("cwd", cwd)
+                putJsonArray("mcpServers") {}
+                putJsonObject("_meta") {
+                    put("runtimeId", runtimeId)
+                    put("title", title)
+                }
+            },
+            includeSessionId = false
+        )
+        val created = result["sessionId"]?.stringValue ?: throw SocketRequestException.Server("Server returned no sessionId")
+        loadSession(created)
+        return created
+    }
+
+    suspend fun loadSession(sessionId: String) {
+        sendSocketRequest("session/load", buildJsonObject { put("sessionId", sessionId) }, includeSessionId = false)
+        this.sessionId = sessionId
+    }
+
+    suspend fun resolveEnvironmentOffer(environmentId: String, bundleHash: String, decision: String) {
+        if (!environmentOffersEnabled) return
+        sendSocketRequest(
+            "_com.the-rooks-nest/environment_offer_resolve",
+            buildJsonObject {
+                put("sessionId", sessionId ?: throw SocketRequestException.NotConnected())
+                put("environmentId", environmentId)
+                put("bundleHash", bundleHash)
+                put("decision", decision)
+            },
+            includeSessionId = false
+        )
     }
 
     suspend fun setMode(modeId: String) {
@@ -272,6 +334,27 @@ class AcpSocket(
             val update = params?.get("update") as? JsonObject
             if (update != null) {
                 handleUpdate(update)
+                return
+            }
+        }
+
+        if (method == "_com.the-rooks-nest/environment_offer") {
+            val params = frame["params"] as? JsonObject
+            val environmentId = params?.get("environmentId")?.stringValue
+            val bundleId = params?.get("bundleId")?.stringValue
+            val bundleHash = params?.get("bundleHash")?.stringValue
+            if (params != null && environmentId != null && bundleId != null && bundleHash != null) {
+                emit(AcpClientEvent.EnvironmentOffered(EnvironmentOffer(environmentId, bundleId, bundleHash, params["sourceName"]?.stringValue, params["canonicalSourceUrl"]?.stringValue, stringList(params["skills"]), stringList(params["mcpServers"]), stringList(params["apps"]))))
+                return
+            }
+        }
+
+        if (method == "_com.the-rooks-nest/environment_offer_resolved") {
+            val params = frame["params"] as? JsonObject
+            val environmentId = params?.get("environmentId")?.stringValue
+            val bundleHash = params?.get("bundleHash")?.stringValue
+            if (environmentId != null && bundleHash != null) {
+                emit(AcpClientEvent.EnvironmentOfferResolved(environmentId, bundleHash))
                 return
             }
         }
@@ -406,7 +489,6 @@ class AcpSocket(
                 update["modeId"]?.stringValue?.let { emit(AcpClientEvent.CurrentModeUpdate(it)) }
             "config_option_update" ->
                 parseConfigOptions(update["configOptions"])?.let { emit(AcpClientEvent.ConfigOptionUpdate(it)) }
-            "_rookery_environment_event" -> handleEnvironmentEvent(update)
             "_rookery_protocol_error" -> emit(AcpClientEvent.ProtocolError(update["error"]?.stringValue ?: "Protocol error"))
             "_rookery_connection_error" -> emit(AcpClientEvent.ConnectionError(update["error"]?.stringValue ?: "Connection error"))
             else -> {
@@ -463,16 +545,23 @@ class AcpSocket(
         webSocket?.close(1000, null)
         webSocket = null
         sessionId = null
+        runtimeIds = emptyList()
+        defaultRuntimeId = null
+        environmentOffersEnabled = false
         _isConnected.value = false
         continuations.values.forEach { it.completeExceptionally(SocketRequestException.NotConnected()) }
     }
 
-    private suspend fun sendSocketRequest(method: String, params: JsonObject): JsonObject {
+    private suspend fun sendSocketRequest(method: String, params: JsonObject, includeSessionId: Boolean = true): JsonObject {
         val ws = webSocket ?: throw SocketRequestException.NotConnected()
-        val sid = sessionId ?: throw SocketRequestException.NotConnected()
         requestCounter += 1
         val requestId = "rpc-$requestCounter"
-        val mergedParams = JsonObject(params + ("sessionId" to JsonPrimitive(sid)))
+        val mergedParams = if (includeSessionId) {
+            val sid = sessionId ?: throw SocketRequestException.NotConnected()
+            JsonObject(params + ("sessionId" to JsonPrimitive(sid)))
+        } else {
+            params
+        }
         val deferred = CompletableDeferred<JsonObject>()
         pendingRequests[requestId] = deferred
         val sent = sendFrame(

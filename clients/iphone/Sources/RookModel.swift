@@ -412,6 +412,7 @@ final class RookModel: ObservableObject {
             serverDiagnostic = ""
             if !wasOnline {
                 await loadAgents()
+                await loadSessions()
                 reannouncePlaceEnvironment()
                 await autoResumeRecentSessionIfNeeded()
             }
@@ -444,7 +445,7 @@ final class RookModel: ObservableObject {
         }
     }
 
-    // MARK: - Agents & sessions
+    // MARK: - Runtimes & sessions
 
     func loadAgents() async {
         do {
@@ -465,49 +466,38 @@ final class RookModel: ObservableObject {
                 append(child, depth: depth + 1)
             }
         }
-        for root in roots {
-            append(root, depth: 0)
-        }
-        for agent in agents where !result.contains(where: { $0.0.id == agent.id }) {
-            result.append((agent, 0))
-        }
+        for root in roots { append(root, depth: 0) }
+        for agent in agents where !result.contains(where: { $0.0.id == agent.id }) { result.append((agent, 0)) }
         return result
     }
 
+    private func ensureSocketConnected() async throws {
+        _ = try await socket.connect(request: api.webSocketRequest())
+    }
+
     private func autoResumeRecentSessionIfNeeded() async {
-        guard !autoResumeAttempted, currentSession == nil else {
-            return
-        }
+        guard !autoResumeAttempted, currentSession == nil else { return }
         autoResumeAttempted = true
-        guard let recent = try? await api.recentSession() else {
-            return
-        }
-        // Warm the most recent session in the background, but stay on the agent
-        // list — don't force the user into a chat on launch.
-        await resumeSession(recent, switchToChat: false)
-    }
-
-    /// Open the per-agent session list (mirrors the Mac app's `.sessions` panel):
-    /// tapping an agent shows its previous sessions to resume, plus a new-chat
-    /// entry — instead of silently spawning a fresh session.
-    func openAgentSessions(_ agentId: String) {
-        selectedAgentId = agentId
-        sessions = []
-        sessionsError = ""
-        Task { await loadSessions(agentId: agentId) }
-    }
-
-    func closeAgentSessions() {
-        selectedAgentId = nil
-    }
-
-    func loadSessions(agentId: String) async {
-        sessionsLoading = true
-        defer {
-            sessionsLoading = false
-        }
         do {
-            sessions = try await api.sessions(agent: agentId)
+            try await ensureSocketConnected()
+            let recent = try await socket.sessionList().first
+            guard let recent else { return }
+            try await socket.loadSession(recent.id)
+            enterChat(session: recent, resumed: true, switchToChat: false)
+        } catch {
+            sessionsError = error.localizedDescription
+        }
+    }
+
+    func openAgentSessions(_ agentId: String) {}
+    func closeAgentSessions() { selectedAgentId = nil }
+
+    func loadSessions(agentId _: String = "") async {
+        sessionsLoading = true
+        defer { sessionsLoading = false }
+        do {
+            try await ensureSocketConnected()
+            sessions = try await socket.sessionList()
             sessionsError = ""
         } catch {
             sessionsError = error.localizedDescription
@@ -520,8 +510,12 @@ final class RookModel: ObservableObject {
         Task {
             defer { startingSession = false }
             do {
-                let session = try await api.startSession(agent: agentId, sessionName: trimmed.isEmpty ? nil : trimmed)
-                enterChat(session: session, resumed: false)
+                try await ensureSocketConnected()
+                let sessionId = try await socket.createSession(runtimeId: agentId, title: trimmed.isEmpty ? "session" : trimmed, cwd: FileManager.default.currentDirectoryPath)
+                await loadSessions()
+                if let session = sessions.first(where: { $0.id == sessionId }) {
+                    enterChat(session: session, resumed: false)
+                }
             } catch {
                 sessionsError = error.localizedDescription
             }
@@ -532,16 +526,13 @@ final class RookModel: ObservableObject {
         startingSession = true
         Task {
             defer { startingSession = false }
-            await resumeSession(session, switchToChat: true)
-        }
-    }
-
-    private func resumeSession(_ session: AgentSessionSummary, switchToChat: Bool) async {
-        do {
-            let started = try await api.resumeSession(session)
-            enterChat(session: started, resumed: true, switchToChat: switchToChat)
-        } catch {
-            sessionsError = error.localizedDescription
+            do {
+                try await ensureSocketConnected()
+                try await socket.loadSession(session.id)
+                enterChat(session: session, resumed: true, switchToChat: true)
+            } catch {
+                sessionsError = error.localizedDescription
+            }
         }
     }
 
@@ -570,7 +561,7 @@ final class RookModel: ObservableObject {
         if resumed {
             appendBlock(.system(text: "Resumed session — earlier messages aren't replayed."))
         }
-        socket.connect(sessionId: session.id, request: api.webSocketRequest(sessionId: session.id))
+        socket.selectSession(session.id)
         updateLiveActivity()
         refreshEnvironmentList()
     }
@@ -696,13 +687,15 @@ final class RookModel: ObservableObject {
                 return
             }
             if await api.health() {
-                _ = try? await api.resumeSession(session)
-                guard !Task.isCancelled else {
-                    return
+                do {
+                    try await ensureSocketConnected()
+                    try await socket.loadSession(session.id)
+                    guard !Task.isCancelled else { return }
+                    reconnecting = false
+                    deliverNextQueuedIfIdle()
+                } catch {
+                    if !Task.isCancelled { scheduleReconnect(delaySeconds: 3) }
                 }
-                socket.connect(sessionId: session.id, request: api.webSocketRequest(sessionId: session.id))
-                reconnecting = false
-                deliverNextQueuedIfIdle()
             } else if !Task.isCancelled {
                 scheduleReconnect(delaySeconds: 3)
             }
@@ -980,7 +973,7 @@ final class RookModel: ObservableObject {
         }
         Task {
             do {
-                try await api.decideEnvironment(environmentId: offer.environmentId, bundleHash: offer.bundleHash, decision: decision, sessionId: session.id)
+                try await socket.resolveEnvironmentOffer(environmentId: offer.environmentId, bundleHash: offer.bundleHash, decision: decision)
                 if decision == "accept" || decision == "approve" {
                     appendBlock(.system(text: "Bundle \(offer.bundleId) allowed for \(offer.environmentId)."))
                 }
