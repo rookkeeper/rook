@@ -94,6 +94,19 @@ Dump active/recent environment state from the server:
 ```
 Uses `GET /api/diagnostics/environments`. Useful for inspecting what environments the server knows about, their status (active/recent), and bundles.
 
+### Environment paths
+
+Environment bundles live in two places:
+
+- **Repo**: `environment-repository/<kind>/<path>/.bundles/<bundle-id>/` — checked-in bundles (skills, AGENTS.md, tools)
+- **User-local**: `~/.rook/environment-repository/<kind>/<path>/.bundles/<bundle-id>/` — bundles Rook writes at runtime (e.g. agent-authored skills, memories)
+
+For the full filesystem shape and authoring model, see:
+- `PRODUCT/environment-repository.md`
+- `PRODUCT/environment-local-authoring.md`
+
+When debugging missing skills or instructions, check both locations. The user-local path is where `--join` will pick up agent-authored artifacts.
+
 ### `scripts/dump-environment-decisions.sh`
 Dump the SQLite environment_decisions table:
 ```bash
