@@ -42,6 +42,7 @@ export class RookCliClient {
     this.toolHeader = null;
     this.toolLineWidth = 0;
     this.toolCallId = null;
+    this.pendingOffers = [];
   }
 
   baseRestUrl() {
@@ -110,7 +111,9 @@ export class RookCliClient {
   async initialize() {
     await this.request("initialize", {
       protocolVersion: 1,
-      clientCapabilities: {},
+      clientCapabilities: {
+        _meta: { "com.the-rooks-nest": { environmentOffers: true } },
+      },
       clientInfo: { name: "rook-cli", title: "Rook CLI", version: "0.1.0" },
     });
   }
@@ -144,6 +147,19 @@ export class RookCliClient {
     });
     if (this.joinEnv.length > 0) printLine(COLORS.gray, `joined: ${this.joinEnv.join(", ")}`);
     if (this.leaveEnv.length > 0) printLine(COLORS.gray, `left: ${this.leaveEnv.join(", ")}`);
+
+    // Auto-accept any env offers that arrive after joining.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    for (const offer of this.pendingOffers) {
+      printLine(COLORS.gray, `accepting offer: ${offer.environmentId} bundle=${offer.bundleId}`);
+      await this.request("_com.the-rooks-nest/environment_offer_resolve", {
+        sessionId: this.sessionId,
+        environmentId: offer.environmentId,
+        bundleHash: offer.bundleHash,
+        decision: "accept",
+      });
+    }
+    this.pendingOffers = [];
   }
 
   async runTranscriptMode() {
@@ -254,6 +270,17 @@ export class RookCliClient {
 
     if (frame.method === "session/update" && frame.params?.update) {
       this.handleUpdate(frame.params.update);
+      return;
+    }
+
+    if (frame.method === "_com.the-rooks-nest/environment_offer") {
+      const params = frame.params || {};
+      const envId = params.environmentId || "?";
+      const bundleId = params.bundleId || "?";
+      if (!this.lastMessageOnly) {
+        printLine(COLORS.yellow, `env-offer: ${envId} bundle=${bundleId}`);
+        this.pendingOffers.push({ environmentId: envId, bundleId, bundleHash: params.bundleHash || "" });
+      }
       return;
     }
 

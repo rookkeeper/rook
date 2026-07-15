@@ -110,6 +110,18 @@ Tail Pi provider-payload traces:
 ```
 Reads from `.var/pi-traces.jsonl`. Shows the raw prompts sent to the LLM — useful for debugging prompt construction and environment context injection.
 
+### Inspecting agent instructions
+
+To see exactly what system prompt, skills, and context the agent is receiving:
+```bash
+# Start tailing Pi traces in one terminal:
+./scripts/tail-logs.sh --instructions
+
+# In another terminal, trigger a prompt:
+rook exec --runtime MyPiOpenAiAgent --auth-token "$ROOK_AUTH_TOKEN" "hi"
+```
+The trace logs show the full provider payload including system instructions, skill content, tool definitions, and environment context — everything the agent sees.
+
 ### `scripts/run-tests.sh`
 Run the known server, Swift package, iPhone, and macOS test/build checks all at once.
 
