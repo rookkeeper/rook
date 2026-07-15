@@ -10,13 +10,13 @@ struct EnvironmentsScreen: View {
     var body: some View {
         ZStack {
             PanelBackground().ignoresSafeArea()
-            if model.environmentsLoading {
+            if model.environmentsLoading && model.environmentListItems.isEmpty {
                 VStack {
                     Spacer()
                     ProgressView()
                     Spacer()
                 }
-            } else if !model.environmentsError.isEmpty {
+            } else if !model.environmentsError.isEmpty && model.environmentListItems.isEmpty {
                 VStack(spacing: 12) {
                     Spacer()
                     Image(systemName: "exclamationmark.triangle")
@@ -42,7 +42,7 @@ struct EnvironmentsScreen: View {
                 }
             } else {
                 ScrollView {
-                    VStack(spacing: 8) {
+                    LazyVStack(spacing: 8) {
                         ForEach(model.environmentListItems) { item in
                             environmentRow(item)
                         }
@@ -51,8 +51,10 @@ struct EnvironmentsScreen: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .tint(PanelPalette.accent)
-        .onAppear { model.refreshEnvironmentList() }
+        .onAppear { model.startEnvironmentListAutoRefresh() }
+        .onDisappear { model.stopEnvironmentListAutoRefresh() }
     }
 
     private func environmentRow(_ item: EnvironmentListItem) -> some View {

@@ -87,6 +87,7 @@ final class RookModel: ObservableObject {
     private(set) var api: RookAPI
     private let socket = AcpSocket()
     private var healthTimer: Timer?
+    private var environmentListAutoRefreshTask: Task<Void, Never>?
     private var blockCounter = 0
     private var enteredEnvironments: Set<String> = []
     private var autoResumeAttempted = false
@@ -993,22 +994,34 @@ final class RookModel: ObservableObject {
 
     // MARK: - Environment join / leave
 
-    func refreshEnvironmentList() {
+    func refreshEnvironmentList(showLoading: Bool = true) {
         guard let session = currentSession else {
             environmentListItems = []
             return
         }
-        environmentsLoading = true
-        environmentsError = ""
+        if showLoading && environmentListItems.isEmpty {
+            environmentsLoading = true
+        }
         Task {
             defer { environmentsLoading = false }
             do {
-                environmentListItems = try await api.environmentList(sessionId: session.id)
+                let refreshedItems = try await api.environmentList(sessionId: session.id)
+                EnvironmentListPresentation.apply(refreshedItems, to: &environmentListItems)
                 environmentsError = ""
             } catch {
                 environmentsError = error.localizedDescription
             }
         }
+    }
+
+    func startEnvironmentListAutoRefresh() {
+        EnvironmentListPresentation.startAutoRefresh(task: &environmentListAutoRefreshTask) { [weak self] showLoading in
+            self?.refreshEnvironmentList(showLoading: showLoading)
+        }
+    }
+
+    func stopEnvironmentListAutoRefresh() {
+        EnvironmentListPresentation.stopAutoRefresh(task: &environmentListAutoRefreshTask)
     }
 
     func joinEnvironment(_ environmentId: String) {

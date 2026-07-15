@@ -18,42 +18,50 @@ struct EnvironmentsDetail: View {
                 model.closeEnvironments()
             }
 
-            if model.environmentsLoading {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Spacer()
+            Group {
+                if model.environmentsLoading && model.environmentListItems.isEmpty {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Spacer()
+                    }
+                    .padding(.vertical, 20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else if !model.environmentsError.isEmpty && model.environmentListItems.isEmpty {
+                    PanelCard {
+                        Text(model.environmentsError)
+                            .font(.callout)
+                            .foregroundStyle(PanelPalette.danger)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else if model.environmentListItems.isEmpty {
+                    PanelCard {
+                        Text("No environments in memory.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else {
+                    environmentList
                 }
-                .padding(.vertical, 20)
-            } else if !model.environmentsError.isEmpty {
-                PanelCard {
-                    Text(model.environmentsError)
-                        .font(.callout)
-                        .foregroundStyle(PanelPalette.danger)
-                }
-            } else if model.environmentListItems.isEmpty {
-                PanelCard {
-                    Text("No environments in memory.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
-                }
-            } else {
-                environmentList
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var environmentList: some View {
         ScrollView {
-            VStack(spacing: 6) {
+            LazyVStack(spacing: 6) {
                 ForEach(model.environmentListItems) { item in
                     environmentRow(item)
                 }
             }
             .padding(.horizontal, 2)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func environmentRow(_ item: EnvironmentListItem) -> some View {

@@ -188,6 +188,7 @@ class RookViewModel(
     private var blockCounter = 0
     private var autoResumeAttempted = false
     private var reconnectJob: Job? = null
+    private var environmentListAutoRefreshJob: Job? = null
     private var userCancelledRun = false
     // Set on any content-bearing event during the in-flight turn; checked on RunCompleted.
     // Upstream provider failures (e.g. billing/auth rejections) can come back from the
@@ -669,7 +670,7 @@ class RookViewModel(
     fun setShowPlaces(visible: Boolean) { _showPlaces.value = visible }
     fun setShowEnvironments(visible: Boolean) {
         _showEnvironments.value = visible
-        if (visible) refreshEnvironmentList()
+        if (visible) startEnvironmentListAutoRefresh() else stopEnvironmentListAutoRefresh()
     }
 
     // MARK: - Server connection
@@ -874,6 +875,22 @@ class RookViewModel(
                 _environmentsLoading.value = false
             }
         }
+    }
+
+    private fun startEnvironmentListAutoRefresh() {
+        if (environmentListAutoRefreshJob != null) return
+        refreshEnvironmentList()
+        environmentListAutoRefreshJob = scope.launch {
+            while (true) {
+                delay(5000)
+                refreshEnvironmentList()
+            }
+        }
+    }
+
+    private fun stopEnvironmentListAutoRefresh() {
+        environmentListAutoRefreshJob?.cancel()
+        environmentListAutoRefreshJob = null
     }
 
     fun joinEnvironment(environmentId: String) {

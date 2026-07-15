@@ -51,7 +51,7 @@ struct RookView: View {
 
     @ViewBuilder
     private var displayedContent: some View {
-        if model.panelMode == .chat {
+        if model.panelMode == .chat || model.panelMode == .environments {
             baseContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
@@ -121,7 +121,10 @@ struct RookView: View {
     }
 
     private var panelHeight: CGFloat {
-        max(420, measuredContentHeight)
+        if model.panelMode == .chat || model.panelMode == .environments {
+            return 420
+        }
+        return max(420, measuredContentHeight)
     }
 
     private func applyWindowSizing(_ window: NSWindow?) {

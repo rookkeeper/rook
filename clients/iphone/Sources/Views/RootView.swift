@@ -32,6 +32,7 @@ struct RootView: View {
         }
         .sheet(isPresented: $model.showEnvironments) {
             EnvironmentsScreen(model: model)
+                .presentationDetents([.medium, .large])
         }
     }
 }
