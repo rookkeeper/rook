@@ -16,6 +16,10 @@ function send(ws: WebSocket, id: number, method: string, params: Record<string, 
   ws.send(JSON.stringify({ jsonrpc: "2.0", id: String(id), method, params }));
 }
 
+function notify(ws: WebSocket, method: string, params: Record<string, unknown> = {}): void {
+  ws.send(JSON.stringify({ jsonrpc: "2.0", method, params }));
+}
+
 function recv(ws: WebSocket): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
     ws.once("message", (data) => resolve(JSON.parse(String(data))));
@@ -80,6 +84,37 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     expect(sessions.some((session) => session.sessionId === sessionId)).toBe(true);
 
     await request(ws, 6, "session/close", { sessionId });
+    ws.close();
+  });
+
+  it("accepts session/cancel as a JSON-RPC notification and cancels the turn", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
+
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "cancel-test" },
+    });
+    const sessionId = created.sessionId as string;
+    await request(ws, 3, "session/load", { sessionId });
+
+    send(ws, 4, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "run a long task" }],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    notify(ws, "session/cancel", { sessionId });
+
+    while (true) {
+      const msg = await recv(ws);
+      if (msg.error) throw new Error((msg.error as Record<string, unknown>).message as string ?? "Unexpected error");
+      if (msg.id === "4") {
+        expect((msg.result as Record<string, unknown>).stopReason).toBe("cancelled");
+        break;
+      }
+    }
+
     ws.close();
   });
 

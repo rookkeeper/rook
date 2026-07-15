@@ -45,7 +45,15 @@ async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: R
     if (!runtimes.respondToRuntime(message)) send(failure(typeof message.id === "string" || typeof message.id === "number" ? message.id : null, "Unknown runtime request", -32600));
     return;
   }
-  if (typeof message.method !== "string" || (typeof message.id !== "string" && typeof message.id !== "number")) {
+  if (typeof message.method !== "string") {
+    send(failure(null, "JSON-RPC method required", -32600));
+    return;
+  }
+
+  const requestId = typeof message.id === "string" || typeof message.id === "number" ? message.id : null;
+  const isRequest = requestId !== null;
+  const allowNotification = message.method === "session/cancel";
+  if (!isRequest && !allowNotification) {
     send(failure(null, "JSON-RPC request required", -32600));
     return;
   }
@@ -57,7 +65,7 @@ async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: R
         const extension = object(clientMeta)?.["com.the-rooks-nest"];
         const environmentOffers = object(extension)?.environmentOffers === true;
         setEnvironmentOffers(environmentOffers);
-        send(success(message.id, {
+        send(success(requestId!, {
           protocolVersion: 1,
           agentInfo: { name: "rook", title: "Rook", version: "0.1.0" },
           agentCapabilities: { loadSession: true, sessionCapabilities: { list: {}, resume: {}, close: {} }, promptCapabilities: { image: false, audio: false, embeddedContext: false } },
@@ -74,11 +82,11 @@ async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: R
         const decision = params.decision;
         if (!environmentId || !bundleHash || (decision !== "accept" && decision !== "approve" && decision !== "ignore" && decision !== "reject")) throw new Error("Invalid environment offer resolution.");
         await runtimes.resolveEnvironmentOffer(sessionId, environmentId, bundleHash, decision);
-        send(success(message.id, { ok: true }));
+        send(success(requestId!, { ok: true }));
         return;
       }
       case "session/list":
-        send(success(message.id, { sessions: (await runtimes.listSessions()).map((record) => ({ sessionId: record.sessionId, cwd: record.cwd, title: record.title, updatedAt: record.updatedAt, _meta: { runtimeId: record.runtimeId, startedAt: record.startedAt } })) }));
+        send(success(requestId!, { sessions: (await runtimes.listSessions()).map((record) => ({ sessionId: record.sessionId, cwd: record.cwd, title: record.title, updatedAt: record.updatedAt, _meta: { runtimeId: record.runtimeId, startedAt: record.startedAt } })) }));
         return;
       case "session/new": {
         const params = object(message.params) ?? {};
@@ -88,7 +96,7 @@ async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: R
         const title = typeof meta?.title === "string" && meta.title.trim() ? meta.title.trim() : "session";
         const record = await runtimes.createSession(runtimeId, withoutMeta(params), title);
         subscribe(record.sessionId);
-        send(success(message.id, { sessionId: record.sessionId }));
+        send(success(requestId!, { sessionId: record.sessionId }));
         return;
       }
       case "session/load":
@@ -99,7 +107,7 @@ async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: R
         const params = object(message.params) ?? {};
         const sessionId = requiredSessionId(params);
         subscribe(sessionId);
-        send(success(message.id, await runtimes.requestForSession(sessionId, message.method, withoutSessionId(params))));
+        send(success(requestId!, await runtimes.requestForSession(sessionId, message.method, withoutSessionId(params))));
         return;
       }
       case "session/cancel": {
@@ -107,19 +115,20 @@ async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: R
         const sessionId = requiredSessionId(params);
         subscribe(sessionId);
         await runtimes.notifyForSession(sessionId, "session/cancel", withoutSessionId(params));
+        if (isRequest) send(success(requestId!, { ok: true }));
         return;
       }
       case "session/close": {
         const sessionId = requiredSessionId(object(message.params) ?? {});
         subscribe(sessionId);
-        send(success(message.id, await runtimes.closeSession(sessionId)));
+        send(success(requestId!, await runtimes.closeSession(sessionId)));
         return;
       }
       default:
-        send(failure(message.id, `Unsupported ACP method: ${message.method}`, -32601));
+        send(failure(requestId, `Unsupported ACP method: ${message.method}`, -32601));
     }
   } catch (error) {
-    send(failure(message.id, error instanceof Error ? error.message : String(error)));
+    send(failure(requestId, error instanceof Error ? error.message : String(error)));
   }
 }
 

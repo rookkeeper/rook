@@ -18,7 +18,7 @@ function write(message) {
 function ensureSession(sessionId) {
   let session = sessions.get(sessionId);
   if (!session) {
-    session = { sessionId, lastAssistantMessage: '', transcript: [] };
+    session = { sessionId, lastAssistantMessage: '', transcript: [], cancelRequested: false };
     sessions.set(sessionId, session);
   }
   return session;
@@ -140,8 +140,8 @@ async function replayTranscript(sessionId, transcript) {
   }
 }
 
-function finish(id) {
-  write({ jsonrpc: '2.0', id, result: { stopReason: 'end_turn' } });
+function finish(id, stopReason = 'end_turn') {
+  write({ jsonrpc: '2.0', id, result: { stopReason } });
 }
 
 function delay(ms) {
@@ -185,6 +185,17 @@ async function handleMessage(message) {
     return;
   }
 
+  if (message.method === 'session/cancel') {
+    const sessionId = message.params?.sessionId;
+    if (typeof sessionId === 'string') {
+      ensureSession(sessionId).cancelRequested = true;
+    }
+    if (message.id != null) {
+      write({ jsonrpc: '2.0', id: message.id, result: { ok: true } });
+    }
+    return;
+  }
+
   if (message.method === 'session/list') {
     write({ jsonrpc: '2.0', id: message.id, result: { sessions: [...sessions.values()].map((session) => ({ sessionId: session.sessionId, title: 'mock', updatedAt: new Date().toISOString() })) } });
     return;
@@ -217,10 +228,29 @@ async function handlePrompt(message) {
   const text = message.params.prompt?.map((part) => part.text).join(' ')?.trim() || '';
   const lower = text.toLowerCase();
 
+  session.cancelRequested = false;
   session.transcript.push({ role: 'user', text });
 
   if (lower === 'boom') {
     write({ jsonrpc: '2.0', id: message.id, error: { code: -32000, message: 'boom' } });
+    return;
+  }
+
+  if (lower.includes('long task')) {
+    await streamThoughts(sessionId, ['Starting a long-running mock task.']);
+    for (let index = 0; index < 100; index += 1) {
+      if (session.cancelRequested) {
+        session.cancelRequested = false;
+        finish(message.id, 'cancelled');
+        return;
+      }
+      await delay(20);
+    }
+    const response = 'Finished the long-running mock task.';
+    session.lastAssistantMessage = response;
+    session.transcript.push({ role: 'assistant', text: response });
+    await streamText(sessionId, response);
+    finish(message.id);
     return;
   }
 
