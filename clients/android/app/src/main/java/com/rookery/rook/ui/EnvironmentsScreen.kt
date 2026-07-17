@@ -52,7 +52,7 @@ private fun EnvironmentRow(item: EnvironmentListItem, viewModel: RookViewModel) 
             StatusDot(if (item.entered) PanelPalette.success else PanelPalette.textMuted)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
-                    text = item.sourceName ?: item.environmentId,
+                    text = item.displayName,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PanelPalette.textNormal
@@ -65,6 +65,15 @@ private fun EnvironmentRow(item: EnvironmentListItem, viewModel: RookViewModel) 
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (item.sourceName != null && item.sourceName != item.displayName && item.sourceName != item.environmentId) {
+                    Text(
+                        text = item.sourceName,
+                        fontSize = 11.sp,
+                        color = PanelPalette.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Text(
                     text = "${if (item.status == "active") "Active" else "Recent"} • ${item.approvedBundleCount}/${item.bundleCount} bundles",
                     fontSize = 11.sp,

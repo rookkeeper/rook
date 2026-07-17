@@ -29,6 +29,7 @@ export type EnvironmentResolution = "approved" | "dismissed" | "unavailable";
 export interface EnvironmentOfferInfo {
   sourceName?: string;
   canonicalSourceUrl?: string;
+  displayName?: string;
 }
 
 export interface EnvironmentBundleOffer extends EnvironmentOfferInfo {

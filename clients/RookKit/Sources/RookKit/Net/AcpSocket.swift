@@ -333,6 +333,7 @@ public final class AcpSocket {
         }
         onEvent?(.environmentOffered(EnvironmentOffer(
             environmentId: environmentId,
+            displayName: params["displayName"] as? String,
             bundleId: bundleId,
             bundleHash: bundleHash,
             sourceName: params["sourceName"] as? String,

@@ -43,6 +43,7 @@ export const ENVIRONMENT_EXITED_KIND = "environment_exited";
 
 export interface EnvironmentOfferAvailablePayload {
   environmentId: string;
+  displayName?: string;
   bundleId: string;
   bundleHash: string;
   sourceName?: string;
@@ -61,6 +62,7 @@ export interface EnvironmentOfferResolvedPayload {
 
 export interface EnvironmentLifecyclePayload {
   environmentId: string;
+  displayName?: string;
 }
 
 /** Source of a location identification request. */

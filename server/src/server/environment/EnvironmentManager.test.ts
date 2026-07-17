@@ -579,6 +579,7 @@ describe("EnvironmentManager", () => {
         environmentId: "web:example.com",
         bundleId: "testing",
         bundleHash: "hash-1",
+        displayName: "Example",
         sourceName: "Example",
       }),
     );
@@ -641,6 +642,58 @@ describe("EnvironmentManager", () => {
     expect(list[0].entered).toBe(true);
     expect(list[1].environmentId).toBe("web:b.com");
     expect(list[1].entered).toBe(false);
+  });
+
+  it("environmentList derives display names by environment kind", async () => {
+    const manager = newManager();
+
+    await manager.registerAvailableEnvironment(
+      {
+        id: "web:example.com/docs",
+        metadata: {
+          appName: "Google Chrome",
+          windowTitle: "Example Docs - Google Chrome - John",
+          url: "https://example.com/docs",
+        },
+      },
+      { sourceName: "https://example.com/docs" },
+    );
+    await manager.registerAvailableEnvironment(
+      {
+        id: "mac:md.obsidian/Peeps",
+        metadata: {
+          appName: "Obsidian",
+          vaultName: "Peeps",
+        },
+      },
+      { sourceName: "Obsidian · Peeps" },
+    );
+    await manager.registerAvailableEnvironment(
+      {
+        id: "location:target.com/123-main-st-springfield-il",
+        metadata: {
+          displayName: "Target",
+          address: "123 Main St, Springfield, IL",
+        },
+      },
+      { sourceName: "Target" },
+    );
+
+    const list = manager.environmentList("s1");
+    const byId = new Map(list.map((item) => [item.environmentId, item]));
+
+    expect(byId.get("web:example.com/docs")).toMatchObject({
+      displayName: "Example Docs",
+      sourceName: "https://example.com/docs",
+    });
+    expect(byId.get("mac:md.obsidian/Peeps")).toMatchObject({
+      displayName: "Obsidian · Peeps",
+      sourceName: "Obsidian · Peeps",
+    });
+    expect(byId.get("location:target.com/123-main-st-springfield-il")).toMatchObject({
+      displayName: "Target",
+      sourceName: "Target",
+    });
   });
 
   it("enterEnvironment does nothing for an unsubscribed session", async () => {
@@ -825,6 +878,7 @@ describe("EnvironmentManager", () => {
       environmentId: "web:example.com",
       bundleId: "testing",
       bundleHash: "hash-1",
+      displayName: "Example",
       sourceName: "Example",
       canonicalSourceUrl: undefined,
       skills: ["consult"],

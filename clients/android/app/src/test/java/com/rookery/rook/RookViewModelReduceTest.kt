@@ -136,7 +136,7 @@ class RookViewModelReduceTest {
     // MARK: - Environment reducer branches (location/skills phase)
 
     private fun offer(envId: String, bundleId: String = "b1", hash: String = "hash1") =
-        EnvironmentOffer(envId, bundleId, hash, "Store", null, emptyList(), emptyList(), emptyList())
+        EnvironmentOffer(envId, "Store", bundleId, hash, "Store", null, emptyList(), emptyList(), emptyList())
 
     @Test
     fun environmentOfferedSetsPendingOfferAndIgnoresDuplicate() {

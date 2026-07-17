@@ -97,6 +97,47 @@ function environmentHierarchy(environmentId: string): string[] {
   return parts.map((_, index) => `${prefix}${parts.slice(0, index + 1).join("/")}`);
 }
 
+function environmentKind(environmentId: string): string | undefined {
+  const separator = environmentId.indexOf(":");
+  if (separator === -1) return undefined;
+  return environmentId.slice(0, separator);
+}
+
+function stringMetadata(metadata: Record<string, unknown>, key: string): string | undefined {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function cleanWebWindowTitle(windowTitle: string, appName?: string): string {
+  const trimmed = windowTitle.trim();
+  if (!trimmed) return "";
+  if (!appName) return trimmed;
+  const marker = ` - ${appName}`;
+  const index = trimmed.indexOf(marker);
+  if (index === -1) return trimmed;
+  return trimmed.slice(0, index).trim();
+}
+
+function deriveEnvironmentDisplayName(environmentId: string, sourceName: string | undefined, metadata: Record<string, unknown>): string {
+  const kind = environmentKind(environmentId);
+  switch (kind) {
+    case "web": {
+      const windowTitle = stringMetadata(metadata, "windowTitle");
+      const appName = stringMetadata(metadata, "appName");
+      const cleanedTitle = windowTitle ? cleanWebWindowTitle(windowTitle, appName) : "";
+      return cleanedTitle || sourceName || environmentId;
+    }
+    case "mac": {
+      return sourceName || stringMetadata(metadata, "appName") || environmentId;
+    }
+    case "location": {
+      return sourceName || stringMetadata(metadata, "displayName") || environmentId;
+    }
+    default:
+      return sourceName || environmentId;
+  }
+}
+
 export class EnvironmentManager {
   private readonly remembered = new Map<string, RememberedEnvironmentEntry>();
   private readonly sessionDecisions: SessionDecisionRegistry;
@@ -400,6 +441,7 @@ export class EnvironmentManager {
 
   environmentList(sessionId: string): {
     environmentId: string;
+    displayName: string;
     sourceName?: string;
     status: "active" | "recent";
     lastTouchedAt: string;
@@ -417,6 +459,7 @@ export class EnvironmentManager {
       ).length;
       return {
         environmentId: entry.environmentId,
+        displayName: deriveEnvironmentDisplayName(entry.environmentId, entry.info.sourceName, entry.record.metadata),
         sourceName: entry.info.sourceName,
         status: entry.status,
         lastTouchedAt: entry.lastTouchedAt,
@@ -454,6 +497,7 @@ export class EnvironmentManager {
         if (this.effectiveDecision(bundle.bundleHash, sessionId) !== "undecided") continue;
         listener.onEnvironmentOffered({
           environmentId,
+          displayName: deriveEnvironmentDisplayName(environmentId, entry.info.sourceName, entry.record.metadata),
           bundleId: bundle.bundleId,
           bundleHash: bundle.bundleHash,
           sourceName: entry.info.sourceName,

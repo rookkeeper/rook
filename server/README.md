@@ -57,6 +57,7 @@ The server is a single ACP-compliant agent from the client's perspective. Intern
 - `POST /api/environments/register` — mark an environment available
 - `POST /api/environments/decision` — record accept/approve/ignore/reject
 - `GET /api/environments/preview` — bundle/file preview data
+- `GET /api/environments/list` — per-session environment list for client UI (`displayName`, `environmentId`, status, bundle counts)
 - `GET /api/diagnostics/environments` — active/recent environment diagnostics
 - `GET /api/ws` — connection-level ACP WebSocket facade (no session query parameter)
 

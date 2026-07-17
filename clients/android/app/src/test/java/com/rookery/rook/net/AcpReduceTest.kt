@@ -227,6 +227,7 @@ class AcpReduceTest {
                 put("method", "_com.the-rooks-nest/environment_offer")
                 putJsonObject("params") {
                     put("environmentId", "location:store")
+                    put("displayName", "Store")
                     put("bundleId", "bundle-1")
                     put("bundleHash", "hash-1")
                     put("sourceName", "Store")
@@ -240,6 +241,7 @@ class AcpReduceTest {
         job.join()
         val event = events.single() as AcpClientEvent.EnvironmentOffered
         assertEquals("location:store", event.offer.environmentId)
+        assertEquals("Store", event.offer.displayName)
         assertEquals("bundle-1", event.offer.bundleId)
         assertEquals("hash-1", event.offer.bundleHash)
     }

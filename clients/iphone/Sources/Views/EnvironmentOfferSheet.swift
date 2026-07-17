@@ -42,7 +42,7 @@ struct EnvironmentOfferSheet: View {
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(PanelPalette.accent.opacity(0.18)))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(model.pendingOffer?.sourceName ?? model.pendingOffer?.environmentId ?? "")
+                    Text(model.pendingOffer?.displayName ?? model.pendingOffer?.sourceName ?? model.pendingOffer?.environmentId ?? "")
                         .font(.headline)
                         .foregroundStyle(PanelPalette.textNormal)
                     Text("wants to load bundle \(model.pendingOffer?.bundleId ?? "") into this session")
@@ -51,6 +51,13 @@ struct EnvironmentOfferSheet: View {
                     if let environmentId = model.pendingOffer?.environmentId {
                         Text(environmentId)
                             .font(.caption2.monospaced())
+                            .foregroundStyle(PanelPalette.textMuted)
+                    }
+                    if let sourceName = model.pendingOffer?.sourceName,
+                       sourceName != model.pendingOffer?.displayName,
+                       sourceName != model.pendingOffer?.environmentId {
+                        Text(sourceName)
+                            .font(.caption2)
                             .foregroundStyle(PanelPalette.textMuted)
                     }
                 }

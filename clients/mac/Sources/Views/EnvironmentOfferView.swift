@@ -38,7 +38,7 @@ struct EnvironmentOfferDetail: View {
             HStack(alignment: .top, spacing: 10) {
                 StatusGlyph(systemImage: "shippingbox.fill", tint: PanelPalette.warning, size: 28)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(offer.sourceName ?? offer.environmentId)
+                    Text(offer.displayName ?? offer.sourceName ?? offer.environmentId)
                         .font(.subheadline)
                         .fontWeight(.semibold)
                     Text("wants to load bundle \(offer.bundleId) into this agent session")
@@ -49,6 +49,15 @@ struct EnvironmentOfferDetail: View {
                         .foregroundStyle(PanelPalette.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                    if let sourceName = offer.sourceName,
+                       sourceName != offer.displayName,
+                       sourceName != offer.environmentId {
+                        Text(sourceName)
+                            .font(.caption2)
+                            .foregroundStyle(PanelPalette.secondaryText)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                     if let url = offer.canonicalSourceUrl, !url.isEmpty {
                         Text(url)
                             .font(.caption2)

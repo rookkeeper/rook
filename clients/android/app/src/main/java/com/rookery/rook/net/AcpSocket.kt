@@ -344,7 +344,7 @@ class AcpSocket(
             val bundleId = params?.get("bundleId")?.stringValue
             val bundleHash = params?.get("bundleHash")?.stringValue
             if (params != null && environmentId != null && bundleId != null && bundleHash != null) {
-                emit(AcpClientEvent.EnvironmentOffered(EnvironmentOffer(environmentId, bundleId, bundleHash, params["sourceName"]?.stringValue, params["canonicalSourceUrl"]?.stringValue, stringList(params["skills"]), stringList(params["mcpServers"]), stringList(params["apps"]))))
+                emit(AcpClientEvent.EnvironmentOffered(EnvironmentOffer(environmentId, params["displayName"]?.stringValue, bundleId, bundleHash, params["sourceName"]?.stringValue, params["canonicalSourceUrl"]?.stringValue, stringList(params["skills"]), stringList(params["mcpServers"]), stringList(params["apps"]))))
                 return
             }
         }
@@ -511,6 +511,7 @@ class AcpSocket(
                     AcpClientEvent.EnvironmentOffered(
                         EnvironmentOffer(
                             environmentId = environmentId,
+                            displayName = payload["displayName"]?.stringValue,
                             bundleId = bundleId,
                             bundleHash = bundleHash,
                             sourceName = payload["sourceName"]?.stringValue,

@@ -65,13 +65,21 @@ struct EnvironmentsScreen: View {
                     .foregroundStyle(item.entered ? PanelPalette.success : PanelPalette.textMuted)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.sourceName ?? item.environmentId)
+                    Text(item.displayName)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(PanelPalette.textNormal)
                     Text(item.environmentId)
                         .font(.caption2.monospaced())
                         .foregroundStyle(PanelPalette.textMuted)
                         .lineLimit(1)
+                    if let sourceName = item.sourceName,
+                       sourceName != item.displayName,
+                       sourceName != item.environmentId {
+                        Text(sourceName)
+                            .font(.caption2)
+                            .foregroundStyle(PanelPalette.textMuted)
+                            .lineLimit(1)
+                    }
                     HStack(spacing: 6) {
                         Text(item.status == "active" ? "Active" : "Recent")
                             .font(.caption2)

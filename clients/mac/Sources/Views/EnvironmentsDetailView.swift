@@ -73,7 +73,7 @@ struct EnvironmentsDetail: View {
                     .foregroundStyle(item.entered ? PanelPalette.success : PanelPalette.textMuted)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.sourceName ?? item.environmentId)
+                    Text(item.displayName)
                         .font(.subheadline)
                         .fontWeight(.semibold)
                     Text(item.environmentId)
@@ -81,6 +81,15 @@ struct EnvironmentsDetail: View {
                         .foregroundStyle(PanelPalette.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                    if let sourceName = item.sourceName,
+                       sourceName != item.displayName,
+                       sourceName != item.environmentId {
+                        Text(sourceName)
+                            .font(.caption2)
+                            .foregroundStyle(PanelPalette.textMuted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                     HStack(spacing: 8) {
                         Text(item.status == "active" ? "Active" : "Recent")
                             .font(.caption2)

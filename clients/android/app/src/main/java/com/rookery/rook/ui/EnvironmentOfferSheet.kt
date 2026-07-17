@@ -45,7 +45,7 @@ fun EnvironmentOfferSheet(viewModel: RookViewModel) {
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        text = current.sourceName ?: current.environmentId,
+                        text = current.displayName ?: current.sourceName ?: current.environmentId,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = PanelPalette.textNormal
@@ -61,6 +61,13 @@ fun EnvironmentOfferSheet(viewModel: RookViewModel) {
                         fontFamily = FontFamily.Monospace,
                         color = PanelPalette.textMuted
                     )
+                    if (current.sourceName != null && current.sourceName != current.displayName && current.sourceName != current.environmentId) {
+                        Text(
+                            text = current.sourceName,
+                            fontSize = 11.sp,
+                            color = PanelPalette.textMuted
+                        )
+                    }
                 }
             }
         }
