@@ -724,7 +724,7 @@ final class RookModel: ObservableObject {
 
     // MARK: - Event reduction
 
-    private func handleSocketEvent(_ event: AcpClientEvent) {
+    func handleSocketEvent(_ event: AcpClientEvent) {
         switch event {
         case .userMessageChunk(let text):
             appendBlock(.user(text: text))
@@ -804,8 +804,11 @@ final class RookModel: ObservableObject {
             break
         case .configOptionUpdate:
             break
-        case .runCompleted:
+        case .runCompleted(let stopReason):
             finalizeStreamingBlocks()
+            if stopReason == "cancelled" {
+                finalizeActiveTools(as: .cancelled)
+            }
             isRunning = false
             statusLine = ""
             userCancelledRun = false
@@ -821,6 +824,7 @@ final class RookModel: ObservableObject {
             statusLine = ""
             spokenTurnBuffer = ""
             if userCancelledRun {
+                finalizeActiveTools(as: .cancelled)
                 userCancelledRun = false
                 appendBlock(.system(text: "Stopped."))
             } else {
@@ -857,7 +861,7 @@ final class RookModel: ObservableObject {
     /// Banner label for an entered location: the business name when one match is clearly
     /// best, "Surrounding businesses" when ambiguous, or nil (generic) when unknown.
     /// Mirrors the server's confidence heuristic (`isConfidentMatch`).
-    private func locationBannerLabel(entered: EnvironmentCandidate?, candidates: [EnvironmentCandidate]) -> String? {
+    func locationBannerLabel(entered: EnvironmentCandidate?, candidates: [EnvironmentCandidate]) -> String? {
         guard let top = candidates.first else { return entered?.displayName }
         let ambiguous = top.confidence < 0.7 || (candidates.count >= 2 && top.confidence - candidates[1].confidence < 0.15)
         if ambiguous { return "Surrounding businesses" }
@@ -866,7 +870,7 @@ final class RookModel: ObservableObject {
 
     /// Website URLs for the entered-business favicon row: the entered business first,
     /// then nearby candidates that have a website, deduped by host.
-    private func orderedUniqueWebsites(entered: EnvironmentCandidate?, all: [EnvironmentCandidate]) -> [String] {
+    func orderedUniqueWebsites(entered: EnvironmentCandidate?, all: [EnvironmentCandidate]) -> [String] {
         let ordered = ([entered].compactMap { $0 } + all.filter { $0.environmentId != entered?.environmentId })
         var seenHosts = Set<String>()
         var result: [String] = []
@@ -923,6 +927,15 @@ final class RookModel: ObservableObject {
             default:
                 break
             }
+        }
+    }
+
+    func finalizeActiveTools(as finalStatus: ToolBlockStatus) {
+        for index in blocks.indices {
+            guard case .tool(var state) = blocks[index].kind else { continue }
+            guard !state.status.isTerminal else { continue }
+            state.status = finalStatus
+            blocks[index].kind = .tool(state)
         }
     }
 

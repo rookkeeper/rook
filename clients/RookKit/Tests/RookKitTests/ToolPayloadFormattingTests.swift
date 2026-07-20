@@ -7,11 +7,19 @@ final class ToolPayloadFormattingTests: XCTestCase {
         XCTAssertEqual(ToolPayloadFormatting.displayArguments(raw), raw)
     }
 
-    func testRendersJsonObjectAsYaml() {
+    func testRendersJsonObjectAsYamlPreservingKeyOrder() {
         let raw = "{\"timeout\":30,\"path\":\"/tmp/demo\",\"enabled\":true}"
         XCTAssertEqual(
             ToolPayloadFormatting.displayArguments(raw),
-            "enabled: true\npath: /tmp/demo\ntimeout: 30"
+            "timeout: 30\npath: /tmp/demo\nenabled: true"
+        )
+    }
+
+    func testRendersNestedEditPayloadPreservingKeyOrder() {
+        let raw = #"{"path":"/tmp/demo","edits":[{"oldText":"before","newText":"after"}]}"#
+        XCTAssertEqual(
+            ToolPayloadFormatting.displayArguments(raw),
+            "path: /tmp/demo\nedits:\n  - oldText: before\n    newText: after"
         )
     }
 

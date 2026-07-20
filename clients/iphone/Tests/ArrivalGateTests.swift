@@ -1,5 +1,6 @@
 import CoreLocation
 import XCTest
+import RookKit
 @testable import Rook
 
 /// Unit tests for the pure CLVisit dwell/motion gate (`LocationProvider.arrivalContext`).
@@ -67,5 +68,117 @@ final class ArrivalGateTests: XCTestCase {
 
     func testNoDwellWhenArrivalDistantPast() {
         XCTAssertNil(gate(arrivalDate: .distantPast)?.dwellSeconds)
+    }
+}
+
+// MARK: - RookModel tool cancellation tests
+
+@MainActor
+final class RookModelToolCancellationTests: XCTestCase {
+    var model: RookModel!
+
+    override func setUp() {
+        model = RookModel()
+    }
+
+    override func tearDown() {
+        model = nil
+    }
+
+    func testFinalizeActiveToolsMarksInputStreamingAsCancelled() {
+        let toolState = ToolBlockState(
+            toolCallId: "t1", title: "edit", kindLabel: "tool",
+            status: .inputStreaming, arguments: "{\"path\":\"", output: ""
+        )
+        model.blocks = [ChatBlock(id: "1", kind: .tool(toolState))]
+        model.finalizeActiveTools(as: .cancelled)
+        guard case .tool(let final) = model.blocks[0].kind else { return XCTFail() }
+        XCTAssertEqual(final.status, .cancelled)
+    }
+
+    func testFinalizeActiveToolsMarksPendingAsCancelled() {
+        model.blocks = [ChatBlock(id: "1", kind: .tool(
+            ToolBlockState(toolCallId: "t2", title: "w", kindLabel: "t", status: .pending, arguments: "", output: "")))]
+        model.finalizeActiveTools(as: .cancelled)
+        guard case .tool(let final) = model.blocks[0].kind else { return XCTFail() }
+        XCTAssertEqual(final.status, .cancelled)
+    }
+
+    func testFinalizeActiveToolsSkipsCompletedTools() {
+        model.blocks = [ChatBlock(id: "1", kind: .tool(
+            ToolBlockState(toolCallId: "t3", title: "r", kindLabel: "t", status: .completed, arguments: "{}", output: "ok")))]
+        model.finalizeActiveTools(as: .cancelled)
+        guard case .tool(let final) = model.blocks[0].kind else { return XCTFail() }
+        XCTAssertEqual(final.status, .completed)
+    }
+
+    func testFinalizeActiveToolsMarksMultipleTools() {
+        model.blocks = [
+            ChatBlock(id: "1", kind: .tool(ToolBlockState(toolCallId: "a", title: "e1", kindLabel: "t", status: .running, arguments: "{}", output: ""))),
+            ChatBlock(id: "2", kind: .tool(ToolBlockState(toolCallId: "b", title: "e2", kindLabel: "t", status: .inputStreaming, arguments: "{", output: ""))),
+            ChatBlock(id: "3", kind: .tool(ToolBlockState(toolCallId: "c", title: "e3", kindLabel: "t", status: .completed, arguments: "{}", output: "")))
+        ]
+        model.finalizeActiveTools(as: .cancelled)
+        if case .tool(let t) = model.blocks[0].kind { XCTAssertEqual(t.status, .cancelled) } else { XCTFail() }
+        if case .tool(let t) = model.blocks[1].kind { XCTAssertEqual(t.status, .cancelled) } else { XCTFail() }
+        if case .tool(let t) = model.blocks[2].kind { XCTAssertEqual(t.status, .completed) } else { XCTFail() }
+    }
+
+    func testFinalizeActiveToolsSkipsNonToolBlocks() {
+        model.blocks = [
+            ChatBlock(id: "1", kind: .user(text: "hello")),
+            ChatBlock(id: "2", kind: .tool(ToolBlockState(toolCallId: "t1", title: "e", kindLabel: "t", status: .inputStreaming, arguments: "{}", output: "")))
+        ]
+        model.finalizeActiveTools(as: .cancelled)
+        guard case .user = model.blocks[0].kind else { return XCTFail() }
+        guard case .tool(let t) = model.blocks[1].kind else { return XCTFail() }
+        XCTAssertEqual(t.status, .cancelled)
+    }
+
+    // MARK: - Full event simulation: tool started, streaming input, then cancelled
+
+    func testToolInputDeltaAccumulatesAndGetsCancelled() {
+        model.handleSocketEvent(.toolCallStarted(
+            toolCallId: "t1", title: "edit", kind: "tool", status: "pending", rawInput: nil
+        ))
+        model.handleSocketEvent(.toolInputDelta(toolCallId: "t1", toolName: nil, delta: #"{"path"#))
+        model.handleSocketEvent(.toolInputDelta(toolCallId: "t1", toolName: nil, delta: #"":""#))
+
+        guard case .tool(let s) = model.blocks[0].kind else { return XCTFail() }
+        XCTAssertEqual(s.status, .inputStreaming)
+        XCTAssertTrue(s.arguments.contains("path"), "arguments should contain path string after deltas")
+
+        // Simulate cancellation
+        model.finalizeActiveTools(as: .cancelled)
+        guard case .tool(let cancelled) = model.blocks[0].kind else { return XCTFail() }
+        XCTAssertEqual(cancelled.status, .cancelled)
+    }
+
+    func testToolCallStartedCreatesPendingBlock() {
+        model.handleSocketEvent(.toolCallStarted(
+            toolCallId: "t1", title: "edit", kind: "tool", status: "pending", rawInput: nil
+        ))
+        XCTAssertEqual(model.blocks.count, 1)
+        guard case .tool(let s) = model.blocks[0].kind else { return XCTFail() }
+        XCTAssertEqual(s.toolCallId, "t1")
+    }
+
+    func testToolCallUpdateCompleted() {
+        model.handleSocketEvent(.toolCallStarted(
+            toolCallId: "t1", title: "edit", kind: "tool", status: "pending", rawInput: nil
+        ))
+        model.handleSocketEvent(.toolCallUpdate(toolCallId: "t1", status: "completed", toolName: nil, output: "result"))
+        guard case .tool(let s) = model.blocks[0].kind else { return XCTFail() }
+        XCTAssertEqual(s.status, .completed)
+        XCTAssertEqual(s.output, "result")
+    }
+
+    func testToolCallUpdateFailed() {
+        model.handleSocketEvent(.toolCallStarted(
+            toolCallId: "t1", title: "edit", kind: "tool", status: "pending", rawInput: nil
+        ))
+        model.handleSocketEvent(.toolCallUpdate(toolCallId: "t1", status: "failed", toolName: nil, output: "error"))
+        guard case .tool(let s) = model.blocks[0].kind else { return XCTFail() }
+        XCTAssertEqual(s.status, .failed)
     }
 }

@@ -933,6 +933,9 @@ final class RookMacModel: ObservableObject {
         case .runCompleted(let stopReason):
             if isReplaying { flushReplayBuffers(); return }
             finalizeStreamingBlocks()
+            if stopReason == "cancelled" {
+                finalizeActiveTools(as: .cancelled)
+            }
             isRunning = false
             statusLine = ""
             lastStopReason = stopReason
@@ -951,6 +954,7 @@ final class RookMacModel: ObservableObject {
             spokenTurnBuffer = ""
             pendingPermission = nil
             if userCancelledRun || message.lowercased().contains("cancel") {
+                finalizeActiveTools(as: .cancelled)
                 userCancelledRun = false
                 lastStopReason = "cancelled"
                 appendBlock(.system(text: "Stopped."))
@@ -1140,6 +1144,15 @@ final class RookMacModel: ObservableObject {
         guard !tool.status.isTerminal else { return }
         if next.isTerminal || toolStatusRank(next) >= toolStatusRank(tool.status) {
             tool.status = next
+        }
+    }
+
+    func finalizeActiveTools(as finalStatus: ToolBlockStatus) {
+        for index in blocks.indices {
+            guard case .tool(var state) = blocks[index].kind else { continue }
+            guard !state.status.isTerminal else { continue }
+            state.status = finalStatus
+            blocks[index].kind = .tool(state)
         }
     }
 
