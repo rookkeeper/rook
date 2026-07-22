@@ -7,30 +7,26 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - [Docs index](docs/README.md)
 - [Setup](docs/setup.md)
 - [Configuration](docs/configuration.md)
-- [Product / architecture notes](PRODUCT/)
+- [Product notes](PRODUCT/)
+- [As-built architecture notes](AS-BUILT-ARCHITECTURE/)
 
 ## Packages
 
 - [server/](server/) — Fastify API, session/runtime orchestration, environment manager, ACP-backed agent adapters
-- [server-next/](server-next/) — minimal Fastify playground server for ACP-first experiments
 - [clients/cli](clients/cli/) — minimal ACP-first command-line client
 - [clients/mac](clients/mac/) — native macOS menu bar client
 - [clients/iphone](clients/iphone/) — native iPhone client
 - [clients/android](clients/android/) — native Android client
 - [clients/cli](clients/cli/) — minimal ACP-first command-line client
 - [clients/RookKit](clients/RookKit/) — shared Swift package for the native clients
-- [clients-next/](clients-next/) — parallel next-generation Apple-client rebuild area
 - [skills/](skills/) — repo-local Pi skills that Rook injects into Pi sessions (currently includes `create-skills`)
 - [dev-tools/](dev-tools/) — repo-local Pi development/debug extensions (currently includes provider-payload trace logging to `.var/pi-traces.jsonl`)
 
 ## Common entry points
 
 - `./scripts/run-rook.sh server`
-- `./scripts/run-rook.sh server-next`
 - `./scripts/run-rook.sh mac`
 - `./scripts/run-rook.sh iphone`
-- `./scripts/run-rook.sh mac-next`
-- `./scripts/run-rook.sh iphone-next`
 - `./scripts/run-rook.sh android`
 - `./scripts/run-rook.sh stop`
 - `./scripts/print-environments.sh` — dump active/recent environment diagnostics from the server
@@ -41,6 +37,7 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 
 - setup, `.env`, binding, and remote-access notes: [docs/setup.md](docs/setup.md)
 - agent-profile config: [docs/configuration.md](docs/configuration.md)
+- as-built architecture index: [AS-BUILT-ARCHITECTURE/](AS-BUILT-ARCHITECTURE/)
 - server package details: [server/README.md](server/README.md)
 - iPhone client details: [clients/iphone/README.md](clients/iphone/README.md)
 - macOS client details: [clients/mac/README.md](clients/mac/README.md)

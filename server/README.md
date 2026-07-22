@@ -45,9 +45,29 @@ The server is a single ACP-compliant agent from the client's perspective. Intern
 
 ### Layering
 
-- **API layer** (`src/server/routes/`): Fastify route modules — HTTP/WebSocket auth boundary, JSON-RPC framing, ACP message dispatch to the service layer.
-- **Service layer** (`src/server/services/`): `AgentRuntimeManager` orchestrates the runtime catalog, creates one lazy `SessionRuntime` per public session, and coordinates with `EnvironmentManager` for session-specific environment state.
-- **Repository / datastore layer** (`src/server/datastore/`, `src/server/repositories/`): SQLite-backed `SqliteSessionRepository` persists public session IDs, runtime-to-local ID mappings, and `session_environments` membership. `RookDatastore` owns the shared SQLite connection.
+Target structure:
+- **API layer** (`src/server/routes/`) when the capability is externally exposed
+- **Service layer** (`src/server/services/`) for orchestration and business rules
+- **Repository / store layer** for persistence-facing interfaces
+- **Datastore layer** (`src/server/datastore/`) for the underlying database connection
+
+Important nuance:
+- not every feature needs every layer of the stack
+- internal-only capabilities do not need routes
+- features with no persistence do not need repository/datastore layers
+- some modules legitimately stop at the service layer
+
+As-built today, the server is only partway through this transition.
+
+Examples:
+- `SqliteSessionRepository` is a good example of the intended repository shape
+- `RookDatastore` is the shared SQLite connection owner
+- some environment/location code still mixes domain logic and persistence-adjacent concerns more than we ultimately want
+- `EnvironmentDecisionStore` is persistence-layer code, but today it lives under `src/server/environment/` rather than a more uniform repository area
+
+So this layering is the direction we are aiming toward, not a claim that every current module is already perfectly arranged.
+
+For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTURE/database.md](../AS-BUILT-ARCHITECTURE/database.md).
 
 ### API surface
 

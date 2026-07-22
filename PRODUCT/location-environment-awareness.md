@@ -7,7 +7,7 @@ Rook agent can act on.
 This is the human-facing product note — what the feature does, what it assumes, where it's
 limited, and what's next. The **architecture** (the request/registration flow, the
 environment model, the agent bridge) lives in
-[AS-BUILT-ARCHITECTURE.md §6.6](./AS-BUILT-ARCHITECTURE.md). Bundle layout is in
+[the server architecture notes](../AS-BUILT-ARCHITECTURE/server.md). Bundle layout is in
 [environment-repository.md](./environment-repository.md).
 
 ## What it does
