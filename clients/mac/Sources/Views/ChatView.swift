@@ -141,7 +141,12 @@ struct ChatDetail: View {
                 ScrollViewReader { proxy in
                     GeometryReader { scrollGeo in
                         ScrollView(.vertical) {
-                            LazyVStack(alignment: .leading, spacing: 10) {
+                            // Use VStack instead of LazyVStack; during streaming the
+                            // LazyStack's visible-range calculation can miscompute when
+                            // content mutations and scrollTo calls interleave, causing the
+                            // entire thread to render blank until a manual scroll forces
+                            // relayout (issue #55).
+                            VStack(alignment: .leading, spacing: 10) {
                                 ForEach(model.blocks) { block in
                                     ChatBlockView(block: block)
                                 }
