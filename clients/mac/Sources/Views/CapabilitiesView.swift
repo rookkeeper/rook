@@ -2,10 +2,9 @@ import Foundation
 import RookKit
 import SwiftUI
 
-/// The configuration surface, moved off the home panel: the toggles, permission
-/// grants, and helper copy for Voice, Computer Control, and the Context Bridge,
-/// plus the current foreground-app environment detail. Reached from the home
-/// "Capabilities" strip so the home panel stays focused on chat.
+/// Transitional capabilities screen during the refactor. Voice and computer
+/// control were removed from the active client; this screen now focuses on the
+/// current environment context and documents the removal.
 struct CapabilitiesDetail: View {
     @ObservedObject var model: RookMacModel
 
@@ -19,187 +18,29 @@ struct CapabilitiesDetail: View {
                 model.goHome()
             }
 
-            voiceCard
-            computerControlCard
-            contextBridgeCard
+            archivedFeaturesCard
             if model.foregroundEnvironmentId != nil {
                 foregroundEnvironmentCard
             }
         }
     }
 
-    // MARK: - Voice
-
-    private var voiceCard: some View {
+    private var archivedFeaturesCard: some View {
         PanelCard {
             HStack(spacing: 8) {
-                Label("Voice", systemImage: "mic.fill")
+                Label("Archived features", systemImage: "archivebox.fill")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 Spacer()
-                Toggle("", isOn: Binding(
-                    get: { model.voiceModeEnabled },
-                    set: { model.setVoiceMode($0) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(PanelPalette.accent)
+                StatusDot(tint: PanelPalette.warning)
             }
 
-            if model.voiceModeEnabled {
-                HStack(spacing: 8) {
-                    Button {
-                        model.toggleVoiceListening()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: model.voiceListening ? "waveform.circle.fill" : "mic.circle")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(model.voiceListening ? PanelPalette.danger : PanelPalette.accent)
-                                .symbolEffect(.pulse, isActive: model.voiceListening)
-                            Text(voiceStatusText)
-                                .font(.caption)
-                                .foregroundStyle(model.voiceListening ? PanelPalette.textNormal : PanelPalette.textMuted)
-                                .lineLimit(2)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(model.voiceListening ? PanelPalette.danger.opacity(0.14) : PanelPalette.backgroundPrimary.opacity(0.5))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(model.voiceListening ? PanelPalette.danger.opacity(0.5) : PanelPalette.border)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .help("Press to talk (or ⌃⌥Space anywhere)")
-                    .pointingHandOnHover()
-
-                    if model.voiceSpeaking {
-                        Button {
-                            model.stopSpeaking()
-                        } label: {
-                            Image(systemName: "stop.fill")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 34, height: 34)
-                                .background(Circle().fill(PanelPalette.danger))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Stop speaking")
-                        .pointingHandOnHover()
-                    }
-                }
-
-                Text(model.voiceAuthorized
-                     ? "Press to talk or ⌃⌥Space from any app. Voice: \(model.voiceName). Talking interrupts playback."
-                     : "Voice needs Microphone + Speech Recognition permission.")
-                    .font(.caption2)
-                    .foregroundStyle(PanelPalette.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("Talk to your agent hands-free — speak and hear replies aloud.")
-                    .font(.caption)
-                    .foregroundStyle(PanelPalette.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var voiceStatusText: String {
-        if model.voiceListening {
-            return model.voicePartial.isEmpty ? "Listening…" : model.voicePartial
-        }
-        if model.voiceSpeaking {
-            return "Speaking…"
-        }
-        return "Press to talk"
-    }
-
-    // MARK: - Computer Control
-
-    private var computerControlCard: some View {
-        PanelCard {
-            HStack(spacing: 8) {
-                Label("Computer Control", systemImage: "cursorarrow.rays")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { model.computerControlEnabled },
-                    set: { model.setComputerControlEnabled($0) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(PanelPalette.accent)
-            }
-
-            Text(model.computerControlEnabled
-                 ? "The agent can move the mouse, click, and type in the frontmost app."
-                 : "Off — the agent can read context but cannot drive the mouse/keyboard.")
+            Text("Voice, hotkey control, the local context bridge, and computer-control UI were removed during the refactor. Restoration notes should live in follow-up issues if and when these features return.")
                 .font(.caption)
-                .foregroundStyle(model.computerControlEnabled ? PanelPalette.warning : PanelPalette.textMuted)
+                .foregroundStyle(PanelPalette.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 8) {
-                Image(systemName: model.screenRecordingTrusted ? "checkmark.shield.fill" : "exclamationmark.shield")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(model.screenRecordingTrusted ? PanelPalette.success : PanelPalette.warning)
-                Text(model.screenRecordingTrusted
-                     ? "Screen Recording granted — screenshots available"
-                     : "Screen Recording needed for screenshot (vision) grounding")
-                    .font(.caption)
-                    .foregroundStyle(PanelPalette.textMuted)
-                    .lineLimit(2)
-                Spacer(minLength: 4)
-                if !model.screenRecordingTrusted {
-                    GrantButton(help: "Open System Settings → Privacy → Screen Recording") {
-                        model.requestScreenRecording()
-                    }
-                }
-            }
         }
     }
-
-    // MARK: - Context Bridge
-
-    private var contextBridgeCard: some View {
-        PanelCard {
-            HStack(spacing: 8) {
-                Label("Context Bridge", systemImage: "antenna.radiowaves.left.and.right")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-                Text(model.bridgePort > 0 ? ":\(String(model.bridgePort))" : "off")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(PanelPalette.textMuted)
-                StatusDot(tint: model.bridgePort > 0 ? PanelPalette.success : PanelPalette.danger)
-            }
-
-            HStack(spacing: 8) {
-                Image(systemName: model.accessibilityTrusted ? "checkmark.shield.fill" : "exclamationmark.shield")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(model.accessibilityTrusted ? PanelPalette.success : PanelPalette.warning)
-                Text(model.accessibilityTrusted
-                     ? "Accessibility granted — window titles visible"
-                     : "Grant Accessibility to read window titles")
-                    .font(.caption)
-                    .foregroundStyle(PanelPalette.textMuted)
-                    .lineLimit(2)
-                Spacer(minLength: 4)
-                if !model.accessibilityTrusted {
-                    GrantButton(help: "Open System Settings → Privacy → Accessibility") {
-                        model.requestAccessibility()
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Foreground environment
 
     private var foregroundEnvironmentCard: some View {
         PanelCard {
@@ -222,6 +63,13 @@ struct CapabilitiesDetail: View {
                 StatusDot(tint: PanelPalette.success)
             }
 
+            if let site = model.foregroundSiteEnvironmentId, !site.isEmpty {
+                Text(site)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(PanelPalette.textMuted)
+                    .lineLimit(1)
+            }
+
             if let title = model.foregroundWindowTitle, !title.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "text.window")
@@ -235,26 +83,5 @@ struct CapabilitiesDetail: View {
                 }
             }
         }
-    }
-}
-
-/// Shared small "Grant" pill for permission requests.
-struct GrantButton: View {
-    var help: String
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text("Grant")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(PanelPalette.accent))
-        }
-        .buttonStyle(.plain)
-        .help(help)
-        .pointingHandOnHover()
     }
 }

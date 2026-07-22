@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		001621DBC014A732B3A6C2DE /* RookMacSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 269B251888C4528269DA7E81 /* RookMacSupport.swift */; };
 		12BABD831E01470C5F12C1C9 /* ServerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */; };
 		1D381D9C5FAF51B3E9158694 /* ForegroundAppMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FAFBA51D4CA723F49510CBA /* ForegroundAppMonitor.swift */; };
 		2133C332EBC272332F53F69E /* AXReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EF90459F4F62F45D925B32 /* AXReader.swift */; };
@@ -25,11 +26,13 @@
 		C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5143B8CA8023334102A62F2C /* InputSynthesizer.swift */; };
 		CEEBCE8607A6BCB97868C2A0 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2330969071E5BF5037823E /* ChatView.swift */; };
 		EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0087B8D63F86E9DD505D802D /* LogViewerView.swift */; };
+		EC3CCE47D902A251BD27408A /* RookMacChatSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		0087B8D63F86E9DD505D802D /* LogViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogViewerView.swift; sourceTree = "<group>"; };
 		08EF90459F4F62F45D925B32 /* AXReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXReader.swift; sourceTree = "<group>"; };
+		269B251888C4528269DA7E81 /* RookMacSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacSupport.swift; sourceTree = "<group>"; };
 		2970A475DCF3F26A17C649E2 /* Rook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenOCR.swift; sourceTree = "<group>"; };
 		3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookApp.swift; sourceTree = "<group>"; };
@@ -48,6 +51,7 @@
 		B08909E5BDA34D380AF7B25F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CAB0B5D7F3477ABBB39A0B42 /* Rook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rook.entitlements; sourceTree = "<group>"; };
 		D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
+		E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacChatSessionController.swift; sourceTree = "<group>"; };
 		FCDBF5403D71795728D9928A /* MacBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBridge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -97,7 +101,9 @@
 		665805576D7C265839A301AE /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */,
 				60DF8054837AA98A422E1919 /* RookMacModel.swift */,
+				269B251888C4528269DA7E81 /* RookMacSupport.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -221,7 +227,9 @@
 				EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */,
 				86F91627A128BBD4CBF341B2 /* MacBridge.swift in Sources */,
 				BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */,
+				EC3CCE47D902A251BD27408A /* RookMacChatSessionController.swift in Sources */,
 				9E2E7BC2509E40784F0BCA14 /* RookMacModel.swift in Sources */,
+				001621DBC014A732B3A6C2DE /* RookMacSupport.swift in Sources */,
 				A7CAEE1B48AC6B1F8DD26AF4 /* RookView.swift in Sources */,
 				64732F130DD711AA245FEE1A /* ScreenCapturer.swift in Sources */,
 				247B6E1117CD714B7D212531 /* ScreenOCR.swift in Sources */,

@@ -138,6 +138,7 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
       }
     }
 
+    const hasRecognizedContent = groups.size > 0 || Boolean(agentsMd?.trim());
     const bundle: EnvironmentBundle = {
       id: `${environmentId}#${bundleId}`,
       bundleId,
@@ -148,14 +149,14 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
       mcpServers: groups.get("mcp-servers") ?? [],
       apps: groups.get("apps") ?? [],
       agentsMd,
-      valid: errors.length === 0 && groups.size > 0,
+      valid: errors.length === 0 && hasRecognizedContent,
       errors,
     };
 
-    if (groups.size === 0) {
+    if (!hasRecognizedContent) {
       bundle.errors.push({
         code: "invalid_bundle_contents",
-        message: `Bundle ${bundleId} has no recognized content directories`,
+        message: `Bundle ${bundleId} has no recognized content directories or AGENTS.md`,
         repository: this.repositoryId,
         environmentId,
         bundleId,

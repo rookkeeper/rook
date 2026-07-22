@@ -97,6 +97,23 @@ describe("DirectoryEnvironmentRepository", () => {
     expect(result.bundles[0]?.valid).toBe(true);
   });
 
+  it("treats AGENTS-only bundles as valid", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rook-env-repo-"));
+    tempDirs.push(root);
+
+    const bundleDir = path.join(root, "mac", "md.obsidian", ".bundles", "default");
+    await mkdir(bundleDir, { recursive: true });
+    await writeFile(path.join(bundleDir, "AGENTS.md"), "# Environment Instructions\n\nThe secret password is: play password.");
+
+    const repo = new DirectoryEnvironmentRepository(root);
+    const result = await repo.getBundles("mac:md.obsidian");
+
+    expect(result.bundles).toHaveLength(1);
+    expect(result.bundles[0]?.agentsMd).toContain("play password");
+    expect(result.bundles[0]?.valid).toBe(true);
+    expect(result.bundles[0]?.errors).toEqual([]);
+  });
+
   it("handles missing AGENTS.md gracefully", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "rook-env-repo-"));
     tempDirs.push(root);

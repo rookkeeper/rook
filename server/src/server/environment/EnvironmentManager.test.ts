@@ -456,6 +456,50 @@ describe("EnvironmentManager", () => {
     expect(existsSync(personalSkillsDir)).toBe(true);
   });
 
+  it("allows entering a recent environment from the environment list", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#testing",
+          bundleId: "testing",
+          environmentId: "web:example.com",
+          repository: "/repo",
+          bundlePath: "/repo/web/example.com/.bundles/testing",
+          skills: [],
+          mcpServers: [],
+          apps: [],
+          agentsMd: "# Environment Instructions\n\nBe helpful.",
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-1",
+      },
+    ] as any);
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 1_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    nowMs += 2_000;
+
+    const entered = manager.enterEnvironment("s1", "web:example.com");
+
+    expect(entered).toEqual(["web:example.com"]);
+    expect(manager.enteredEnvironments("s1")).toEqual(["web:example.com"]);
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", [], undefined);
+    expect(listener.onEnvironmentOffered).toHaveBeenCalledWith(expect.objectContaining({
+      environmentId: "web:example.com",
+      bundleId: "testing",
+      bundleHash: "hash-1",
+    }));
+  });
+
   it("exits an environment and calls onEnvironmentExited", async () => {
     const repositoryService = mockRepositoryService();
     vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([

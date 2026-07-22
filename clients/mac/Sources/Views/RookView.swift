@@ -368,9 +368,9 @@ private struct HomeContent: View {
             model.openCapabilities()
         } label: {
             HStack(spacing: 12) {
-                capGlyph("mic.fill", on: model.voiceModeEnabled, attention: model.voiceModeEnabled && !model.voiceAuthorized)
-                capGlyph("cursorarrow.rays", on: model.computerControlEnabled, attention: model.computerControlEnabled && !model.screenRecordingTrusted)
-                capGlyph("antenna.radiowaves.left.and.right", on: model.bridgePort > 0, attention: !model.accessibilityTrusted)
+                capGlyph("macwindow.on.rectangle", on: model.foregroundEnvironmentId != nil)
+                capGlyph("globe", on: model.foregroundSiteEnvironmentId != nil)
+                capGlyph("archivebox.fill", on: true)
                 Text("Capabilities")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -394,11 +394,11 @@ private struct HomeContent: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .help("Voice, Computer Control, and Context Bridge settings")
+        .help("Foreground environment details and archived feature notes")
         .pointingHandOnHover()
     }
 
-    private func capGlyph(_ systemImage: String, on: Bool, attention: Bool) -> some View {
+    private func capGlyph(_ systemImage: String, on: Bool) -> some View {
         Image(systemName: systemImage)
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(on ? PanelPalette.accent : PanelPalette.textMuted.opacity(0.6))
@@ -406,15 +406,6 @@ private struct HomeContent: View {
             .background(
                 Circle().fill(on ? PanelPalette.accent.opacity(0.16) : Color.white.opacity(0.04))
             )
-            .overlay(alignment: .topTrailing) {
-                if attention {
-                    Circle()
-                        .fill(PanelPalette.warning)
-                        .frame(width: 7, height: 7)
-                        .overlay(Circle().strokeBorder(PanelPalette.backgroundPrimary, lineWidth: 1.5))
-                        .offset(x: 1, y: -1)
-                }
-            }
     }
 
     private var pendingOfferCard: some View {

@@ -30,7 +30,7 @@ struct ForegroundApp: Equatable {
 /// Watches which Mac app is frontmost (NSWorkspace activation — needs no
 /// permission) and, when Accessibility is granted, the focused window title
 /// (Tier 1 perception). Emits two signals:
-///   - onForegroundChange: app identity changed (drives register/unregister)
+///   - onForegroundChange: app identity changed (starts a new focus episode)
 ///   - onContextRefresh:   app+title snapshot (drives the bridge /context),
 ///                         also firing on in-app title changes (e.g. switching
 ///                         Slack channels without switching apps)

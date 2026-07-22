@@ -393,7 +393,7 @@ export class EnvironmentManager {
     if (!listener) return [];
 
     const entry = this.remembered.get(environmentId);
-    if (!entry || entry.status !== "active") return [];
+    if (!entry) return [];
 
     if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
     this.explicitlyEntered.get(sessionId)!.add(environmentId);
@@ -487,7 +487,7 @@ export class EnvironmentManager {
     for (const environmentId of next) {
       if (current.has(environmentId)) continue;
       const entry = this.remembered.get(environmentId);
-      if (!entry || entry.status !== "active") continue;
+      if (!entry) continue;
 
       ensurePersonalEnvironmentBinding(environmentId);
       listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sessionId), entry.contextText);
@@ -528,7 +528,7 @@ export class EnvironmentManager {
     for (const environmentId of this.explicitlyEntered.get(sessionId) ?? []) {
       for (const candidateId of environmentHierarchy(environmentId)) {
         const entry = this.remembered.get(candidateId);
-        if (!entry || entry.status !== "active") continue;
+        if (!entry) continue;
         effective.add(candidateId);
       }
     }

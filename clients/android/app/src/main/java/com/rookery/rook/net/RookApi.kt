@@ -107,10 +107,6 @@ class RookApi(
         )
     }
 
-    suspend fun unregisterEnvironment(id: String) {
-        postJson("api/environments/unregister", buildJsonObject { put("id", id) })
-    }
-
     /**
      * Ask the server which `location:` environments are likely available at the given
      * location. Identification only — does not register/enter anything.

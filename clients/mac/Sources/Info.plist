@@ -29,11 +29,5 @@
 	</dict>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Rookery</string>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>Rook drives other apps (e.g. opening a Slack channel) on your behalf when you approve an app environment.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Rook listens to your voice so you can talk to your agent hands-free.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Rook transcribes your speech on-device to send to your agent.</string>
 </dict>
 </plist>
