@@ -983,7 +983,11 @@ final class RookMacModel: ObservableObject {
                 appendBlock(.system(text: "Exited environment \(environmentId)\(suffix)."))
             }
         }
-        scrollTick += 1
+        // scrollTick intentionally NOT incremented here — rapid streaming
+        // mutations (30-60 events/s) triggering scrollTo on every tick confuses
+        // SwiftUI layout. Instead, scrollTick only fires when a new block is
+        // appended (see appendBlock below). Block mutations (streaming text,
+        // tool status changes) don't need to re-scroll.
     }
 
     func resumeAutoScroll() {
@@ -1018,6 +1022,7 @@ final class RookMacModel: ObservableObject {
     private func appendBlock(_ kind: ChatBlockKind, id: String? = nil) {
         blockCounter += 1
         blocks.append(ChatBlock(id: id ?? "block-\(blockCounter)", kind: kind))
+        scrollTick += 1
     }
 
     /// Some synthesized error updates arrive twice on the wire (translated +

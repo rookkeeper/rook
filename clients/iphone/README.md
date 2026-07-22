@@ -136,7 +136,6 @@ Fast paths from the repo root:
 
 ```zsh
 ./scripts/run-rook.sh iphone
-./scripts/run-rook.sh iphone-next
 ./scripts/run-rook.sh stop     # shut down server + launched app(s)
 
 # point at a specific server instead of the default/auto-detected one
@@ -144,8 +143,6 @@ Fast paths from the repo root:
 ```
 
 `run-rook.sh iphone` builds and launches the current physical-iPhone client, using `--server-url` if given, else `ROOK_REMOTE_HOSTNAME` or `ROOK_BIND_IP` to determine a server address your phone can reach. The server itself still binds localhost for the Mac app; `ROOK_BIND_IP` adds the second remote listener. It intentionally does **not** hardcode a development team into `project.yml`; pass `--team` / `ROOK_IOS_DEVELOPMENT_TEAM` when needed, or let the script auto-detect your local team for personal use. Keep the phone unlocked while the launcher installs and opens the app; otherwise iOS denies the launch request.
-
-`run-rook.sh iphone-next` is the equivalent launcher for the next-generation iPhone client under `clients-next/iphone/`.
 
 Manual steps:
 

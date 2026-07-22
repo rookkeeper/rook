@@ -19,11 +19,7 @@ health_ok() {
   fi
   local body
   body="$(curl "${curl_args[@]}" "$SERVER_HEALTH_URL" 2>/dev/null)" || return 1
-  if [[ "$SERVER_KIND" == "next" ]]; then
-    grep -q '"service":"rook-next"' <<<"$body"
-  else
-    ! grep -q '"service":"rook-next"' <<<"$body"
-  fi
+  [[ -n "$body" ]]
 }
 
 listener_is_localhost_only() {
@@ -143,7 +139,6 @@ stop_everything() {
   log "stopping managed Rook resources"
 
   kill_server_pidfile "$CURRENT_SERVER_PIDFILE"
-  kill_server_pidfile "$NEXT_SERVER_PIDFILE"
 
   local pids
   pids="$(lsof -tiTCP:"$SERVER_PORT" -sTCP:LISTEN 2>/dev/null || true)"
@@ -530,8 +525,4 @@ EOF
 
 run_rook_target_server() {
   log "server ready: ${SERVER_HEALTH_URL%/api/health}"
-}
-
-run_rook_target_server_next() {
-  log "server-next ready: ${SERVER_HEALTH_URL%/api/health}"
 }
