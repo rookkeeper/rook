@@ -205,7 +205,7 @@ final class AppEnvironmentProvider {
         onStateChange?()
     }
 
-    private func deriveForegroundEnvironmentCandidates(app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
+    func deriveForegroundEnvironmentCandidates(app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
         var candidates: [EnvironmentCandidate] = []
         var metadata: [String: JSONValue] = [
             "bundleId": .string(app.bundleId),

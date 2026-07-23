@@ -43,16 +43,16 @@
 - [ ] Keep refactors incremental and buildable after each step
 - [ ] Keep Mac and iPhone clients working at current behavior throughout the refactor
 - [x] Prefer extraction over behavior changes except for explicit removal of voice/bridge/computer-control features
-- [ ] Add/update focused tests where logic becomes independently testable
+- [x] Add/update focused tests where logic becomes independently testable
 - [x] Add manual verification checklists where automation is not practical
 - [ ] Avoid pushing more responsibility into `RookMacModel` during refactor
 - [x] When removing voice/bridge/permissions code, create restoration issues documenting behavior, prior file locations, commit reference, and reimplementation notes
 
 ## Pre-refactor coverage
 
-- [ ] Add pure tests for app environment derivation
-- [ ] Add pure tests for browser URL → hierarchical `web:` IDs
-- [ ] Add pure tests for Obsidian title → vault environment derivation
+- [x] Add pure tests for app environment derivation
+- [x] Add pure tests for browser URL → hierarchical `web:` IDs
+- [x] Add pure tests for Obsidian title → vault environment derivation
 - [ ] Add tests for dwell/emission dedupe behavior
 - [ ] Add chat/session smoke coverage where practical
 - [x] Review and maintain `mac-manual-verification.md`
