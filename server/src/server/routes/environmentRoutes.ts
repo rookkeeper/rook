@@ -4,7 +4,7 @@ import type { EnvironmentDecision } from "../environment/types.js";
 import type { EnvironmentIdentifier } from "../location/EnvironmentIdentifier.js";
 import type { LocationRegistrar } from "../location/LocationRegistrar.js";
 import type { AgentRuntimeManager } from "../services/AgentRuntimeManager.js";
-import type { IdentifyAvailableRequest, IdentifySource } from "../../shared/environment.js";
+import type { CandidateEnvironmentRecord, CandidateEnvironmentMetadata, IdentifyAvailableRequest, IdentifySource } from "../../shared/environment.js";
 
 export async function registerEnvironmentRoutes(
   app: FastifyInstance,
@@ -13,7 +13,7 @@ export async function registerEnvironmentRoutes(
   locationRegistrar: LocationRegistrar,
   runtimeManager?: AgentRuntimeManager,
 ): Promise<void> {
-  app.post<{ Body: { id?: unknown; metadata?: unknown; canonicalSourceUrl?: unknown; sourceName?: unknown } }>("/api/environments/register", async (request, reply) => {
+  app.post<{ Body: { id?: unknown; metadata?: unknown } }>("/api/environments/register", async (request, reply) => {
     const id = request.body?.id;
     if (typeof id !== "string" || !id.trim()) {
       reply.code(400).send({ error: "Missing environment id" });
@@ -26,18 +26,22 @@ export async function registerEnvironmentRoutes(
       return;
     }
 
-    const canonicalSourceUrl = typeof request.body?.canonicalSourceUrl === "string" ? request.body.canonicalSourceUrl : undefined;
-    const sourceName = typeof request.body?.sourceName === "string" ? request.body.sourceName : undefined;
+    const typedMetadata = (metadata ?? {}) as CandidateEnvironmentMetadata;
+    if (typedMetadata.sourceName !== undefined && typeof typedMetadata.sourceName !== "string") {
+      reply.code(400).send({ error: "Invalid metadata.sourceName" });
+      return;
+    }
+    if (typedMetadata.canonicalSourceUrl !== undefined && typeof typedMetadata.canonicalSourceUrl !== "string") {
+      reply.code(400).send({ error: "Invalid metadata.canonicalSourceUrl" });
+      return;
+    }
 
-    const trimmedId = id.trim();
-    request.log.info({ environmentId: trimmedId, sourceName, canonicalSourceUrl }, "environment registered");
+    const candidate: CandidateEnvironmentRecord = { id: id.trim(), metadata: typedMetadata };
+    request.log.info({ environmentId: candidate.id, sourceName: candidate.metadata.sourceName, canonicalSourceUrl: candidate.metadata.canonicalSourceUrl }, "environment candidate registered");
 
-    await environmentManager.registerAvailableEnvironment(
-      { id: trimmedId, metadata: (metadata ?? {}) as Record<string, unknown> },
-      { ...(canonicalSourceUrl ? { canonicalSourceUrl } : {}), ...(sourceName ? { sourceName } : {}) },
-    );
+    await environmentManager.registerCandidateEnvironment(candidate);
     const registeredAt = new Date().toISOString();
-    return { ok: true, id: trimmedId, registeredAt };
+    return { ok: true, id: candidate.id, registeredAt };
   });
 
   app.post<{ Body: { environmentId?: unknown; bundleHash?: unknown; decision?: unknown; sessionId?: unknown } }>("/api/environments/decision", async (request, reply) => {

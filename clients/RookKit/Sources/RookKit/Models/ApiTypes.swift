@@ -64,6 +64,16 @@ public struct AgentSessionSummary: Equatable, Identifiable {
     }
 }
 
+public struct CandidateEnvironmentRecord: Encodable, Equatable {
+    public let id: String
+    public let metadata: [String: JSONValue]
+
+    public init(id: String, metadata: [String: JSONValue]) {
+        self.id = id
+        self.metadata = metadata
+    }
+}
+
 public struct EnvironmentArtifactPreview: Codable, Equatable, Identifiable {
     public let id: String
     public let files: [String: String]

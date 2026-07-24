@@ -2,23 +2,8 @@ import XCTest
 @testable import Rook
 import RookKit
 
-private typealias MacEnvironmentCandidate = Rook.EnvironmentCandidate
-
-private struct StubSpecializedProvider: SpecializedEnvironmentProvider {
-    let active: Bool
-    let produced: [MacEnvironmentCandidate]
-
-    func isActive(for app: ForegroundApp) -> Bool { active }
-    func candidates(for app: ForegroundApp, title: String?) -> [MacEnvironmentCandidate] { produced }
-}
-
+@MainActor
 final class EnvironmentProviderTests: XCTestCase {
-    func testObsidianProviderIsActiveOnlyForObsidian() {
-        let provider = ObsidianEnvironmentProvider()
-        XCTAssertTrue(provider.isActive(for: ForegroundApp(bundleId: "md.obsidian", name: "Obsidian", pid: 1)))
-        XCTAssertFalse(provider.isActive(for: ForegroundApp(bundleId: "com.apple.Safari", name: "Safari", pid: 1)))
-    }
-
     func testObsidianVaultNameParsesFromTrailingSegment() {
         XCTAssertEqual(
             ObsidianEnvironmentProvider.vaultName(from: "Note name - Personal Vault - Obsidian"),
@@ -46,30 +31,21 @@ final class EnvironmentProviderTests: XCTestCase {
     }
 
     func testObsidianCandidatesEncodeVaultAndIncludeMetadata() {
-        let provider = ObsidianEnvironmentProvider()
         let app = ForegroundApp(bundleId: "md.obsidian", name: "Obsidian", pid: 99)
 
-        let candidates = provider.candidates(for: app, title: "Daily Note - Work Vault - Obsidian")
+        let candidates = ObsidianEnvironmentProvider.candidates(for: app, title: "Daily Note - Work Vault - Obsidian")
 
         XCTAssertEqual(candidates.map(\.id), ["mac:md.obsidian/Work%20Vault"])
-        XCTAssertEqual(candidates.first?.sourceName, "Obsidian · Work Vault")
+        XCTAssertEqual(candidates.first?.metadata["sourceName"], .string("Obsidian · Work Vault"))
         XCTAssertEqual(candidates.first?.metadata["vaultName"], .string("Work Vault"))
         XCTAssertEqual(candidates.first?.metadata["windowTitle"], .string("Daily Note - Work Vault - Obsidian"))
     }
 
     func testObsidianCandidatesRequireRecognizableTitle() {
-        let provider = ObsidianEnvironmentProvider()
         let app = ForegroundApp(bundleId: "md.obsidian", name: "Obsidian", pid: 99)
 
-        XCTAssertEqual(provider.candidates(for: app, title: nil), [])
-        XCTAssertEqual(provider.candidates(for: app, title: "Obsidian"), [])
-    }
-
-    func testBrowserProviderIsActiveForSupportedBundleIds() {
-        let provider = BrowserEnvironmentProvider()
-        XCTAssertTrue(provider.isActive(for: ForegroundApp(bundleId: "com.apple.Safari", name: "Safari", pid: 1)))
-        XCTAssertTrue(provider.isActive(for: ForegroundApp(bundleId: "com.google.Chrome", name: "Chrome", pid: 1)))
-        XCTAssertFalse(provider.isActive(for: ForegroundApp(bundleId: "md.obsidian", name: "Obsidian", pid: 1)))
+        XCTAssertEqual(ObsidianEnvironmentProvider.candidates(for: app, title: nil), [])
+        XCTAssertEqual(ObsidianEnvironmentProvider.candidates(for: app, title: "Obsidian"), [])
     }
 
     func testBrowserWebEnvironmentIdsBuildHierarchy() {
@@ -98,51 +74,23 @@ final class EnvironmentProviderTests: XCTestCase {
     }
 
     @MainActor
-    func testAppEnvironmentProviderDerivesMacAndObsidianCandidatesSortedByDepth() {
-        let api = RookAPI(baseURL: URL(string: "http://127.0.0.1:7665")!, authToken: "")
-        let provider = AppEnvironmentProvider(
-            api: api,
-            environmentFocusDelay: 60,
-            specializedProviders: [ObsidianEnvironmentProvider()]
-        )
-        let app = ForegroundApp(bundleId: "md.obsidian", name: "Obsidian", pid: 123)
+    func testObsidianProviderTracksCurrentEnvironmentIdOnActivateAndDeactivate() {
+        let provider = ObsidianEnvironmentProvider(register: { _, _ in })
+        let app = ForegroundApp(bundleId: "md.obsidian", name: "Obsidian", pid: 1)
 
-        let candidates = provider.deriveForegroundEnvironmentCandidates(
-            app: app,
-            title: "Daily Note - Work Vault - Obsidian"
-        )
+        provider.activate(app: app, title: "Daily Note - Work Vault - Obsidian")
+        XCTAssertEqual(provider.currentAppEnvironmentId, "mac:md.obsidian/Work%20Vault")
 
-        XCTAssertEqual(candidates.map(\.id), [
-            "mac:md.obsidian",
-            "mac:md.obsidian/Work%20Vault",
-        ])
-        XCTAssertEqual(candidates.last?.sourceName, "Obsidian · Work Vault")
-        XCTAssertEqual(candidates.last?.metadata["vaultName"], .string("Work Vault"))
+        provider.deactivate()
+        XCTAssertNil(provider.currentAppEnvironmentId)
     }
 
     @MainActor
-    func testAppEnvironmentProviderDeduplicatesOverlappingSpecializedCandidates() {
-        let api = RookAPI(baseURL: URL(string: "http://127.0.0.1:7665")!, authToken: "")
-        let provider = AppEnvironmentProvider(
-            api: api,
-            environmentFocusDelay: 60,
-            specializedProviders: [
-                StubSpecializedProvider(active: true, produced: [
-                    MacEnvironmentCandidate(id: "mac:md.obsidian", sourceName: "duplicate", metadata: [:]),
-                    MacEnvironmentCandidate(id: "mac:md.obsidian/Work%20Vault", sourceName: "vault", metadata: [:]),
-                    MacEnvironmentCandidate(id: "mac:md.obsidian/Work%20Vault/Deep", sourceName: "deep", metadata: [:]),
-                ])
-            ]
-        )
-        let app = ForegroundApp(bundleId: "md.obsidian", name: "Obsidian", pid: 123)
+    func testBrowserProviderTracksCurrentSiteEnvironmentIdOnActivateAndDeactivate() {
+        let provider = BrowserEnvironmentProvider(register: { _, _ in })
 
-        let candidates = provider.deriveForegroundEnvironmentCandidates(app: app, title: "Anything")
-
-        XCTAssertEqual(candidates.map(\.id), [
-            "mac:md.obsidian",
-            "mac:md.obsidian/Work%20Vault",
-            "mac:md.obsidian/Work%20Vault/Deep",
-        ])
-        XCTAssertEqual(Set(candidates.map(\.id)).count, candidates.count)
+        XCTAssertNil(provider.currentSiteEnvironmentId)
+        provider.deactivate()
+        XCTAssertNil(provider.currentSiteEnvironmentId)
     }
 }

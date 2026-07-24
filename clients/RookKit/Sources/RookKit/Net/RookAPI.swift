@@ -98,13 +98,12 @@ public struct RookAPI {
         )
     }
 
-    public func registerEnvironment(id: String, sourceName: String, metadata: [String: JSONValue]) async throws {
+    public func registerEnvironment(_ candidate: CandidateEnvironmentRecord) async throws {
         _ = try await postJSON(
             path: "api/environments/register",
             payload: .object([
-                "id": .string(id),
-                "sourceName": .string(sourceName),
-                "metadata": .object(metadata),
+                "id": .string(candidate.id),
+                "metadata": .object(candidate.metadata),
             ])
         )
     }

@@ -11,6 +11,7 @@ import { renderEnvironmentPrompt } from "./EnvironmentPromptTemplate.js";
 import { renderRookIdentityPrompt } from "./RookIdentityPrompt.js";
 import { SessionDecisionRegistry } from "./SessionDecisionRegistry.js";
 import type {
+  CandidateEnvironmentRecord,
   EnvironmentDecision,
   EnvironmentEventListener,
   EnvironmentOfferInfo,
@@ -108,24 +109,30 @@ function stringMetadata(metadata: Record<string, unknown>, key: string): string 
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function cleanWebWindowTitle(windowTitle: string, appName?: string): string {
-  const trimmed = windowTitle.trim();
-  if (!trimmed) return "";
-  if (!appName) return trimmed;
-  const marker = ` - ${appName}`;
-  const index = trimmed.indexOf(marker);
-  if (index === -1) return trimmed;
-  return trimmed.slice(0, index).trim();
+function observationInfoFromMetadata(metadata: Record<string, unknown>): EnvironmentOfferInfo {
+  const sourceName = stringMetadata(metadata, "sourceName");
+  const canonicalSourceUrl = stringMetadata(metadata, "canonicalSourceUrl");
+  return {
+    ...(sourceName ? { sourceName } : {}),
+    ...(canonicalSourceUrl ? { canonicalSourceUrl } : {}),
+  };
+}
+
+function webEnvironmentDisplayName(environmentId: string): string {
+  const separator = environmentId.indexOf(":");
+  if (separator === -1) return environmentId;
+  const rest = environmentId.slice(separator + 1);
+  if (!rest) return environmentId;
+  const parts = rest.split("/").filter(Boolean);
+  if (parts.length <= 1) return rest;
+  return `${parts[0]} / ${parts.slice(1).join(" / ")}`;
 }
 
 function deriveEnvironmentDisplayName(environmentId: string, sourceName: string | undefined, metadata: Record<string, unknown>): string {
   const kind = environmentKind(environmentId);
   switch (kind) {
     case "web": {
-      const windowTitle = stringMetadata(metadata, "windowTitle");
-      const appName = stringMetadata(metadata, "appName");
-      const cleanedTitle = windowTitle ? cleanWebWindowTitle(windowTitle, appName) : "";
-      return cleanedTitle || sourceName || environmentId;
+      return webEnvironmentDisplayName(environmentId);
     }
     case "mac": {
       return sourceName || stringMetadata(metadata, "appName") || environmentId;
@@ -169,9 +176,7 @@ export class EnvironmentManager {
   async registerAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo = {}, contextText?: string): Promise<void> {
     this.pruneMemory();
 
-    const now = this.now();
-    const nowIso = new Date(now).toISOString();
-    const existing = this.remembered.get(env.id);
+    const nowIso = new Date(this.now()).toISOString();
     try {
       await this.registrationCaptureSink.capture({
         capturedAt: nowIso,
@@ -183,6 +188,50 @@ export class EnvironmentManager {
     } catch (error) {
       this.logger.info({ environmentId: env.id, error }, "failed to append environment metadata capture");
     }
+    await this.rememberAvailableEnvironment(env, info, contextText, true);
+  }
+
+  async registerCandidateEnvironment(candidate: CandidateEnvironmentRecord): Promise<void> {
+    this.pruneMemory();
+
+    const now = this.now();
+    const nowIso = new Date(now).toISOString();
+    const info = observationInfoFromMetadata(candidate.metadata);
+    const contextText = stringMetadata(candidate.metadata, "contextText");
+    try {
+      await this.registrationCaptureSink.capture({
+        capturedAt: nowIso,
+        environmentId: candidate.id,
+        sourceName: info.sourceName,
+        canonicalSourceUrl: info.canonicalSourceUrl,
+        metadata: candidate.metadata,
+      });
+    } catch (error) {
+      this.logger.info({ environmentId: candidate.id, error }, "failed to append environment metadata capture");
+    }
+
+    if (environmentKind(candidate.id) === "web") {
+      const hierarchy = environmentHierarchy(candidate.id);
+      const idsToRegister = new Set<string>();
+      if (hierarchy.length > 0) idsToRegister.add(hierarchy[0]!);
+      for (const environmentId of hierarchy.slice(1)) {
+        const resolvedBundles = await this.repositoryService.getResolvedBundles(environmentId);
+        if (resolvedBundles.length > 0) idsToRegister.add(environmentId);
+      }
+      for (const environmentId of hierarchy) {
+        if (!idsToRegister.has(environmentId)) continue;
+        await this.rememberAvailableEnvironment({ id: environmentId, metadata: candidate.metadata }, info, contextText, false);
+      }
+      return;
+    }
+
+    await this.rememberAvailableEnvironment({ id: candidate.id, metadata: candidate.metadata }, info, contextText, true);
+  }
+
+  private async rememberAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo, contextText: string | undefined, autoRegisterParents: boolean): Promise<void> {
+    const now = this.now();
+    const nowIso = new Date(now).toISOString();
+    const existing = this.remembered.get(env.id);
     const registeredAt = existing?.status === "active" ? (existing.registeredAt ?? nowIso) : nowIso;
     const activeUntil = new Date(now + this.activeEnvironmentWindowMs).toISOString();
     const resolvedBundles = await this.repositoryService.getResolvedBundles(env.id);
@@ -235,18 +284,15 @@ export class EnvironmentManager {
     );
 
     const previousBundles = existing?.status === "active" ? existing.bundles : [];
-    const previousBundleHashes = new Set(previousBundles.map((bundle) => bundle.bundleHash));
     const currentBundleHashes = new Set(bundles.map((bundle) => bundle.bundleHash));
     for (const previousBundle of previousBundles) {
       if (currentBundleHashes.has(previousBundle.bundleHash)) continue;
       this.sessionDecisions.clearAllForBundle(previousBundle.bundleHash);
       this.broadcastBundleResolution(env.id, previousBundle.bundleId, previousBundle.bundleHash, "unavailable");
     }
-    // Offers are deferred until a session enters the environment (see syncEnteredEnvironments).
 
-    // Auto-register any hierarchy parents that aren't already active so
-    // computeEffectiveEnteredSet can cascade entry into them. Parents get a
-    // minimal no-bundle entry (same info / contextText as the child).
+    if (!autoRegisterParents) return;
+
     for (const parentId of environmentHierarchy(env.id)) {
       if (parentId === env.id) continue;
       const parent = this.remembered.get(parentId);
@@ -254,8 +300,6 @@ export class EnvironmentManager {
 
       const parentEntry: RememberedEnvironmentEntry = {
         record: { id: parentId, metadata: { ...env.metadata, registeredAt: nowIso } },
-        // Strip sourceName so the parent's label in the UI won't be a duplicate
-        // of the child's. canonicalSourceUrl is still useful and non-confusing.
         info: { canonicalSourceUrl: info.canonicalSourceUrl },
         registeredAt: nowIso,
         lastTouchedAt: nowIso,

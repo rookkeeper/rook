@@ -106,6 +106,82 @@ describe("EnvironmentManager", () => {
     });
   });
 
+  it("registerCandidateEnvironment captures the full web candidate but only registers the domain by default", async () => {
+    const repositoryService = mockRepositoryService();
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+      registrationCaptureSink: captureSink(),
+    });
+
+    await manager.registerCandidateEnvironment({
+      id: "web:docs.google.com/document/d/abc/edit",
+      metadata: {
+        sourceName: "https://docs.google.com/document/d/abc/edit",
+        canonicalSourceUrl: "https://docs.google.com/document/d/abc/edit",
+        appName: "Google Chrome",
+      },
+    });
+
+    expect(manager.isAvailable("web:docs.google.com")).toBe(true);
+    expect(manager.isAvailable("web:docs.google.com/document")).toBe(false);
+    expect(manager.isAvailable("web:docs.google.com/document/d")).toBe(false);
+    expect(manager.isAvailable("web:docs.google.com/document/d/abc")).toBe(false);
+    expect(manager.isAvailable("web:docs.google.com/document/d/abc/edit")).toBe(false);
+
+    const filePath = path.join(captureDir, "web-docs.google.com--document--d--abc--edit.jsonl");
+    expect(existsSync(filePath)).toBe(true);
+    const lines = readFileSync(filePath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    expect(lines.at(-1)).toMatchObject({
+      environmentId: "web:docs.google.com/document/d/abc/edit",
+      sourceName: "https://docs.google.com/document/d/abc/edit",
+      canonicalSourceUrl: "https://docs.google.com/document/d/abc/edit",
+    });
+  });
+
+  it("registerCandidateEnvironment registers bundle-backed web ancestors", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {
+      if (environmentId === "web:docs.google.com/document" || environmentId === "web:docs.google.com/document/d/abc") {
+        return [{
+          bundle: {
+            id: `${environmentId}#default`,
+            bundleId: "default",
+            environmentId,
+            repository: "/repo",
+            bundlePath: `/repo/${environmentId.replace(":", "/")}/.bundles/default`,
+            skills: [],
+            mcpServers: [],
+            apps: [],
+            valid: true,
+            errors: [],
+          },
+          bundleHash: `hash-${environmentId}`,
+        }] as any;
+      }
+      return [];
+    });
+    const manager = new EnvironmentManager(repositoryService, decisions, {
+      activeEnvironmentWindowMs: 6 * 60_000,
+      recentEnvironmentRetentionMs: 30 * 60_000,
+      logger: { info: vi.fn() },
+      now: () => nowMs,
+    });
+
+    await manager.registerCandidateEnvironment({
+      id: "web:docs.google.com/document/d/abc/edit",
+      metadata: { sourceName: "https://docs.google.com/document/d/abc/edit" },
+    });
+
+    expect(manager.isAvailable("web:docs.google.com")).toBe(true);
+    expect(manager.isAvailable("web:docs.google.com/document")).toBe(true);
+    expect(manager.isAvailable("web:docs.google.com/document/d")).toBe(false);
+    expect(manager.isAvailable("web:docs.google.com/document/d/abc")).toBe(true);
+    expect(manager.isAvailable("web:docs.google.com/document/d/abc/edit")).toBe(false);
+  });
+
   it("moves an active environment to recent after the active window", async () => {
     const manager = newManager(1_000, 10_000);
     await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
@@ -623,7 +699,7 @@ describe("EnvironmentManager", () => {
         environmentId: "web:example.com",
         bundleId: "testing",
         bundleHash: "hash-1",
-        displayName: "Example",
+        displayName: "example.com",
         sourceName: "Example",
       }),
     );
@@ -727,7 +803,7 @@ describe("EnvironmentManager", () => {
     const byId = new Map(list.map((item) => [item.environmentId, item]));
 
     expect(byId.get("web:example.com/docs")).toMatchObject({
-      displayName: "Example Docs",
+      displayName: "example.com / docs",
       sourceName: "https://example.com/docs",
     });
     expect(byId.get("mac:md.obsidian/Peeps")).toMatchObject({
@@ -922,7 +998,7 @@ describe("EnvironmentManager", () => {
       environmentId: "web:example.com",
       bundleId: "testing",
       bundleHash: "hash-1",
-      displayName: "Example",
+      displayName: "example.com",
       sourceName: "Example",
       canonicalSourceUrl: undefined,
       skills: ["consult"],

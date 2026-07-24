@@ -8,7 +8,6 @@ enum PanelMode: Equatable {
     case sessions(agentId: String)
     case chat
     case environmentOffer
-    case capabilities
     case environments
 }
 
@@ -92,6 +91,7 @@ final class RookMacModel: ObservableObject {
     @Published var foregroundSiteEnvironmentId: String?
     @Published var foregroundAppName: String?
     @Published var foregroundWindowTitle: String?
+    @Published var accessibilityTrusted = AXReader.isTrusted()
     @Published var baseURLString: String
     @Published var authTokenString: String
 
@@ -325,6 +325,7 @@ final class RookMacModel: ObservableObject {
     // MARK: - Server lifecycle
 
     func refreshNow() async {
+        refreshAccessibilityStatus()
         await serverStateController.refreshNow()
         syncServerState()
         if serverState == .online {
@@ -405,11 +406,6 @@ final class RookMacModel: ObservableObject {
     func goHome() {
         stopEnvironmentListAutoRefresh()
         panelMode = .home
-    }
-
-    func openCapabilities() {
-        stopEnvironmentListAutoRefresh()
-        panelMode = .capabilities
     }
 
     func openEnvironments() {
@@ -532,5 +528,17 @@ final class RookMacModel: ObservableObject {
 
     func leaveEnvironment(_ environmentId: String) {
         environmentListController.leaveEnvironment(sessionId: currentSession?.id, environmentId: environmentId)
+    }
+
+    func refreshAccessibilityStatus() {
+        accessibilityTrusted = AXReader.isTrusted()
+        if accessibilityTrusted {
+            appEnvironmentProvider.refreshCurrentContext()
+        }
+    }
+
+    func requestAccessibilityAccess() {
+        _ = AXReader.isTrusted(promptIfNeeded: true)
+        refreshAccessibilityStatus()
     }
 }

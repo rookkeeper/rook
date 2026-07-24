@@ -362,8 +362,9 @@ final class RookModel: ObservableObject {
                 "latitude": .number(place.latitude),
                 "longitude": .number(place.longitude),
                 "radiusMeters": .number(place.radius),
+                "sourceName": .string(place.name),
             ]
-            try? await api.registerEnvironment(id: envId, sourceName: place.name, metadata: metadata)
+            try? await api.registerEnvironment(CandidateEnvironmentRecord(id: envId, metadata: metadata))
         }
     }
 
@@ -377,8 +378,9 @@ final class RookModel: ObservableObject {
                 "latitude": .number(place.latitude),
                 "longitude": .number(place.longitude),
                 "radiusMeters": .number(place.radius),
+                "sourceName": .string(place.name),
             ]
-            try? await api.registerEnvironment(id: envId, sourceName: place.name, metadata: metadata)
+            try? await api.registerEnvironment(CandidateEnvironmentRecord(id: envId, metadata: metadata))
         }
     }
 

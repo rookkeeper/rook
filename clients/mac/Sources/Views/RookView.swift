@@ -84,8 +84,6 @@ struct RookView: View {
                 ChatDetail(model: model, elasticThreadCard: true, measurementMode: false)
             case .environmentOffer:
                 EnvironmentOfferDetail(model: model)
-            case .capabilities:
-                CapabilitiesDetail(model: model)
             case .environments:
                 EnvironmentsDetail(model: model)
             }
@@ -103,8 +101,6 @@ struct RookView: View {
                 ChatDetail(model: model, elasticThreadCard: false, measurementMode: true)
             case .environmentOffer:
                 EnvironmentOfferDetail(model: model)
-            case .capabilities:
-                CapabilitiesDetail(model: model)
             case .environments:
                 EnvironmentsDetail(model: model)
             }
@@ -247,12 +243,14 @@ private struct HomeContent: View {
             if model.currentSession != nil {
                 resumeRow
             }
+            if !model.accessibilityTrusted {
+                accessibilityCard
+            }
             if model.serverState == .online {
                 agentsCard
             } else {
                 serverOfflineCard
             }
-            capabilitiesStrip
             footerActions
         }
     }
@@ -361,51 +359,35 @@ private struct HomeContent: View {
         .pointingHandOnHover()
     }
 
-    // MARK: - Capabilities strip (entry to settings)
+    private var accessibilityCard: some View {
+        PanelCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Label("Enable Accessibility", systemImage: "figure.wave")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    StatusDot(tint: PanelPalette.warning)
+                }
 
-    private var capabilitiesStrip: some View {
-        Button {
-            model.openCapabilities()
-        } label: {
-            HStack(spacing: 12) {
-                capGlyph("macwindow.on.rectangle", on: model.foregroundEnvironmentId != nil)
-                capGlyph("globe", on: model.foregroundSiteEnvironmentId != nil)
-                capGlyph("archivebox.fill", on: true)
-                Text("Capabilities")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(PanelPalette.textNormal)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
+                Text("Rook needs Accessibility access to read browser URLs and app window titles for environments.")
+                    .font(.caption)
+                    .foregroundStyle(PanelPalette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Button("Open Settings") {
+                        model.requestAccessibilityAccess()
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("I've enabled it") {
+                        model.refreshAccessibilityStatus()
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(PanelPalette.backgroundSecondary.opacity(0.6))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(PanelPalette.border)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .help("Foreground environment details and archived feature notes")
-        .pointingHandOnHover()
-    }
-
-    private func capGlyph(_ systemImage: String, on: Bool) -> some View {
-        Image(systemName: systemImage)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(on ? PanelPalette.accent : PanelPalette.textMuted.opacity(0.6))
-            .frame(width: 26, height: 26)
-            .background(
-                Circle().fill(on ? PanelPalette.accent.opacity(0.16) : Color.white.opacity(0.04))
-            )
     }
 
     private var pendingOfferCard: some View {

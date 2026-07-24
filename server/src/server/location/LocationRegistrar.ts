@@ -1,13 +1,9 @@
-import type { EnvironmentCandidate } from "../../shared/environment.js";
+import type { CandidateEnvironmentRecord, EnvironmentCandidate } from "../../shared/environment.js";
 import { renderLocationContextText, writeLocationContextSkill } from "./LocationContextSkill.js";
 
 /** The slice of EnvironmentManager the registrar needs (eases testing). */
 export interface LocationEnvironmentSink {
-  registerAvailableEnvironment(
-    env: { id: string; metadata: Record<string, unknown> },
-    info: { sourceName?: string; canonicalSourceUrl?: string },
-    contextText?: string,
-  ): Promise<void>;
+  registerCandidateEnvironment(candidate: CandidateEnvironmentRecord): Promise<void>;
   decideEnvironment(environmentId: string, decision: "accept" | "approve" | "ignore" | "reject", bundleHash?: string, sessionId?: string): void;
 }
 
@@ -95,19 +91,27 @@ export class LocationRegistrar {
     // Serve the synthesized context bundle through the repository facade so the
     // manager can discover it as a normal environment bundle (no extra runtime channel).
     this.contextRepo.setContextBundle(current.environmentId, contextDir);
-    await this.manager.registerAvailableEnvironment(
-      { id: current.environmentId, metadata: metadataFor(current, true) },
-      { sourceName: current.displayName, ...(current.website ? { canonicalSourceUrl: current.website } : {}) },
-      contextText,
-    );
+    await this.manager.registerCandidateEnvironment({
+      id: current.environmentId,
+      metadata: {
+        ...metadataFor(current, true),
+        sourceName: current.displayName,
+        ...(current.website ? { canonicalSourceUrl: current.website } : {}),
+        contextText,
+      },
+    });
     // Auto-enter the current location so the agent gets the context immediately.
     this.manager.decideEnvironment(current.environmentId, "accept");
 
     for (const c of nearby) {
-      await this.manager.registerAvailableEnvironment(
-        { id: c.environmentId, metadata: metadataFor(c, false) },
-        { sourceName: c.displayName, ...(c.website ? { canonicalSourceUrl: c.website } : {}) },
-      );
+      await this.manager.registerCandidateEnvironment({
+        id: c.environmentId,
+        metadata: {
+          ...metadataFor(c, false),
+          sourceName: c.displayName,
+          ...(c.website ? { canonicalSourceUrl: c.website } : {}),
+        },
+      });
     }
 
     this.registeredIds = nextIds;

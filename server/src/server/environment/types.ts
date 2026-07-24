@@ -1,6 +1,6 @@
-import type { EnvironmentDecision } from "../../shared/environment.js";
+import type { CandidateEnvironmentMetadata, CandidateEnvironmentRecord, EnvironmentDecision } from "../../shared/environment.js";
 
-export type { EnvironmentDecision };
+export type { CandidateEnvironmentMetadata, CandidateEnvironmentRecord, EnvironmentDecision };
 
 export interface EnvironmentRecord {
   id: string;

@@ -15,6 +15,17 @@ export interface EnvironmentPreview {
   bundles: EnvironmentBundlePreview[];
 }
 
+export interface CandidateEnvironmentMetadata extends Record<string, unknown> {
+  sourceName?: string;
+  canonicalSourceUrl?: string;
+  contextText?: string;
+}
+
+export interface CandidateEnvironmentRecord {
+  id: string;
+  metadata: CandidateEnvironmentMetadata;
+}
+
 export const ENVIRONMENT_KINDS = [
   "location",
   "web",
