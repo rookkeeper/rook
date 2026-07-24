@@ -9,6 +9,9 @@ The macOS client is a native SwiftUI menu bar app with a regular app window. It 
 - `RookMacModel`
   - main app state and reducer
   - owns server state, sessions, chat blocks, environment offers, environment list, voice, and provider state
+- `EnvironmentsDetailView`
+  - renders the environment-memory list
+  - uses `RookKit.EnvironmentListPresentation` for shared presentation rules, including hiding raw URL `sourceName` rows for `web:` environments
 - `AcpSocket` and `RookAPI` from `RookKit`
   - ACP WebSocket transport and REST client
 - `ForegroundAppMonitor`

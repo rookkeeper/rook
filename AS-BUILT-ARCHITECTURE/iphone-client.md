@@ -13,7 +13,7 @@ The iPhone client is a native SwiftUI app that shares the chat/networking layer 
 - `PlaceStore`
   - UserDefaults-backed storage for named places and visit suggestions
 - `RookKit`
-  - shared ACP socket, REST client, chat block models/views, voice, and Live Activity attributes
+  - shared ACP socket, REST client, chat block models/views, voice, Live Activity attributes, and shared environment-list presentation helpers
 - `RookWidgets`
   - widget extension that renders the Live Activity / Dynamic Island surface
 
@@ -60,6 +60,7 @@ Same shared contract as other clients:
 - `blocks: [ChatBlock]`
 - pending environment offer
 - environment list items
+  - `EnvironmentsScreen` uses `EnvironmentListPresentation.shouldDisplaySourceName(...)` so web rows no longer show the raw page URL as a secondary label
 - current place name / `placeEnvironmentId`
 - `placeSkillStatus[slug] -> Bool`
 - `nearbyCandidates: [EnvironmentCandidate]`

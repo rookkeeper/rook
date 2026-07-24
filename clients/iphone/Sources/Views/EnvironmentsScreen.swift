@@ -72,9 +72,7 @@ struct EnvironmentsScreen: View {
                         .font(.caption2.monospaced())
                         .foregroundStyle(PanelPalette.textMuted)
                         .lineLimit(1)
-                    if let sourceName = item.sourceName,
-                       sourceName != item.displayName,
-                       sourceName != item.environmentId {
+                    if EnvironmentListPresentation.shouldDisplaySourceName(for: item), let sourceName = item.sourceName {
                         Text(sourceName)
                             .font(.caption2)
                             .foregroundStyle(PanelPalette.textMuted)

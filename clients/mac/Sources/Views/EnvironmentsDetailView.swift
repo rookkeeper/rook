@@ -81,9 +81,7 @@ struct EnvironmentsDetail: View {
                         .foregroundStyle(PanelPalette.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    if let sourceName = item.sourceName,
-                       sourceName != item.displayName,
-                       sourceName != item.environmentId {
+                    if EnvironmentListPresentation.shouldDisplaySourceName(for: item), let sourceName = item.sourceName {
                         Text(sourceName)
                             .font(.caption2)
                             .foregroundStyle(PanelPalette.textMuted)

@@ -23,6 +23,7 @@ The Android client is a native Kotlin + Jetpack Compose app that mirrors the iPh
   - persisted place/suggestion state
 - Compose UI screens
   - agent picker, chat, settings, places, environments, environment offer sheet
+  - `EnvironmentsScreen` mirrors the Apple behavior by suppressing URL-like secondary `sourceName` rows for `web:` environments
 
 ## Main interfaces
 

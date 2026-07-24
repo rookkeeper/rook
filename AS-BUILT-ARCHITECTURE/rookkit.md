@@ -25,6 +25,7 @@
   - iOS-only shared ActivityKit attributes
 - support utilities
   - `KeychainStore`, `EnvironmentListPresentation`, `ToolPayloadFormatting`, `Clipboard`
+    - `EnvironmentListPresentation` now owns shared environment-list presentation rules used by Apple clients, including whether a secondary `sourceName` should be shown (for example, hiding raw URL rows for `web:` environments while still showing useful non-web source context)
 
 ## Main interfaces
 
@@ -104,6 +105,7 @@
 1. app reducers construct `ChatBlock`s
 2. RookKit design views render the block list consistently across macOS and iOS
 3. markdown/tool payload helpers normalize output for display
+4. `EnvironmentListPresentation` applies shared list-refresh behavior and shared row-level display rules for environment metadata
 
 ## Notable architectural characteristics
 

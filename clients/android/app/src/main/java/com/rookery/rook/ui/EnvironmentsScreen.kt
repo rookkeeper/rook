@@ -27,6 +27,14 @@ import com.rookery.rook.ui.chat.PanelCard
 import com.rookery.rook.ui.chat.PanelPalette
 import com.rookery.rook.ui.chat.StatusDot
 
+private fun shouldShowSourceName(item: EnvironmentListItem): Boolean {
+    val sourceName = item.sourceName ?: return false
+    if (sourceName == item.displayName || sourceName == item.environmentId) return false
+    if (item.environmentId.startsWith("web:")) return false
+    val lower = sourceName.lowercase()
+    return !lower.startsWith("http://") && !lower.startsWith("https://")
+}
+
 @Composable
 fun EnvironmentsScreen(viewModel: RookViewModel) {
     val loading by viewModel.environmentsLoading.collectAsState()
@@ -65,9 +73,9 @@ private fun EnvironmentRow(item: EnvironmentListItem, viewModel: RookViewModel) 
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (item.sourceName != null && item.sourceName != item.displayName && item.sourceName != item.environmentId) {
+                if (shouldShowSourceName(item)) {
                     Text(
-                        text = item.sourceName,
+                        text = item.sourceName.orEmpty(),
                         fontSize = 11.sp,
                         color = PanelPalette.textMuted,
                         maxLines = 1,

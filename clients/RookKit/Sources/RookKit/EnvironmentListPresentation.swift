@@ -36,4 +36,13 @@ public enum EnvironmentListPresentation {
             currentItems = refreshedItems
         }
     }
+
+    public static func shouldDisplaySourceName(for item: EnvironmentListItem) -> Bool {
+        guard let sourceName = item.sourceName,
+              sourceName != item.displayName,
+              sourceName != item.environmentId else { return false }
+        if item.environmentId.hasPrefix("web:") { return false }
+        let lower = sourceName.lowercased()
+        return !(lower.hasPrefix("http://") || lower.hasPrefix("https://"))
+    }
 }
