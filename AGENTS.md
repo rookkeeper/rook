@@ -2,7 +2,13 @@
 
 This is a mono-repo for the Rook personal agent. The agent knows its user AND the agent can be made to interact with the environment around it.
 
-Product/design notes: `PRODUCT/`. When making PRs, make sure to reference anything in this directory and describe how the PR interacts with the current PRODUCT design philosophy and approach. Does it implement a missing feature that product docs is asking for? Does it create a new concept (which you definitely need to add to documentation as part of the PR)? Does it change part of the design philosophy and approach or negate it (In this case, also update the docs as part of the PR)? `AS-BUILT-ARCHITECTURE/` is also a good place to look for the current structure. When big architecture, schema, layering, or cross-package structure changes happen, update the relevant files in `AS-BUILT-ARCHITECTURE/`. If you notice the structure is being modified from what these documents describe, make sure to eventually update them too.
+# Orientation
+
+Before doing anything else in this repo — investigating bugs, planning features, or making changes — read `AS-BUILT-ARCHITECTURE/` to get the lay of the land. It covers the server, each client, the shared Swift package, the database, and the common system shape (ACP over WebSocket client↔server, ACP over stdio server↔runtime, one subprocess per session). Knowing the architecture first will save you from making wrong assumptions about how the system fits together.
+
+Product/design notes: `PRODUCT/`. When making PRs, make sure to reference anything in this directory and describe how the PR interacts with the current PRODUCT design philosophy and approach. Does it implement a missing feature that product docs is asking for? Does it create a new concept (which you definitely need to add to documentation as part of the PR)? Does it change part of the design philosophy and approach or negate it (In this case, also update the docs as part of the PR)?
+
+When big architecture, schema, layering, or cross-package structure changes happen, update the relevant files in `AS-BUILT-ARCHITECTURE/`. If you notice the structure is being modified from what these documents describe, make sure to eventually update them too.
 
 When making changes:
 - Keep tests in sync with code changes.

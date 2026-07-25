@@ -5,7 +5,7 @@ import SwiftUI
 public enum EnvironmentListPresentation {
     public static func startAutoRefresh(
         task: inout Task<Void, Never>?,
-        intervalNanoseconds: UInt64 = 5_000_000_000,
+        intervalNanoseconds: UInt64 = 1_000_000_000,
         refresh: @escaping @MainActor (_ showLoading: Bool) -> Void
     ) {
         guard task == nil else { return }
