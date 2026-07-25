@@ -71,6 +71,7 @@ See also: [database.md](./database.md)
 ### REST control plane
 - `GET /api/health`
 - `GET /api/agent_runtimes`
+- `GET /api/sessions` — session listing over REST (replaces WebSocket `session/list`)
 - `POST /api/environments/register`
 - `POST /api/environments/decision`
 - `GET /api/environments/preview`
@@ -103,6 +104,9 @@ Persisted in SQLite:
 - `cwd`
 - `startedAt`
 - `updatedAt`
+
+The `GET /api/sessions` response additionally includes a `running` boolean
+(derived from whether a `SessionRuntime` is active for that session).
 
 Related table:
 - `session_environments(session_id, environment_id, entered_at)`

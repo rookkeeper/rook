@@ -91,6 +91,14 @@ public struct RookAPI {
         return body.runtimes
     }
 
+    public func sessions() async throws -> [AgentSessionSummary] {
+        struct SessionsResponse: Decodable {
+            let sessions: [JSONValue]
+        }
+        let response: SessionsResponse = try await get(path: "api/sessions", query: [:])
+        return response.sessions.map { AgentSessionSummary(raw: $0) }
+    }
+
     public func environmentPreview(environmentId: String) async throws -> EnvironmentPreview {
         try await get(
             path: "api/environments/preview",

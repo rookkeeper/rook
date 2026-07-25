@@ -179,6 +179,10 @@ export class AgentRuntimeManager {
     };
   }
 
+  sessionHasRuntime(sessionId: string): boolean {
+    return this.sessionRuntimes.has(sessionId);
+  }
+
   async close(): Promise<void> {
     for (const unsubscribe of this.runtimeSubscriptions.values()) unsubscribe();
     this.runtimeSubscriptions.clear();

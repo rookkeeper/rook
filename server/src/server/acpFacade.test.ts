@@ -139,4 +139,39 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   it.skip("resumes a session across connections", async () => {
     // TODO: reconnect test needs runtime serialization investigation.
   });
+
+  it("lists sessions via REST /api/sessions", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
+
+    // Create two sessions
+    const a = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "rest-test-a" },
+    });
+    const b = await request(ws, 3, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "rest-test-b" },
+    });
+
+    // Fetch via REST
+    const response = await fetch(`http://127.0.0.1:${PORT}/api/sessions`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { sessions: Array<Record<string, unknown>> };
+    expect(body.sessions.length).toBeGreaterThanOrEqual(2);
+
+    const titles = body.sessions.map((s) => s.title);
+    expect(titles).toContain("rest-test-a");
+    expect(titles).toContain("rest-test-b");
+
+    // running should be true for sessions with active runtimes
+    const sessionA = body.sessions.find((s) => s.title === "rest-test-a")!;
+    expect(sessionA.running).toBe(true);
+    expect(sessionA._meta).toBeDefined();
+    expect((sessionA._meta as Record<string, unknown>).runtimeId).toBe("MockAcpAgent");
+
+    ws.close();
+  });
 });

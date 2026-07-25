@@ -30,10 +30,9 @@
 ## Main interfaces
 
 ### ACP socket API
-`AcpSocket` exposes:
-- `connect(request:)`
+`AcpSocket` exposes one-session-per-connection ACP methods:
+- `connect(request:)` — opens WebSocket, runs `initialize` handshake
 - `disconnect()`
-- `sessionList()`
 - `createSession(runtimeId:title:cwd:)`
 - `loadSession(_:)`
 - `sendPrompt(text:)`
@@ -49,6 +48,7 @@
 `RookAPI` exposes:
 - `healthResult()` / `health()`
 - `agents()`
+- `sessions()` — session list over REST (replaces the old WebSocket `session/list`)
 - `environmentPreview(environmentId:)`
 - `registerEnvironment(id:sourceName:metadata:)`
 - `identifyEnvironments(_:)`
