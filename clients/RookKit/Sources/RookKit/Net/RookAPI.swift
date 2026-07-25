@@ -29,16 +29,23 @@ public struct RookAPI {
     }
 
     public var webSocketURL: URL {
+        webSocketURL(sessionId: nil)
+    }
+
+    public func webSocketURL(sessionId: String?) -> URL {
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         components.scheme = baseURL.scheme == "https" ? "wss" : "ws"
         components.path = "/api/ws"
+        if let sessionId, !sessionId.isEmpty {
+            components.queryItems = [URLQueryItem(name: "sessionId", value: sessionId)]
+        }
         return components.url!
     }
 
     public var webAppURL: URL { baseURL }
 
-    public func webSocketRequest() -> URLRequest {
-        var request = authorizedRequest(url: webSocketURL)
+    public func webSocketRequest(sessionId: String? = nil) -> URLRequest {
+        var request = authorizedRequest(url: webSocketURL(sessionId: sessionId))
         request.timeoutInterval = 30
         return request
     }
@@ -97,6 +104,14 @@ public struct RookAPI {
         }
         let response: SessionsResponse = try await get(path: "api/sessions", query: [:])
         return response.sessions.map { AgentSessionSummary(raw: $0) }
+    }
+
+    public func sessionTranscript(sessionId: String) async throws -> [JSONValue] {
+        struct TranscriptResponse: Decodable {
+            let events: [JSONValue]
+        }
+        let response: TranscriptResponse = try await get(path: "api/sessions/\(sessionId)/transcript", query: [:])
+        return response.events
     }
 
     public func environmentPreview(environmentId: String) async throws -> EnvironmentPreview {

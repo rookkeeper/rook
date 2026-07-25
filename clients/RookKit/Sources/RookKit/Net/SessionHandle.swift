@@ -91,6 +91,21 @@ public final class SessionHandle {
         isLoaded = true
     }
 
+    public func attach(transcript events: [JSONValue]) async throws {
+        if isLoaded {
+            onStateChange?()
+            return
+        }
+        resetVisibleState()
+        for event in events {
+            applyTranscriptEvent(event)
+        }
+        try await ensureSocketConnected()
+        socket.selectSession(sessionId)
+        isLoaded = true
+        onStateChange?()
+    }
+
     public func close() {
         reconnectTask?.cancel()
         streamingFlushTask?.cancel()
@@ -201,10 +216,103 @@ public final class SessionHandle {
         }
     }
 
+    private func resetVisibleState() {
+        blocks = []
+        queuedMessages = []
+        isRunning = false
+        statusLine = ""
+        contextUsage = nil
+        currentModes = nil
+        configOptions = []
+        pendingPermission = nil
+        lastStopReason = nil
+        autoScrollEnabled = true
+        enteredEnvironments = []
+        blockCounter = 0
+        scrollTick = 0
+    }
+
+    private func applyTranscriptEvent(_ event: JSONValue) {
+        let kind = event["kind"]?.stringValue ?? ""
+        switch kind {
+        case "user_message_chunk":
+            if let text = event["text"]?.stringValue { appendBlock(.user(text: text)) }
+        case "agent_message_chunk":
+            if let text = event["text"]?.stringValue { appendBlock(.assistantText(text: text, streaming: false)) }
+        case "agent_thought_chunk":
+            if let text = event["text"]?.stringValue { appendBlock(.thinking(text: text, streaming: false)) }
+        case "tool_call":
+            guard let toolCallId = event["toolCallId"]?.stringValue else { return }
+            let state = ToolBlockState(
+                toolCallId: toolCallId,
+                title: event["title"]?.stringValue ?? "Tool",
+                kindLabel: event["toolKind"]?.stringValue ?? "",
+                status: transcriptStatus(event["status"]?.stringValue),
+                arguments: stringifyTranscriptJSON(event["rawInput"]),
+                output: ""
+            )
+            appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
+        case "tool_call_update":
+            guard let toolCallId = event["toolCallId"]?.stringValue else { return }
+            updateTool(toolCallId) { tool in
+                if let toolName = event["toolName"]?.stringValue, tool.title.isEmpty { tool.title = toolName }
+                switch event["status"]?.stringValue {
+                case "pending": advanceToolStatus(&tool, to: .pending)
+                case "in_progress": advanceToolStatus(&tool, to: .running); tool.output = stringifyTranscriptJSON(event["rawOutput"])
+                case "completed": advanceToolStatus(&tool, to: .completed); tool.output = stringifyTranscriptJSON(event["rawOutput"])
+                case "failed": advanceToolStatus(&tool, to: .failed); tool.output = stringifyTranscriptJSON(event["rawOutput"])
+                case "cancelled": advanceToolStatus(&tool, to: .cancelled)
+                default: break
+                }
+            }
+        case "plan_update":
+            if case .array(let entries)? = event["entries"] {
+                let planEntries = entries.enumerated().compactMap { index, item -> PlanEntry? in
+                    guard let content = item["content"]?.stringValue ?? item["text"]?.stringValue else { return nil }
+                    return PlanEntry(id: Int(item["id"]?.numberValue ?? Double(index)), content: content, priority: item["priority"]?.stringValue ?? "", status: item["status"]?.stringValue ?? "")
+                }
+                upsertPlanBlock(planEntries)
+            }
+        case "usage_update":
+            if let used = event["used"]?.numberValue, let size = event["size"]?.numberValue {
+                contextUsage = ContextUsageState(used: Int(used), size: Int(size), cost: nil)
+            }
+        case "run_completed":
+            isRunning = false
+            statusLine = ""
+        case "run_failed":
+            isRunning = false
+            statusLine = ""
+            if let message = event["message"]?.stringValue { appendErrorBlock(source: "run", message: message) }
+        default:
+            break
+        }
+    }
+
+    private func transcriptStatus(_ raw: String?) -> ToolBlockStatus {
+        switch raw {
+        case "in_progress": return .running
+        case "completed": return .completed
+        case "failed": return .failed
+        case "cancelled": return .cancelled
+        case "ready": return .ready
+        case "input_streaming": return .inputStreaming
+        default: return .pending
+        }
+    }
+
+    private func stringifyTranscriptJSON(_ value: JSONValue?) -> String {
+        guard let value else { return "" }
+        if case .string(let text) = value { return text }
+        if case .null = value { return "" }
+        if let data = try? JSONEncoder().encode(value), let text = String(data: data, encoding: .utf8) { return text }
+        return ""
+    }
+
     // MARK: - Private: connection
 
     private func ensureSocketConnected() async throws {
-        _ = try await socket.connect(request: api.webSocketRequest())
+        _ = try await socket.connect(request: api.webSocketRequest(sessionId: sessionId))
     }
 
     private func scheduleReconnect(delaySeconds: Double) {

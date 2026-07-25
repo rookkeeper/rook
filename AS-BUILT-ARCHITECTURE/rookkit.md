@@ -7,8 +7,11 @@
 ## Main components
 
 - `Net/AcpSocket.swift`
-  - connection-level ACP WebSocket client for `/api/ws`
+  - session-bound ACP WebSocket client for `/api/ws?sessionId=...`
   - owns request/response bookkeeping and event reduction
+- `Net/SessionHandle.swift`
+  - shared per-session state container used by both Apple clients
+  - owns one `AcpSocket`, transcript hydration, replay avoidance, reconnection, and live event reduction
 - `Net/RookAPI.swift`
   - REST client for health, runtimes, environments, and location identification
 - `Models/ApiTypes.swift`
@@ -49,6 +52,7 @@
 - `healthResult()` / `health()`
 - `agents()`
 - `sessions()` — session list over REST (replaces the old WebSocket `session/list`)
+- `sessionTranscript(sessionId:)` — normalized transcript hydration for second viewers / running sessions
 - `environmentPreview(environmentId:)`
 - `registerEnvironment(id:sourceName:metadata:)`
 - `identifyEnvironments(_:)`
@@ -102,7 +106,7 @@
 4. the prompt response marks the run complete or failed
 
 ### Shared rendering flow
-1. app reducers construct `ChatBlock`s
+1. `SessionHandle` (or app-specific reducers around it) constructs `ChatBlock`s from transcript hydration + live ACP events
 2. RookKit design views render the block list consistently across macOS and iOS
 3. markdown/tool payload helpers normalize output for display
 4. `EnvironmentListPresentation` applies shared list-refresh behavior and shared row-level display rules for environment metadata

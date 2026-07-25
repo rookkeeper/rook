@@ -29,7 +29,7 @@ binding, and bearer-token auth, start with [docs/setup.md](../../docs/setup.md).
   contains, then decide with the same 2×2 choices as every other client.
   Leaving the region simply stops refreshing it from the phone; the server ages
   it out on its own.
-- **Full chat parity.** Agent picker, session start/resume, streaming ACP chat
+- **Full chat parity.** Agent picker, REST-backed session discovery, per-session websocket attach, transcript hydration for already-running sessions, and streaming ACP chat
   (text, thinking, tool calls, plans, errors, context usage) — including
   auto-rendering well-formed JSON tool arguments as human-readable YAML and
   assistant markdown with native drag-selection, standard copy/paste behavior,
@@ -100,7 +100,7 @@ dropped.
 
 ### The location → skill loop
 
-Mirrors `RookMacModel.handleForegroundApp`, with place in place of mac:
+Mirrors `RookMacModel.handleForegroundApp`, with place in place of mac. Chat/session behavior mirrors the Mac too: one websocket per session, server-owned transcript hydration for already-running sessions, and no disruptive `session/load` on simple reselect/reopen.
 
 1. You define places → `PlaceStore`; `LocationProvider` monitors their regions
    (Always auth recommended for background entry).

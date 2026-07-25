@@ -13,9 +13,9 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
 ## Features
 
 - **Agent picker** - unified Sessions home screen listing all sessions across runtimes, with a New Chat form that selects a configured runtime.
-- **Sessions** - session history ordered by most recently updated; resume any session by clicking it. Session creation and loading use ACP (`session/new`, `session/load`) over the connection-level WebSocket.
-- **Auto-resume** - on launch the app rejoins the most recent session via ACP `session/load`.
-- **Streaming chat** — `session/prompt` over `ws://127.0.0.1:7665/api/ws`;
+- **Sessions** - session history ordered by most recently updated; resume any session by clicking it. Discovery is REST (`GET /api/sessions`). Live interaction is one session-bound WebSocket per session.
+- **Auto-resume** - on launch the app rejoins the most recent session; if it is already running, it hydrates from `GET /api/sessions/:id/transcript` instead of reloading the runtime.
+- **Streaming chat** — `session/prompt` over `ws://127.0.0.1:7665/api/ws?sessionId=...`;
   renders agent text, thinking (collapsible), tool calls with normalized raw
   input/output (including auto-rendering well-formed JSON tool arguments as
   human-readable YAML), and assistant markdown with native drag-selection,

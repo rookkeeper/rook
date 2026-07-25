@@ -28,6 +28,7 @@ import { loadAgentRuntimes } from "./config/agentRuntimes.js";
 import { RookDatastore } from "./datastore/RookDatastore.js";
 import { SqliteSessionRepository } from "./datastore/SqliteSessionRepository.js";
 import { AgentRuntimeManager } from "./services/AgentRuntimeManager.js";
+import { SessionTranscriptStore } from "./services/SessionTranscriptStore.js";
 import { startRemoteProxy } from "./remoteProxy.js";
 
 dotenv.config({ path: path.join(REPO_ROOT, ".env") });
@@ -96,7 +97,8 @@ export async function buildServer(options: BuildServerOptions = {}) {
   });
   const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
   const sessionRepository = new SqliteSessionRepository(datastore);
-  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, environmentManager);
+  const transcriptStore = new SessionTranscriptStore(datastore);
+  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, environmentManager, transcriptStore);
   await app.register(websocket);
 
   app.addHook("onRequest", async (request, reply) => {
@@ -113,7 +115,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
   app.get("/api/health", async () => ({ ok: true, service: "rook" }));
   await registerRuntimeRoutes(app, runtimeManager);
-  await registerSessionRoutes(app, runtimeManager);
+  await registerSessionRoutes(app, runtimeManager, transcriptStore);
   await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar, runtimeManager);
   await registerDiagnosticRoutes(app, environmentManager);
   await registerAcpFacadeRoute(app, runtimeManager, auth);

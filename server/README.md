@@ -73,22 +73,26 @@ For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTU
 
 - `GET /api/health` — service health
 - `GET /api/agent_runtimes` — configured runtime catalog (only explicitly declared entries)
+- `GET /api/sessions` — session list + running state
+- `GET /api/sessions/:sessionId/transcript` — normalized server-owned transcript hydration
 - `POST /api/session/environments` — enter/leave environments for a session
 - `POST /api/environments/register` — mark an environment available
 - `POST /api/environments/decision` — record accept/approve/ignore/reject
 - `GET /api/environments/preview` — bundle/file preview data
 - `GET /api/environments/list` — per-session environment list for client UI (`displayName`, `environmentId`, status, bundle counts)
 - `GET /api/diagnostics/environments` — active/recent environment diagnostics
-- `GET /api/ws` — connection-level ACP WebSocket facade (no session query parameter)
+- `GET /api/ws` — session-bound ACP WebSocket facade (`?sessionId=<public-session-id>` preferred)
 
 ### ACP WebSocket
 
-The facade at `/api/ws` is the primary client interface. It implements:
+The facade at `/api/ws` is the primary live-session interface. The intended shape is one websocket per session. A client typically discovers sessions via REST, then opens `/api/ws?sessionId=<id>` and runs `initialize`.
+
+It implements:
 
 - `initialize` — returns runtime catalog, default runtime, env-offer extension capability
-- `session/list` — unified cross-runtime session list with `_meta.runtimeId` and `_meta.startedAt`
-- `session/new` — creates session for a chosen runtime via `_meta.runtimeId` and `_meta.title`
-- `session/load`, `session/resume` — loads an existing session
+- `session/list` — legacy/unbound-only session list (REST is preferred)
+- `session/new` — creates session for a chosen runtime via `_meta.runtimeId` and `_meta.title` (unbound websocket only)
+- `session/load`, `session/resume` — loads an existing session; replay is requester-private, not broadcast to all watchers
 - `session/prompt`, `session/cancel` — standard prompt flow
 - `session/set_mode`, `session/set_config_option` — ACP controls
 - `session/close` — closes a session
@@ -101,6 +105,7 @@ The facade at `/api/ws` is the primary client interface. It implements:
 - Each session maps to `runtimeId` + runtime-local `runtimeSessionId` in SQLite
 - Sessions are a unified cross-runtime list ordered by `updatedAt` desc
 - Session-to-environment membership persists in `session_environments`
+- Transcript history persists in `session_transcript_events` so later viewers can hydrate from server state instead of forcing runtime replay
 
 ### Runtime management
 

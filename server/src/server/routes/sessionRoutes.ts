@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import type { AgentRuntimeManager } from "../services/AgentRuntimeManager.js";
+import type { SessionTranscriptStore } from "../services/SessionTranscriptStore.js";
 
 /** REST session listing — session discovery lives outside the ACP WebSocket. */
-export async function registerSessionRoutes(app: FastifyInstance, runtimeManager: AgentRuntimeManager): Promise<void> {
+export async function registerSessionRoutes(app: FastifyInstance, runtimeManager: AgentRuntimeManager, transcriptStore: SessionTranscriptStore): Promise<void> {
   app.get("/api/sessions", async () => {
     const records = await runtimeManager.listSessions();
     return {
@@ -17,6 +18,22 @@ export async function registerSessionRoutes(app: FastifyInstance, runtimeManager
           startedAt: record.startedAt,
         },
       })),
+    };
+  });
+
+  app.get<{ Params: { sessionId: string } }>("/api/sessions/:sessionId/transcript", async (request, reply) => {
+    const sessionId = request.params.sessionId;
+    const records = await runtimeManager.listSessions();
+    const record = records.find((item) => item.sessionId === sessionId);
+    if (!record) {
+      reply.code(404).send({ error: "Unknown session" });
+      return;
+    }
+    const events = await transcriptStore.list(sessionId);
+    return {
+      sessionId,
+      running: runtimeManager.sessionHasRuntime(sessionId),
+      events: events.map((item) => ({ sequence: item.sequence, createdAt: item.createdAt, ...item.event })),
     };
   });
 }

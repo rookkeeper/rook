@@ -529,12 +529,18 @@ final class RookModel: ObservableObject {
                 let handle = getOrCreateHandle(for: session)
                 wireHandle(handle)
                 currentSession = session
-                try await handle.load()
+                if handle.isLoaded {
+                    try await handle.load()
+                } else if session.running {
+                    let events = try await api.sessionTranscript(sessionId: session.id)
+                    try await handle.attach(transcript: events)
+                } else {
+                    try await handle.load()
+                }
                 selectedAgentId = nil
                 chatVisible = true
                 enteredEnvironments = []
                 environmentListItems = []
-                appendBlock(.system(text: "Resumed session — earlier messages aren't replayed."))
                 updateLiveActivity()
                 refreshEnvironmentList()
             } catch {
@@ -631,7 +637,13 @@ final class RookModel: ObservableObject {
             Task {
                 let handle = getOrCreateHandle(for: session)
                 wireHandle(handle)
-                try? await handle.load()
+                if handle.isLoaded {
+                    try? await handle.load()
+                } else if session.running, let events = try? await api.sessionTranscript(sessionId: session.id) {
+                    try? await handle.attach(transcript: events)
+                } else {
+                    try? await handle.load()
+                }
             }
         }
         Task { await refreshHealth() }

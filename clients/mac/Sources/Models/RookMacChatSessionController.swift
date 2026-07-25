@@ -124,7 +124,14 @@ final class ChatSessionController {
                 let handle = getOrCreateHandle(for: session)
                 currentSession = session
                 wireHandle(handle)
-                try await handle.load()
+                if handle.isLoaded {
+                    try await handle.load()
+                } else if session.running {
+                    let events = try await api.sessionTranscript(sessionId: session.id)
+                    try await handle.attach(transcript: events)
+                } else {
+                    try await handle.load()
+                }
             } catch {
                 sessionsError = error.localizedDescription
             }
