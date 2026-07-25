@@ -2,7 +2,7 @@
 
 ## Summary
 
-The macOS client is a native SwiftUI menu bar app with a regular app window. It is both a chat client and a Mac environment provider. It watches the frontmost app and browser URL, registers `mac:` and `web:` environments with the server, surfaces environment offers, and exposes a loopback Mac bridge for perception and control.
+The macOS client is a native SwiftUI menu bar app with a regular app window. It is both a chat client and a Mac environment provider. It watches the frontmost app, registers `mac:` application environments plus richer generic/specialized candidate environments with the server, surfaces environment offers, and exposes a loopback Mac bridge for perception and control.
 
 ## Main components
 
@@ -46,9 +46,11 @@ Bound to `127.0.0.1` and bearer-token protected:
 
 ### Environment provider surface
 The client derives and registers:
-- `mac:<bundleId>`
+- `mac:<bundleId>` for the foreground application
 - `mac:<bundleId>/<context>` for richer app-specific contexts like Obsidian vaults
-- hierarchical `web:<host>` and `web:<host>/<path...>` IDs for browsers
+- `mac:<bundleId>/_plugin/<plugin-id>` for app-specific plugin capabilities such as enabled Obsidian community plugins
+- exact `dir:/absolute/path` directory environments from generic Accessibility document signals
+- hierarchical `web:<host>` and `web:<host>/<path...>` IDs from generic Accessibility web/document signals
 
 ## Core data schemas
 
@@ -98,10 +100,12 @@ Via `RookKit`:
 
 ### Foreground environment detection
 1. `ForegroundAppMonitor` detects app activation or window-title change
-2. `RookMacModel` derives `mac:` and optional `web:` candidates
-3. model updates bridge context
-4. after a dwell delay, the focused environments are registered with the server
-5. server may respond with environment offers, which the client presents natively
+2. `AppEnvironmentProvider` always emits the base `mac:<bundleId>` app environment after a short dwell delay
+3. `AppEnvironmentProvider` activates either a bundle-id-specific specialist or the generic fallback provider
+4. `GenericEnvironmentProvider` polls every 5 seconds while active, reads Accessibility document and web signals, and emits `dir:` / `web:` candidates only when the normalized environment-id set is stable across two polls
+5. `ObsidianEnvironmentProvider` is currently the only specialist; it polls local data every 5 seconds, reads `~/Library/Application Support/obsidian/obsidian.json`, emits open vault environments, and emits enabled community-plugin environments
+6. `EnvironmentRegistrationController` suppresses duplicate emissions of the same environment id for 1 minute
+7. server may respond with environment offers, which the client presents natively
 
 ### Environment approval
 1. server emits `_com.rookkeeper/environment_offer`
@@ -123,6 +127,8 @@ Via `RookKit`:
 ## Notable architectural characteristics
 
 - the mac app is both a client and an environment provider
-- environment registration is local-first and derived from visible user context
+- environment registration is layered: base app identity, generic Accessibility-derived candidates, and bundle-id-specific specialists
+- generic environment detection is AX-based and intentionally app-agnostic; app-specific providers are selected by bundle-id lookup with a generic fallback
+- environment registration is local-first and derived from visible user context plus app-owned local data where needed
 - the Mac bridge centralizes Accessibility, Automation, and Screen Recording permissions in one native app
 - reconnect and queued-message handling are built into the client reducer
