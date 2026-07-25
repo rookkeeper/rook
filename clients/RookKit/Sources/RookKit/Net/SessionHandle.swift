@@ -34,6 +34,10 @@ public final class SessionHandle {
     public private(set) var autoScrollEnabled = true { didSet { onStateChange?() } }
     public private(set) var scrollTick = 0 { didSet { onStateChange?() } }
 
+    /// True after the first successful `load()` — prevents re-sending
+    /// `session/load` when switching back to an already-connected handle.
+    public private(set) var isLoaded = false
+
     // MARK: - Private streaming / replay state
     private var blockCounter = 0
     private var enteredEnvironments: Set<String> = []
@@ -69,6 +73,11 @@ public final class SessionHandle {
     }
 
     public func load() async throws {
+        if isLoaded {
+            // Already connected and subscribed — just report current state.
+            onStateChange?()
+            return
+        }
         try await ensureSocketConnected()
         isReplaying = true
         replayUserBuffer = ""
@@ -79,12 +88,14 @@ public final class SessionHandle {
         isReplaying = false
         flushReplayBuffers()
         isRunning = false
+        isLoaded = true
     }
 
     public func close() {
         reconnectTask?.cancel()
         streamingFlushTask?.cancel()
         socket.disconnect()
+        isLoaded = false
     }
 
     public func stopAgent() {
