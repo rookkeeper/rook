@@ -850,6 +850,22 @@ describe("EnvironmentManager", () => {
     expect(manager.isAvailable("dir:/Users/john")).toBe(false);
   });
 
+  it("enters only the exact dir environment", async () => {
+    const manager = newManager();
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerCandidateEnvironment({
+      id: "dir:/Users/john/project/subdir",
+      metadata: { directoryPath: "/Users/john/project/subdir" },
+    });
+
+    const entered = manager.enterEnvironment("s1", "dir:/Users/john/project/subdir");
+    expect(entered).toEqual(["dir:/Users/john/project/subdir"]);
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledTimes(1);
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("dir:/Users/john/project/subdir", [], undefined);
+  });
+
   it("renders environment binding instructions for all entered environments", async () => {
     const manager = newManager();
     const listener = mockListener();
