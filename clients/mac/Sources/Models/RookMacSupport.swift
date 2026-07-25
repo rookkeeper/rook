@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import OSLog
 import RookKit
 
 struct EnvironmentCandidate: Equatable {
@@ -22,14 +23,16 @@ protocol SpecializedEnvironmentProvider: AnyObject {
 
 @MainActor
 final class EnvironmentRegistrationController {
+    private static let duplicateSuppressionWindow: TimeInterval = 60
+
     private let register: ([EnvironmentCandidate], String) -> Void
     private var timer: Timer?
     private var currentSignature: String?
     private var currentCandidates: [EnvironmentCandidate] = []
     private var currentReason = ""
     private var readyToEmit = false
-    private var emitted = false
     private var isServerOnline = false
+    private var lastEmissionAtByEnvironmentId: [String: Date] = [:]
 
     init(register: @escaping ([EnvironmentCandidate], String) -> Void) {
         self.register = register
@@ -41,24 +44,26 @@ final class EnvironmentRegistrationController {
     }
 
     func update(candidates: [EnvironmentCandidate], delay: TimeInterval, reason: String) {
-        let signature = candidates.map(\.id).joined(separator: "|")
+        let signature = Self.signature(for: candidates)
         guard !signature.isEmpty else {
             clear()
             return
         }
+        currentCandidates = candidates
+        currentReason = reason
         if signature == currentSignature {
-            currentCandidates = candidates
-            currentReason = reason
             flushIfPossible()
             return
         }
         timer?.invalidate()
         timer = nil
         currentSignature = signature
-        currentCandidates = candidates
-        currentReason = reason
         readyToEmit = false
-        emitted = false
+        if delay <= 0 {
+            readyToEmit = true
+            flushIfPossible()
+            return
+        }
         timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -68,6 +73,13 @@ final class EnvironmentRegistrationController {
         }
     }
 
+    func emitNow(candidates: [EnvironmentCandidate], reason: String) {
+        currentCandidates = candidates
+        currentReason = reason
+        readyToEmit = true
+        flushIfPossible()
+    }
+
     func clear() {
         timer?.invalidate()
         timer = nil
@@ -75,128 +87,82 @@ final class EnvironmentRegistrationController {
         currentCandidates = []
         currentReason = ""
         readyToEmit = false
-        emitted = false
     }
 
     private func flushIfPossible() {
-        guard readyToEmit, !emitted, isServerOnline, !currentCandidates.isEmpty else { return }
-        emitted = true
-        register(currentCandidates, currentReason)
+        guard readyToEmit, isServerOnline, !currentCandidates.isEmpty else { return }
+        let now = Date()
+        let eligible = currentCandidates.filter { candidate in
+            guard let lastEmission = lastEmissionAtByEnvironmentId[candidate.id] else {
+                return true
+            }
+            return now.timeIntervalSince(lastEmission) >= Self.duplicateSuppressionWindow
+        }
+        guard !eligible.isEmpty else { return }
+        for candidate in eligible {
+            lastEmissionAtByEnvironmentId[candidate.id] = now
+        }
+        register(eligible, currentReason)
+    }
+
+    private static func signature(for candidates: [EnvironmentCandidate]) -> String {
+        candidates.map(\.id).sorted().joined(separator: "|")
     }
 }
 
-@MainActor
-final class ObsidianEnvironmentProvider: SpecializedEnvironmentProvider {
-    var onStateChange: (() -> Void)?
-    var currentAppEnvironmentId: String? { currentCandidates.last?.id }
-    var currentSiteEnvironmentId: String? { nil }
-
-    private let dwellDelay: TimeInterval
-    private let registration: EnvironmentRegistrationController
-    private var currentCandidates: [EnvironmentCandidate] = []
-
-    init(dwellDelay: TimeInterval = 5, register: @escaping ([EnvironmentCandidate], String) -> Void) {
-        self.dwellDelay = dwellDelay
-        self.registration = EnvironmentRegistrationController(register: register)
-    }
-
-    func isActive(for app: ForegroundApp) -> Bool {
-        app.bundleId == "md.obsidian"
-    }
-
-    func activate(app: ForegroundApp, title: String?) {
-        update(app: app, title: title)
-    }
-
-    func update(app: ForegroundApp, title: String?) {
-        currentCandidates = Self.candidates(for: app, title: title)
-        registration.update(candidates: currentCandidates, delay: dwellDelay, reason: "obsidian")
-        onStateChange?()
-    }
-
-    func deactivate() {
-        currentCandidates = []
-        registration.clear()
-        onStateChange?()
-    }
-
-    func setServerOnline(_ online: Bool) {
-        registration.setServerOnline(online)
-    }
-
-    static func candidates(for app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
-        guard let title, let vault = vaultName(from: title) else {
-            return []
-        }
-        let metadata: [String: JSONValue] = [
-            "bundleId": .string(app.bundleId),
-            "appName": .string(app.name),
-            "windowTitle": .string(title),
-            "vaultName": .string(vault),
-        ]
-        return [EnvironmentCandidate(
-            id: "mac:\(app.bundleId)/\(EnvironmentIDEncoding.encodePathComponent(vault))",
-            metadata: metadata.merging(["sourceName": .string("\(app.name) · \(vault)")]) { _, new in new }
-        )]
-    }
-
-    /// Obsidian title parsing works backwards because note names may contain dashes.
-    static func vaultName(from title: String) -> String? {
-        guard let obsidianRange = title.range(of: " - Obsidian", options: .backwards) else {
-            return nil
-        }
-        let prefix = String(title[..<obsidianRange.lowerBound]).trimmingCharacters(in: .whitespaces)
-        guard !prefix.isEmpty else {
-            return nil
-        }
-        if let split = prefix.range(of: " - ", options: .backwards) {
-            let vault = String(prefix[split.upperBound...]).trimmingCharacters(in: .whitespaces)
-            return vault.isEmpty ? nil : vault
-        }
-        return prefix
-    }
+private struct GenericEnvironmentObservation {
+    let candidates: [EnvironmentCandidate]
+    let normalizedIds: [String]
+    let documentValues: [String]
+    let webURL: String?
 }
 
 @MainActor
-final class BrowserEnvironmentProvider: SpecializedEnvironmentProvider {
-    static let bundleIds: Set<String> = [
-        "com.google.Chrome", "com.google.Chrome.beta", "com.google.Chrome.canary", "com.google.Chrome.dev",
-        "com.apple.Safari", "com.apple.SafariTechnologyPreview",
-        "company.thebrowser.Browser",
-        "com.brave.Browser", "com.brave.Browser.beta", "com.brave.Browser.nightly",
-        "com.microsoft.edgemac", "com.microsoft.edgemac.Beta",
-        "com.vivaldi.Vivaldi", "com.operasoftware.Opera",
-    ]
+final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
+    private static let pollInterval: TimeInterval = 5
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.rook", category: "GenericEnvironmentProvider")
 
     var onStateChange: (() -> Void)?
     var currentAppEnvironmentId: String? { nil }
-    var currentSiteEnvironmentId: String? { currentCandidates.last?.id }
+    var currentSiteEnvironmentId: String? { nil }
 
-    private let dwellDelay: TimeInterval
     private let registration: EnvironmentRegistrationController
-    private var currentCandidates: [EnvironmentCandidate] = []
+    private var pollTimer: Timer?
+    private var currentApp: ForegroundApp?
+    private var currentTitle: String?
+    private var previousNormalizedIds: [String]?
 
-    init(dwellDelay: TimeInterval = 5, register: @escaping ([EnvironmentCandidate], String) -> Void) {
-        self.dwellDelay = dwellDelay
+    init(register: @escaping ([EnvironmentCandidate], String) -> Void) {
         self.registration = EnvironmentRegistrationController(register: register)
     }
 
     func isActive(for app: ForegroundApp) -> Bool {
-        Self.bundleIds.contains(app.bundleId)
+        true
     }
 
     func activate(app: ForegroundApp, title: String?) {
-        update(app: app, title: title)
+        currentApp = app
+        currentTitle = title
+        previousNormalizedIds = nil
+        startPolling()
+        poll()
     }
 
     func update(app: ForegroundApp, title: String?) {
-        currentCandidates = Self.candidates(for: app, title: title)
-        registration.update(candidates: currentCandidates, delay: dwellDelay, reason: "browser")
-        onStateChange?()
+        currentApp = app
+        currentTitle = title
     }
 
     func deactivate() {
-        currentCandidates = []
+        if let app = currentApp {
+            let observation = Self.observation(for: app, title: currentTitle)
+            registration.emitNow(candidates: observation.candidates, reason: "generic-final")
+        }
+        pollTimer?.invalidate()
+        pollTimer = nil
+        currentApp = nil
+        currentTitle = nil
+        previousNormalizedIds = nil
         registration.clear()
         onStateChange?()
     }
@@ -205,27 +171,106 @@ final class BrowserEnvironmentProvider: SpecializedEnvironmentProvider {
         registration.setServerOnline(online)
     }
 
-    static func candidates(for app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
-        guard let rawURL = AXReader.activeTabURL(pid: app.pid) else {
-            return []
+    private func startPolling() {
+        pollTimer?.invalidate()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.poll()
+            }
         }
+    }
+
+    private func poll() {
+        guard let app = currentApp else { return }
+        let observation = Self.observation(for: app, title: currentTitle)
+        defer {
+            previousNormalizedIds = observation.normalizedIds
+            onStateChange?()
+        }
+        guard let previousNormalizedIds, previousNormalizedIds == observation.normalizedIds else {
+            return
+        }
+        registration.emitNow(candidates: observation.candidates, reason: "generic")
+    }
+
+    private static func observation(for app: ForegroundApp, title: String?) -> GenericEnvironmentObservation {
+        let documentValues = AXReader.focusedWindowDocumentValues(pid: app.pid)
+        let webURL = AXReader.activeTabURL(pid: app.pid)
+        var candidatesById: [String: EnvironmentCandidate] = [:]
+
+        for rawValue in documentValues {
+            if let normalizedPath = normalizedAbsolutePath(from: rawValue) {
+                let candidate = directoryCandidate(path: normalizedPath, app: app, title: title, rawValue: rawValue)
+                candidatesById[candidate.id] = candidate
+                continue
+            }
+            let webCandidates = webCandidates(from: rawValue, app: app, title: title)
+            if webCandidates.isEmpty {
+                warningForNonAbsoluteDirectoryCandidate(rawValue: rawValue, app: app)
+                continue
+            }
+            for candidate in webCandidates {
+                candidatesById[candidate.id] = candidate
+            }
+        }
+
+        if let webURL {
+            for candidate in webCandidates(from: webURL, app: app, title: title) {
+                candidatesById[candidate.id] = candidate
+            }
+        }
+
+        let candidates = candidatesById.values.sorted { lhs, rhs in
+            EnvironmentIDEncoding.depth(lhs.id) < EnvironmentIDEncoding.depth(rhs.id)
+        }
+        return GenericEnvironmentObservation(
+            candidates: candidates,
+            normalizedIds: candidates.map(\.id),
+            documentValues: documentValues,
+            webURL: webURL
+        )
+    }
+
+    private static func directoryCandidate(path: String, app: ForegroundApp, title: String?, rawValue: String) -> EnvironmentCandidate {
+        var metadata: [String: JSONValue] = [
+            "bundleId": .string(app.bundleId),
+            "appName": .string(app.name),
+            "directoryPath": .string(path),
+            "axDocument": .string(rawValue),
+            "sourceName": .string(path),
+        ]
+        if let title, !title.isEmpty {
+            metadata["windowTitle"] = .string(title)
+        }
+        return EnvironmentCandidate(id: "dir:\(path)", metadata: metadata)
+    }
+
+    private static func webCandidates(from rawURL: String, app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
         let ids = webEnvironmentIds(from: rawURL)
         guard !ids.isEmpty else { return [] }
         var metadata: [String: JSONValue] = [
             "bundleId": .string(app.bundleId),
             "appName": .string(app.name),
             "url": .string(rawURL),
+            "sourceName": .string(rawURL),
+            "canonicalSourceUrl": .string(rawURL),
         ]
         if let title, !title.isEmpty {
             metadata["windowTitle"] = .string(title)
         }
-        return ids.map { EnvironmentCandidate(
-            id: $0,
-            metadata: metadata.merging([
-                "sourceName": .string(rawURL),
-                "canonicalSourceUrl": .string(rawURL),
-            ]) { _, new in new }
-        ) }
+        return ids.map { EnvironmentCandidate(id: $0, metadata: metadata) }
+    }
+
+    private static func normalizedAbsolutePath(from rawValue: String) -> String? {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let url = URL(string: trimmed), url.isFileURL {
+            return URL(fileURLWithPath: url.path).standardizedFileURL.path
+        }
+        guard trimmed.hasPrefix("/") else {
+            return nil
+        }
+        return URL(fileURLWithPath: trimmed).standardizedFileURL.path
     }
 
     static func webEnvironmentIds(from rawURL: String) -> [String] {
@@ -247,6 +292,129 @@ final class BrowserEnvironmentProvider: SpecializedEnvironmentProvider {
         }
         return ids
     }
+
+    static func warningForNonAbsoluteDirectoryCandidate(rawValue: String, app: ForegroundApp) {
+        logger.warning("Skipping non-absolute directory candidate for bundleId=\(app.bundleId, privacy: .public): \(rawValue, privacy: .public)")
+    }
+}
+
+@MainActor
+final class ObsidianEnvironmentProvider: SpecializedEnvironmentProvider {
+    private static let configURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/obsidian/obsidian.json")
+    private static let pollInterval: TimeInterval = 5
+
+    var onStateChange: (() -> Void)?
+    var currentAppEnvironmentId: String? { nil }
+    var currentSiteEnvironmentId: String? { nil }
+
+    private let registration: EnvironmentRegistrationController
+    private var pollTimer: Timer?
+    private var currentApp: ForegroundApp?
+
+    init(register: @escaping ([EnvironmentCandidate], String) -> Void) {
+        self.registration = EnvironmentRegistrationController(register: register)
+    }
+
+    func isActive(for app: ForegroundApp) -> Bool {
+        app.bundleId == "md.obsidian"
+    }
+
+    func activate(app: ForegroundApp, title: String?) {
+        currentApp = app
+        startPolling()
+        poll()
+    }
+
+    func update(app: ForegroundApp, title: String?) {
+        currentApp = app
+    }
+
+    func deactivate() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+        currentApp = nil
+        registration.clear()
+        onStateChange?()
+    }
+
+    func setServerOnline(_ online: Bool) {
+        registration.setServerOnline(online)
+    }
+
+    private func startPolling() {
+        pollTimer?.invalidate()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.poll()
+            }
+        }
+    }
+
+    private func poll() {
+        guard let currentApp else { return }
+        let candidates = Self.candidates(for: currentApp)
+        registration.emitNow(candidates: candidates, reason: "obsidian")
+        onStateChange?()
+    }
+
+    static func candidates(for app: ForegroundApp) -> [EnvironmentCandidate] {
+        guard let data = try? Data(contentsOf: configURL),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let vaults = root["vaults"] as? [String: Any] else {
+            return []
+        }
+
+        var candidatesById: [String: EnvironmentCandidate] = [:]
+        for value in vaults.values {
+            guard let entry = value as? [String: Any],
+                  let isOpen = entry["open"] as? Bool, isOpen,
+                  let path = entry["path"] as? String, !path.isEmpty else {
+                continue
+            }
+            let vaultPath = URL(fileURLWithPath: path).standardizedFileURL.path
+            let vaultName = URL(fileURLWithPath: vaultPath).lastPathComponent
+            let vaultMetadata: [String: JSONValue] = [
+                "bundleId": .string(app.bundleId),
+                "appName": .string(app.name),
+                "vaultName": .string(vaultName),
+                "vaultPath": .string(vaultPath),
+                "sourceName": .string("\(app.name) · \(vaultName)"),
+            ]
+            let vaultCandidate = EnvironmentCandidate(
+                id: "mac:\(app.bundleId)/\(EnvironmentIDEncoding.encodePathComponent(vaultName))",
+                metadata: vaultMetadata
+            )
+            candidatesById[vaultCandidate.id] = vaultCandidate
+
+            for pluginId in enabledCommunityPlugins(vaultPath: vaultPath) {
+                let pluginCandidate = EnvironmentCandidate(
+                    id: "mac:\(app.bundleId)/_plugin/\(EnvironmentIDEncoding.encodePathComponent(pluginId))",
+                    metadata: [
+                        "bundleId": .string(app.bundleId),
+                        "appName": .string(app.name),
+                        "pluginId": .string(pluginId),
+                        "sourceName": .string("\(app.name) Plugin · \(pluginId)"),
+                    ]
+                )
+                candidatesById[pluginCandidate.id] = pluginCandidate
+            }
+        }
+
+        return candidatesById.values.sorted { lhs, rhs in
+            EnvironmentIDEncoding.depth(lhs.id) < EnvironmentIDEncoding.depth(rhs.id)
+        }
+    }
+
+    private static func enabledCommunityPlugins(vaultPath: String) -> [String] {
+        let pluginsURL = URL(fileURLWithPath: vaultPath)
+            .appendingPathComponent(".obsidian/community-plugins.json")
+        guard let data = try? Data(contentsOf: pluginsURL),
+              let plugins = try? JSONSerialization.jsonObject(with: data) as? [String] else {
+            return []
+        }
+        return Array(Set(plugins.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })).sorted()
+    }
 }
 
 enum EnvironmentIDEncoding {
@@ -267,14 +435,16 @@ final class AppEnvironmentProvider {
     private let api: RookAPI
     private let monitor = ForegroundAppMonitor()
     private let environmentFocusDelay: TimeInterval
-    private let specializedProviders: [SpecializedEnvironmentProvider]
+    private let specializedProvidersByBundleId: [String: SpecializedEnvironmentProvider]
+    private let genericProvider: SpecializedEnvironmentProvider
     private let baseRegistration: EnvironmentRegistrationController
-    private var activeSpecialist: SpecializedEnvironmentProvider?
+    private var activeProvider: SpecializedEnvironmentProvider?
     private var currentApp: ForegroundApp?
     private var isServerOnline = false
 
     private var lastLoggedTitle: String?
     private var lastLoggedURL: String?
+    private var lastLoggedDocumentValues: [String] = []
     private var lastLoggedBundleId: String?
     private var hasLoggedContext = false
 
@@ -283,11 +453,7 @@ final class AppEnvironmentProvider {
     private(set) var foregroundAppName: String?
     private(set) var foregroundWindowTitle: String?
 
-    init(
-        api: RookAPI,
-        environmentFocusDelay: TimeInterval = 5,
-        specializedProviders: [SpecializedEnvironmentProvider]? = nil
-    ) {
+    init(api: RookAPI, environmentFocusDelay: TimeInterval = 1) {
         self.api = api
         self.environmentFocusDelay = environmentFocusDelay
         let registerClosure: ([EnvironmentCandidate], String) -> Void = { candidates, reason in
@@ -305,16 +471,12 @@ final class AppEnvironmentProvider {
             }
         }
         self.baseRegistration = EnvironmentRegistrationController(register: registerClosure)
-        if let specializedProviders {
-            self.specializedProviders = specializedProviders
-        } else {
-            self.specializedProviders = [
-                ObsidianEnvironmentProvider(dwellDelay: environmentFocusDelay, register: registerClosure),
-                BrowserEnvironmentProvider(dwellDelay: environmentFocusDelay, register: registerClosure),
-            ]
-        }
+        let obsidianProvider = ObsidianEnvironmentProvider(register: registerClosure)
+        let genericProvider = GenericEnvironmentProvider(register: registerClosure)
+        self.specializedProvidersByBundleId = ["md.obsidian": obsidianProvider]
+        self.genericProvider = genericProvider
 
-        for provider in self.specializedProviders {
+        for provider in Array(self.specializedProvidersByBundleId.values) + [self.genericProvider] {
             provider.onStateChange = { [weak self] in
                 self?.syncPublishedEnvironmentState()
             }
@@ -335,13 +497,13 @@ final class AppEnvironmentProvider {
     func stop() {
         monitor.stop()
         baseRegistration.clear()
-        activeSpecialist?.deactivate()
+        activeProvider?.deactivate()
     }
 
     func setServerOnline(_ online: Bool) {
         isServerOnline = online
         baseRegistration.setServerOnline(online)
-        activeSpecialist?.setServerOnline(online)
+        activeProvider?.setServerOnline(online)
     }
 
     func refreshCurrentContext() {
@@ -355,7 +517,7 @@ final class AppEnvironmentProvider {
         foregroundAppName = app.name
         foregroundWindowTitle = title
         currentApp = app
-        activateSpecialistIfNeeded(for: app, title: title)
+        activateProviderIfNeeded(for: app, title: title)
         updateBaseEnvironment(for: app, title: title)
         syncPublishedEnvironmentState()
     }
@@ -365,19 +527,20 @@ final class AppEnvironmentProvider {
         foregroundAppName = app.name
         foregroundWindowTitle = title
         currentApp = app
-        activeSpecialist?.update(app: app, title: title)
+        activeProvider?.update(app: app, title: title)
         syncPublishedEnvironmentState()
     }
 
-    private func activateSpecialistIfNeeded(for app: ForegroundApp, title: String?) {
-        if let activeSpecialist, activeSpecialist.isActive(for: app) {
-            activeSpecialist.update(app: app, title: title)
+    private func activateProviderIfNeeded(for app: ForegroundApp, title: String?) {
+        let nextProvider = specializedProvidersByBundleId[app.bundleId] ?? genericProvider
+        if let activeProvider, activeProvider === nextProvider {
+            activeProvider.update(app: app, title: title)
             return
         }
-        activeSpecialist?.deactivate()
-        activeSpecialist = specializedProviders.first(where: { $0.isActive(for: app) })
-        activeSpecialist?.setServerOnline(isServerOnline)
-        activeSpecialist?.activate(app: app, title: title)
+        activeProvider?.deactivate()
+        activeProvider = nextProvider
+        activeProvider?.setServerOnline(isServerOnline)
+        activeProvider?.activate(app: app, title: title)
     }
 
     private func updateBaseEnvironment(for app: ForegroundApp, title: String?) {
@@ -396,35 +559,35 @@ final class AppEnvironmentProvider {
     }
 
     private func syncPublishedEnvironmentState() {
-        let baseId = currentApp.map { "mac:\($0.bundleId)" }
-        foregroundEnvironmentId = activeSpecialist?.currentAppEnvironmentId ?? baseId
-        foregroundSiteEnvironmentId = activeSpecialist?.currentSiteEnvironmentId
+        foregroundEnvironmentId = currentApp.map { "mac:\($0.bundleId)" }
+        foregroundSiteEnvironmentId = nil
         onStateChange?()
     }
 
     private func logRawContext(app: ForegroundApp, title: String?, reason: String) {
-        let isBrowser = BrowserEnvironmentProvider.bundleIds.contains(app.bundleId)
-        let browserURL = isBrowser ? AXReader.activeTabURL(pid: app.pid) : nil
+        let documentValues = AXReader.focusedWindowDocumentValues(pid: app.pid)
+        let webURL = AXReader.activeTabURL(pid: app.pid)
         let appChanged = app.bundleId != lastLoggedBundleId
-        let urlChanged = browserURL != lastLoggedURL
         let titleChanged = title != lastLoggedTitle
-        if hasLoggedContext, !appChanged, !titleChanged, !urlChanged {
+        let urlChanged = webURL != lastLoggedURL
+        let documentChanged = documentValues != lastLoggedDocumentValues
+        if hasLoggedContext, !appChanged, !titleChanged, !urlChanged, !documentChanged {
             return
         }
         hasLoggedContext = true
         lastLoggedBundleId = app.bundleId
         lastLoggedTitle = title
-        lastLoggedURL = browserURL
+        lastLoggedURL = webURL
+        lastLoggedDocumentValues = documentValues
 
         var lines: [String] = []
         lines.append("[RAW-CONTEXT] reason=\(reason)")
         lines.append("  mac:          \(app.name)  bundleId=\(app.bundleId)  pid=\(app.pid)")
-        lines.append("  isBrowser:    \(isBrowser)")
         let titleText = title.map { "\"\($0)\"" } ?? "(null)"
         lines.append("  windowTitle:  \(titleText)")
-        if isBrowser {
-            let browserURLText = browserURL ?? "(null — AX web-content tree not ready or not a browser tab)"
-            lines.append("  browserURL:   \(browserURLText)")
+        lines.append("  axDocument:   \(documentValues.isEmpty ? "(none)" : documentValues.joined(separator: " | "))")
+        if let webURL {
+            lines.append("  axWebURL:     \(webURL)")
         }
         lines.append("  trustedAX:    \(AXReader.isTrusted())")
         for line in lines {
@@ -653,7 +816,7 @@ final class EnvironmentListController {
         refreshEnvironmentList(sessionId: sessionId(), showLoading: true)
         autoRefreshTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { break }
                 await MainActor.run {
                     self.refreshEnvironmentList(sessionId: sessionId(), showLoading: false)

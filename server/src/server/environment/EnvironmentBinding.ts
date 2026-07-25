@@ -27,7 +27,7 @@ function resolveEnvironmentDir(environmentId: string, root: string): string | nu
   const colonIndex = environmentId.indexOf(":");
   if (colonIndex === -1) return null;
   const kind = environmentId.slice(0, colonIndex);
-  const envPath = environmentId.slice(colonIndex + 1);
+  const envPath = environmentId.slice(colonIndex + 1).replace(/^[/\\]+/, "");
   if (!kind || !envPath) return null;
   return path.join(root, kind, envPath);
 }

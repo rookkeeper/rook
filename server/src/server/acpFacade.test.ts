@@ -4,7 +4,7 @@ import { buildServer } from "./index.js";
 
 const PORT = 18999;
 
-function connect(): Promise<WebSocket> {
+function connect(): Promise<any> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`ws://127.0.0.1:${PORT}/api/ws`);
     socket.on("open", () => resolve(socket));
@@ -12,21 +12,21 @@ function connect(): Promise<WebSocket> {
   });
 }
 
-function send(ws: WebSocket, id: number, method: string, params: Record<string, unknown> = {}): void {
+function send(ws: any, id: number, method: string, params: Record<string, unknown> = {}): void {
   ws.send(JSON.stringify({ jsonrpc: "2.0", id: String(id), method, params }));
 }
 
-function notify(ws: WebSocket, method: string, params: Record<string, unknown> = {}): void {
+function notify(ws: any, method: string, params: Record<string, unknown> = {}): void {
   ws.send(JSON.stringify({ jsonrpc: "2.0", method, params }));
 }
 
-function recv(ws: WebSocket): Promise<Record<string, unknown>> {
+function recv(ws: any): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
-    ws.once("message", (data) => resolve(JSON.parse(String(data))));
+    ws.once("message", (data: unknown) => resolve(JSON.parse(String(data))));
   });
 }
 
-async function request(ws: WebSocket, id: number, method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+async function request(ws: any, id: number, method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   send(ws, id, method, params);
   while (true) {
     const msg = await recv(ws);
@@ -42,7 +42,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
 
   beforeAll(async () => {
-    app = await buildServer({ logger: false, environmentDecisionStoreLocation: ":memory:", authToken: "" });
+    app = await buildServer({ environmentDecisionStoreLocation: ":memory:", authToken: "" });
     await app.listen({ host: "127.0.0.1", port: PORT });
   });
 
