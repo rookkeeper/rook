@@ -30,7 +30,6 @@
 		E1AE321D976D7E91E7CCE85F /* EnvironmentOfferControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700CE33894B323CBE9D99B12 /* EnvironmentOfferControllerTests.swift */; };
 		EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0087B8D63F86E9DD505D802D /* LogViewerView.swift */; };
 		EC3CCE47D902A251BD27408A /* RookMacChatSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */; };
-		846A32C3BB81E3C29B621792 /* SessionHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30877432D1026706D7E805DA /* SessionHandle.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,7 +68,6 @@
 		D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
 		DE39DA6CCC172D89C0BD7648 /* EnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentProviderTests.swift; sourceTree = "<group>"; };
 		E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacChatSessionController.swift; sourceTree = "<group>"; };
-		30877432D1026706D7E805DA /* SessionHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionHandle.swift; sourceTree = "<group>"; };
 		FCDBF5403D71795728D9928A /* MacBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBridge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -138,7 +136,6 @@
 		665805576D7C265839A301AE /* Models */ = {
 			isa = PBXGroup;
 			children = (
-				30877432D1026706D7E805DA /* SessionHandle.swift */,
 				E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */,
 				60DF8054837AA98A422E1919 /* RookMacModel.swift */,
 				269B251888C4528269DA7E81 /* RookMacSupport.swift */,
@@ -284,7 +281,6 @@
 				C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */,
 				EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */,
 				86F91627A128BBD4CBF341B2 /* MacBridge.swift in Sources */,
-				846A32C3BB81E3C29B621792 /* SessionHandle.swift in Sources */,
 				BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */,
 				EC3CCE47D902A251BD27408A /* RookMacChatSessionController.swift in Sources */,
 				9E2E7BC2509E40784F0BCA14 /* RookMacModel.swift in Sources */,

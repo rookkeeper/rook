@@ -261,10 +261,11 @@ class RookViewModel(
         autoResumeAttempted = true
         scope.launch {
             try {
-                ensureSocketConnected()
-                val recent = socket.sessionList().firstOrNull()?.let(::AgentSessionSummary) ?: return@launch
-                socket.loadSession(recent.id)
-                enterChat(recent, resumed = true, switchToChat = false)
+                if (_sessions.value.isEmpty()) {
+                    _sessions.value = api.sessions().map(::AgentSessionSummary)
+                }
+                val recent = _sessions.value.firstOrNull() ?: return@launch
+                resumeSession(recent)
             } catch (_: Exception) {
             }
         }
@@ -276,8 +277,7 @@ class RookViewModel(
         scope.launch {
             _sessionsLoading.value = true
             try {
-                ensureSocketConnected()
-                _sessions.value = socket.sessionList().map(::AgentSessionSummary)
+                _sessions.value = api.sessions().map(::AgentSessionSummary)
                 _sessionsError.value = ""
             } catch (e: Exception) {
                 _sessionsError.value = e.message ?: "Failed to load sessions"

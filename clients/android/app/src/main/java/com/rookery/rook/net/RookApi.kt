@@ -92,6 +92,12 @@ class RookApi(
         return json.decodeFromJsonElement(RuntimeResponse.serializer(), body).runtimes
     }
 
+    suspend fun sessions(): List<JsonObject> {
+        @Serializable data class SessionsResponse(val sessions: List<JsonObject>)
+        val body = getJson("api/sessions")
+        return json.decodeFromJsonElement(SessionsResponse.serializer(), body).sessions
+    }
+
     suspend fun environmentPreview(environmentId: String): EnvironmentPreview {
         val body = getJson("api/environments/preview", mapOf("environmentId" to environmentId))
         return json.decodeFromJsonElement(EnvironmentPreview.serializer(), body)

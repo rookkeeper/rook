@@ -85,14 +85,12 @@ final class RookModel: ObservableObject {
     @Published var authTokenString: String
 
     private(set) var api: RookAPI
-    private let socket = AcpSocket()
+    private var handles: [String: SessionHandle] = [:]
     private var healthTimer: Timer?
     private var environmentListAutoRefreshTask: Task<Void, Never>?
+    private var autoResumeAttempted = false
     private var blockCounter = 0
     private var enteredEnvironments: Set<String> = []
-    private var autoResumeAttempted = false
-    private var reconnectTask: Task<Void, Never>?
-    private var userCancelledRun = false
 
     init() {
         let env = ProcessInfo.processInfo.environment["ROOK_SERVER_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -125,12 +123,6 @@ final class RookModel: ObservableObject {
             authToken: authToken
         )
 
-        socket.onEvent = { [weak self] event in
-            self?.handleSocketEvent(event)
-        }
-        socket.onConnectionChange = { [weak self] connected in
-            self?.handleSocketConnectionChange(connected)
-        }
         healthTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 await self?.refreshHealth()
@@ -400,7 +392,7 @@ final class RookModel: ObservableObject {
             KeychainStore.setString(trimmedToken, for: "RookAuthToken")
         }
         api = RookAPI(baseURL: url, authToken: trimmedToken)
-        socket.disconnect()
+        currentHandle?.close()
         currentSession = nil
         Task { await refreshHealth() }
     }
@@ -450,6 +442,11 @@ final class RookModel: ObservableObject {
 
     // MARK: - Runtimes & sessions
 
+    private var currentHandle: SessionHandle? {
+        guard let session = currentSession else { return nil }
+        return handles[session.id]
+    }
+
     func loadAgents() async {
         do {
             agents = try await api.agents()
@@ -475,18 +472,16 @@ final class RookModel: ObservableObject {
     }
 
     private func ensureSocketConnected() async throws {
-        _ = try await socket.connect(request: api.webSocketRequest())
+        // No longer needed — SessionHandle manages its own socket.
     }
 
     private func autoResumeRecentSessionIfNeeded() async {
         guard !autoResumeAttempted, currentSession == nil else { return }
         autoResumeAttempted = true
         do {
-            try await ensureSocketConnected()
-            let recent = try await socket.sessionList().first
-            guard let recent else { return }
-            try await socket.loadSession(recent.id)
-            enterChat(session: recent, resumed: true, switchToChat: false)
+            if sessions.isEmpty { sessions = try await api.sessions() }
+            guard let recent = sessions.first else { return }
+            resumeSession(recent)
         } catch {
             sessionsError = error.localizedDescription
         }
@@ -499,8 +494,7 @@ final class RookModel: ObservableObject {
         sessionsLoading = true
         defer { sessionsLoading = false }
         do {
-            try await ensureSocketConnected()
-            sessions = try await socket.sessionList()
+            sessions = try await api.sessions()
             sessionsError = ""
         } catch {
             sessionsError = error.localizedDescription
@@ -513,11 +507,13 @@ final class RookModel: ObservableObject {
         Task {
             defer { startingSession = false }
             do {
-                try await ensureSocketConnected()
-                let sessionId = try await socket.createSession(runtimeId: agentId, title: trimmed.isEmpty ? "session" : trimmed, cwd: FileManager.default.currentDirectoryPath)
+                let tempSocket = AcpSocket()
+                _ = try await tempSocket.connect(request: api.webSocketRequest())
+                let sessionId = try await tempSocket.createSession(runtimeId: agentId, title: trimmed.isEmpty ? "session" : trimmed, cwd: FileManager.default.currentDirectoryPath)
+                tempSocket.disconnect()
                 await loadSessions()
                 if let session = sessions.first(where: { $0.id == sessionId }) {
-                    enterChat(session: session, resumed: false)
+                    resumeSession(session)
                 }
             } catch {
                 sessionsError = error.localizedDescription
@@ -530,9 +526,17 @@ final class RookModel: ObservableObject {
         Task {
             defer { startingSession = false }
             do {
-                try await ensureSocketConnected()
-                try await socket.loadSession(session.id)
-                enterChat(session: session, resumed: true, switchToChat: true)
+                let handle = getOrCreateHandle(for: session)
+                wireHandle(handle)
+                currentSession = session
+                try await handle.load()
+                selectedAgentId = nil
+                chatVisible = true
+                enteredEnvironments = []
+                environmentListItems = []
+                appendBlock(.system(text: "Resumed session — earlier messages aren't replayed."))
+                updateLiveActivity()
+                refreshEnvironmentList()
             } catch {
                 sessionsError = error.localizedDescription
             }
@@ -549,39 +553,63 @@ final class RookModel: ObservableObject {
         chatVisible = true
     }
 
-    private func enterChat(session: AgentSessionSummary, resumed: Bool, switchToChat: Bool = true) {
-        reconnectTask?.cancel()
-        selectedAgentId = nil
-        chatVisible = switchToChat
-        currentSession = session
-        blocks = []
-        queuedMessages = []
-        isRunning = false
-        statusLine = ""
-        contextUsage = nil
-        enteredEnvironments = []
-        environmentListItems = []
-        if resumed {
-            appendBlock(.system(text: "Resumed session — earlier messages aren't replayed."))
-        }
-        socket.selectSession(session.id)
-        updateLiveActivity()
-        refreshEnvironmentList()
-    }
-
     func leaveChat() {
-        socket.disconnect()
-        reconnectTask?.cancel()
+        for handle in handles.values { handle.close() }
+        handles = [:]
         currentSession = nil
         chatVisible = false
-        // Don't hard-end — if you're at a place with skills, the activity stays
-        // up as the ambient place card; updateLiveActivity ends it otherwise.
         updateLiveActivity()
+    }
+
+    private func getOrCreateHandle(for session: AgentSessionSummary) -> SessionHandle {
+        if let existing = handles[session.id] { return existing }
+        let handle = SessionHandle(sessionId: session.id, api: api)
+        handles[session.id] = handle
+        return handle
+    }
+
+    private func wireHandle(_ handle: SessionHandle) {
+        handle.onStateChange = { [weak self] in self?.syncChatState() }
+        handle.onAgentTextChunk = { [weak self] text in
+            guard let self, self.voiceModeEnabled else { return }
+            self.spokenTurnBuffer += text
+        }
+        handle.onEnvironmentOffered = { [weak self] offer in
+            self?.pendingOffer = offer
+            self?.offerBundles = []
+            self?.offerError = ""
+            self?.offerLoading = false
+        }
+        handle.onEnvironmentOfferResolved = { [weak self] _, _ in
+            self?.pendingOffer = nil
+            self?.offerBundles = []
+        }
+        handle.onEnvironmentEntered = { [weak self] environmentId in
+            self?.enteredEnvironments.insert(environmentId)
+        }
+        handle.onEnvironmentExited = { [weak self] environmentId, _ in
+            self?.enteredEnvironments.remove(environmentId)
+        }
+    }
+
+    private func syncChatState() {
+        guard let handle = currentHandle else { return }
+        blocks = handle.blocks
+        isRunning = handle.isRunning
+        statusLine = handle.statusLine
+        socketConnected = handle.socketConnected
+        reconnecting = handle.reconnecting
+        if let usage = handle.contextUsage {
+            contextUsage = (usage.used, usage.size)
+        } else {
+            contextUsage = nil
+        }
+        scrollTick = handle.scrollTick
     }
 
     // MARK: - App lifecycle (scenePhase)
 
-    private var pendingSocketResume = false
+    private var pendingSocketResume = false  // handled by SessionHandle reconnection
 
     /// iOS suspends the websocket when the app backgrounds. Tear it down
     /// intentionally (silent — no phantom "connection lost") and stop any
@@ -590,28 +618,21 @@ final class RookModel: ObservableObject {
     /// running in the background, so you're still "at" the place, and the
     /// server will age old registrations out if they stop being refreshed.
     func handleEnteredBackground() {
-        guard currentSession != nil else {
-            return
-        }
-        if socket.isConnected {
-            socket.disconnect()
-            pendingSocketResume = true
-        }
-        if isRunning {
-            finalizeStreamingBlocks()
-            isRunning = false
-            statusLine = ""
-        }
+        guard currentSession != nil else { return }
+        pendingSocketResume = true
+        // SessionHandle manages its own socket lifecycle.
     }
 
     func handleBecameActive() {
         reannouncePlaceEnvironment()
-        // Start/refresh the Live Activity now that we're foreground (Activity.request
-        // is foreground-only, so a background place arrival couldn't start it).
         updateLiveActivity()
-        if pendingSocketResume, currentSession != nil, !socket.isConnected {
+        if pendingSocketResume, let session = currentSession {
             pendingSocketResume = false
-            scheduleReconnect(delaySeconds: 0)
+            Task {
+                let handle = getOrCreateHandle(for: session)
+                wireHandle(handle)
+                try? await handle.load()
+            }
         }
         Task { await refreshHealth() }
     }
@@ -619,246 +640,25 @@ final class RookModel: ObservableObject {
     // MARK: - Chat
 
     func send(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, currentSession != nil else {
-            return
-        }
-        if isRunning || !socket.isConnected {
-            queuedMessages.append(trimmed)
-            if !socket.isConnected {
-                scheduleReconnect(delaySeconds: 0)
-            }
-            return
-        }
-        deliver(trimmed)
-    }
-
-    func stopAgent() {
-        guard isRunning else {
-            return
-        }
-        userCancelledRun = true
-        statusLine = "Stopping…"
-        voice.stopSpeaking()
-        spokenTurnBuffer = ""
-        socket.sendCancel()
-    }
-
-    func removeQueuedMessage(at index: Int) {
-        guard queuedMessages.indices.contains(index) else {
-            return
-        }
-        queuedMessages.remove(at: index)
-    }
-
-    private func deliver(_ text: String) {
-        finalizeStreamingBlocks()
-        appendBlock(.user(text: text))
-        isRunning = true
-        statusLine = "Agent is working…"
-        spokenTurnBuffer = ""
-        socket.sendPrompt(text: text)
+        currentHandle?.send(text)
         updateLiveActivity()
     }
 
-    private func deliverNextQueuedIfIdle() {
-        guard !isRunning, socket.isConnected, !queuedMessages.isEmpty else {
-            return
-        }
-        let next = queuedMessages.removeFirst()
-        Task {
-            try? await Task.sleep(nanoseconds: 120_000_000)
-            guard !isRunning, socket.isConnected else {
-                queuedMessages.insert(next, at: 0)
-                return
-            }
-            deliver(next)
-        }
+    func stopAgent() {
+        guard isRunning else { return }
+        voice.stopSpeaking()
+        spokenTurnBuffer = ""
+        currentHandle?.stopAgent()
     }
 
-    private func scheduleReconnect(delaySeconds: Double) {
-        guard currentSession != nil else {
-            return
-        }
-        reconnectTask?.cancel()
-        reconnecting = true
-        reconnectTask = Task {
-            if delaySeconds > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
-            }
-            guard !Task.isCancelled, let session = currentSession else {
-                return
-            }
-            if await api.health() {
-                do {
-                    try await ensureSocketConnected()
-                    try await socket.loadSession(session.id)
-                    guard !Task.isCancelled else { return }
-                    reconnecting = false
-                    deliverNextQueuedIfIdle()
-                } catch {
-                    if !Task.isCancelled { scheduleReconnect(delaySeconds: 3) }
-                }
-            } else if !Task.isCancelled {
-                scheduleReconnect(delaySeconds: 3)
-            }
-        }
+    func removeQueuedMessage(at index: Int) {
+        currentHandle?.removeQueuedMessage(at: index)
     }
 
-    private func handleSocketConnectionChange(_ connected: Bool) {
-        socketConnected = connected
-        if connected {
-            reconnectTask?.cancel()
-            reconnectTask = nil
-            reconnecting = false
-            return
-        }
-        if isRunning {
-            isRunning = false
-            statusLine = ""
-            finalizeStreamingBlocks()
-            appendErrorBlock(source: "connection", message: "Connection lost while the agent was running.")
-        }
-        if currentSession != nil {
-            scheduleReconnect(delaySeconds: 2)
-        }
-    }
 
-    // MARK: - Event reduction
 
-    func handleSocketEvent(_ event: AcpClientEvent) {
-        switch event {
-        case .userMessageChunk(let text):
-            appendBlock(.user(text: text))
-        case .agentMessageChunk(let text):
-            statusLine = "Responding…"
-            appendStreamingText(text, isThinking: false)
-            if voiceModeEnabled {
-                spokenTurnBuffer += text
-            }
-        case .agentThoughtChunk(let text):
-            statusLine = "Thinking…"
-            appendStreamingText(text, isThinking: true)
-        case .toolCallStarted(let toolCallId, let title, let kind, let status, let rawInput):
-            statusLine = "Using tool: \(title)"
-            let state = ToolBlockState(
-                toolCallId: toolCallId,
-                title: title,
-                kindLabel: kind,
-                status: status == "in_progress" ? .running : .pending,
-                arguments: rawInput ?? "",
-                output: ""
-            )
-            appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
-        case .toolCallUpdate(let toolCallId, let status, let toolName, let output):
-            updateTool(toolCallId) { tool in
-                if let toolName, tool.title.isEmpty {
-                    tool.title = toolName
-                }
-                switch status {
-                case "pending": tool.status = .pending
-                case "in_progress":
-                    tool.status = .running
-                    if let output { tool.output = output }
-                case "completed":
-                    tool.status = .completed
-                    if let output { tool.output = output }
-                case "failed":
-                    tool.status = .failed
-                    if let output { tool.output = output }
-                case "cancelled": tool.status = .cancelled
-                default: break
-                }
-            }
-        case .toolInputSnapshot(let toolCallId, _, let text):
-            updateTool(toolCallId) { tool in
-                tool.status = .inputStreaming
-                tool.arguments = text
-            }
-        case .toolInputDelta(let toolCallId, _, let delta):
-            updateTool(toolCallId) { tool in
-                tool.status = .inputStreaming
-                tool.arguments += delta
-            }
-        case .toolCallReady(let toolCallId, _):
-            updateTool(toolCallId) { tool in
-                tool.status = .ready
-            }
-        case .toolOutputSnapshot(let toolCallId, _, let text):
-            updateTool(toolCallId) { tool in
-                tool.status = .running
-                tool.output = text
-            }
-        case .toolOutputDelta(let toolCallId, _, let delta):
-            updateTool(toolCallId) { tool in
-                tool.status = .running
-                tool.output += delta
-            }
-        case .permissionRequest:
-            break
-        case .planUpdate(let entries):
-            upsertPlanBlock(entries)
-        case .usageUpdate(let used, let size, _):
-            contextUsage = (used, size)
-        case .modesState:
-            break
-        case .currentModeUpdate:
-            break
-        case .configOptionUpdate:
-            break
-        case .runCompleted(let stopReason):
-            finalizeStreamingBlocks()
-            if stopReason == "cancelled" {
-                finalizeActiveTools(as: .cancelled)
-            }
-            isRunning = false
-            statusLine = ""
-            userCancelledRun = false
-            if voiceModeEnabled, !spokenTurnBuffer.isEmpty {
-                voice.speak(spokenTurnBuffer)
-            }
-            spokenTurnBuffer = ""
-            updateLiveActivity()
-            deliverNextQueuedIfIdle()
-        case .runFailed(let message):
-            finalizeStreamingBlocks()
-            isRunning = false
-            statusLine = ""
-            spokenTurnBuffer = ""
-            if userCancelledRun {
-                finalizeActiveTools(as: .cancelled)
-                userCancelledRun = false
-                appendBlock(.system(text: "Stopped."))
-            } else {
-                appendErrorBlock(source: "run", message: message)
-            }
-            updateLiveActivity()
-            deliverNextQueuedIfIdle()
-        case .protocolError(let message):
-            appendErrorBlock(source: "protocol", message: message)
-        case .connectionError(let message):
-            appendErrorBlock(source: "connection", message: message)
-        case .environmentOffered(let offer):
-            handleEnvironmentOffered(offer)
-        case .environmentOfferResolved(let environmentId, let bundleHash):
-            handleEnvironmentOfferResolved(environmentId, bundleHash: bundleHash)
-        case .environmentEntered(let environmentId):
-            if enteredEnvironments.insert(environmentId).inserted {
-                let entered = nearbyCandidates.first { $0.environmentId == environmentId }
-                let websites = orderedUniqueWebsites(entered: entered, all: nearbyCandidates)
-                let label = locationBannerLabel(entered: entered, candidates: nearbyCandidates)
-                appendBlock(.environment(EnvironmentBanner(displayName: label, websites: websites)))
-            }
-            refreshEnvironmentList()
-        case .environmentExited(let environmentId, let error):
-            if enteredEnvironments.remove(environmentId) != nil {
-                let suffix = error.map { " (\($0))" } ?? ""
-                appendBlock(.system(text: "Exited environment \(environmentId)\(suffix)."))
-            }
-            refreshEnvironmentList()
-        }
-        scrollTick += 1
-    }
+
+
 
     /// Banner label for an entered location: the business name when one match is clearly
     /// best, "Surrounding businesses" when ambiguous, or nil (generic) when unknown.
@@ -899,89 +699,14 @@ final class RookModel: ObservableObject {
         appendBlock(.error(source: source, message: message))
     }
 
-    private func appendStreamingText(_ text: String, isThinking: Bool) {
-        if let last = blocks.indices.last {
-            switch blocks[last].kind {
-            case .assistantText(let existing, true) where !isThinking:
-                blocks[last].kind = .assistantText(text: existing + text, streaming: true)
-                return
-            case .thinking(let existing, true) where isThinking:
-                blocks[last].kind = .thinking(text: existing + text, streaming: true)
-                return
-            default:
-                break
-            }
-        }
-        if isThinking {
-            appendBlock(.thinking(text: text, streaming: true))
-        } else {
-            appendBlock(.assistantText(text: text, streaming: true))
-        }
-    }
 
-    private func finalizeStreamingBlocks() {
-        for index in blocks.indices {
-            switch blocks[index].kind {
-            case .assistantText(let text, true):
-                blocks[index].kind = .assistantText(text: text, streaming: false)
-            case .thinking(let text, true):
-                blocks[index].kind = .thinking(text: text, streaming: false)
-            default:
-                break
-            }
-        }
-    }
 
-    func finalizeActiveTools(as finalStatus: ToolBlockStatus) {
-        for index in blocks.indices {
-            guard case .tool(var state) = blocks[index].kind else { continue }
-            guard !state.status.isTerminal else { continue }
-            state.status = finalStatus
-            blocks[index].kind = .tool(state)
-        }
-    }
 
-    private func updateTool(_ toolCallId: String, _ mutate: (inout ToolBlockState) -> Void) {
-        for index in blocks.indices.reversed() {
-            if case .tool(var state) = blocks[index].kind, state.toolCallId == toolCallId {
-                mutate(&state)
-                blocks[index].kind = .tool(state)
-                return
-            }
-        }
-        var state = ToolBlockState(toolCallId: toolCallId, title: "Tool", kindLabel: "", status: .running, arguments: "", output: "")
-        mutate(&state)
-        appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
-    }
 
-    private func upsertPlanBlock(_ entries: [PlanEntry]) {
-        for index in blocks.indices.reversed() {
-            if case .plan = blocks[index].kind {
-                blocks[index].kind = .plan(entries: entries)
-                return
-            }
-        }
-        appendBlock(.plan(entries: entries))
-    }
 
     // MARK: - Environment offers
 
-    private func handleEnvironmentOffered(_ offer: EnvironmentOffer) {
-        guard pendingOffer?.environmentId != offer.environmentId else {
-            return
-        }
-        pendingOffer = offer
-        offerBundles = []
-        offerError = ""
-        offerLoading = false
-    }
 
-    private func handleEnvironmentOfferResolved(_ environmentId: String, bundleHash: String) {
-        guard pendingOffer?.environmentId == environmentId, pendingOffer?.bundleHash == bundleHash else {
-            return
-        }
-        clearOffer()
-    }
 
     func decideEnvironment(_ decision: String) {
         guard let offer = pendingOffer, let session = currentSession else {
@@ -989,7 +714,7 @@ final class RookModel: ObservableObject {
         }
         Task {
             do {
-                try await socket.resolveEnvironmentOffer(environmentId: offer.environmentId, bundleHash: offer.bundleHash, decision: decision)
+                try await currentHandle?.resolveEnvironmentOffer(environmentId: offer.environmentId, bundleHash: offer.bundleHash, decision: decision)
                 if decision == "accept" || decision == "approve" {
                     appendBlock(.system(text: "Bundle \(offer.bundleId) allowed for \(offer.environmentId)."))
                 }

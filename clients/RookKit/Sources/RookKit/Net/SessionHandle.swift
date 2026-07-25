@@ -1,36 +1,38 @@
 import Foundation
-import RookKit
 
 /// Owns a dedicated WebSocket, blocks, run state, and streaming state for one
 /// session.  Multiple handles coexist — switching sessions is just changing
 /// which handle the UI observes.
 @MainActor
-final class SessionHandle {
-    let sessionId: String
+public final class SessionHandle {
+    public let sessionId: String
 
-    var onStateChange: (() -> Void)?
-    var onEnvironmentOffered: ((EnvironmentOffer) -> Void)?
-    var onEnvironmentOfferResolved: ((String, String) -> Void)?
-    var onEnvironmentEntered: ((String) -> Void)?
-    var onEnvironmentExited: ((String, String?) -> Void)?
+    public var onStateChange: (() -> Void)?
+    public var onEnvironmentOffered: ((EnvironmentOffer) -> Void)?
+    public var onEnvironmentOfferResolved: ((String, String) -> Void)?
+    public var onEnvironmentEntered: ((String) -> Void)?
+    public var onEnvironmentExited: ((String, String?) -> Void)?
+
+    /// Called for every agent text chunk — iPhone uses this for voice synthesis buffering.
+    public var onAgentTextChunk: ((String) -> Void)?
 
     private let api: RookAPI
     private let socket = AcpSocket()
 
     // MARK: - Observable state (same shape ChatSessionController exposed)
-    private(set) var blocks: [ChatBlock] = [] { didSet { onStateChange?() } }
-    private(set) var queuedMessages: [QueuedChatMessage] = [] { didSet { onStateChange?() } }
-    private(set) var isRunning = false { didSet { onStateChange?() } }
-    private(set) var statusLine = "" { didSet { onStateChange?() } }
-    private(set) var socketConnected = false { didSet { onStateChange?() } }
-    private(set) var reconnecting = false { didSet { onStateChange?() } }
-    private(set) var contextUsage: ContextUsageState? { didSet { onStateChange?() } }
-    private(set) var currentModes: AcpModesState? { didSet { onStateChange?() } }
-    private(set) var configOptions: [AcpConfigOption] = [] { didSet { onStateChange?() } }
-    private(set) var pendingPermission: PendingPermissionRequest? { didSet { onStateChange?() } }
-    private(set) var lastStopReason: String? { didSet { onStateChange?() } }
-    private(set) var autoScrollEnabled = true { didSet { onStateChange?() } }
-    private(set) var scrollTick = 0 { didSet { onStateChange?() } }
+    public private(set) var blocks: [ChatBlock] = [] { didSet { onStateChange?() } }
+    public private(set) var queuedMessages: [QueuedChatMessage] = [] { didSet { onStateChange?() } }
+    public private(set) var isRunning = false { didSet { onStateChange?() } }
+    public private(set) var statusLine = "" { didSet { onStateChange?() } }
+    public private(set) var socketConnected = false { didSet { onStateChange?() } }
+    public private(set) var reconnecting = false { didSet { onStateChange?() } }
+    public private(set) var contextUsage: ContextUsageState? { didSet { onStateChange?() } }
+    public private(set) var currentModes: AcpModesState? { didSet { onStateChange?() } }
+    public private(set) var configOptions: [AcpConfigOption] = [] { didSet { onStateChange?() } }
+    public private(set) var pendingPermission: PendingPermissionRequest? { didSet { onStateChange?() } }
+    public private(set) var lastStopReason: String? { didSet { onStateChange?() } }
+    public private(set) var autoScrollEnabled = true { didSet { onStateChange?() } }
+    public private(set) var scrollTick = 0 { didSet { onStateChange?() } }
 
     // MARK: - Private streaming / replay state
     private var blockCounter = 0
@@ -48,7 +50,7 @@ final class SessionHandle {
     private var replayAssistantBuffer = ""
     private var replayThinkingBuffer = ""
 
-    init(sessionId: String, api: RookAPI) {
+    public init(sessionId: String, api: RookAPI) {
         self.sessionId = sessionId
         self.api = api
         socket.onEvent = { [weak self] event in
@@ -61,12 +63,12 @@ final class SessionHandle {
 
     // MARK: - Lifecycle
 
-    func connectAndLoad(title: String, cwd: String) async throws {
+    public func connectAndLoad(title: String, cwd: String) async throws {
         try await ensureSocketConnected()
         _ = try await socket.createSession(runtimeId: "", title: title, cwd: cwd)
     }
 
-    func load() async throws {
+    public func load() async throws {
         try await ensureSocketConnected()
         isReplaying = true
         replayUserBuffer = ""
@@ -79,13 +81,13 @@ final class SessionHandle {
         isRunning = false
     }
 
-    func close() {
+    public func close() {
         reconnectTask?.cancel()
         streamingFlushTask?.cancel()
         socket.disconnect()
     }
 
-    func stopAgent() {
+    public func stopAgent() {
         guard isRunning else { return }
         userCancelledRun = true
         statusLine = "Stopping…"
@@ -94,7 +96,7 @@ final class SessionHandle {
 
     // MARK: - Messaging
 
-    func send(_ text: String) {
+    public func send(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         if isRunning || !socket.isConnected {
@@ -107,24 +109,24 @@ final class SessionHandle {
         deliver(trimmed)
     }
 
-    func removeQueuedMessage(at index: Int) {
+    public func removeQueuedMessage(at index: Int) {
         guard queuedMessages.indices.contains(index) else { return }
         queuedMessages.remove(at: index)
     }
 
-    func beginEditingQueuedMessage(_ id: String) {
+    public func beginEditingQueuedMessage(_ id: String) {
         updateQueuedMessage(id) { $0.isEditing = true; $0.draftText = $0.text }
     }
 
-    func updateQueuedMessageDraft(_ id: String, text: String) {
+    public func updateQueuedMessageDraft(_ id: String, text: String) {
         updateQueuedMessage(id) { $0.draftText = text }
     }
 
-    func cancelEditingQueuedMessage(_ id: String) {
+    public func cancelEditingQueuedMessage(_ id: String) {
         updateQueuedMessage(id) { $0.isEditing = false; $0.draftText = $0.text }
     }
 
-    func saveQueuedMessageEdit(_ id: String) {
+    public func saveQueuedMessageEdit(_ id: String) {
         updateQueuedMessage(id) { message in
             let trimmed = message.draftText.trimmingCharacters(in: .whitespacesAndNewlines)
             message.text = trimmed.isEmpty ? message.text : trimmed
@@ -133,7 +135,7 @@ final class SessionHandle {
         }
     }
 
-    func decidePermission(optionId: String?) {
+    public func decidePermission(optionId: String?) {
         guard let pendingPermission else { return }
         self.pendingPermission = nil
         do {
@@ -143,43 +145,43 @@ final class SessionHandle {
         }
     }
 
-    func setMode(_ modeId: String) {
+    public func setMode(_ modeId: String) {
         Task {
             do { try await socket.setMode(modeId) }
             catch { appendErrorBlock(source: "protocol", message: error.localizedDescription) }
         }
     }
 
-    func setConfigOption(_ configId: String, value: String) {
+    public func setConfigOption(_ configId: String, value: String) {
         Task {
             do { try await socket.setConfigOption(configId: configId, value: value) }
             catch { appendErrorBlock(source: "protocol", message: error.localizedDescription) }
         }
     }
 
-    func resolveEnvironmentOffer(environmentId: String, bundleHash: String, decision: String) async throws {
+    public func resolveEnvironmentOffer(environmentId: String, bundleHash: String, decision: String) async throws {
         try await socket.resolveEnvironmentOffer(environmentId: environmentId, bundleHash: bundleHash, decision: decision)
     }
 
-    func refreshForCurrentSessionReset() {
+    public func refreshForCurrentSessionReset() {
         enteredEnvironments = []
     }
 
-    func resumeAutoScroll() {
+    public func resumeAutoScroll() {
         let wasEnabled = autoScrollEnabled
         autoScrollEnabled = true
         if !wasEnabled { scrollTick += 1 }
     }
 
-    func pauseAutoScroll() {
+    public func pauseAutoScroll() {
         autoScrollEnabled = false
     }
 
-    func appendSystemMessage(_ text: String) {
+    public func appendSystemMessage(_ text: String) {
         appendBlock(.system(text: text))
     }
 
-    func finalizeActiveTools(as finalStatus: ToolBlockStatus) {
+    public func finalizeActiveTools(as finalStatus: ToolBlockStatus) {
         for index in blocks.indices {
             guard case .tool(var state) = blocks[index].kind else { continue }
             guard !state.status.isTerminal else { continue }
@@ -278,6 +280,7 @@ final class SessionHandle {
             } else {
                 statusLine = "Responding…"
                 appendStreamingText(text, isThinking: false)
+                onAgentTextChunk?(text)
             }
         case .agentThoughtChunk(let text):
             if isReplaying {

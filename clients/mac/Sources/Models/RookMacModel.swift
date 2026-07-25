@@ -18,25 +18,6 @@ enum ServerState: Equatable {
     case online
 }
 
-struct QueuedChatMessage: Identifiable, Equatable {
-    let id: String
-    var text: String
-    var draftText: String
-    var isEditing = false
-}
-
-struct PendingPermissionRequest: Equatable {
-    var requestId: String
-    var toolCall: AcpPermissionToolCall
-    var options: [AcpPermissionOption]
-}
-
-struct ContextUsageState: Equatable {
-    var used: Int
-    var size: Int
-    var cost: AcpUsageCost?
-}
-
 @MainActor
 final class RookMacModel: ObservableObject {
     static weak var shared: RookMacModel?
