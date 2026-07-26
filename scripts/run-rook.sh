@@ -17,9 +17,9 @@ CURRENT_SERVER_PIDFILE="$RUN_ROOT/server.pid"
 SERVER_PORT="${ROOK_SERVER_PORT:-7665}"
 SERVER_BIND_HOST="127.0.0.1"
 SERVER_AUTH_TOKEN="${ROOK_AUTH_TOKEN:-}"
-DEFAULT_IOS_APP_BUNDLE_ID="com.rookery.Rook"
+DEFAULT_IOS_APP_BUNDLE_ID="com.rookkeeper.Rook"
 DEFAULT_IOS_WIDGET_BUNDLE_ID="${DEFAULT_IOS_APP_BUNDLE_ID}.RookWidgets"
-DEFAULT_IOS_TEST_BUNDLE_ID="com.rookery.RookTests"
+DEFAULT_IOS_TEST_BUNDLE_ID="com.rookkeeper.RookTests"
 
 mkdir -p "$RUN_ROOT" "$BUILD_ROOT"
 
@@ -37,7 +37,8 @@ usage() {
 Usage:
   ./scripts/run-rook.sh server
   ./scripts/run-rook.sh mac
-  ./scripts/run-rook.sh iphone [--device NAME_OR_UDID] [--team TEAM_ID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
+  ./scripts/run-rook.sh iphone [--device NAME_OR_UDID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
+  ./scripts/run-rook.sh sim [--device NAME_OR_UDID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
   ./scripts/run-rook.sh android
   ./scripts/run-rook.sh server mac iphone
   ./scripts/run-rook.sh stop
@@ -52,24 +53,24 @@ Notes:
   - mac uses localhost by default
   - iphone uses ROOK_REMOTE_HOSTNAME, ROOK_BIND_IP, or a non-localhost
     ROOK_SERVER_HOST by default; pass --server-url to override
+  - sim uses localhost by default; pass --server-url to override
   - android is currently a placeholder target
   - the server always binds localhost; ROOK_BIND_IP adds a second remote listener
   - the server runs as a detached background process and logs to .var/run-rook/server.log
-  - pass --team / ROOK_IOS_DEVELOPMENT_TEAM for iPhone code signing when needed
+  - iphone signing now follows the Xcode project’s configured DEVELOPMENT_TEAM and bundle identifiers
   - stop shuts down the server, mac app(s), iphone app(s), and android app if present
 EOF
 }
 
 TARGETS=()
 DEVICE_FILTER=""
-TEAM_ID="${ROOK_IOS_DEVELOPMENT_TEAM:-}"
 RESET_PERMISSIONS=0
 SERVER_URL=""
 SIMULATE_ARRIVAL=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    server|mac|iphone|android|stop)
+    server|mac|iphone|sim|android|stop)
       TARGETS+=("$1")
       shift
       ;;
@@ -79,10 +80,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --device)
       DEVICE_FILTER="${2:-}"
-      shift 2
-      ;;
-    --team)
-      TEAM_ID="${2:-}"
       shift 2
       ;;
     --server-url)
@@ -109,11 +106,13 @@ HAS_SERVER_TARGET=0
 HAS_SERVER_NEXT_TARGET=0
 HAS_IPHONE_TARGET=0
 HAS_MAC_TARGET=0
+HAS_SIM_TARGET=0
 HAS_ANDROID_TARGET=0
 for target in "${TARGETS[@]}"; do
   case "$target" in
     server) HAS_SERVER_TARGET=1 ;;
     iphone) HAS_IPHONE_TARGET=1 ;;
+    sim) HAS_SIM_TARGET=1 ;;
     mac) HAS_MAC_TARGET=1 ;;
     android) HAS_ANDROID_TARGET=1 ;;
     stop) ;;
@@ -156,6 +155,9 @@ for TARGET in "${TARGETS[@]}"; do
       ;;
     iphone)
       run_rook_target_iphone
+      ;;
+    sim)
+      run_rook_target_sim
       ;;
     android)
       run_rook_target_android

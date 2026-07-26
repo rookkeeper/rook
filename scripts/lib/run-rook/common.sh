@@ -164,15 +164,6 @@ PY
 )"
     if [[ -n "$udid" ]]; then
       xcrun devicectl device process terminate --device "$udid" "$DEFAULT_IOS_APP_BUNDLE_ID" >/dev/null 2>&1 || true
-      local stop_team stop_bundle_id _stop_widget_id _stop_test_id
-      stop_team="${TEAM_ID:-}"
-      if [[ -z "$stop_team" ]]; then
-        stop_team="$(auto_detect_team 2>/dev/null || true)"
-      fi
-      if [[ -n "$stop_team" ]]; then
-        IFS=$'\t' read -r stop_bundle_id _stop_widget_id _stop_test_id <<<"$(phone_bundle_ids "$stop_team")"
-        xcrun devicectl device process terminate --device "$udid" "$stop_bundle_id" >/dev/null 2>&1 || true
-      fi
     fi
   fi
   rm -f "$tmp"
@@ -210,41 +201,6 @@ ensure_xcode_project() {
     cd "$app_dir"
     xcodegen generate >/dev/null
   )
-}
-
-patch_iphone_project_bundle_ids() {
-  local project_path="$1"
-  local app_id="$2"
-  local widget_id="$3"
-  local test_id="$4"
-  python3 - <<'PY' "$project_path/project.pbxproj" "$app_id" "$widget_id" "$test_id"
-from pathlib import Path
-import sys
-pbxproj = Path(sys.argv[1])
-app_id, widget_id, test_id = sys.argv[2:5]
-text = pbxproj.read_text()
-text = text.replace("PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook.RookWidgets;", f"PRODUCT_BUNDLE_IDENTIFIER = {widget_id};")
-text = text.replace("PRODUCT_BUNDLE_IDENTIFIER = com.rookery.RookTests;", f"PRODUCT_BUNDLE_IDENTIFIER = {test_id};")
-text = text.replace("PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook;", f"PRODUCT_BUNDLE_IDENTIFIER = {app_id};")
-pbxproj.write_text(text)
-PY
-}
-
-sanitize_bundle_segment() {
-  local raw="$1"
-  raw="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')"
-  [[ -n "$raw" ]] || raw="dev"
-  printf '%s' "$raw"
-}
-
-phone_bundle_ids() {
-  local team="$1"
-  local team_segment
-  team_segment="$(sanitize_bundle_segment "$team")"
-  local app_id="com.rookery.${team_segment}.Rook"
-  local widget_id="${app_id}.RookWidgets"
-  local test_id="com.rookery.${team_segment}.RookTests"
-  printf '%s\t%s\t%s\n' "$app_id" "$widget_id" "$test_id"
 }
 
 current_remote_target() {
@@ -310,49 +266,45 @@ PY
   return "$status"
 }
 
-auto_detect_team() {
-  local ids=""
-  local prov_paths=()
-  while IFS= read -r path; do
-    prov_paths+=("$path")
-  done < <(find "$HOME/Library/Developer/Xcode/DerivedData" "$HOME/Library/MobileDevice/Provisioning Profiles" \
-    \( -path '*/Rook.app/embedded.mobileprovision' -o -name '*.mobileprovision' \) 2>/dev/null)
-
-  if [[ ${#prov_paths[@]} -gt 0 ]]; then
-    ids="$(python3 - <<'PY' "${prov_paths[@]}"
-import plistlib, subprocess, sys
-ids=set()
-for path in sys.argv[1:]:
-    try:
-        xml=subprocess.check_output(["security", "cms", "-D", "-i", path], stderr=subprocess.DEVNULL)
-        plist=plistlib.loads(xml)
-        for team in plist.get("TeamIdentifier", []):
-            if team:
-                ids.add(team.upper())
-    except Exception:
-        pass
-print("\n".join(sorted(ids)))
-PY
-)"
-  fi
-
-  if [[ -z "${ids//[$'\n\r\t ']/}" ]]; then
-    ids="$(security find-certificate -a -c "Apple Development" 2>/dev/null | python3 -c '
+resolve_ios_simulator() {
+  local tmp
+  tmp="$(mktemp)"
+  xcrun simctl list devices available >"$tmp"
+  python3 - <<'PY' "$tmp" "$DEVICE_FILTER"
 import re,sys
-text=sys.stdin.read()
-ids=sorted({match.upper() for match in re.findall(r"Apple Development: .* \(([^)]+)\)", text)})
-print("\\n".join(ids))
-')"
-  fi
-
-  ids="$(printf '%s\n' "$ids" | sed '/^$/d' || true)"
-  local count
-  count="$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')"
-  if [[ "$count" == "1" ]]; then
-    printf '%s' "$ids"
-    return 0
-  fi
-  return 1
+path,want=sys.argv[1],sys.argv[2].strip().lower()
+rows=[]
+with open(path) as f:
+    for raw in f:
+        line=raw.strip()
+        m=re.match(r'^(.*?) \(([0-9A-F-]+)\) \((Shutdown|Booted)\)$', line)
+        if not m:
+            continue
+        name,udid,state=m.groups()
+        if not name.startswith('iPhone'):
+            continue
+        rows.append((name,udid,state))
+if want:
+    matches=[r for r in rows if want in f"{r[0]} {r[1]}".lower()]
+    if len(matches)==1:
+        print(f"{matches[0][0]}\t{matches[0][1]}\t{matches[0][2]}")
+        raise SystemExit(0)
+    if len(matches)>1:
+        print('MULTIPLE', file=sys.stderr)
+        for name,udid,state in matches:
+            print(f"- {name} ({udid}) [{state}]", file=sys.stderr)
+        raise SystemExit(2)
+    raise SystemExit(1)
+if rows:
+    booted=[r for r in rows if r[2]=='Booted']
+    chosen=(booted or rows)[0]
+    print(f"{chosen[0]}\t{chosen[1]}\t{chosen[2]}")
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+  local status=$?
+  rm -f "$tmp"
+  return "$status"
 }
 
 ensure_app_dir() {
@@ -408,6 +360,23 @@ open_mac_app_bundle() {
   activate_mac_app "$app_path"
 }
 
+ios_launch_env_json() {
+  local launch_env
+  if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
+    launch_env="{\"ROOK_AUTH_TOKEN\":$(json_escape "$SERVER_AUTH_TOKEN")"
+  else
+    launch_env="{"
+  fi
+  if [[ -n "$SIMULATE_ARRIVAL" ]]; then
+    log "simulating arrival at $SIMULATE_ARRIVAL (DEBUG ROOK_SIMULATE_ARRIVAL)"
+    if [[ "$launch_env" != "{" ]]; then
+      launch_env+=","
+    fi
+    launch_env+="\"ROOK_SIMULATE_ARRIVAL\":$(json_escape "$SIMULATE_ARRIVAL")"
+  fi
+  printf '%s' "$launch_env"
+}
+
 build_iphone_app() {
   need_cmd xcodebuild
   need_cmd xcrun
@@ -422,14 +391,6 @@ build_iphone_app() {
   local phone_name phone_udid
   IFS=$'\t' read -r phone_name phone_udid <<<"$phone"
   log "using device: $phone_name ($phone_udid)"
-
-  if [[ -z "$TEAM_ID" ]]; then
-    if TEAM_ID="$(auto_detect_team)"; then
-      warn "using local Apple Development team $TEAM_ID from Keychain; teammates should pass --team or ROOK_IOS_DEVELOPMENT_TEAM"
-    else
-      die "could not auto-detect a single Apple Development team; pass --team TEAM_ID or export ROOK_IOS_DEVELOPMENT_TEAM"
-    fi
-  fi
 
   local url
   if [[ -n "$SERVER_URL" ]]; then
@@ -454,11 +415,8 @@ EOF
 
   local proj="$app_dir/Rook.xcodeproj"
   local derived="$BUILD_ROOT/$derived_name"
-  local phone_app_bundle_id phone_widget_bundle_id phone_test_bundle_id
-  IFS=$'\t' read -r phone_app_bundle_id phone_widget_bundle_id phone_test_bundle_id <<<"$(phone_bundle_ids "$TEAM_ID")"
-  log "using iPhone bundle ids: $phone_app_bundle_id (+ widget/test variants)"
+  log "using iPhone bundle ids: $DEFAULT_IOS_APP_BUNDLE_ID (+ widget/test variants)"
   ensure_xcode_project "$app_dir" "$proj"
-  patch_iphone_project_bundle_ids "$proj" "$phone_app_bundle_id" "$phone_widget_bundle_id" "$phone_test_bundle_id"
   log "building Rook for $phone_name"
   local build_log="$RUN_ROOT/${derived_name}-build.log"
   if ! xcodebuild \
@@ -470,7 +428,6 @@ EOF
     -allowProvisioningUpdates \
     -allowProvisioningDeviceRegistration \
     CODE_SIGN_STYLE=Automatic \
-    DEVELOPMENT_TEAM="$TEAM_ID" \
     build >"$build_log" 2>&1; then
     tail -n 80 "$build_log" >&2 || true
     die "iPhone build failed (full log: $build_log)"
@@ -481,28 +438,23 @@ EOF
 
   if (( RESET_PERMISSIONS )); then
     log "uninstalling Rook on $phone_name to reset its privacy permissions"
-    xcrun devicectl device uninstall app --device "$phone_udid" "$phone_app_bundle_id" >/dev/null 2>&1 || true
+    xcrun devicectl device uninstall app --device "$phone_udid" "$DEFAULT_IOS_APP_BUNDLE_ID" >/dev/null 2>&1 || true
   fi
   log "installing Rook on $phone_name"
   xcrun devicectl device install app --device "$phone_udid" "$app_path" >/dev/null
   log "launching Rook on $phone_name with ROOK_SERVER_BASE_URL=$url"
-  local launch_env
-  if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
-    launch_env="{\"ROOK_SERVER_BASE_URL\":$(json_escape "$url"),\"ROOK_AUTH_TOKEN\":$(json_escape "$SERVER_AUTH_TOKEN")"
-  else
-    launch_env="{\"ROOK_SERVER_BASE_URL\":$(json_escape "$url")"
+  local phone_launch_env
+  phone_launch_env="$(ios_launch_env_json)"
+  if [[ "$phone_launch_env" != "{" ]]; then
+    phone_launch_env+=","
   fi
-  if [[ -n "$SIMULATE_ARRIVAL" ]]; then
-    log "simulating arrival at $SIMULATE_ARRIVAL (DEBUG ROOK_SIMULATE_ARRIVAL)"
-    launch_env+=",\"ROOK_SIMULATE_ARRIVAL\":$(json_escape "$SIMULATE_ARRIVAL")"
-  fi
-  launch_env+="}"
+  phone_launch_env+="\"ROOK_SERVER_BASE_URL\":$(json_escape "$url")}"
   local launch_log="$RUN_ROOT/${derived_name}-launch.log"
   if ! xcrun devicectl device process launch \
     --device "$phone_udid" \
     --terminate-existing \
-    -e "$launch_env" \
-    "$phone_app_bundle_id" >"$launch_log" 2>&1; then
+    -e "$phone_launch_env" \
+    "$DEFAULT_IOS_APP_BUNDLE_ID" >"$launch_log" 2>&1; then
     if grep -qiE 'explicitly trusted by the user|invalid code signature|inadequate entitlements' "$launch_log"; then
       cat "$launch_log" >&2 || true
       die "iPhone launch failed because the developer app certificate is not yet trusted on $phone_name; trust it in Settings -> General -> VPN & Device Management, then run ./scripts/run-rook.sh iphone again"
@@ -520,6 +472,65 @@ EOF
 [run-rook] server URL: $url
 [run-rook] if iOS says the developer certificate is untrusted:
 [run-rook]   Settings -> General -> VPN & Device Management -> trust your developer app certificate
+EOF
+}
+
+build_ios_simulator_app() {
+  need_cmd xcodebuild
+  need_cmd xcrun
+  local app_dir="$1"
+  local derived_name="$2"
+  ensure_app_dir "$app_dir"
+
+  local sim
+  if ! sim="$(resolve_ios_simulator)"; then
+    die "no usable iPhone simulator found; open Xcode and install an iPhone simulator runtime"
+  fi
+  local sim_name sim_udid sim_state
+  IFS=$'\t' read -r sim_name sim_udid sim_state <<<"$sim"
+  log "using simulator: $sim_name ($sim_udid)"
+  if [[ "$sim_state" != "Booted" ]]; then
+    log "booting simulator $sim_name"
+    xcrun simctl boot "$sim_udid" >/dev/null 2>&1 || true
+  fi
+  open -a Simulator >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$sim_udid" -b >/dev/null
+
+  local proj="$app_dir/Rook.xcodeproj"
+  local derived="$BUILD_ROOT/$derived_name"
+  ensure_xcode_project "$app_dir" "$proj"
+  log "building Rook for simulator $sim_name"
+  local sim_build_log="$RUN_ROOT/${derived_name}-simulator-build.log"
+  if ! xcodebuild \
+    -project "$proj" \
+    -scheme Rook \
+    -configuration Debug \
+    -sdk iphonesimulator \
+    -destination "id=$sim_udid" \
+    -derivedDataPath "$derived" \
+    build >"$sim_build_log" 2>&1; then
+    tail -n 80 "$sim_build_log" >&2 || true
+    die "iPhone simulator build failed (full log: $sim_build_log)"
+  fi
+
+  local sim_app_path="$derived/Build/Products/Debug-iphonesimulator/Rook.app"
+  [[ -d "$sim_app_path" ]] || die "missing built app: $sim_app_path"
+  if (( RESET_PERMISSIONS )); then
+    log "uninstalling Rook on simulator $sim_name to reset its privacy permissions"
+    xcrun simctl uninstall "$sim_udid" "$DEFAULT_IOS_APP_BUNDLE_ID" >/dev/null 2>&1 || true
+  fi
+  log "installing Rook on simulator $sim_name"
+  xcrun simctl install "$sim_udid" "$sim_app_path" >/dev/null
+  local sim_url="${SERVER_URL:-http://127.0.0.1:${SERVER_PORT}}"
+  log "launching Rook on simulator $sim_name with ROOK_SERVER_BASE_URL=$sim_url"
+  SIMCTL_CHILD_ROOK_SERVER_BASE_URL="$sim_url" \
+  SIMCTL_CHILD_ROOK_AUTH_TOKEN="${SERVER_AUTH_TOKEN:-}" \
+  SIMCTL_CHILD_ROOK_SIMULATE_ARRIVAL="${SIMULATE_ARRIVAL:-}" \
+  xcrun simctl launch --terminate-running-process "$sim_udid" "$DEFAULT_IOS_APP_BUNDLE_ID" >/dev/null
+
+  cat <<EOF
+[run-rook] launched on simulator $sim_name
+[run-rook] server URL: $sim_url
 EOF
 }
 

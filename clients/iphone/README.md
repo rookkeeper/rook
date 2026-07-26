@@ -142,7 +142,7 @@ Fast paths from the repo root:
 ./scripts/run-rook.sh iphone --server-url http://your-mac.tailxxxx.ts.net:3000
 ```
 
-`run-rook.sh iphone` builds and launches the current physical-iPhone client, using `--server-url` if given, else `ROOK_REMOTE_HOSTNAME` or `ROOK_BIND_IP` to determine a server address your phone can reach. The server itself still binds localhost for the Mac app; `ROOK_BIND_IP` adds the second remote listener. It intentionally does **not** hardcode a development team into `project.yml`; pass `--team` / `ROOK_IOS_DEVELOPMENT_TEAM` when needed, or let the script auto-detect your local team for personal use. Keep the phone unlocked while the launcher installs and opens the app; otherwise iOS denies the launch request.
+`run-rook.sh iphone` builds and launches the current physical-iPhone client, using `--server-url` if given, else `ROOK_REMOTE_HOSTNAME` or `ROOK_BIND_IP` to determine a server address your phone can reach. The server itself still binds localhost for the Mac app; `ROOK_BIND_IP` adds the second remote listener. Signing follows the Xcode project’s configured `DEVELOPMENT_TEAM` and stable `com.rookkeeper...` bundle identifiers, so the launcher no longer rewrites bundle IDs or asks for a separate `--team` override. Keep the phone unlocked while the launcher installs and opens the app; otherwise iOS denies the launch request.
 
 Manual steps:
 
