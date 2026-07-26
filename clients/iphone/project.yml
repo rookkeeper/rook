@@ -1,6 +1,6 @@
 name: Rook
 options:
-  bundleIdPrefix: com.rookery
+  bundleIdPrefix: com.rookkeeper
   deploymentTarget:
     iOS: "17.0"
 settings:
@@ -22,7 +22,8 @@ targets:
       - target: RookWidgets
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.rookery.Rook
+        PRODUCT_BUNDLE_IDENTIFIER: com.rookkeeper.Rook
+        DEVELOPMENT_TEAM: 3G24HSNP93
         PRODUCT_NAME: Rook
         INFOPLIST_FILE: Sources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/Rook.entitlements
@@ -39,7 +40,8 @@ targets:
       - package: RookKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.rookery.Rook.RookWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: com.rookkeeper.Rook.RookWidgets
+        DEVELOPMENT_TEAM: 3G24HSNP93
         PRODUCT_NAME: RookWidgets
         INFOPLIST_FILE: RookWidgets/Info.plist
         TARGETED_DEVICE_FAMILY: "1"
@@ -55,7 +57,7 @@ targets:
       - target: Rook
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.rookery.RookTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rookkeeper.RookTests
         GENERATE_INFOPLIST_FILE: "YES"
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.9"

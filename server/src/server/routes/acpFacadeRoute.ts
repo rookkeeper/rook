@@ -3,7 +3,7 @@ import type { JsonObject, JsonRpcMessage, RuntimeNotification } from "../runtime
 import type { AgentRuntimeManager } from "../services/AgentRuntimeManager.js";
 import type { ServerAuth } from "../auth.js";
 
-/** One connection-level, strictly ACP JSON-RPC WebSocket facade. */
+/** One session-bound ACP JSON-RPC WebSocket facade. */
 export async function registerAcpFacadeRoute(app: FastifyInstance, runtimes: AgentRuntimeManager, auth: ServerAuth): Promise<void> {
   app.get("/api/ws", { websocket: true }, (socket, request) => {
     const authorization = auth.authorizeRequest(request.raw);
@@ -14,15 +14,27 @@ export async function registerAcpFacadeRoute(app: FastifyInstance, runtimes: Age
     }
     const subscriptions = new Map<string, () => void>();
     let environmentOffers = false;
+    let boundSessionId = queryBoundSessionId(request.raw.url);
     const send: RuntimeNotification = (message) => {
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
     };
     const subscribe = (sessionId: string) => {
       if (!subscriptions.has(sessionId)) subscriptions.set(sessionId, runtimes.subscribe(sessionId, send, { environmentOffers }));
     };
+    if (boundSessionId) subscribe(boundSessionId);
 
     socket.on("message", (raw: unknown) => {
-      void handleMessage(String(raw), runtimes, send, subscribe, (supported) => { environmentOffers = supported; });
+      void handleMessage(String(raw), runtimes, send, subscribe, (supported) => { environmentOffers = supported; }, {
+        boundSessionId: () => boundSessionId,
+        bindSessionId: (sessionId) => {
+          if (!boundSessionId) {
+            boundSessionId = sessionId;
+            subscribe(sessionId);
+            return;
+          }
+          if (boundSessionId !== sessionId) throw new Error(`WebSocket is bound to session ${boundSessionId}`);
+        },
+      });
     });
     const close = () => {
       for (const unsubscribe of subscriptions.values()) unsubscribe();
@@ -33,7 +45,14 @@ export async function registerAcpFacadeRoute(app: FastifyInstance, runtimes: Age
   });
 }
 
-async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: RuntimeNotification, subscribe: (sessionId: string) => void, setEnvironmentOffers: (supported: boolean) => void): Promise<void> {
+async function handleMessage(
+  raw: string,
+  runtimes: AgentRuntimeManager,
+  send: RuntimeNotification,
+  subscribe: (sessionId: string) => void,
+  setEnvironmentOffers: (supported: boolean) => void,
+  binding: { boundSessionId(): string | undefined; bindSessionId(sessionId: string): void },
+): Promise<void> {
   let message: JsonRpcMessage;
   try {
     message = JSON.parse(raw) as JsonRpcMessage;
@@ -76,7 +95,7 @@ async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: R
       }
       case "_com.rookkeeper/environment_offer_resolve": {
         const params = object(message.params) ?? {};
-        const sessionId = requiredSessionId(params);
+        const sessionId = requiredBoundSessionId(params, binding);
         const environmentId = typeof params.environmentId === "string" ? params.environmentId : "";
         const bundleHash = typeof params.bundleHash === "string" ? params.bundleHash : "";
         const decision = params.decision;
@@ -86,9 +105,11 @@ async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: R
         return;
       }
       case "session/list":
+        if (binding.boundSessionId()) throw new Error("session/list is not available on a session-bound websocket; use GET /api/sessions instead.");
         send(success(requestId!, { sessions: (await runtimes.listSessions()).map((record) => ({ sessionId: record.sessionId, cwd: record.cwd, title: record.title, updatedAt: record.updatedAt, _meta: { runtimeId: record.runtimeId, startedAt: record.startedAt } })) }));
         return;
       case "session/new": {
+        if (binding.boundSessionId()) throw new Error("session/new is not available on a session-bound websocket.");
         const params = object(message.params) ?? {};
         const meta = object(params._meta);
         const runtimeId = typeof meta?.runtimeId === "string" ? meta.runtimeId : runtimes.defaultRuntimeId();
@@ -105,21 +126,24 @@ async function handleMessage(raw: string, runtimes: AgentRuntimeManager, send: R
       case "session/set_mode":
       case "session/set_config_option": {
         const params = object(message.params) ?? {};
-        const sessionId = requiredSessionId(params);
+        const sessionId = requiredBoundSessionId(params, binding);
         subscribe(sessionId);
-        send(success(requestId!, await runtimes.requestForSession(sessionId, message.method, withoutSessionId(params))));
+        const result = await runtimes.requestForSession(sessionId, message.method, withoutSessionId(params), {
+          ...(message.method === "session/load" || message.method === "session/resume" ? { privateReplayListener: send } : {}),
+        });
+        send(success(requestId!, result));
         return;
       }
       case "session/cancel": {
         const params = object(message.params) ?? {};
-        const sessionId = requiredSessionId(params);
+        const sessionId = requiredBoundSessionId(params, binding);
         subscribe(sessionId);
         await runtimes.notifyForSession(sessionId, "session/cancel", withoutSessionId(params));
         if (isRequest) send(success(requestId!, { ok: true }));
         return;
       }
       case "session/close": {
-        const sessionId = requiredSessionId(object(message.params) ?? {});
+        const sessionId = requiredBoundSessionId(object(message.params) ?? {}, binding);
         subscribe(sessionId);
         send(success(requestId!, await runtimes.closeSession(sessionId)));
         return;
@@ -139,6 +163,11 @@ function requiredSessionId(params: JsonObject): string {
   if (typeof params.sessionId !== "string" || !params.sessionId) throw new Error("Missing sessionId");
   return params.sessionId;
 }
+function requiredBoundSessionId(params: JsonObject, binding: { boundSessionId(): string | undefined; bindSessionId(sessionId: string): void }): string {
+  const sessionId = requiredSessionId(params);
+  binding.bindSessionId(sessionId);
+  return sessionId;
+}
 function withoutSessionId(params: JsonObject): JsonObject {
   const { sessionId: _sessionId, ...rest } = params;
   return rest;
@@ -146,6 +175,16 @@ function withoutSessionId(params: JsonObject): JsonObject {
 function withoutMeta(params: JsonObject): JsonObject {
   const { _meta: _meta, ...rest } = params;
   return rest;
+}
+function queryBoundSessionId(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url, "http://127.0.0.1");
+    const sessionId = parsed.searchParams.get("sessionId")?.trim();
+    return sessionId || undefined;
+  } catch {
+    return undefined;
+  }
 }
 function success(id: string | number, result: unknown): JsonRpcMessage { return { jsonrpc: "2.0", id, result }; }
 function failure(id: string | number | null, message: string, code = -32000): JsonRpcMessage { return { jsonrpc: "2.0", id, error: { code, message } }; }

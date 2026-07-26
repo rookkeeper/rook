@@ -92,11 +92,12 @@ Same shared contract as other clients:
 5. when an environment enters, the chat shows a business banner with display name and website favicons
 
 ### Chat flow
-1. model connects to `/api/ws`
-2. session creation/resume is done over ACP
-3. `AcpSocket` reduces wire frames into `AcpClientEvent`s
-4. `RookModel` turns them into chat blocks, status text, queueing, and errors
-5. on reconnect the model reloads the current session and re-announces place state
+1. session list is fetched via REST
+2. `RookModel` creates or retrieves a `SessionHandle` per session
+3. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
+4. the handle opens a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and reduces wire frames into `AcpClientEvent`s
+5. `RookModel` mirrors handle state into published chat/UI state and layers on voice / Live Activity behavior
+6. on reconnect the model reattaches to the current session handle and re-announces place state
 
 ### Voice flow
 1. user starts listening
@@ -112,6 +113,7 @@ Same shared contract as other clients:
 ## Notable architectural characteristics
 
 - the iPhone app reuses the Mac chat/network stack but replaces foreground-app context with physical-place context
+- like the Mac client, it now uses one session-bound WebSocket per session and hydrates running sessions from server-owned transcript history
 - region monitoring handles named places; visit/dwell detection handles nearby-business discovery
 - place registration is guarded by environment preview so empty places do not create empty offers
 - the Live Activity is an ambient architecture surface, not just a chat status indicator

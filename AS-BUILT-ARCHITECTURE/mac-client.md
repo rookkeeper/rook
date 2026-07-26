@@ -9,6 +9,14 @@ The macOS client is a native SwiftUI menu bar app with a regular app window. It 
 - `RookMacModel`
   - main app state and reducer
   - owns server state, sessions, chat blocks, environment offers, environment list, voice, and provider state
+- `SessionHandle`
+  - per-session state container: owns a dedicated `AcpSocket` (one WebSocket per session), blocks, run state, streaming/replay buffers, queued messages, mode/config state
+  - handles all ACP event reduction and reconnection for its session
+  - multiple handles coexist; switching sessions is a pointer change
+- `ChatSessionController`
+  - registry of `SessionHandle`s keyed by session ID
+  - loads session list via REST (`GET /api/sessions`)
+  - proxies current-session UI state from the active handle
 - `EnvironmentsDetailView`
   - renders the environment-memory list
   - uses `RookKit.EnvironmentListPresentation` for shared presentation rules, including hiding raw URL `sourceName` rows for `web:` environments
@@ -90,11 +98,13 @@ Via `RookKit`:
 4. on server availability it loads runtimes/sessions and auto-resumes the most recent session
 
 ### Chat flow
-1. model ensures ACP socket connection
-2. user creates or resumes a session
-3. `AcpSocket` emits flattened `AcpClientEvent`s
-4. `RookMacModel` reduces them into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
-5. queued messages are delivered automatically once the agent goes idle
+1. session list is fetched via REST, not the WebSocket
+2. tapping a session creates or retrieves a `SessionHandle`
+3. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
+4. the handle opens a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and runs `initialize`
+5. the handle reduces `AcpClientEvent`s into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
+6. switching sessions changes which handle the UI observes — background sessions keep their WebSocket and continue running
+7. queued messages are delivered automatically once the agent goes idle
 
 ### Foreground environment detection
 1. `ForegroundAppMonitor` detects app activation or window-title change
@@ -123,6 +133,8 @@ Via `RookKit`:
 ## Notable architectural characteristics
 
 - the mac app is both a client and an environment provider
+- session discovery is REST; agent interaction is one ACP WebSocket per session
+- `SessionHandle` isolates all session state — blocks, streaming buffers, reconnection — so switching never tears down a running session
 - environment registration is local-first and derived from visible user context
 - the Mac bridge centralizes Accessibility, Automation, and Screen Recording permissions in one native app
 - reconnect and queued-message handling are built into the client reducer

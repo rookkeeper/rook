@@ -13,13 +13,14 @@ The primary development entry point. Starts the server (if needed) and builds + 
 ```bash
 ./scripts/run-rook.sh server                    # start the main server
 ./scripts/run-rook.sh mac                       # build and launch the current macOS client
-./scripts/run-rook.sh iphone                    # build and deploy the current iPhone client
+./scripts/run-rook.sh iphone                    # build and deploy the current physical-iPhone client
+./scripts/run-rook.sh sim                       # build and launch the iPhone simulator client
 ./scripts/run-rook.sh android                   # placeholder target for now
 ./scripts/run-rook.sh server mac iphone         # run multiple current targets
 ./scripts/run-rook.sh stop                      # stop everything (server + launched apps)
 ```
 
-Flags: `--device NAME_OR_UDID`, `--team TEAM_ID`, `--server-url URL`, `--reset-permissions`, `--simulate-arrival "LAT,LON"`
+Flags: `--device NAME_OR_UDID`, `--server-url URL`, `--reset-permissions`, `--simulate-arrival "LAT,LON"`
 
 ### `run-tests.sh` — run all test suites
 

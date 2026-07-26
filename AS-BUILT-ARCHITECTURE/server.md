@@ -2,7 +2,7 @@
 
 ## Summary
 
-The server is a Fastify service on `127.0.0.1:7665` with an optional second remote/VPN listener. It exposes a connection-level ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes and environments, and an internal runtime broker that launches one ACP subprocess per public session.
+The server is a Fastify service on `127.0.0.1:7665` with an optional second remote/VPN listener. It exposes a session-bound ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes, sessions, transcripts, and environments, and an internal runtime broker that launches one ACP subprocess per public session.
 
 ## Main components
 
@@ -52,10 +52,12 @@ See also: [database.md](./database.md)
 
 ### WebSocket ACP facade
 - route: `GET /api/ws`
+- websocket may be session-bound up front via `?sessionId=<public-session-id>`
+- once bound, the websocket is restricted to that session only
 - client methods handled directly:
   - `initialize`
-  - `session/list`
-  - `session/new`
+  - `session/list` (unbound websocket only; REST preferred)
+  - `session/new` (unbound websocket only)
   - `session/load`
   - `session/resume`
   - `session/prompt`
@@ -71,6 +73,8 @@ See also: [database.md](./database.md)
 ### REST control plane
 - `GET /api/health`
 - `GET /api/agent_runtimes`
+- `GET /api/sessions` — session listing over REST (replaces WebSocket `session/list`)
+- `GET /api/sessions/:sessionId/transcript` — server-owned normalized transcript for hydrators / second viewers
 - `POST /api/environments/register`
 - `POST /api/environments/decision`
 - `GET /api/environments/preview`
@@ -87,6 +91,7 @@ See also: [database.md](./database.md)
 
 Current durable persistence is SQLite-backed and centered on:
 - session records
+- append-only normalized transcript events per session
 - session-environment membership
 - durable environment bundle decisions
 
@@ -104,8 +109,12 @@ Persisted in SQLite:
 - `startedAt`
 - `updatedAt`
 
-Related table:
+The `GET /api/sessions` response additionally includes a `running` boolean
+(derived from whether a `SessionRuntime` is active for that session).
+
+Related tables:
 - `session_environments(session_id, environment_id, entered_at)`
+- `session_transcript_events(sequence, session_id, created_at, event_json)`
 
 ### Environment decision model
 - `accept` — allow for this session/visit
@@ -145,12 +154,13 @@ Related table:
 5. later client `session/load`s the public session
 
 ### Prompt execution
-1. client sends ACP `session/prompt`
+1. client sends ACP `session/prompt` on a session-bound websocket
 2. ACP facade resolves the public session
 3. `AgentRuntimeManager` rewrites to the runtime-local session ID
 4. `SessionRuntime` forwards the request to the subprocess
 5. runtime emits `session/update` notifications
-6. server rewrites session IDs back to the public ID and forwards them to subscribed clients
+6. server normalizes live transcript events into `session_transcript_events`
+7. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
 
 ### Environment offer and approval
 1. a provider registers an environment with `POST /api/environments/register`
@@ -175,7 +185,9 @@ Related table:
 ## Notable architectural characteristics
 
 - one public session = one runtime subprocess
-- pure ACP on both protocol boundaries
+- websocket connections are session-bound, not general multi-session ACP pipes
+- `session/load` replay is requester-private; it no longer fans out to every watcher of that session
+- the server owns a durable normalized transcript for each session so additional viewers can hydrate without runtime replay
 - environment state is session-specific at runtime launch time
-- durable decisions and session membership are SQLite-backed
+- durable decisions, transcript history, and session membership are SQLite-backed
 - location identification is provider-pluggable behind `PoiLookupProvider`
