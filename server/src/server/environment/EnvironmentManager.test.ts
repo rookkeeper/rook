@@ -790,6 +790,15 @@ describe("EnvironmentManager", () => {
     );
     await manager.registerAvailableEnvironment(
       {
+        id: "dir:/Users/john/project",
+        metadata: {
+          directoryPath: "/Users/john/project",
+        },
+      },
+      { sourceName: "/Users/john/project" },
+    );
+    await manager.registerAvailableEnvironment(
+      {
         id: "location:target.com/123-main-st-springfield-il",
         metadata: {
           displayName: "Target",
@@ -810,6 +819,10 @@ describe("EnvironmentManager", () => {
       displayName: "Obsidian · Peeps",
       sourceName: "Obsidian · Peeps",
     });
+    expect(byId.get("dir:/Users/john/project")).toMatchObject({
+      displayName: "/Users/john/project",
+      sourceName: "/Users/john/project",
+    });
     expect(byId.get("location:target.com/123-main-st-springfield-il")).toMatchObject({
       displayName: "Target",
       sourceName: "Target",
@@ -822,6 +835,35 @@ describe("EnvironmentManager", () => {
 
     const entered = manager.enterEnvironment("nonexistent", "web:example.com");
     expect(entered).toEqual([]);
+  });
+
+  it("registerCandidateEnvironment keeps dir environments exact-only with no parents", async () => {
+    const manager = newManager();
+
+    await manager.registerCandidateEnvironment({
+      id: "dir:/Users/john/project/subdir",
+      metadata: { directoryPath: "/Users/john/project/subdir" },
+    });
+
+    expect(manager.isAvailable("dir:/Users/john/project/subdir")).toBe(true);
+    expect(manager.isAvailable("dir:/Users/john/project")).toBe(false);
+    expect(manager.isAvailable("dir:/Users/john")).toBe(false);
+  });
+
+  it("enters only the exact dir environment", async () => {
+    const manager = newManager();
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.registerCandidateEnvironment({
+      id: "dir:/Users/john/project/subdir",
+      metadata: { directoryPath: "/Users/john/project/subdir" },
+    });
+
+    const entered = manager.enterEnvironment("s1", "dir:/Users/john/project/subdir");
+    expect(entered).toEqual(["dir:/Users/john/project/subdir"]);
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledTimes(1);
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("dir:/Users/john/project/subdir", [], undefined);
   });
 
   it("renders environment binding instructions for all entered environments", async () => {

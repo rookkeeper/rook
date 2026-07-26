@@ -88,6 +88,9 @@ function environmentHierarchy(environmentId: string): string[] {
   const separator = environmentId.indexOf(":");
   if (separator === -1) return [environmentId];
 
+  const kind = environmentId.slice(0, separator);
+  if (kind === "dir") return [environmentId];
+
   const prefix = environmentId.slice(0, separator + 1);
   const rest = environmentId.slice(separator + 1);
   if (!rest) return [environmentId];
@@ -136,6 +139,9 @@ function deriveEnvironmentDisplayName(environmentId: string, sourceName: string 
     }
     case "mac": {
       return sourceName || stringMetadata(metadata, "appName") || environmentId;
+    }
+    case "dir": {
+      return sourceName || environmentId.slice(environmentId.indexOf(":") + 1) || environmentId;
     }
     case "location": {
       return sourceName || stringMetadata(metadata, "displayName") || environmentId;
@@ -222,6 +228,11 @@ export class EnvironmentManager {
         if (!idsToRegister.has(environmentId)) continue;
         await this.rememberAvailableEnvironment({ id: environmentId, metadata: candidate.metadata }, info, contextText, false);
       }
+      return;
+    }
+
+    if (environmentKind(candidate.id) === "dir") {
+      await this.rememberAvailableEnvironment({ id: candidate.id, metadata: candidate.metadata }, info, contextText, false);
       return;
     }
 

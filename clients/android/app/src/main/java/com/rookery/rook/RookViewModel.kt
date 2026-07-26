@@ -885,7 +885,7 @@ class RookViewModel(
         refreshEnvironmentList()
         environmentListAutoRefreshJob = scope.launch {
             while (true) {
-                delay(5000)
+                delay(1000)
                 refreshEnvironmentList()
             }
         }
