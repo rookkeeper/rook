@@ -232,15 +232,15 @@ public final class AcpSocket {
                     }
                     self.handle(text)
                 } catch {
-                    self?.handleDisconnect(error)
+                    self?.handleDisconnect(task: task, error: error)
                     return
                 }
             }
         }
     }
 
-    private func handleDisconnect(_ error: Error) {
-        guard task != nil else { return }
+    private func handleDisconnect(task disconnectedTask: URLSessionWebSocketTask, error: Error) {
+        guard task === disconnectedTask else { return }
         task = nil
         connectTask = nil
         setConnected(false)

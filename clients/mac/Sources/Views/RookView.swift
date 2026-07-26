@@ -253,6 +253,12 @@ private struct HomeContent: View {
             }
             footerActions
         }
+        .onAppear {
+            ensureSelectedRuntimeID()
+        }
+        .onChange(of: model.agents.map(\.id).joined(separator: "|")) { _ in
+            ensureSelectedRuntimeID()
+        }
     }
 
     // MARK: - Identity (slim, one line)
@@ -448,6 +454,16 @@ private struct HomeContent: View {
         }
     }
 
+    private func ensureSelectedRuntimeID() {
+        guard !model.agents.isEmpty else {
+            selectedRuntimeID = ""
+            return
+        }
+        if selectedRuntimeID.isEmpty || !model.agents.contains(where: { $0.id == selectedRuntimeID }) {
+            selectedRuntimeID = model.agents.first?.id ?? ""
+        }
+    }
+
     private var newSessionCard: some View {
         PanelCard {
             Text("NEW CHAT")
@@ -465,9 +481,6 @@ private struct HomeContent: View {
                         Text(String(repeating: "  ", count: entry.depth) + entry.agent.id).tag(entry.agent.id)
                     }
                 }
-                .onAppear {
-                    if selectedRuntimeID.isEmpty { selectedRuntimeID = model.agents.first?.id ?? "" }
-                }
             }
 
             HStack(spacing: 8) {
@@ -479,13 +492,11 @@ private struct HomeContent: View {
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(PanelPalette.backgroundPrimary.opacity(0.75)))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(PanelPalette.border))
                     .onSubmit {
-                        guard !selectedRuntimeID.isEmpty else { return }
-                        model.startNewSession(agentId: selectedRuntimeID, name: newSessionName)
+                        startNewSessionFromHome()
                     }
 
                 Button {
-                    guard !selectedRuntimeID.isEmpty else { return }
-                    model.startNewSession(agentId: selectedRuntimeID, name: newSessionName)
+                    startNewSessionFromHome()
                 } label: {
                     Image(systemName: model.startingSession ? "hourglass" : "arrow.up")
                         .font(.system(size: 13, weight: .bold))
@@ -497,6 +508,12 @@ private struct HomeContent: View {
                 .disabled(model.startingSession || selectedRuntimeID.isEmpty)
             }
         }
+    }
+
+    private func startNewSessionFromHome() {
+        ensureSelectedRuntimeID()
+        guard !selectedRuntimeID.isEmpty else { return }
+        model.startNewSession(agentId: selectedRuntimeID, name: newSessionName)
     }
 
     private var sessionsCard: some View {

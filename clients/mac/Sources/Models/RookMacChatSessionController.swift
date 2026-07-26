@@ -104,19 +104,21 @@ final class ChatSessionController {
         Task {
             defer {
                 self.startingSession = false
-                completion?()
             }
             do {
+                if currentSession != nil || socket.currentSessionId != nil {
+                    socket.disconnect()
+                }
                 try await ensureSocketConnected()
                 let sessionId = try await socket.createSession(runtimeId: agentId, title: title, cwd: FileManager.default.currentDirectoryPath)
-                await loadSessions()
-                let session = sessions.first(where: { $0.id == sessionId })
-                    ?? AgentSessionSummary(raw: .object([
-                        "sessionId": .string(sessionId),
-                        "title": .string(title),
-                        "_meta": .object(["runtimeId": .string(agentId)]),
-                    ]))
+                let session = AgentSessionSummary(raw: .object([
+                    "sessionId": .string(sessionId),
+                    "title": .string(title),
+                    "_meta": .object(["runtimeId": .string(agentId)]),
+                ]))
                 enterChat(session: session)
+                completion?()
+                await loadSessions()
             } catch {
                 sessionsError = error.localizedDescription
                 appendErrorBlock(source: "session", message: error.localizedDescription)
@@ -129,13 +131,13 @@ final class ChatSessionController {
         Task {
             defer {
                 self.startingSession = false
-                completion?()
             }
             do {
                 try await ensureSocketConnected()
                 prepareForSessionResume(session: session)
                 try await socket.loadSession(session.id)
                 finishSessionResume(session: session)
+                completion?()
             } catch {
                 sessionsError = error.localizedDescription
                 appendErrorBlock(source: "session", message: "Failed to load session: \(error.localizedDescription)")
