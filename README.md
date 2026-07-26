@@ -1,6 +1,6 @@
 # Rook
 
-Rook is a local-first personal-agent runtime built around ACP (Agent Client Protocol). The repo contains the server, native clients, and supporting docs.
+Rook is a local-first personal-agent runtime built around ACP (Agent Client Protocol). The repo contains the server, native clients, and supporting docs. Session discovery is REST-backed, and live session interaction uses one ACP WebSocket per active session.
 
 ## Start here
 

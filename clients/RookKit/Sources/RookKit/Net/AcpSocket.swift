@@ -91,7 +91,6 @@ public final class AcpSocket {
             throw SocketError.server("Server returned no sessionId")
         }
         currentSessionId = sessionId
-        _ = try await request(method: "session/load", params: ["sessionId": sessionId])
         return sessionId
     }
 

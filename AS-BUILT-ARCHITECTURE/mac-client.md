@@ -101,12 +101,13 @@ Via `RookKit`:
 
 ### Chat flow
 1. session list is fetched via REST, not the WebSocket
-2. tapping a session creates or retrieves a `SessionHandle`
-3. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
-4. the handle opens a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and runs `initialize`
-5. the handle reduces `AcpClientEvent`s into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
-6. switching sessions changes which handle the UI observes — background sessions keep their WebSocket and continue running
-7. queued messages are delivered automatically once the agent goes idle
+2. starting a new session opens an unbound WebSocket, sends ACP `session/new`, then keeps that same socket as the new session's `SessionHandle`
+3. resuming an existing session creates or retrieves a `SessionHandle`
+4. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
+5. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and run `initialize`
+6. the handle reduces `AcpClientEvent`s into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
+7. switching sessions changes which handle the UI observes — background sessions keep their WebSocket and continue running
+8. queued messages are delivered automatically once the agent goes idle
 
 ### Foreground environment detection
 1. `ForegroundAppMonitor` detects app activation or window-title change

@@ -213,7 +213,7 @@ class AcpSocket(
             includeSessionId = false
         )
         val created = result["sessionId"]?.stringValue ?: throw SocketRequestException.Server("Server returned no sessionId")
-        loadSession(created)
+        sessionId = created
         return created
     }
 

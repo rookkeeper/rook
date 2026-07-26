@@ -1,7 +1,7 @@
 import RookKit
 import SwiftUI
 
-struct AgentPickerScreen: View {
+struct SessionsHomeScreen: View {
     @ObservedObject var model: RookModel
     @State private var showingSettings = false
     @State private var showingPlaces = false
@@ -124,7 +124,7 @@ struct AgentPickerScreen: View {
                 VStack(spacing: 0) {
                     ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
                         Button { model.resumeSession(session) } label: {
-                            SessionRow(session: session)
+                            SessionRow(session: session, currentSessionId: model.currentSession?.id)
                         }
                         .buttonStyle(.plain)
                         .disabled(model.startingSession)
@@ -203,14 +203,15 @@ struct AgentPickerScreen: View {
 
 private struct SessionRow: View {
     let session: AgentSessionSummary
+    let currentSessionId: String?
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "bubble.left.and.bubble.right")
+            Image(systemName: statusIcon)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(PanelPalette.info)
+                .foregroundStyle(statusTint)
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(PanelPalette.info.opacity(0.14)))
+                .background(Circle().fill(statusTint.opacity(0.14)))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.name)
@@ -230,11 +231,39 @@ private struct SessionRow: View {
             }
 
             Spacer(minLength: 4)
+
+            Text(status.label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.95))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(statusTint.opacity(0.25)))
+
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(PanelPalette.textMuted)
         }
         .padding(.vertical, 9)
         .contentShape(Rectangle())
+    }
+
+    private var status: SessionSelectionStatus {
+        session.selectionStatus(currentSessionId: currentSessionId)
+    }
+
+    private var statusTint: Color {
+        switch status {
+        case .active: return PanelPalette.warning
+        case .on: return PanelPalette.success
+        case .off: return PanelPalette.textMuted
+        }
+    }
+
+    private var statusIcon: String {
+        switch status {
+        case .active: return "waveform.and.mic"
+        case .on: return "bolt.fill"
+        case .off: return "moon.zzz"
+        }
     }
 }

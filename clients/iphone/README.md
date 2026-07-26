@@ -29,7 +29,7 @@ binding, and bearer-token auth, start with [docs/setup.md](../../docs/setup.md).
   contains, then decide with the same 2×2 choices as every other client.
   Leaving the region simply stops refreshing it from the phone; the server ages
   it out on its own.
-- **Full chat parity.** Agent picker, REST-backed session discovery, per-session websocket attach, transcript hydration for already-running sessions, and streaming ACP chat
+- **Full chat parity.** Agent picker, REST-backed session discovery, one-socket session creation (`session/new` binds the just-opened websocket), per-session websocket attach for resumed sessions, transcript hydration for already-running sessions, and streaming ACP chat
   (text, thinking, tool calls, plans, errors, context usage) — including
   auto-rendering well-formed JSON tool arguments as human-readable YAML and
   assistant markdown with native drag-selection, standard copy/paste behavior,
@@ -83,7 +83,7 @@ Rook (iOS app target)                         RookWidgets (app-extension)
   ├─ Location/
   │   ├─ Place.swift          Place + PlaceStore (UserDefaults) + CLVisit suggestions
   │   └─ LocationProvider.swift   CLCircularRegion monitoring, CLVisit, Always auth
-  └─ Views/               RootView · AgentPickerScreen · ChatScreen · PlacesScreen · EnvironmentOfferSheet
+  └─ Views/               RootView · SessionsHomeScreen · ChatScreen · PlacesScreen · EnvironmentOfferSheet
             │
             ▼ depends on
         RookKit  ──── Models · Net (RookAPI/AcpSocket) · Design · Voice · LiveActivity

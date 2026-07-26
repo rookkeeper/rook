@@ -542,7 +542,7 @@ private struct HomeContent: View {
                             Button {
                                 model.resumeSession(session)
                             } label: {
-                                SessionHomeRow(session: session)
+                                SessionHomeRow(session: session, currentSessionId: model.currentSession?.id)
                             }
                             .buttonStyle(.plain)
                             .pointingHandOnHover()
@@ -625,6 +625,7 @@ private struct HomeContent: View {
 
 private struct SessionHomeRow: View {
     var session: AgentSessionSummary
+    var currentSessionId: String?
 
     var body: some View {
         HStack(spacing: 9) {
@@ -653,6 +654,17 @@ private struct SessionHomeRow: View {
 
             Spacer(minLength: 4)
 
+            Text(status.label)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(.white.opacity(0.96))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(statusTint.opacity(0.25))
+                )
+
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.secondary)
@@ -661,6 +673,18 @@ private struct SessionHomeRow: View {
         .padding(.horizontal, 6)
         .contentShape(Rectangle())
         .hoverRowBackground()
+    }
+
+    private var status: SessionSelectionStatus {
+        session.selectionStatus(currentSessionId: currentSessionId)
+    }
+
+    private var statusTint: Color {
+        switch status {
+        case .active: return PanelPalette.warning
+        case .on: return PanelPalette.success
+        case .off: return PanelPalette.secondaryText
+        }
     }
 }
 
@@ -774,7 +798,7 @@ private struct SessionsDetail: View {
                             Button {
                                 model.resumeSession(session)
                             } label: {
-                                SessionRow(session: session)
+                                SessionRow(session: session, currentSessionId: model.currentSession?.id)
                             }
                             .buttonStyle(.plain)
                             .help("Resume this session")
@@ -804,16 +828,17 @@ private struct SessionsDetail: View {
 
 private struct SessionRow: View {
     var session: AgentSessionSummary
+    var currentSessionId: String?
 
     var body: some View {
         HStack(alignment: .center, spacing: 9) {
-            Image(systemName: session.running ? "bolt.fill" : "moon.zzz")
+            Image(systemName: statusIcon)
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(session.running ? PanelPalette.success : PanelPalette.secondaryText)
+                .foregroundStyle(statusTint)
                 .frame(width: 22, height: 22)
                 .background(
                     Circle()
-                        .fill((session.running ? PanelPalette.success : PanelPalette.secondaryText).opacity(0.14))
+                        .fill(statusTint.opacity(0.14))
                 )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -839,7 +864,7 @@ private struct SessionRow: View {
                 .padding(.vertical, 2)
                 .background(
                     Capsule()
-                        .fill((session.running ? PanelPalette.success : PanelPalette.secondaryText).opacity(0.25))
+                        .fill(statusTint.opacity(0.25))
                 )
         }
         .padding(.vertical, 7)
@@ -848,10 +873,27 @@ private struct SessionRow: View {
         .hoverRowBackground()
     }
 
-    private var statusLabel: String {
-        if session.running {
-            return session.connectedClients > 0 ? "\(session.connectedClients) connected" : "Running"
+    private var status: SessionSelectionStatus {
+        session.selectionStatus(currentSessionId: currentSessionId)
+    }
+
+    private var statusTint: Color {
+        switch status {
+        case .active: return PanelPalette.warning
+        case .on: return PanelPalette.success
+        case .off: return PanelPalette.secondaryText
         }
-        return "Stopped"
+    }
+
+    private var statusIcon: String {
+        switch status {
+        case .active: return "waveform.and.mic"
+        case .on: return "bolt.fill"
+        case .off: return "moon.zzz"
+        }
+    }
+
+    private var statusLabel: String {
+        status.label
     }
 }

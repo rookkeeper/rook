@@ -53,11 +53,12 @@ See also: [database.md](./database.md)
 ### WebSocket ACP facade
 - route: `GET /api/ws`
 - websocket may be session-bound up front via `?sessionId=<public-session-id>`
+- a websocket that starts unbound becomes bound after a successful `session/new`
 - once bound, the websocket is restricted to that session only
 - client methods handled directly:
   - `initialize`
   - `session/list` (unbound websocket only; REST preferred)
-  - `session/new` (unbound websocket only)
+  - `session/new` (unbound websocket only; success binds that websocket to the new public session)
   - `session/load`
   - `session/resume`
   - `session/prompt`
@@ -147,11 +148,11 @@ Related tables:
 ## Main processes
 
 ### Session creation
-1. client sends `session/new` with runtime metadata
+1. client sends `session/new` with runtime metadata on an unbound websocket
 2. `AgentRuntimeManager` creates a `SessionRuntime`
 3. server calls runtime `session/new`
 4. server stores a public session record with a new public UUID
-5. later client `session/load`s the public session
+5. server returns that public session ID and binds the same websocket to it
 
 ### Prompt execution
 1. client sends ACP `session/prompt` on a session-bound websocket

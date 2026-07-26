@@ -42,17 +42,19 @@ export class SessionRuntime {
   private readonly decoder = new StringDecoder("utf8");
   private buffered = "";
   private requestIndex = 0;
+  private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
 
   constructor(
     readonly profile: AgentRuntimeProfile,
     private readonly repoRoot: string,
     private readonly launchPlanner: RuntimeLaunchPlanner,
     readonly configuration: SessionRuntimeConfiguration = emptyConfiguration(),
+    private readonly logger: { info: (obj: Record<string, unknown>, msg?: string) => void; error?: (obj: Record<string, unknown>, msg?: string) => void } = console,
   ) {}
 
   /** Builds an unstarted replacement carrying new session-only environment state. */
   replacement(configuration: SessionRuntimeConfiguration): SessionRuntime {
-    return new SessionRuntime(this.profile, this.repoRoot, this.launchPlanner, configuration);
+    return new SessionRuntime(this.profile, this.repoRoot, this.launchPlanner, configuration, this.logger);
   }
 
   async initialize(): Promise<void> {
@@ -94,6 +96,13 @@ export class SessionRuntime {
 
   private async start(): Promise<void> {
     const plan = this.launchPlanner(this.profile, this.repoRoot, this.configuration);
+    const startedAt = performance.now();
+    this.timingLog("runtime_start_begin", {
+      runtimeId: this.profile.id,
+      command: plan.command,
+      args: plan.args,
+      cwd: plan.cwd,
+    });
     const child = spawn(plan.command, plan.args, {
       cwd: plan.cwd,
       env: { ...process.env, ...(plan.env ?? {}) },
@@ -120,6 +129,10 @@ export class SessionRuntime {
       protocolVersion: 1,
       clientCapabilities: {},
       clientInfo: { name: "rook-server", title: "Rook", version: "0.1.0" },
+    });
+    this.timingLog("runtime_start_complete", {
+      runtimeId: this.profile.id,
+      elapsedMs: Math.round((performance.now() - startedAt) * 100) / 100,
     });
   }
 
@@ -181,6 +194,11 @@ export class SessionRuntime {
   private rejectPending(error: Error): void {
     for (const request of this.pending.values()) request.reject(error);
     this.pending.clear();
+  }
+
+  private timingLog(event: string, details: Record<string, unknown>): void {
+    if (!this.timingLogsEnabled) return;
+    this.logger.info({ component: "SessionRuntime", event, ...details }, "session timing");
   }
 }
 

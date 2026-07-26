@@ -127,7 +127,6 @@ export class RookCliClient {
     this.createdSessionId = result?.sessionId;
     if (!this.createdSessionId) throw new Error("Server returned no sessionId");
     this.sessionId = this.createdSessionId;
-    await this.request("session/load", { sessionId: this.sessionId });
     if (!this.lastMessageOnly) printLine(COLORS.gray, `session: ${this.sessionId} (${this.runtimeId})`);
   }
 

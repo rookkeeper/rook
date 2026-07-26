@@ -93,11 +93,12 @@ Same shared contract as other clients:
 
 ### Chat flow
 1. session list is fetched via REST
-2. `RookModel` creates or retrieves a `SessionHandle` per session
-3. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
-4. the handle opens a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and reduces wire frames into `AcpClientEvent`s
-5. `RookModel` mirrors handle state into published chat/UI state and layers on voice / Live Activity behavior
-6. on reconnect the model reattaches to the current session handle and re-announces place state
+2. starting a new session opens an unbound WebSocket, sends ACP `session/new`, then keeps that same socket as the new session's `SessionHandle`
+3. resuming an existing session creates or retrieves a `SessionHandle`
+4. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
+5. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and reduce wire frames into `AcpClientEvent`s
+6. `RookModel` mirrors handle state into published chat/UI state and layers on voice / Live Activity behavior
+7. on reconnect the model reattaches to the current session handle and re-announces place state
 
 ### Voice flow
 1. user starts listening

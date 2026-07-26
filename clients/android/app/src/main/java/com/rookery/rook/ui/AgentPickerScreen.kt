@@ -57,10 +57,11 @@ import com.rookery.rook.ServerState
 import com.rookery.rook.buildAgentTree
 import com.rookery.rook.model.AgentDefinition
 import com.rookery.rook.model.AgentSessionSummary
+import com.rookery.rook.model.SessionSelectionStatus
 import com.rookery.rook.ui.chat.PanelPalette
 
 @Composable
-fun AgentPickerScreen(viewModel: RookViewModel) {
+fun SessionsHomeScreen(viewModel: RookViewModel) {
     val serverState by viewModel.serverState.collectAsState()
     val agents by viewModel.agents.collectAsState()
     val agentsError by viewModel.agentsError.collectAsState()
@@ -128,7 +129,7 @@ fun AgentPickerScreen(viewModel: RookViewModel) {
                         Text("No sessions yet — start a new chat above.", fontSize = 14.sp, color = PanelPalette.textMuted, modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp))
                     } else {
                         sessions.forEachIndexed { index, session ->
-                            SessionRow(session = session, enabled = !startingSession, onClick = { viewModel.resumeSession(session) })
+                            SessionRow(session = session, currentSessionId = currentSession?.id, enabled = !startingSession, onClick = { viewModel.resumeSession(session) })
                             if (index < sessions.lastIndex) HorizontalDivider(color = PanelPalette.border)
                         }
                     }
@@ -200,7 +201,14 @@ private fun NewChatNameField(value: String, onValueChange: (String) -> Unit, onS
 }
 
 @Composable
-private fun SessionRow(session: AgentSessionSummary, enabled: Boolean, onClick: () -> Unit) {
+private fun SessionRow(session: AgentSessionSummary, currentSessionId: String?, enabled: Boolean, onClick: () -> Unit) {
+    val status = session.selectionStatus(currentSessionId)
+    val statusTint = when (status) {
+        SessionSelectionStatus.ACTIVE -> PanelPalette.warning
+        SessionSelectionStatus.ON -> PanelPalette.success
+        SessionSelectionStatus.OFF -> PanelPalette.textMuted
+    }
+
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).padding(vertical = 9.dp)) {
         Box(modifier = Modifier.size(30.dp).clip(CircleShape).background(PanelPalette.info.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = PanelPalette.info, modifier = Modifier.size(14.dp))
@@ -209,6 +217,9 @@ private fun SessionRow(session: AgentSessionSummary, enabled: Boolean, onClick: 
             Text(session.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = PanelPalette.textNormal, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(session.agent, fontSize = 12.sp, color = PanelPalette.textMuted, maxLines = 1)
             if (session.updatedAtLabel.isNotEmpty()) Text("Updated ${session.updatedAtLabel}", fontSize = 11.sp, color = PanelPalette.textMuted, maxLines = 1)
+        }
+        Box(modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(statusTint.copy(alpha = 0.25f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+            Text(status.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.95f))
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = PanelPalette.textMuted)
     }

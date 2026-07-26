@@ -26,6 +26,7 @@ export class AgentRuntimeManager {
   private readonly privateReplayTargets = new Map<string, Set<RuntimeNotification>>();
   private readonly privateReplayIdleTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly privateReplayWaiters = new Map<string, Set<() => void>>();
+  private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
 
   constructor(
     profiles: AgentRuntimeProfile[],
@@ -33,6 +34,7 @@ export class AgentRuntimeManager {
     private readonly repoRoot: string,
     private readonly environmentManager?: EnvironmentManager,
     private readonly transcriptStore?: SessionTranscriptStore,
+    private readonly logger: { info: (obj: Record<string, unknown>, msg?: string) => void } = console,
   ) {
     this.profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
   }
@@ -62,8 +64,11 @@ export class AgentRuntimeManager {
   }
 
   async createSession(runtimeId: string, params: JsonObject, title: string): Promise<SessionRecord> {
+    const startedAt = performance.now();
     const profile = this.requireProfile(runtimeId);
+    this.timingLog("create_session_begin", { runtimeId, title, cwd: typeof params.cwd === "string" ? params.cwd : this.repoRoot });
     const runtime = this.createSessionRuntime(profile);
+    const beforeRuntimeSessionNew = performance.now();
     const result = await runtime.request("session/new", runtimeSessionParams(profile, params, runtime.configuration));
     const runtimeSessionId = sessionIdFromResult(result);
     const now = new Date().toISOString();
@@ -79,10 +84,18 @@ export class AgentRuntimeManager {
     await this.sessions.save(record);
     this.attachSessionRuntime(record.sessionId, runtime);
     this.subscribeToEnvironments(record.sessionId);
+    this.timingLog("create_session_complete", {
+      runtimeId,
+      sessionId: record.sessionId,
+      runtimeSessionId,
+      runtimeSessionNewMs: roundMs(performance.now() - beforeRuntimeSessionNew),
+      totalMs: roundMs(performance.now() - startedAt),
+    });
     return record;
   }
 
   async requestForSession(sessionId: string, method: string, params: JsonObject, options: { privateReplayListener?: RuntimeNotification } = {}): Promise<unknown> {
+    const startedAt = performance.now();
     const record = await this.requireSession(sessionId);
     await this.restoreEnvironmentMembership(record);
     const runtime = this.runtimeFor(record);
@@ -99,11 +112,24 @@ export class AgentRuntimeManager {
         await this.transcriptStore?.append(sessionId, runCompletedEvent(stopReason));
       }
       await this.sessions.touch(sessionId);
+      this.timingLog("request_complete", {
+        method,
+        sessionId,
+        runtimeId: record.runtimeId,
+        elapsedMs: roundMs(performance.now() - startedAt),
+      });
       return rewriteResultSessionId(record, result);
     } catch (error) {
       if (method === "session/prompt") {
         await this.transcriptStore?.append(sessionId, runFailedEvent(error instanceof Error ? error.message : String(error)));
       }
+      this.timingLog("request_failed", {
+        method,
+        sessionId,
+        runtimeId: record.runtimeId,
+        elapsedMs: roundMs(performance.now() - startedAt),
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     } finally {
       if (privateReplay) await this.endPrivateReplayAfterQuiet(sessionId);
@@ -229,7 +255,7 @@ export class AgentRuntimeManager {
   }
 
   private createSessionRuntime(profile: AgentRuntimeProfile): SessionRuntime {
-    return new SessionRuntime(profile, this.repoRoot, runtimeLaunchPlan);
+    return new SessionRuntime(profile, this.repoRoot, runtimeLaunchPlan, undefined, this.logger);
   }
 
   private attachSessionRuntime(sessionId: string, runtime: SessionRuntime): void {
@@ -396,6 +422,15 @@ export class AgentRuntimeManager {
     if (!record) throw new Error(`Unknown session: ${sessionId}`);
     return record;
   }
+
+  private timingLog(event: string, details: Record<string, unknown>): void {
+    if (!this.timingLogsEnabled) return;
+    this.logger.info({ component: "AgentRuntimeManager", event, ...details }, "session timing");
+  }
+}
+
+function roundMs(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function sessionIdFromResult(value: unknown): string {
