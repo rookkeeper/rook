@@ -31,6 +31,7 @@ export const ENVIRONMENT_KINDS = [
   "web",
   "project",
   "mac",
+  "dir",
   "iphone",
   "android",
   "windows",

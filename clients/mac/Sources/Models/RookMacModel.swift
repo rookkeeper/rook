@@ -84,7 +84,7 @@ final class RookMacModel: ObservableObject {
     private let environmentOfferController: EnvironmentOfferController
     private let environmentListController: EnvironmentListController
 
-    init(environmentFocusDelay: TimeInterval = 5) {
+    init(environmentFocusDelay: TimeInterval = 1) {
         let envBaseURL = ProcessInfo.processInfo.environment["ROOK_SERVER_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         let storedBaseURL = UserDefaults.standard.string(forKey: "RookServerBaseURL")?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedBaseURL = (envBaseURL?.isEmpty == false ? envBaseURL : storedBaseURL) ?? "http://127.0.0.1:7665"

@@ -33,21 +33,9 @@ enum AXReader {
     /// Title of the focused (or main) window of the app owning `pid`, or nil if
     /// AX isn't trusted / the app exposes no titled window.
     static func focusedWindowTitle(pid: pid_t) -> String? {
-        guard isTrusted() else {
+        guard let window = focusedWindow(pid: pid) else {
             return nil
         }
-        let appElement = AXUIElementCreateApplication(pid)
-        enableWebContentAccessibility(appElement)
-        var windowRef: AnyObject?
-        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
-            if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
-                return nil
-            }
-        }
-        guard let windowRef else {
-            return nil
-        }
-        let window = windowRef as! AXUIElement
         var titleRef: AnyObject?
         guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success else {
             return nil
@@ -56,11 +44,25 @@ enum AXReader {
         return (title?.isEmpty == false) ? title : nil
     }
 
-    /// The active tab's URL for a Chromium/WebKit browser owning `pid`, read from
-    /// the focused window's AXWebArea (AXURL). Relies on the web-content tree, so
-    /// the browser should have been primed (it comes forward → primeAccessibility).
-    /// Returns nil for non-browsers or before the URL is exposed.
-    static func activeTabURL(pid: pid_t, maxNodes: Int = 600) -> String? {
+    /// Top-level window document-like values exposed via standard AX attributes
+    /// such as AXDocument / AXFilename / AXURL.
+    static func focusedWindowDocumentValues(pid: pid_t) -> [String] {
+        guard let window = focusedWindow(pid: pid) else {
+            return []
+        }
+        let attributes = ["AXDocument", "AXFilename", "AXURL"]
+        var results: [String] = []
+        for attribute in attributes {
+            if let value = stringAttribute(window, attribute)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !value.isEmpty,
+               !results.contains(value) {
+                results.append(value)
+            }
+        }
+        return results
+    }
+
+    private static func focusedWindow(pid: pid_t) -> AXUIElement? {
         guard isTrusted() else {
             return nil
         }
@@ -75,8 +77,19 @@ enum AXReader {
         guard let windowRef else {
             return nil
         }
+        return windowRef as! AXUIElement
+    }
+
+    /// The active tab's URL for a Chromium/WebKit browser owning `pid`, read from
+    /// the focused window's AXWebArea (AXURL). Relies on the web-content tree, so
+    /// the browser should have been primed (it comes forward → primeAccessibility).
+    /// Returns nil for non-browsers or before the URL is exposed.
+    static func activeTabURL(pid: pid_t, maxNodes: Int = 600) -> String? {
+        guard let window = focusedWindow(pid: pid) else {
+            return nil
+        }
         // Breadth-first: the web area sits near the top of the window subtree.
-        var queue: [AXUIElement] = [windowRef as! AXUIElement]
+        var queue: [AXUIElement] = [window]
         var budget = maxNodes
         while !queue.isEmpty, budget > 0 {
             let element = queue.removeFirst()
