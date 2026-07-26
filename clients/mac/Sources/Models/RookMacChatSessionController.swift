@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import RookKit
 
 /// Session lifecycle and registry.  One `SessionHandle` per session, each
@@ -6,6 +7,8 @@ import RookKit
 /// observes — background sessions keep running.
 @MainActor
 final class ChatSessionController {
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.Rook", category: "ChatSessionController")
+    private static let timingLogsEnabled = ProcessInfo.processInfo.environment["ROOK_SESSION_TIMING_LOGS"] == "1"
     var onStateChange: (() -> Void)?
     var onCurrentSessionChange: ((AgentSessionSummary?) -> Void)?
     var onEnvironmentOffered: ((EnvironmentOffer) -> Void)?
@@ -90,14 +93,19 @@ final class ChatSessionController {
         startingSession = true
         Task {
             defer { self.startingSession = false; completion?() }
+            let startedAt = Date().timeIntervalSinceReferenceDate
             do {
                 let socket = AcpSocket()
+                let connectStartedAt = Date().timeIntervalSinceReferenceDate
                 _ = try await socket.connect(request: api.webSocketRequest())
+                Self.timingLog("connect complete", elapsedMs: Date().timeIntervalSinceReferenceDate - connectStartedAt, runtimeId: agentId)
+                let createStartedAt = Date().timeIntervalSinceReferenceDate
                 let sessionId = try await socket.createSession(
                     runtimeId: agentId,
                     title: title,
                     cwd: FileManager.default.currentDirectoryPath
                 )
+                Self.timingLog("session/new complete", elapsedMs: Date().timeIntervalSinceReferenceDate - createStartedAt, runtimeId: agentId, sessionId: sessionId)
 
                 let summary = AgentSessionSummary(raw: .object([
                     "sessionId": .string(sessionId),
@@ -113,11 +121,15 @@ final class ChatSessionController {
                 handles[sessionId] = handle
                 wireHandle(handle)
                 currentSession = summary
+                let refreshStartedAt = Date().timeIntervalSinceReferenceDate
                 await loadSessions()
+                Self.timingLog("loadSessions complete", elapsedMs: Date().timeIntervalSinceReferenceDate - refreshStartedAt, runtimeId: agentId, sessionId: sessionId)
                 if let refreshed = sessions.first(where: { $0.id == sessionId }) {
                     currentSession = refreshed
                 }
+                Self.timingLog("startNewSession complete", elapsedMs: Date().timeIntervalSinceReferenceDate - startedAt, runtimeId: agentId, sessionId: sessionId)
             } catch {
+                Self.timingLog("startNewSession failed", elapsedMs: Date().timeIntervalSinceReferenceDate - startedAt, runtimeId: agentId, error: error.localizedDescription)
                 sessionsError = error.localizedDescription
             }
         }
@@ -178,5 +190,19 @@ final class ChatSessionController {
         handle.onEnvironmentOfferResolved = { [weak self] in self?.onEnvironmentOfferResolved?($0, $1) }
         handle.onEnvironmentEntered = { [weak self] in self?.onEnvironmentEntered?($0) }
         handle.onEnvironmentExited = { [weak self] in self?.onEnvironmentExited?($0, $1) }
+    }
+
+    private static func timingLog(_ message: String, elapsedMs: CFTimeInterval, runtimeId: String, sessionId: String? = nil, error: String? = nil) {
+        guard timingLogsEnabled else { return }
+        let rounded = (elapsedMs * 1000).rounded() / 1000
+        if let sessionId, let error {
+            logger.info("timing \(message, privacy: .public) runtime=\(runtimeId, privacy: .public) session=\(sessionId, privacy: .public) elapsedMs=\(rounded, privacy: .public) error=\(error, privacy: .public)")
+        } else if let sessionId {
+            logger.info("timing \(message, privacy: .public) runtime=\(runtimeId, privacy: .public) session=\(sessionId, privacy: .public) elapsedMs=\(rounded, privacy: .public)")
+        } else if let error {
+            logger.info("timing \(message, privacy: .public) runtime=\(runtimeId, privacy: .public) elapsedMs=\(rounded, privacy: .public) error=\(error, privacy: .public)")
+        } else {
+            logger.info("timing \(message, privacy: .public) runtime=\(runtimeId, privacy: .public) elapsedMs=\(rounded, privacy: .public)")
+        }
     }
 }

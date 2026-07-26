@@ -98,7 +98,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
   const sessionRepository = new SqliteSessionRepository(datastore);
   const transcriptStore = new SessionTranscriptStore(datastore);
-  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, environmentManager, transcriptStore);
+  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, environmentManager, transcriptStore, app.log);
   await app.register(websocket);
 
   app.addHook("onRequest", async (request, reply) => {
