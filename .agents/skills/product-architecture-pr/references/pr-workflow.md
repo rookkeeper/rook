@@ -30,13 +30,22 @@ If they say yes:
 
 ## Fast local sync after merge
 
-When the developer wants local `main` updated after merge, this is the fastest safe path when local `main` may have drifted:
+When the developer wants local `main` updated after merge, **do not clobber local-only commits or tracked changes on local `main`**. Never use `git reset --hard origin/main` as the default sync step after a PR merge.
 
-1. stash unrelated dirty files
-2. `git switch main`
-3. `git fetch origin`
-4. preserve old local main if needed (for example `git branch backup/main-before-sync`)
-5. `git reset --hard origin/main`
-6. restore the stashed local files
+Safe default:
 
-Use `git pull --ff-only` only when you are confident local `main` has not diverged.
+1. `git switch main`
+2. `git fetch origin`
+3. inspect divergence:
+   - `git log --oneline main..origin/main`
+   - `git log --oneline origin/main..main`
+4. if local `main` has **no local-only commits**, use:
+   - `git pull --ff-only`
+5. if local `main` **does have local-only commits**, preserve them and integrate non-destructively:
+   - either `git merge origin/main`
+   - or create an integration branch and merge there first if conflict risk is high
+6. only stash unrelated dirty files if they block branch switching or merging, then restore them afterward
+
+The goal is to **merge remote `main` into local `main`, not overwrite local `main` with remote state**.
+
+If the developer explicitly asks to discard local `main` commits, confirm that intent before doing anything destructive.

@@ -117,7 +117,7 @@ If the developer said to use branch/PR flow:
 4. `gh pr create` with title and body from template
 5. Return the PR URL
 6. Ask whether they want it merged now
-7. If yes, prefer squash merge and follow the local-sync guidance in [`references/pr-workflow.md`](./references/pr-workflow.md)
+7. If yes, use an allowed merge method for the repo and follow the non-destructive local-sync guidance in [`references/pr-workflow.md`](./references/pr-workflow.md)
 
 If the developer explicitly said to push directly to `main` / `master`, you may do so.
 
@@ -142,3 +142,7 @@ This PR format borrows from [Architecture Decision Records](https://cognitect.co
 
 - Full PR body template: [pr-template.md](pr-template.md)
 - Repo PR expectations: [AGENTS.md](../../../AGENTS.md)
+
+## Local main safety
+
+After merging a PR, do not hard-reset local `main` to `origin/main` unless the developer explicitly asks to discard local-only work. The default is to bring remote `main` into local `main` non-destructively.
