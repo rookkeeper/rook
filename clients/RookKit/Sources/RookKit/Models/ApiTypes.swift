@@ -12,6 +12,20 @@ public struct AgentDefinition: Codable, Equatable, Identifiable {
 
 /// Wraps the raw session record JSON so resume can send the record back to
 /// ACP session summaries plus Rook `_meta` fields, including fields this app doesn't model.
+public enum SessionSelectionStatus: String, Equatable {
+    case active
+    case on
+    case off
+
+    public var label: String {
+        switch self {
+        case .active: return "Active"
+        case .on: return "On"
+        case .off: return "Off"
+        }
+    }
+}
+
 public struct AgentSessionSummary: Equatable, Identifiable {
     public let raw: JSONValue
 
@@ -26,6 +40,13 @@ public struct AgentSessionSummary: Equatable, Identifiable {
     public var connectedClients: Int { Int(raw["connectedClients"]?.numberValue ?? 0) }
     public var updatedAtISO: String? { raw["updatedAt"]?.stringValue }
     public var startedAtISO: String? { raw["createdAt"]?.stringValue ?? raw["_meta"]?["startedAt"]?.stringValue }
+
+    public func selectionStatus(currentSessionId: String?) -> SessionSelectionStatus {
+        if running, currentSessionId == id {
+            return .active
+        }
+        return running ? .on : .off
+    }
 
     public var createdAt: Date? {
         guard let iso = startedAtISO else {

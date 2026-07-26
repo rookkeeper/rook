@@ -83,7 +83,7 @@ Rook (iOS app target)                         RookWidgets (app-extension)
   ├─ Location/
   │   ├─ Place.swift          Place + PlaceStore (UserDefaults) + CLVisit suggestions
   │   └─ LocationProvider.swift   CLCircularRegion monitoring, CLVisit, Always auth
-  └─ Views/               RootView · AgentPickerScreen · ChatScreen · PlacesScreen · EnvironmentOfferSheet
+  └─ Views/               RootView · SessionsHomeScreen · ChatScreen · PlacesScreen · EnvironmentOfferSheet
             │
             ▼ depends on
         RookKit  ──── Models · Net (RookAPI/AcpSocket) · Design · Voice · LiveActivity

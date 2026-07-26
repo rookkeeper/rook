@@ -14,7 +14,7 @@ struct RootView: View {
             if model.currentSession != nil && model.chatVisible {
                 ChatScreen(model: model)
             } else {
-                AgentPickerScreen(model: model)
+                SessionsHomeScreen(model: model)
             }
         }
         .tint(PanelPalette.accent)

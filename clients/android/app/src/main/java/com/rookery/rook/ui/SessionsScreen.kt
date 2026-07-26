@@ -5,5 +5,5 @@ import com.rookery.rook.RookViewModel
 
 @Composable
 fun SessionsScreen(viewModel: RookViewModel) {
-    AgentPickerScreen(viewModel)
+    SessionsHomeScreen(viewModel)
 }

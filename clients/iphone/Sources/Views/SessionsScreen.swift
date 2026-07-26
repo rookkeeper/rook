@@ -136,7 +136,7 @@ struct SessionsScreen: View {
                         Button {
                             model.resumeSession(session)
                         } label: {
-                            SessionRow(session: session)
+                            SessionRow(session: session, currentSessionId: model.currentSession?.id)
                         }
                         .buttonStyle(.plain)
                         .disabled(model.startingSession)
@@ -161,15 +161,16 @@ struct SessionsScreen: View {
 
 private struct SessionRow: View {
     let session: AgentSessionSummary
+    let currentSessionId: String?
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: session.running ? "bolt.fill" : "moon.zzz")
+            Image(systemName: statusIcon)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(session.running ? PanelPalette.success : PanelPalette.textMuted)
+                .foregroundStyle(statusTint)
                 .frame(width: 30, height: 30)
                 .background(
-                    Circle().fill((session.running ? PanelPalette.success : PanelPalette.textMuted).opacity(0.14))
+                    Circle().fill(statusTint.opacity(0.14))
                 )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -194,7 +195,7 @@ private struct SessionRow: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(
-                    Capsule().fill((session.running ? PanelPalette.success : PanelPalette.textMuted).opacity(0.25))
+                    Capsule().fill(statusTint.opacity(0.25))
                 )
 
             Image(systemName: "chevron.right")
@@ -205,10 +206,27 @@ private struct SessionRow: View {
         .contentShape(Rectangle())
     }
 
-    private var statusLabel: String {
-        if session.running {
-            return session.connectedClients > 0 ? "\(session.connectedClients) live" : "Running"
+    private var status: SessionSelectionStatus {
+        session.selectionStatus(currentSessionId: currentSessionId)
+    }
+
+    private var statusTint: Color {
+        switch status {
+        case .active: return PanelPalette.warning
+        case .on: return PanelPalette.success
+        case .off: return PanelPalette.textMuted
         }
-        return "Stopped"
+    }
+
+    private var statusIcon: String {
+        switch status {
+        case .active: return "waveform.and.mic"
+        case .on: return "bolt.fill"
+        case .off: return "moon.zzz"
+        }
+    }
+
+    private var statusLabel: String {
+        status.label
     }
 }

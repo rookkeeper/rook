@@ -12,7 +12,7 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
 
 ## Features
 
-- **Agent picker** - unified Sessions home screen listing all sessions across runtimes, with a New Chat form that selects a configured runtime.
+- **Sessions home** - unified session-selection screen listing all sessions across runtimes, with a New Chat form that selects a configured runtime.
 - **Sessions** - session history ordered by most recently updated; resume any session by clicking it. Discovery is REST (`GET /api/sessions`). Live interaction is one session-bound WebSocket per session.
 - **Auto-resume** - on launch the app rejoins the most recent session; if it is already running, it hydrates from `GET /api/sessions/:id/transcript` instead of reloading the runtime.
 - **Streaming chat** — `session/prompt` over `ws://127.0.0.1:7665/api/ws?sessionId=...`;

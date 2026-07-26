@@ -12,7 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.rookery.rook.ui.AgentPickerScreen
+import com.rookery.rook.ui.SessionsHomeScreen
 import com.rookery.rook.ui.ChatScreen
 import com.rookery.rook.ui.EnvironmentOfferSheet
 import com.rookery.rook.ui.EnvironmentsScreen
@@ -44,7 +44,7 @@ fun RookApp(viewModel: RookViewModel, simulateArrival: Pair<Double, Double>? = n
     ) {
         when {
             currentSession != null && chatVisible -> ChatScreen(viewModel)
-            else -> AgentPickerScreen(viewModel)
+            else -> SessionsHomeScreen(viewModel)
         }
     }
 
