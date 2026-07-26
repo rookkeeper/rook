@@ -91,25 +91,32 @@ final class ChatSessionController {
         Task {
             defer { self.startingSession = false; completion?() }
             do {
-                // Create the session via a temporary socket, then hand off
-                // to a permanent handle that loads it on its own WebSocket.
-                let tempSocket = AcpSocket()
-                _ = try await tempSocket.connect(request: api.webSocketRequest())
-                let sessionId = try await tempSocket.createSession(
+                let socket = AcpSocket()
+                _ = try await socket.connect(request: api.webSocketRequest())
+                let sessionId = try await socket.createSession(
                     runtimeId: agentId,
                     title: title,
                     cwd: FileManager.default.currentDirectoryPath
                 )
-                tempSocket.disconnect()
 
+                let summary = AgentSessionSummary(raw: .object([
+                    "sessionId": .string(sessionId),
+                    "title": .string(title),
+                    "updatedAt": .string(ISO8601DateFormatter().string(from: Date())),
+                    "running": .bool(true),
+                    "_meta": .object([
+                        "runtimeId": .string(agentId),
+                        "startedAt": .string(ISO8601DateFormatter().string(from: Date())),
+                    ]),
+                ]))
+                let handle = SessionHandle(sessionId: sessionId, api: api, socket: socket, isLoaded: true)
+                handles[sessionId] = handle
+                wireHandle(handle)
+                currentSession = summary
                 await loadSessions()
-                let summary = sessions.first(where: { $0.id == sessionId })
-                    ?? AgentSessionSummary(raw: .object([
-                        "sessionId": .string(sessionId),
-                        "title": .string(title),
-                        "_meta": .object(["runtimeId": .string(agentId)]),
-                    ]))
-                resumeSession(summary)
+                if let refreshed = sessions.first(where: { $0.id == sessionId }) {
+                    currentSession = refreshed
+                }
             } catch {
                 sessionsError = error.localizedDescription
             }

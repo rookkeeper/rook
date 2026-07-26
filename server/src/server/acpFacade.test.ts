@@ -73,7 +73,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     ws.close();
   });
 
-  it("creates, loads, prompts, and closes a session", async () => {
+  it("creates, prompts, and closes a session on the same websocket", async () => {
     const ws = await connect();
     await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
 
@@ -85,7 +85,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const sessionId = created.sessionId as string;
     expect(typeof sessionId).toBe("string");
 
-    await request(ws, 3, "session/load", { sessionId });
+    await expect(request(ws, 3, "session/list", {})).rejects.toThrow("session/list is not available on a session-bound websocket");
 
     const promptResult = await request(ws, 4, "session/prompt", {
       sessionId,
@@ -111,7 +111,6 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       _meta: { runtimeId: "MockAcpAgent", title: "cancel-test" },
     });
     const sessionId = created.sessionId as string;
-    await request(ws, 3, "session/load", { sessionId });
 
     send(ws, 4, "session/prompt", {
       sessionId,
@@ -151,19 +150,23 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   });
 
   it("binds a websocket to one session and rejects cross-session use", async () => {
-    const control = await connect();
-    await request(control, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
-    const a = await request(control, 2, "session/new", {
+    const controlA = await connect();
+    await request(controlA, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
+    const a = await request(controlA, 2, "session/new", {
       cwd: "/tmp",
       mcpServers: [],
       _meta: { runtimeId: "MockAcpAgent", title: "bound-a" },
     });
-    const b = await request(control, 3, "session/new", {
+    controlA.close();
+
+    const controlB = await connect();
+    await request(controlB, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
+    const b = await request(controlB, 2, "session/new", {
       cwd: "/tmp",
       mcpServers: [],
       _meta: { runtimeId: "MockAcpAgent", title: "bound-b" },
     });
-    control.close();
+    controlB.close();
 
     const ws = await connect(`/api/ws?sessionId=${a.sessionId}`);
     await request(ws, 4, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
@@ -184,7 +187,6 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       _meta: { runtimeId: "MockAcpAgent", title: "private-replay" },
     });
     const sessionId = created.sessionId as string;
-    await request(creator, 3, "session/load", { sessionId });
     await request(creator, 4, "session/prompt", {
       sessionId,
       prompt: [{ type: "text", text: "tell me a joke" }],
@@ -215,7 +217,6 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       _meta: { runtimeId: "MockAcpAgent", title: "zero-viewers" },
     });
     const sessionId = created.sessionId as string;
-    await request(ws, 3, "session/load", { sessionId });
     send(ws, 4, "session/prompt", {
       sessionId,
       prompt: [{ type: "text", text: "run a long task" }],
@@ -237,19 +238,23 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   });
 
   it("isolates updates between two simultaneously running sessions", async () => {
-    const control = await connect();
-    await request(control, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "control" } });
-    const a = await request(control, 2, "session/new", {
+    const controlA = await connect();
+    await request(controlA, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "control-a" } });
+    const a = await request(controlA, 2, "session/new", {
       cwd: "/tmp",
       mcpServers: [],
       _meta: { runtimeId: "MockAcpAgent", title: "iso-a" },
     });
-    const b = await request(control, 3, "session/new", {
+    controlA.close();
+
+    const controlB = await connect();
+    await request(controlB, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "control-b" } });
+    const b = await request(controlB, 2, "session/new", {
       cwd: "/tmp",
       mcpServers: [],
       _meta: { runtimeId: "MockAcpAgent", title: "iso-b" },
     });
-    control.close();
+    controlB.close();
 
     const watcherA = await connect(`/api/ws?sessionId=${a.sessionId}`);
     const watcherB = await connect(`/api/ws?sessionId=${b.sessionId}`);
@@ -268,22 +273,22 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   });
 
   it("lists sessions via REST /api/sessions", async () => {
-    const ws = await connect();
-    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
-
-    // Create two sessions
-    const a = await request(ws, 2, "session/new", {
+    const wsA = await connect();
+    await request(wsA, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test-a" } });
+    await request(wsA, 2, "session/new", {
       cwd: "/tmp",
       mcpServers: [],
       _meta: { runtimeId: "MockAcpAgent", title: "rest-test-a" },
     });
-    const b = await request(ws, 3, "session/new", {
+
+    const wsB = await connect();
+    await request(wsB, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test-b" } });
+    await request(wsB, 2, "session/new", {
       cwd: "/tmp",
       mcpServers: [],
       _meta: { runtimeId: "MockAcpAgent", title: "rest-test-b" },
     });
 
-    // Fetch via REST
     const response = await fetch(`http://127.0.0.1:${PORT}/api/sessions`);
     expect(response.status).toBe(200);
     const body = await response.json() as { sessions: Array<Record<string, unknown>> };
@@ -293,12 +298,12 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     expect(titles).toContain("rest-test-a");
     expect(titles).toContain("rest-test-b");
 
-    // running should be true for sessions with active runtimes
     const sessionA = body.sessions.find((s) => s.title === "rest-test-a")!;
     expect(sessionA.running).toBe(true);
     expect(sessionA._meta).toBeDefined();
     expect((sessionA._meta as Record<string, unknown>).runtimeId).toBe("MockAcpAgent");
 
-    ws.close();
+    wsA.close();
+    wsB.close();
   });
 });

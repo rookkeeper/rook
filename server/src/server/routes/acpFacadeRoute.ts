@@ -116,7 +116,7 @@ async function handleMessage(
         if (!runtimeId) throw new Error("No configured runtimes are available");
         const title = typeof meta?.title === "string" && meta.title.trim() ? meta.title.trim() : "session";
         const record = await runtimes.createSession(runtimeId, withoutMeta(params), title);
-        subscribe(record.sessionId);
+        binding.bindSessionId(record.sessionId);
         send(success(requestId!, { sessionId: record.sessionId }));
         return;
       }

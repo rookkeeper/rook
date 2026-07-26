@@ -507,13 +507,36 @@ final class RookModel: ObservableObject {
         Task {
             defer { startingSession = false }
             do {
-                let tempSocket = AcpSocket()
-                _ = try await tempSocket.connect(request: api.webSocketRequest())
-                let sessionId = try await tempSocket.createSession(runtimeId: agentId, title: trimmed.isEmpty ? "session" : trimmed, cwd: FileManager.default.currentDirectoryPath)
-                tempSocket.disconnect()
+                let title = trimmed.isEmpty ? "session" : trimmed
+                let socket = AcpSocket()
+                _ = try await socket.connect(request: api.webSocketRequest())
+                let sessionId = try await socket.createSession(runtimeId: agentId, title: title, cwd: FileManager.default.currentDirectoryPath)
+                let now = ISO8601DateFormatter().string(from: Date())
+                let session = AgentSessionSummary(raw: .object([
+                    "sessionId": .string(sessionId),
+                    "title": .string(title),
+                    "updatedAt": .string(now),
+                    "running": .bool(true),
+                    "_meta": .object([
+                        "runtimeId": .string(agentId),
+                        "startedAt": .string(now),
+                    ]),
+                ]))
+                let handle = SessionHandle(sessionId: sessionId, api: api, socket: socket, isLoaded: true)
+                handles[sessionId] = handle
+                wireHandle(handle)
+                currentSession = session
+                syncChatState()
+                selectedAgentId = nil
+                chatVisible = true
+                enteredEnvironments = []
+                environmentListItems = []
+                updateLiveActivity()
+                refreshEnvironmentList()
                 await loadSessions()
-                if let session = sessions.first(where: { $0.id == sessionId }) {
-                    resumeSession(session)
+                if let refreshed = sessions.first(where: { $0.id == sessionId }) {
+                    currentSession = refreshed
+                    syncChatState()
                 }
             } catch {
                 sessionsError = error.localizedDescription

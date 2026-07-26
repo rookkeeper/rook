@@ -7,7 +7,7 @@
 ## Main components
 
 - `Net/AcpSocket.swift`
-  - session-bound ACP WebSocket client for `/api/ws?sessionId=...`
+  - ACP WebSocket client for `/api/ws`, optionally session-bound via `?sessionId=...`
   - owns request/response bookkeeping and event reduction
 - `Net/SessionHandle.swift`
   - shared per-session state container used by both Apple clients

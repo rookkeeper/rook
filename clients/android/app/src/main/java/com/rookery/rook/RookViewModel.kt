@@ -293,9 +293,23 @@ class RookViewModel(
             _startingSession.value = true
             try {
                 ensureSocketConnected()
-                val sessionId = socket.createSession(agentId, trimmedName.ifEmpty { "session" }, System.getProperty("user.dir") ?: ".")
-                _sessions.value = socket.sessionList().map(::AgentSessionSummary)
-                _sessions.value.firstOrNull { it.id == sessionId }?.let { enterChat(it, resumed = false) }
+                val title = trimmedName.ifEmpty { "session" }
+                val sessionId = socket.createSession(agentId, title, System.getProperty("user.dir") ?: ".")
+                val session = AgentSessionSummary(
+                    raw = buildJsonObject {
+                        put("sessionId", sessionId)
+                        put("title", title)
+                        put("updatedAt", java.time.Instant.now().toString())
+                        put("running", true)
+                        putJsonObject("_meta") {
+                            put("runtimeId", agentId)
+                            put("startedAt", java.time.Instant.now().toString())
+                        }
+                    }
+                )
+                enterChat(session, resumed = false)
+                _sessions.value = api.sessions().map(::AgentSessionSummary)
+                _sessions.value.firstOrNull { it.id == sessionId }?.let { _currentSession.value = it }
             } catch (e: Exception) {
                 _sessionsError.value = e.message ?: "Failed to start session"
             } finally {

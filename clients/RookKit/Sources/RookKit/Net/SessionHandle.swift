@@ -17,7 +17,7 @@ public final class SessionHandle {
     public var onAgentTextChunk: ((String) -> Void)?
 
     private let api: RookAPI
-    private let socket = AcpSocket()
+    private let socket: AcpSocket
 
     // MARK: - Observable state (same shape ChatSessionController exposed)
     public private(set) var blocks: [ChatBlock] = [] { didSet { onStateChange?() } }
@@ -54,15 +54,18 @@ public final class SessionHandle {
     private var replayAssistantBuffer = ""
     private var replayThinkingBuffer = ""
 
-    public init(sessionId: String, api: RookAPI) {
+    public init(sessionId: String, api: RookAPI, socket: AcpSocket? = nil, isLoaded: Bool = false) {
         self.sessionId = sessionId
         self.api = api
-        socket.onEvent = { [weak self] event in
+        self.socket = socket ?? AcpSocket()
+        self.isLoaded = isLoaded
+        self.socket.onEvent = { [weak self] event in
             self?.handleSocketEvent(event)
         }
-        socket.onConnectionChange = { [weak self] connected in
+        self.socket.onConnectionChange = { [weak self] connected in
             self?.handleSocketConnectionChange(connected)
         }
+        self.socketConnected = self.socket.isConnected
     }
 
     // MARK: - Lifecycle
@@ -70,6 +73,7 @@ public final class SessionHandle {
     public func connectAndLoad(title: String, cwd: String) async throws {
         try await ensureSocketConnected()
         _ = try await socket.createSession(runtimeId: "", title: title, cwd: cwd)
+        isLoaded = true
     }
 
     public func load() async throws {
