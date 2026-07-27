@@ -29,7 +29,6 @@ export interface CandidateEnvironmentRecord {
 export const ENVIRONMENT_KINDS = [
   "location",
   "web",
-  "project",
   "mac",
   "dir",
   "iphone",

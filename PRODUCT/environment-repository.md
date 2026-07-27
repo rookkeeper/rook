@@ -61,8 +61,8 @@ Environment ids use:
 Current top-level environment types we want to standardize around:
 - `location`
 - `web`
-- `project`
 - `mac`
+- `dir`
 - `iphone`
 - `android`
 - `windows`
@@ -73,7 +73,7 @@ Examples:
 - `web:example.com`
 - `web:example.com/stuff`
 - `location:office`
-- `project:rookkeeper/rook`
+- `dir:/Users/johnberryman/projects/github/rookkeeper/rook`
 
 ## Filesystem shape
 
@@ -82,10 +82,10 @@ Top level is organized by environment type:
 ```text
 environment-repository/
 ├── android/
+├── dir/
 ├── iphone/
 ├── location/
 ├── mac/
-├── project/
 ├── web/
 └── windows/
 ```
@@ -96,7 +96,7 @@ Examples:
 - `mac:md.obsidian` → `mac/md.obsidian/`
 - `mac:md.obsidian/reading_vault` → `mac/md.obsidian/reading_vault/`
 - `location:office` → `location/office/`
-- `project:rookkeeper/rook` → `project/rookkeeper/rook/`
+- `dir:/Users/johnberryman/projects/github/rookkeeper/rook` → `dir/Users/johnberryman/projects/github/rookkeeper/rook/`
 - `web:example.com` → `web/example.com/`
 
 ## Bundles

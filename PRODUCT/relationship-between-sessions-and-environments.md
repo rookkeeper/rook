@@ -1,6 +1,6 @@
 # Relationship between Sessions and Environments
 
-An environment is a context the user finds themselves in — a website, a physical location, a project, a Mac app surface, or any other recognizable domain. Each environment can have zero or more **capability bundles** associated with it. A bundle contains skills, MCP servers, and app instructions that an agent can use while the user is in that environment.
+An environment is a context the user finds themselves in — a website, a physical location, a directory, a Mac app surface, or any other recognizable domain. Each environment can have zero or more **capability bundles** associated with it. A bundle contains skills, MCP servers, and app instructions that an agent can use while the user is in that environment.
 
 ## Bundle decisions are app-wide, not per-session
 
