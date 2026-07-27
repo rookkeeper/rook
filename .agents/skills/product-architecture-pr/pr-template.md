@@ -1,27 +1,18 @@
-## Summary
+## What changed
 
-[2–4 sentences: what changed at product/architecture level and the outcome.]
+[2–5 bullets. Keep this very skimmable. What changed at a product/architecture level?]
 
-## Problem / context
+## Why it matters
 
-[Forces, constraints, user need, or gap in current behavior. What was broken, missing, or unclear?]
+[Required. 1 short paragraph or 2–4 bullets. What gets better for the user, system, or team?]
 
-## Why this matters
+## Notes for reviewers
 
-[Required. User-visible value, security, reliability, or strategic alignment with Rook's agent + environment model. If not obvious, this section must be explicit.]
+[Optional. Anything worth watching: tradeoffs, rollout notes, follow-ups, known limitations, or one important implementation detail.]
 
-## Approaches considered
+## Alternatives / tradeoffs
 
-| Option | Summary | Why not (or chosen) |
-|--------|---------|---------------------|
-| [A] | | |
-| [B] | | |
-
-_Omit this section only when there was a single obvious path; say so in one line._
-
-## Decision / approach taken
-
-[One clear declarative statement, then 2–5 bullets on the chosen approach and tradeoffs accepted.]
+[Optional. Only include this when there was a real choice worth documenting. Keep it to a few bullets, not a long comparison.]
 
 ## Product specification alignment
 
@@ -49,7 +40,7 @@ _Omit this section only when there was a single obvious path; say so in one line
 
 **Notes:** [Boundary changes, new components, deprecated patterns]
 
-## High-level technical footprint
+## Technical touchpoints
 
 _Optional. Abstract only — major types, services, APIs, events, schemas._
 
@@ -57,9 +48,9 @@ _Optional. Abstract only — major types, services, APIs, events, schemas._
 - **APIs / protocols:** [e.g. interact_with_environment, WebSocket payload]
 - **Data / events:** [e.g. EnvironmentStateDelta schema]
 
-## Test plan
+## How to check it
 
-- [ ] [How reviewer verifies product behavior]
+- [ ] [How reviewer verifies the main behavior]
 - [ ] [Regression or edge case checked]
 - [ ] [Docs render / links valid]
 

@@ -11,7 +11,7 @@ description: >-
 
 # Product & Architecture Pull Requests
 
-Rookery PRs are decision records for **what changed in the product and architecture**, not walkthroughs of every code hunk. The code diff is the detail; the PR is the rationale, alignment, and consequences.
+Rookery PRs should be easy to skim. They should explain **what changed, why it matters, and how it fits the product/architecture** without reading like a formal ADR. The code diff is still the source of low-level detail; the PR should surface the important chunks fast.
 
 Read [`references/pr-workflow.md`](./references/pr-workflow.md) when deciding whether to use a PR, when opening a PR for a large issue-sized chunk, and when handling post-merge local sync.
 
@@ -24,6 +24,8 @@ Read [`references/pr-workflow.md`](./references/pr-workflow.md) when deciding wh
 - **Update `PRODUCT/` in the same PR** when the change introduces, modifies, or removes a product or architecture idea - but don't be overly nit-picky because we don't want too much documentation churn. Most of product documents are quite high-level, so we don't need low-level product changes. See [AGENTS.md](../../../AGENTS.md).
 - **Do not ship** until product/architecture alignment sections are complete and doc updates are included (or explicitly marked N/A with reason).
 - If the **why this matters** section of the PR is missing or weak, **stop and ask the developer** before opening the PR.
+- Prefer short, casual, scannable PR prose over exhaustive writeups. Use plain language, short bullets, and only enough context for a reviewer to orient quickly.
+- Do not include an "approaches considered" section by default. Only mention alternatives when there was a real tradeoff the reviewer should understand.
 - **After creating a PR, ask the developer whether they want it merged now.** Do not assume that opening the PR implies immediate merge.
 
 ## Workflow
@@ -55,12 +57,12 @@ Skim code only enough to map **abstract** impact: major components, patterns, AP
 
 Compare the branch to the default branch (`git diff`, commit history, chat context). Summarize:
 
-- **Problem** — what user or system need this addresses
-- **Decision** — what approach was taken (one declarative sentence)
-- **Consequences** — tradeoffs, follow-ups, risks
-- **Technical footprint** (high level) — e.g. new `EnvironmentManager` callback, WebSocket event shape, skill YAML fields
+- **What changed** — the main behavior or capability added/changed
+- **Why it matters** — the user or system payoff
+- **Anything to watch** — tradeoffs, follow-ups, risks, or rollout notes
+- **Technical footprint** (high level, optional) — e.g. new `EnvironmentManager` callback, WebSocket event shape, skill YAML fields
 
-Skip exhaustive file lists and implementation narration.
+Skip exhaustive file lists, implementation narration, and ADR-style ceremony unless the change genuinely needs it.
 
 ### 3. Classify alignment
 
@@ -90,8 +92,7 @@ Include doc changes in the **same branch** as the code.
 
 ### 5. PR title
 
-Use a scannable, ADR-style title (problem → outcome):
-
+Use a scannable, plain-English title focused on the outcome.
 
 Examples:
 
@@ -104,7 +105,7 @@ Examples:
 
 ### 6. PR body
 
-Use the template in [pr-template.md](pr-template.md). And update it as indicated in the template. Keep prose at the **abstract** level. Point to paths or types for detail; do not duplicate the diff.
+Use the template in [pr-template.md](pr-template.md). And update it as indicated in the template. Keep it short, casual, and easy to scan. Point to paths or types for detail; do not duplicate the diff.
 
 ### 7. Ship the PR
 
@@ -136,7 +137,7 @@ Use direct questions; do not guess importance.
 
 ## Relationship to ADRs
 
-This PR format borrows from [Architecture Decision Records](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions) (context, decision, consequences, alternatives). Rookery uses **`PRODUCT/` as the living spec** rather than a separate `docs/adr/` tree — the PR links change to those docs and updates them when the decision lands.
+This PR format still captures the useful ADR bits — context, decision, consequences — but in a lighter, more conversational format. Rookery uses **`PRODUCT/` as the living spec** rather than a separate `docs/adr/` tree, so the PR should connect the change to those docs without turning into a long design memo.
 
 ## Additional resources
 
