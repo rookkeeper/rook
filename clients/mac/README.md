@@ -108,25 +108,43 @@ immediately and start a configurable 5-minute local TTL window.
 Tracked foreground environments include:
 
 - frontmost regular apps as `mac:<bundleId>`
-- richer foreground-derived app environments such as `mac:md.obsidian/<vault>`
+- richer foreground-derived app environments such as:
+  - `mac:md.obsidian/<vault>`
+  - `mac:md.obsidian/_plugin/<plugin-id>` for enabled community plugins
+  - `mac:com.tinyspeck.slackmacgap/<workspace>/<channel>`
+  - `mac:com.obsproject.obs-studio/<scene-collection>`
+  - `mac:com.descript.beachcube/<project>`
+  - `mac:com.hnc.Discord/<server>/<channel>`
 - frontmost browser pages as deepest `web:<host>/<path>` ids
 
 Examples:
 
-- frontmost Slack → `mac:com.tinyspeck.slackmacgap`
+- frontmost Slack in `#announcements` on `NashDev` →
+  `mac:com.tinyspeck.slackmacgap/NashDev/announcements`
 - Obsidian in the `Peeps` vault → `mac:md.obsidian/Peeps`
+- OBS Studio in the `Untitled` scene collection →
+  `mac:com.obsproject.obs-studio/Untitled`
+- Descript in the `AI Tinkerers 2026.05.22` project →
+  `mac:com.descript.beachcube/AI%20Tinkerers%202026.05.22`
+- Discord in `#self-promotion` on `Build With AI` →
+  `mac:com.hnc.Discord/Build%20With%20AI/%23self-promotion`
 - `https://en.wikipedia.org/wiki/Main_Page?foo=bar` →
   `web:en.wikipedia.org/wiki/Main_Page`
 
 The Mac app registers the exact encountered ID it sees at the moment, such as:
 
-- `mac:com.tinyspeck.slackmacgap`
+- `mac:com.tinyspeck.slackmacgap/NashDev/announcements`
 - `mac:md.obsidian/Peeps`
+- `mac:com.obsproject.obs-studio/Untitled`
+- `mac:com.descript.beachcube/AI%20Tinkerers%202026.05.22`
+- `mac:com.hnc.Discord/Build%20With%20AI/%23self-promotion`
 - `web:en.wikipedia.org/wiki/Main_Page`
 
-For Obsidian, vault parsing is title-based and works backwards so note names may
-contain dashes safely. For plain apps the base identity is the bundle id:
-`mac:<bundleId>`.
+Specialist providers now live under `Sources/Models/EnvironmentProviders/` and
+are assembled into an explicit bundle-id registry. Bundle IDs with no
+specialist use the generic provider. For Obsidian, vault parsing is title-based
+and works backwards so note names may contain dashes safely. For plain apps the
+base identity is the bundle id: `mac:<bundleId>`.
 
 Each newly encountered environment registers with a fresh `registeredAt`
 timestamp (`POST /api/environments/register`). If the same cached environment

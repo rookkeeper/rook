@@ -24,6 +24,9 @@ The macOS client is a native SwiftUI menu bar app with a regular app window. It 
   - ACP WebSocket transport and REST client
 - `ForegroundAppMonitor`
   - detects frontmost app changes and in-app title refreshes
+- `AppEnvironmentProvider`
+  - owns the explicit bundle-id → specialist-provider registry
+  - routes each focused app to exactly one provider: a specialist or the generic fallback
 - `AXReader`
   - reads Accessibility-backed window/app context
 - `MacBridge`
@@ -55,7 +58,7 @@ Bound to `127.0.0.1` and bearer-token protected:
 ### Environment provider surface
 The client derives and registers:
 - `mac:<bundleId>` for the foreground application
-- `mac:<bundleId>/<context>` for richer app-specific contexts like Obsidian vaults
+- `mac:<bundleId>/<context>` for richer app-specific contexts like Obsidian vaults, Slack workspaces/channels, OBS scene collections, Descript projects, and Discord servers/channels
 - `mac:<bundleId>/_plugin/<plugin-id>` for app-specific plugin capabilities such as enabled Obsidian community plugins
 - exact `dir:/absolute/path` directory environments from generic Accessibility document signals
 - hierarchical `web:<host>` and `web:<host>/<path...>` IDs from generic Accessibility web/document signals
@@ -113,9 +116,14 @@ Via `RookKit`:
 2. `AppEnvironmentProvider` always emits the base `mac:<bundleId>` app environment after a short dwell delay
 3. `AppEnvironmentProvider` activates either a bundle-id-specific specialist or the generic fallback provider
 4. `GenericEnvironmentProvider` polls every 5 seconds while active, reads Accessibility document and web signals, and emits `dir:` / `web:` candidates only when the normalized environment-id set is stable across two polls
-5. `ObsidianEnvironmentProvider` is currently the only specialist; it polls local data every 5 seconds, reads `~/Library/Application Support/obsidian/obsidian.json`, emits open vault environments, and emits enabled community-plugin environments
-6. `EnvironmentRegistrationController` suppresses duplicate emissions of the same environment id for 1 minute
-7. server may respond with environment offers, which the client presents natively
+5. Specialist providers are selected by bundle-id from an explicit registry and currently include Obsidian, Slack, OBS Studio, Descript, and Discord
+6. `ObsidianEnvironmentProvider` polls local data every 5 seconds, reads `~/Library/Application Support/obsidian/obsidian.json`, emits open vault environments, and emits enabled community-plugin environments
+7. `SlackEnvironmentProvider` polls every 5 seconds, parses the focused window title, and emits workspace plus channel environments when the title exposes a stable channel context
+8. `OBSStudioEnvironmentProvider` polls every 5 seconds, parses the focused window title, and emits scene-collection environments with profile/collection metadata when available
+9. `DescriptEnvironmentProvider` polls every 5 seconds, parses the focused window title, reads `~/Library/Application Support/Descript/config.json`, and emits project environments with route/project metadata when available
+10. `DiscordEnvironmentProvider` polls every 5 seconds, parses the focused window title, and emits server plus channel environments when Discord exposes a `channel | server - Discord` title
+11. `EnvironmentRegistrationController` suppresses duplicate emissions of the same environment id for 1 minute
+12. server may respond with environment offers, which the client presents natively
 
 ### Environment approval
 1. server emits `_com.rookkeeper/environment_offer`
@@ -139,8 +147,8 @@ Via `RookKit`:
 - the mac app is both a client and an environment provider
 - session discovery is REST; agent interaction is one ACP WebSocket per session
 - `SessionHandle` isolates all session state — blocks, streaming buffers, reconnection — so switching never tears down a running session
-- environment registration is layered: base app identity, generic Accessibility-derived candidates, and bundle-id-specific specialists
-- generic environment detection is AX-based and intentionally app-agnostic; app-specific providers are selected by bundle-id lookup with a generic fallback
+- environment registration is layered: base app identity plus exactly one context provider for the focused bundle id
+- generic environment detection is AX-based and intentionally app-agnostic; app-specific providers are selected by bundle-id lookup from an explicit registry with a generic fallback
 - environment registration is local-first and derived from visible user context plus app-owned local data where needed
 - the Mac bridge centralizes Accessibility, Automation, and Screen Recording permissions in one native app
 - reconnect and queued-message handling are built into the client reducer
