@@ -54,24 +54,14 @@ describe("renderEnvironmentPrompt", () => {
     expect(result!).toContain("(none yet)");
   });
 
-  it("includes source name when provided", () => {
-    const result = renderEnvironmentPrompt([makeEntry({ sourceName: "Obsidian" })]);
-    expect(result!).toContain("Source name: Obsidian");
+  it("includes display name when provided", () => {
+    const result = renderEnvironmentPrompt([makeEntry({ displayName: "Obsidian" })]);
+    expect(result!).toContain("Display name: Obsidian");
   });
 
-  it("omits source name line when absent", () => {
-    const result = renderEnvironmentPrompt([makeEntry({ sourceName: undefined })]);
-    expect(result!).not.toContain("Source name:");
-  });
-
-  it("includes canonical source URL when provided", () => {
-    const result = renderEnvironmentPrompt([makeEntry({ canonicalSourceUrl: "https://example.com" })]);
-    expect(result!).toContain("Canonical source URL: https://example.com");
-  });
-
-  it("includes context text when provided", () => {
-    const result = renderEnvironmentPrompt([makeEntry({ contextText: "The user is browsing" })]);
-    expect(result!).toContain("Current environment context: The user is browsing");
+  it("omits display name line when absent", () => {
+    const result = renderEnvironmentPrompt([makeEntry({ displayName: undefined })]);
+    expect(result!).not.toContain("Display name:");
   });
 
   it("renders metadata as JSON block", () => {

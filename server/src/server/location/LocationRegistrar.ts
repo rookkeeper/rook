@@ -1,5 +1,5 @@
 import type { CandidateEnvironmentRecord, EnvironmentCandidate } from "../../shared/environment.js";
-import { renderLocationContextText, writeLocationContextSkill } from "./LocationContextSkill.js";
+import { writeLocationContextSkill } from "./LocationContextSkill.js";
 
 /** The slice of EnvironmentManager the registrar needs (eases testing). */
 export interface LocationEnvironmentSink {
@@ -86,7 +86,6 @@ export class LocationRegistrar {
 
     const [current, ...nearby] = candidates;
     const contextDir = this.writeContextSkill(current, nearby);
-    const contextText = renderLocationContextText(current, nearby);
 
     // Serve the synthesized context bundle through the repository facade so the
     // manager can discover it as a normal environment bundle (no extra runtime channel).
@@ -95,9 +94,8 @@ export class LocationRegistrar {
       id: current.environmentId,
       metadata: {
         ...metadataFor(current, true),
-        sourceName: current.displayName,
-        ...(current.website ? { canonicalSourceUrl: current.website } : {}),
-        contextText,
+        displayName: current.displayName,
+        ...(current.website ? { observedUrls: [current.website] } : {}),
       },
     });
     // Auto-enter the current location so the agent gets the context immediately.
@@ -108,8 +106,8 @@ export class LocationRegistrar {
         id: c.environmentId,
         metadata: {
           ...metadataFor(c, false),
-          sourceName: c.displayName,
-          ...(c.website ? { canonicalSourceUrl: c.website } : {}),
+          displayName: c.displayName,
+          ...(c.website ? { observedUrls: [c.website] } : {}),
         },
       });
     }

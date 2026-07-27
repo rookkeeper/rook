@@ -15,7 +15,7 @@ Current top-level environment kinds are:
 - `android`
 - `windows`
 
-IDs are hierarchical; narrower IDs may imply broader ones (`web:reddit.com/r/foo` ⊂ `web:reddit.com`). Multiple overlapping envs can be active at once. Skills and state can be associated w/ any level of environment.
+Environment ids may still look hierarchical (`web:reddit.com/r/foo`, `dir:/Users/john/...`), but registration and entry are literal. Rook can still use observed paths/URLs to discover other known environments with attached capabilities, but it should not implicitly expand every path segment into an active environment. Multiple overlapping envs can be active at once. Skills and state can be associated w/ any explicit environment id.
 
 For some terminology, there are many "known" environments (ones that are available in an environment repository somewhere). The "available" environments are the ones that the Rook can currently choose to enter (like if you're at Home Depot, then `location:homedepot.com/store-4321` will be available; if you're using Obsidian on the Mac, then `mac:md.obsidian/HomeProjects/ToDos` could be available; if you're browsing the Rook repo in Finder, then `dir:/Users/johnberryman/projects/github/rookkeeper/rook` could be available). And an environment is "entered" if the current session has loaded its skills and is accepting its state changes. (Though it is also possible to request to enter environments that aren't available - like if you want the Rook to know how to navigate a Home Depot even though you're not there. Implementation and UX TBD)
 
@@ -48,7 +48,7 @@ And environment repository needs to be searchable so that you can find environme
 
 Runtime coordinator that serves as a connection between Rook agents, the environments, and the skills. It also remembers skill choices.
 
-When a new environment becomes available, then the environment manager offers it to the running agents (which are currently represented as SessionRooms - but this might change). And the user can review the skills of that environment and "allow once", "allow always", "reject", "ignore".
+When a new environment candidate becomes available, the environment manager can finalize it into one or more real environments by checking known repository-backed capabilities (including exact ids plus path/url-implied known environments). Then the user can review the skills of any finalized environment and "allow once", "allow always", "reject", "ignore".
 
 - If "allow once" or "allow always", the skills are injected into the running session.
 - If "reject" or "ignore", then the skills are not injected.

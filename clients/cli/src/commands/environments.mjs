@@ -17,8 +17,8 @@ export async function runEnvironmentsCommand(args) {
       const id = env.environmentId || "?";
       const status = env.status || "?";
       const bundles = Array.isArray(env.bundles) ? env.bundles.length : (env.bundleIds?.length ?? 0);
-      const sourceName = env.record?.sourceName || env.info?.sourceName || "";
-      console.log(`${id}  ${status}  bundles:${bundles}  ${sourceName}`);
+      const displayName = env.record?.metadata?.displayName || env.info?.displayName || "";
+      console.log(`${id}  ${status}  bundles:${bundles}  ${displayName}`);
     }
     if (environments.length > limit) console.log(`... and ${environments.length - limit} more (use --limit to adjust)`);
   }

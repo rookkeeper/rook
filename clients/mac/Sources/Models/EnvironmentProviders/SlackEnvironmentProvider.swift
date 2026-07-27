@@ -82,14 +82,14 @@ final class SlackEnvironmentProvider: SpecializedEnvironmentProvider {
         var candidates: [EnvironmentCandidate] = []
         var workspaceMetadata = CandidateMetadata.base(app: app, title: title)
         workspaceMetadata["workspaceName"] = .string(context.workspaceName)
-        workspaceMetadata["sourceName"] = .string("\(app.name) · \(context.workspaceName)")
+        workspaceMetadata["displayName"] = .string("\(app.name) · \(context.workspaceName)")
         let workspaceId = teamEnvironmentId(bundleId: app.bundleId, workspaceName: context.workspaceName)
         candidates.append(EnvironmentCandidate(id: workspaceId, metadata: workspaceMetadata))
 
         if let channelName = context.channelName {
             var channelMetadata = workspaceMetadata
             channelMetadata["channelName"] = .string(channelName)
-            channelMetadata["sourceName"] = .string("\(app.name) · \(context.workspaceName) · #\(channelName)")
+            channelMetadata["displayName"] = .string("\(app.name) · \(context.workspaceName) · #\(channelName)")
             let channelId = channelEnvironmentId(bundleId: app.bundleId, workspaceName: context.workspaceName, channelName: channelName)
             candidates.append(EnvironmentCandidate(id: channelId, metadata: channelMetadata))
         }

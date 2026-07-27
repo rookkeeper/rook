@@ -16,9 +16,14 @@ export interface EnvironmentPreview {
 }
 
 export interface CandidateEnvironmentMetadata extends Record<string, unknown> {
-  sourceName?: string;
-  canonicalSourceUrl?: string;
-  contextText?: string;
+  displayName?: string;
+  observedPaths?: string[];
+  observedUrls?: string[];
+  observerDeviceId?: string;
+  detectedSkillPaths?: string[];
+  detectedAgentsMdPaths?: string[];
+  editableSkillPath?: string;
+  editableAgentMdPath?: string;
 }
 
 export interface CandidateEnvironmentRecord {
@@ -57,8 +62,6 @@ export interface EnvironmentOfferAvailablePayload {
   displayName?: string;
   bundleId: string;
   bundleHash: string;
-  sourceName?: string;
-  canonicalSourceUrl?: string;
   skills: string[];
   mcpServers: string[];
   apps: string[];

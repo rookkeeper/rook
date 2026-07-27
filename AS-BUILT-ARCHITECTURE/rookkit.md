@@ -28,7 +28,6 @@
   - iOS-only shared ActivityKit attributes
 - support utilities
   - `KeychainStore`, `EnvironmentListPresentation`, `ToolPayloadFormatting`, `Clipboard`
-    - `EnvironmentListPresentation` now owns shared environment-list presentation rules used by Apple clients, including whether a secondary `sourceName` should be shown (for example, hiding raw URL rows for `web:` environments while still showing useful non-web source context)
 
 ## Main interfaces
 
@@ -54,7 +53,7 @@
 - `sessions()` — session list over REST (replaces the old WebSocket `session/list`)
 - `sessionTranscript(sessionId:)` — normalized transcript hydration for second viewers / running sessions
 - `environmentPreview(environmentId:)`
-- `registerEnvironment(id:sourceName:metadata:)`
+- `registerEnvironment(candidate)`
 - `identifyEnvironments(_:)`
 - `registerLocation(_:)`
 - `decideEnvironment(...)`
@@ -109,7 +108,7 @@
 1. `SessionHandle` (or app-specific reducers around it) constructs `ChatBlock`s from transcript hydration + live ACP events
 2. RookKit design views render the block list consistently across macOS and iOS
 3. markdown/tool payload helpers normalize output for display
-4. `EnvironmentListPresentation` applies shared list-refresh behavior and shared row-level display rules for environment metadata
+4. `EnvironmentListPresentation` applies shared list-refresh behavior for environment metadata
 
 ## Notable architectural characteristics
 

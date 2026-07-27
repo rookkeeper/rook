@@ -27,19 +27,38 @@ export async function registerEnvironmentRoutes(
     }
 
     const typedMetadata = (metadata ?? {}) as CandidateEnvironmentMetadata;
-    if (typedMetadata.sourceName !== undefined && typeof typedMetadata.sourceName !== "string") {
-      reply.code(400).send({ error: "Invalid metadata.sourceName" });
+    if (typedMetadata.displayName !== undefined && typeof typedMetadata.displayName !== "string") {
+      reply.code(400).send({ error: "Invalid metadata.displayName" });
       return;
     }
-    if (typedMetadata.canonicalSourceUrl !== undefined && typeof typedMetadata.canonicalSourceUrl !== "string") {
-      reply.code(400).send({ error: "Invalid metadata.canonicalSourceUrl" });
-      return;
+    for (const [key, value] of [
+      ["observedPaths", typedMetadata.observedPaths],
+      ["observedUrls", typedMetadata.observedUrls],
+      ["detectedSkillPaths", typedMetadata.detectedSkillPaths],
+      ["detectedAgentsMdPaths", typedMetadata.detectedAgentsMdPaths],
+    ] as const) {
+      if (value !== undefined && (!Array.isArray(value) || value.some((item) => typeof item !== "string"))) {
+        reply.code(400).send({ error: `Invalid metadata.${key}` });
+        return;
+      }
+    }
+    for (const [key, value] of [
+      ["observerDeviceId", typedMetadata.observerDeviceId],
+      ["editableSkillPath", typedMetadata.editableSkillPath],
+      ["editableAgentMdPath", typedMetadata.editableAgentMdPath],
+    ] as const) {
+      if (value !== undefined && typeof value !== "string") {
+        reply.code(400).send({ error: `Invalid metadata.${key}` });
+        return;
+      }
     }
 
     const candidate: CandidateEnvironmentRecord = { id: id.trim(), metadata: typedMetadata };
-    request.log.info({ environmentId: candidate.id, sourceName: candidate.metadata.sourceName, canonicalSourceUrl: candidate.metadata.canonicalSourceUrl }, "environment candidate registered");
+    request.log.info({ environmentId: candidate.id, displayName: candidate.metadata.displayName }, "environment candidate registered");
 
-    await environmentManager.registerCandidateEnvironment(candidate);
+    void environmentManager.registerCandidateEnvironment(candidate).catch((error) => {
+      request.log.warn({ environmentId: candidate.id, error }, "environment candidate finalization failed");
+    });
     const registeredAt = new Date().toISOString();
     return { ok: true, id: candidate.id, registeredAt };
   });

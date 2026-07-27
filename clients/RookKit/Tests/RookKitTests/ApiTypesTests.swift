@@ -181,8 +181,6 @@ final class ApiTypesTests: XCTestCase {
             displayName: "Test Place",
             bundleId: "bundle-1",
             bundleHash: "hash",
-            sourceName: "TestSource",
-            canonicalSourceUrl: "https://example.com",
             skills: ["s1", "s2"],
             mcpServers: ["m1"],
             apps: ["a1"]

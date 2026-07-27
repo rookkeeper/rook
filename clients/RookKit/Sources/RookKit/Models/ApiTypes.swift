@@ -275,19 +275,15 @@ public struct EnvironmentOffer: Equatable {
     public let displayName: String?
     public let bundleId: String
     public let bundleHash: String
-    public let sourceName: String?
-    public let canonicalSourceUrl: String?
     public let skills: [String]
     public let mcpServers: [String]
     public let apps: [String]
 
-    public init(environmentId: String, displayName: String?, bundleId: String, bundleHash: String, sourceName: String?, canonicalSourceUrl: String?, skills: [String], mcpServers: [String], apps: [String]) {
+    public init(environmentId: String, displayName: String?, bundleId: String, bundleHash: String, skills: [String], mcpServers: [String], apps: [String]) {
         self.environmentId = environmentId
         self.displayName = displayName
         self.bundleId = bundleId
         self.bundleHash = bundleHash
-        self.sourceName = sourceName
-        self.canonicalSourceUrl = canonicalSourceUrl
         self.skills = skills
         self.mcpServers = mcpServers
         self.apps = apps
@@ -297,7 +293,6 @@ public struct EnvironmentOffer: Equatable {
 public struct EnvironmentListItem: Codable, Equatable, Identifiable {
     public let environmentId: String
     public let displayName: String
-    public let sourceName: String?
     public let status: String
     public let lastTouchedAt: String
     public let entered: Bool
@@ -306,10 +301,9 @@ public struct EnvironmentListItem: Codable, Equatable, Identifiable {
 
     public var id: String { environmentId }
 
-    public init(environmentId: String, displayName: String, sourceName: String?, status: String, lastTouchedAt: String, entered: Bool, bundleCount: Int, approvedBundleCount: Int) {
+    public init(environmentId: String, displayName: String, status: String, lastTouchedAt: String, entered: Bool, bundleCount: Int, approvedBundleCount: Int) {
         self.environmentId = environmentId
         self.displayName = displayName
-        self.sourceName = sourceName
         self.status = status
         self.lastTouchedAt = lastTouchedAt
         self.entered = entered

@@ -5,8 +5,6 @@ import { REPO_ROOT } from "../paths.js";
 export interface EnvironmentMetadataCaptureRecord {
   capturedAt: string;
   environmentId: string;
-  sourceName?: string;
-  canonicalSourceUrl?: string;
   metadata: Record<string, unknown>;
 }
 
