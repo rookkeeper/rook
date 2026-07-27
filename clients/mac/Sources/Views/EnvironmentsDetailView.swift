@@ -81,13 +81,6 @@ struct EnvironmentsDetail: View {
                         .foregroundStyle(PanelPalette.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    if EnvironmentListPresentation.shouldDisplaySourceName(for: item), let sourceName = item.sourceName {
-                        Text(sourceName)
-                            .font(.caption2)
-                            .foregroundStyle(PanelPalette.textMuted)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
                     HStack(spacing: 8) {
                         Text(item.status == "active" ? "Active" : "Recent")
                             .font(.caption2)

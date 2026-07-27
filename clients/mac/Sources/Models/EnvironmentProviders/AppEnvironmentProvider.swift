@@ -116,7 +116,7 @@ final class AppEnvironmentProvider {
 
     private func updateBaseEnvironment(for app: ForegroundApp, title: String?) {
         var metadata = CandidateMetadata.base(app: app, title: title)
-        metadata["sourceName"] = .string(app.name)
+        metadata["displayName"] = .string(app.name)
         let candidate = EnvironmentCandidate(
             id: "mac:\(app.bundleId)",
             metadata: metadata

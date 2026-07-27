@@ -92,7 +92,7 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
         observation.allDirectoryPaths.map { path in
             var metadata = CandidateMetadata.base(app: app, title: title)
             metadata["directoryPath"] = .string(path)
-            metadata["sourceName"] = .string("\(app.name) · \(displayName(for: path))")
+            metadata["displayName"] = .string("\(app.name) · \(displayName(for: path))")
             if path == observation.currentDirectoryPath {
                 metadata["finderCurrent"] = .bool(true)
             }

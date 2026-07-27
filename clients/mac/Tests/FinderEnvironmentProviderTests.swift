@@ -35,7 +35,7 @@ final class FinderEnvironmentProviderTests: XCTestCase {
             "dir:/Users/johnberryman/projects/github/rookkeeper",
         ])
         XCTAssertEqual(candidates.last?.metadata["finderCurrent"], .bool(true))
-        XCTAssertEqual(candidates.last?.metadata["sourceName"], .string("Finder · rookkeeper"))
+        XCTAssertEqual(candidates.last?.metadata["displayName"], .string("Finder · rookkeeper"))
     }
 
     func testProviderTracksCurrentDirectoryEnvironmentId() {

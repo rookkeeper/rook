@@ -18,12 +18,8 @@ export interface EnvironmentPromptEntry {
   environmentId: string;
   /** Environment metadata (title, tags, vault name, etc.). */
   metadata: Record<string, unknown>;
-  /** Human-readable source name, e.g. "Arc", "Obsidian". */
-  sourceName?: string;
-  /** The canonical URL that produced this environment. */
-  canonicalSourceUrl?: string;
-  /** Ambient context pushed into the agent on enter (e.g. "The user is reading docs"). */
-  contextText?: string;
+  /** Human-readable display name. */
+  displayName?: string;
   /** Absolute path to the user's personal binding bundle for this environment. */
   bindingDir: string;
   /** Absolute path to the user's skill-authoring directory for this environment. */
@@ -118,9 +114,7 @@ The metadata shown for each environment below may contain useful details you can
 function renderEnvEntry(entry: EnvironmentPromptEntry): string {
   const meta: string[] = [];
 
-  if (entry.sourceName) meta.push(`- Source name: ${entry.sourceName}`);
-  if (entry.canonicalSourceUrl) meta.push(`- Canonical source URL: ${entry.canonicalSourceUrl}`);
-  if (entry.contextText) meta.push(`- Current environment context: ${entry.contextText}`);
+  if (entry.displayName) meta.push(`- Display name: ${entry.displayName}`);
 
   const agents = agentsMdBlock(entry.agentsMdBundles);
 

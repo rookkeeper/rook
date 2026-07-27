@@ -335,8 +335,6 @@ public final class AcpSocket {
             displayName: params["displayName"] as? String,
             bundleId: bundleId,
             bundleHash: bundleHash,
-            sourceName: params["sourceName"] as? String,
-            canonicalSourceUrl: params["canonicalSourceUrl"] as? String,
             skills: params["skills"] as? [String] ?? [],
             mcpServers: params["mcpServers"] as? [String] ?? [],
             apps: params["apps"] as? [String] ?? []

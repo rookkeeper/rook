@@ -108,8 +108,6 @@ final class EnvironmentOfferControllerTests: XCTestCase {
             displayName: "Obsidian",
             bundleId: "default",
             bundleHash: bundleHash,
-            sourceName: "Obsidian",
-            canonicalSourceUrl: nil,
             skills: [],
             mcpServers: [],
             apps: []

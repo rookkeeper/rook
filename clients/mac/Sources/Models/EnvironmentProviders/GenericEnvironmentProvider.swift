@@ -5,6 +5,7 @@ import RookKit
 private struct GenericEnvironmentObservation {
     let candidates: [EnvironmentCandidate]
     let normalizedIds: [String]
+    let deepestDirEnvironmentId: String?
     let deepestWebEnvironmentId: String?
 }
 
@@ -12,6 +13,31 @@ private struct GenericEnvironmentObservation {
 final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     private static let pollInterval: TimeInterval = 5
     private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.rook", category: "GenericEnvironmentProvider")
+    private static let fileManager = FileManager.default
+    private static let projectRootFileMarkers = [
+        ".git",
+        "Cargo.toml",
+        "go.mod",
+        "pyproject.toml",
+        "Package.swift",
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+        "WORKSPACE",
+        "WORKSPACE.bazel",
+        "MODULE.bazel",
+        "CMakeLists.txt",
+    ]
+    private static let projectRootDirectorySuffixes = [".xcodeproj", ".xcworkspace"]
+    private static let projectRootFileSuffixes = [".sln"]
+    private static let skillDirectoryMarkers = [
+        ".agents/skills",
+        ".claude/skills",
+        ".codex/skills",
+        ".cursor/skills",
+        ".github/skills",
+    ]
+    private static let agentsMdMarker = "AGENTS.md"
 
     let supportedBundleIds: [String] = []
     var onStateChange: (() -> Void)?
@@ -77,6 +103,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         let observation = Self.observation(for: app, title: title)
         defer {
             previousNormalizedIds = observation.normalizedIds
+            currentAppEnvironmentId = observation.deepestDirEnvironmentId
             currentSiteEnvironmentId = observation.deepestWebEnvironmentId
             onStateChange?()
         }
@@ -91,11 +118,15 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         let webURL = AXReader.activeTabURL(pid: app.pid)
         var candidatesById: [String: EnvironmentCandidate] = [:]
         var deepestWebEnvironmentId: String?
+        var deepestDirEnvironmentId: String?
 
         for rawValue in documentValues {
             if let normalizedPath = normalizedAbsolutePath(from: rawValue) {
-                let candidate = directoryCandidate(path: normalizedPath, app: app, title: title, rawValue: rawValue)
-                candidatesById[candidate.id] = candidate
+                let dirCandidates = directoryCandidates(fromObservedPath: normalizedPath, app: app, title: title, rawValue: rawValue)
+                deepestDirEnvironmentId = dirCandidates.last?.id ?? deepestDirEnvironmentId
+                for candidate in dirCandidates {
+                    candidatesById[candidate.id] = candidate
+                }
                 continue
             }
             let webCandidates = webCandidates(from: rawValue, app: app, title: title)
@@ -123,26 +154,87 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         return GenericEnvironmentObservation(
             candidates: candidates,
             normalizedIds: candidates.map(\.id),
+            deepestDirEnvironmentId: deepestDirEnvironmentId,
             deepestWebEnvironmentId: deepestWebEnvironmentId
         )
     }
 
-    private static func directoryCandidate(path: String, app: ForegroundApp, title: String?, rawValue: String) -> EnvironmentCandidate {
-        var metadata = CandidateMetadata.base(app: app, title: title)
-        metadata["directoryPath"] = .string(path)
-        metadata["axDocument"] = .string(rawValue)
-        metadata["sourceName"] = .string(path)
-        return EnvironmentCandidate(id: "dir:\(path)", metadata: metadata)
+    private static func directoryCandidates(fromObservedPath observedPath: String, app: ForegroundApp, title: String?, rawValue: String) -> [EnvironmentCandidate] {
+        let directories = candidateDirectories(forObservedPath: observedPath)
+        return directories.compactMap { directoryPath in
+            let detection = detectDirectorySignals(at: directoryPath)
+            guard detection.isProjectLike || detection.isAgentic else { return nil }
+
+            var metadata = CandidateMetadata.base(app: app, title: title)
+            metadata["directoryPath"] = .string(directoryPath)
+            metadata["axDocument"] = .string(rawValue)
+            metadata["displayName"] = .string((directoryPath as NSString).lastPathComponent)
+            metadata["observedPaths"] = .array([.string(observedPath)])
+            if !detection.detectedSkillPaths.isEmpty {
+                metadata["detectedSkillPaths"] = .array(detection.detectedSkillPaths.map { .string($0) })
+            }
+            if !detection.detectedAgentsMdPaths.isEmpty {
+                metadata["detectedAgentsMdPaths"] = .array(detection.detectedAgentsMdPaths.map { .string($0) })
+            }
+            metadata["editableSkillPath"] = .string(detection.editableSkillPath)
+            metadata["editableAgentMdPath"] = .string(detection.editableAgentMdPath)
+            return EnvironmentCandidate(id: "dir:\(directoryPath)", metadata: metadata)
+        }
     }
 
     private static func webCandidates(from rawURL: String, app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
         let ids = webEnvironmentIds(from: rawURL)
         guard !ids.isEmpty else { return [] }
-        var metadata = CandidateMetadata.base(app: app, title: title)
-        metadata["url"] = .string(rawURL)
-        metadata["sourceName"] = .string(rawURL)
-        metadata["canonicalSourceUrl"] = .string(rawURL)
-        return ids.map { EnvironmentCandidate(id: $0, metadata: metadata) }
+        return ids.map { environmentId in
+            var metadata = CandidateMetadata.base(app: app, title: title)
+            metadata["url"] = .string(rawURL)
+            metadata["displayName"] = .string(webDisplayName(for: environmentId))
+            metadata["observedUrls"] = .array([.string(rawURL)])
+            return EnvironmentCandidate(id: environmentId, metadata: metadata)
+        }
+    }
+
+    private static func candidateDirectories(forObservedPath observedPath: String) -> [String] {
+        let homeDir = URL(fileURLWithPath: NSHomeDirectory()).standardizedFileURL.path
+        guard observedPath.hasPrefix(homeDir + "/") else { return [] }
+
+        var isDirectory: ObjCBool = false
+        let exists = fileManager.fileExists(atPath: observedPath, isDirectory: &isDirectory)
+        var current = exists && isDirectory.boolValue ? observedPath : (observedPath as NSString).deletingLastPathComponent
+        var result: [String] = []
+        while current.hasPrefix(homeDir + "/") && current != homeDir {
+            result.append(current)
+            let parent = (current as NSString).deletingLastPathComponent
+            if parent == current || parent.count < homeDir.count { break }
+            current = parent
+        }
+        return result.reversed()
+    }
+
+    private static func detectDirectorySignals(at directoryPath: String) -> DirectorySignalDetection {
+        let entries = (try? fileManager.contentsOfDirectory(atPath: directoryPath)) ?? []
+        let entrySet = Set(entries)
+
+        let hasProjectMarker = projectRootFileMarkers.contains(where: entrySet.contains)
+            || projectRootDirectorySuffixes.contains(where: { suffix in entries.contains(where: { $0.hasSuffix(suffix) }) })
+            || projectRootFileSuffixes.contains(where: { suffix in entries.contains(where: { $0.hasSuffix(suffix) }) })
+
+        let detectedAgentsMdPaths = entrySet.contains(agentsMdMarker) ? [directoryPath + "/" + agentsMdMarker] : []
+        let detectedSkillPaths = skillDirectoryMarkers
+            .map { directoryPath + "/" + $0 }
+            .filter { fileManager.fileExists(atPath: $0) }
+
+        let editableSkillPath = detectedSkillPaths.first ?? (directoryPath + "/.agents/skills")
+        let editableAgentMdPath = detectedAgentsMdPaths.first ?? (directoryPath + "/AGENTS.md")
+
+        return DirectorySignalDetection(
+            isProjectLike: hasProjectMarker,
+            isAgentic: !detectedAgentsMdPaths.isEmpty || !detectedSkillPaths.isEmpty,
+            detectedSkillPaths: detectedSkillPaths,
+            detectedAgentsMdPaths: detectedAgentsMdPaths,
+            editableSkillPath: editableSkillPath,
+            editableAgentMdPath: editableAgentMdPath
+        )
     }
 
     static func normalizedAbsolutePath(from rawValue: String) -> String? {
@@ -177,7 +269,24 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         return ids
     }
 
+    private static func webDisplayName(for environmentId: String) -> String {
+        let path = environmentId.replacingOccurrences(of: "web:", with: "")
+        let parts = path.split(separator: "/").map(String.init)
+        guard let first = parts.first else { return environmentId }
+        if parts.count == 1 { return first }
+        return ([first] + parts.dropFirst()).joined(separator: " / ")
+    }
+
     static func warningForNonAbsoluteDirectoryCandidate(rawValue: String, app: ForegroundApp) {
         logger.warning("Skipping non-absolute directory candidate for bundleId=\(app.bundleId, privacy: .public): \(rawValue, privacy: .public)")
     }
+}
+
+private struct DirectorySignalDetection {
+    let isProjectLike: Bool
+    let isAgentic: Bool
+    let detectedSkillPaths: [String]
+    let detectedAgentsMdPaths: [String]
+    let editableSkillPath: String
+    let editableAgentMdPath: String
 }

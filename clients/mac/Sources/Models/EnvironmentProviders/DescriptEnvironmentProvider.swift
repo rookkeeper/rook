@@ -95,7 +95,7 @@ final class DescriptEnvironmentProvider: SpecializedEnvironmentProvider {
 
         var metadata = CandidateMetadata.base(app: app, title: title)
         metadata["projectName"] = .string(projectName)
-        metadata["sourceName"] = .string("\(app.name) · \(projectName)")
+        metadata["displayName"] = .string("\(app.name) · \(projectName)")
 
         if let route = focusedRoute(from: configURL) {
             metadata["route"] = .string(route)

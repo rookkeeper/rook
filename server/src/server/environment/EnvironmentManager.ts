@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { EnvironmentDecisionStore } from "./EnvironmentDecisionStore.js";
-import type { EnvironmentPreview } from "../../shared/environment.js";
+import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../shared/environment.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import { ensurePersonalEnvironmentBinding } from "./EnvironmentBinding.js";
 import {
@@ -37,7 +37,6 @@ interface RememberedEnvironmentEntry {
   lastTouchedAt: string;
   activeUntil?: string;
   status: "active" | "recent";
-  contextText?: string;
   bundles: RememberedBundleEntry[];
   bundleIds: string[];
   bundleCollectionPaths: string[];
@@ -51,7 +50,6 @@ export interface DiagnosticEnvironmentEntry {
   registeredAt?: string;
   lastTouchedAt: string;
   activeUntil?: string;
-  contextText?: string;
   bundles: Array<RememberedBundleEntry & { effectiveDecision: EffectiveDecision }>;
   bundleIds: string[];
   bundleCollectionPaths: string[];
@@ -66,45 +64,21 @@ export interface EnvironmentManagerOptions {
   registrationCaptureSink?: EnvironmentRegistrationCaptureSink;
 }
 
-/**
- * Environment manager.
- *
- * Decision model (the 2×2):
- *   positive × permanent = "approve" → SQLite, survives restarts
- *   positive × session   = "accept"  → in-memory per-session, cleared on exit/expiry
- *   negative × session   = "ignore"  → in-memory per-session, cleared on exit/expiry
- *   negative × permanent = "reject"  → SQLite, survives restarts
- *
- * Behavior:
- * - keep environments in memory as either active or recent
- * - on registration, resolve any valid bundles and remember their exact-content hashes
- * - bundle offers are only issued when a session enters an environment, not on registration
- * - session decisions (accept/ignore) are per-session — session 2 entering the same env
- *   sees its own fresh offers regardless of what session 1 decided
- * - when a session exits an environment, its session decisions for that env are cleared
- * - when a user approves/accepts, any session already inside the env gets skills reloaded
- */
-function environmentHierarchy(environmentId: string): string[] {
-  const separator = environmentId.indexOf(":");
-  if (separator === -1) return [environmentId];
-
-  const kind = environmentId.slice(0, separator);
-  if (kind === "dir") return [environmentId];
-
-  const prefix = environmentId.slice(0, separator + 1);
-  const rest = environmentId.slice(separator + 1);
-  if (!rest) return [environmentId];
-
-  const parts = rest.split("/").filter(Boolean);
-  if (parts.length === 0) return [environmentId];
-
-  return parts.map((_, index) => `${prefix}${parts.slice(0, index + 1).join("/")}`);
-}
-
 function environmentKind(environmentId: string): string | undefined {
   const separator = environmentId.indexOf(":");
   if (separator === -1) return undefined;
   return environmentId.slice(0, separator);
+}
+
+function environmentPath(environmentId: string): string {
+  const separator = environmentId.indexOf(":");
+  return separator === -1 ? environmentId : environmentId.slice(separator + 1);
+}
+
+function lastEnvironmentSegment(environmentId: string): string {
+  const raw = environmentPath(environmentId);
+  const parts = raw.split("/").filter(Boolean);
+  return (parts.at(-1) ?? raw) || environmentId;
 }
 
 function stringMetadata(metadata: Record<string, unknown>, key: string): string | undefined {
@@ -112,43 +86,57 @@ function stringMetadata(metadata: Record<string, unknown>, key: string): string 
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function stringArrayMetadata(metadata: Record<string, unknown>, key: string): string[] {
+  const value = metadata[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
+}
+
 function observationInfoFromMetadata(metadata: Record<string, unknown>): EnvironmentOfferInfo {
-  const sourceName = stringMetadata(metadata, "sourceName");
-  const canonicalSourceUrl = stringMetadata(metadata, "canonicalSourceUrl");
-  return {
-    ...(sourceName ? { sourceName } : {}),
-    ...(canonicalSourceUrl ? { canonicalSourceUrl } : {}),
-  };
+  const displayName = stringMetadata(metadata, "displayName");
+  return displayName ? { displayName } : {};
 }
 
-function webEnvironmentDisplayName(environmentId: string): string {
-  const separator = environmentId.indexOf(":");
-  if (separator === -1) return environmentId;
-  const rest = environmentId.slice(separator + 1);
-  if (!rest) return environmentId;
-  const parts = rest.split("/").filter(Boolean);
-  if (parts.length <= 1) return rest;
-  return `${parts[0]} / ${parts.slice(1).join(" / ")}`;
+function deriveEnvironmentDisplayName(environmentId: string, metadata: Record<string, unknown>, info?: EnvironmentOfferInfo): string {
+  return info?.displayName ?? stringMetadata(metadata, "displayName") ?? lastEnvironmentSegment(environmentId);
 }
 
-function deriveEnvironmentDisplayName(environmentId: string, sourceName: string | undefined, metadata: Record<string, unknown>): string {
-  const kind = environmentKind(environmentId);
-  switch (kind) {
-    case "web": {
-      return webEnvironmentDisplayName(environmentId);
-    }
-    case "mac": {
-      return sourceName || stringMetadata(metadata, "appName") || environmentId;
-    }
-    case "dir": {
-      return sourceName || environmentId.slice(environmentId.indexOf(":") + 1) || environmentId;
-    }
-    case "location": {
-      return sourceName || stringMetadata(metadata, "displayName") || environmentId;
-    }
-    default:
-      return sourceName || environmentId;
+function metadataWithoutDisplayName(metadata: CandidateEnvironmentMetadata): CandidateEnvironmentMetadata {
+  const { displayName: _displayName, ...rest } = metadata;
+  return rest;
+}
+
+function webEnvironmentIdsFromUrl(rawURL: string): string[] {
+  let components: URL;
+  try {
+    components = new URL(rawURL);
+  } catch {
+    return [];
   }
+  const scheme = components.protocol.toLowerCase();
+  if (scheme !== "http:" && scheme !== "https:") return [];
+  const host = components.hostname.toLowerCase();
+  if (!host) return [];
+  const segments = components.pathname.split("/").filter(Boolean);
+  const ids = [`web:${host}`];
+  let current = host;
+  for (const segment of segments) {
+    current += `/${segment}`;
+    ids.push(`web:${current}`);
+  }
+  return ids;
+}
+
+function dirEnvironmentIdsFromPath(rawPath: string): string[] {
+  const trimmed = rawPath.trim();
+  if (!trimmed.startsWith("/")) return [];
+  const normalized = path.posix.normalize(trimmed);
+  const segments = normalized.split("/").filter(Boolean);
+  const ids: string[] = [];
+  for (let index = 0; index < segments.length; index += 1) {
+    ids.push(`dir:/${segments.slice(0, index + 1).join("/")}`);
+  }
+  return ids;
 }
 
 export class EnvironmentManager {
@@ -179,7 +167,7 @@ export class EnvironmentManager {
     this.expiryTimer.unref?.();
   }
 
-  async registerAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo = {}, contextText?: string): Promise<void> {
+  async registerAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo = {}): Promise<void> {
     this.pruneMemory();
 
     const nowIso = new Date(this.now()).toISOString();
@@ -187,59 +175,61 @@ export class EnvironmentManager {
       await this.registrationCaptureSink.capture({
         capturedAt: nowIso,
         environmentId: env.id,
-        sourceName: info.sourceName,
-        canonicalSourceUrl: info.canonicalSourceUrl,
         metadata: env.metadata,
       });
     } catch (error) {
       this.logger.info({ environmentId: env.id, error }, "failed to append environment metadata capture");
     }
-    await this.rememberAvailableEnvironment(env, info, contextText, true);
+    await this.rememberAvailableEnvironment(env, info);
   }
 
   async registerCandidateEnvironment(candidate: CandidateEnvironmentRecord): Promise<void> {
     this.pruneMemory();
 
-    const now = this.now();
-    const nowIso = new Date(now).toISOString();
-    const info = observationInfoFromMetadata(candidate.metadata);
-    const contextText = stringMetadata(candidate.metadata, "contextText");
+    const nowIso = new Date(this.now()).toISOString();
     try {
       await this.registrationCaptureSink.capture({
         capturedAt: nowIso,
         environmentId: candidate.id,
-        sourceName: info.sourceName,
-        canonicalSourceUrl: info.canonicalSourceUrl,
         metadata: candidate.metadata,
       });
     } catch (error) {
       this.logger.info({ environmentId: candidate.id, error }, "failed to append environment metadata capture");
     }
 
-    if (environmentKind(candidate.id) === "web") {
-      const hierarchy = environmentHierarchy(candidate.id);
-      const idsToRegister = new Set<string>();
-      if (hierarchy.length > 0) idsToRegister.add(hierarchy[0]!);
-      for (const environmentId of hierarchy.slice(1)) {
-        const resolvedBundles = await this.repositoryService.getResolvedBundles(environmentId);
-        if (resolvedBundles.length > 0) idsToRegister.add(environmentId);
-      }
-      for (const environmentId of hierarchy) {
-        if (!idsToRegister.has(environmentId)) continue;
-        await this.rememberAvailableEnvironment({ id: environmentId, metadata: candidate.metadata }, info, contextText, false);
-      }
-      return;
+    const finalIds = await this.finalizedEnvironmentIds(candidate);
+    for (const environmentId of finalIds) {
+      const metadata = environmentId === candidate.id ? candidate.metadata : metadataWithoutDisplayName(candidate.metadata);
+      const info = environmentId === candidate.id ? observationInfoFromMetadata(candidate.metadata) : {};
+      await this.rememberAvailableEnvironment({ id: environmentId, metadata }, info);
     }
-
-    if (environmentKind(candidate.id) === "dir") {
-      await this.rememberAvailableEnvironment({ id: candidate.id, metadata: candidate.metadata }, info, contextText, false);
-      return;
-    }
-
-    await this.rememberAvailableEnvironment({ id: candidate.id, metadata: candidate.metadata }, info, contextText, true);
   }
 
-  private async rememberAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo, contextText: string | undefined, autoRegisterParents: boolean): Promise<void> {
+  private async finalizedEnvironmentIds(candidate: CandidateEnvironmentRecord): Promise<string[]> {
+    const ids = new Set<string>([candidate.id]);
+    const implied = new Set<string>();
+
+    for (const observedPath of stringArrayMetadata(candidate.metadata, "observedPaths")) {
+      for (const environmentId of dirEnvironmentIdsFromPath(observedPath)) {
+        implied.add(environmentId);
+      }
+    }
+    for (const observedUrl of stringArrayMetadata(candidate.metadata, "observedUrls")) {
+      for (const environmentId of webEnvironmentIdsFromUrl(observedUrl)) {
+        implied.add(environmentId);
+      }
+    }
+
+    for (const environmentId of implied) {
+      if (ids.has(environmentId)) continue;
+      const bundles = await this.repositoryService.getResolvedBundles(environmentId);
+      if (bundles.length > 0) ids.add(environmentId);
+    }
+
+    return [...ids];
+  }
+
+  private async rememberAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo): Promise<void> {
     const now = this.now();
     const nowIso = new Date(now).toISOString();
     const existing = this.remembered.get(env.id);
@@ -278,7 +268,6 @@ export class EnvironmentManager {
       bundles,
       bundleIds,
       bundleCollectionPaths,
-      ...(contextText ? { contextText } : {}),
     };
     this.remembered.set(env.id, entry);
     this.logger.info(
@@ -287,7 +276,7 @@ export class EnvironmentManager {
         previousStatus: existing?.status,
         registeredAt,
         activeUntil,
-        sourceName: info.sourceName,
+        displayName: deriveEnvironmentDisplayName(env.id, entry.record.metadata, info),
         bundleIds,
         bundleCollectionPaths,
       },
@@ -301,40 +290,8 @@ export class EnvironmentManager {
       this.sessionDecisions.clearAllForBundle(previousBundle.bundleHash);
       this.broadcastBundleResolution(env.id, previousBundle.bundleId, previousBundle.bundleHash, "unavailable");
     }
-
-    if (!autoRegisterParents) return;
-
-    for (const parentId of environmentHierarchy(env.id)) {
-      if (parentId === env.id) continue;
-      const parent = this.remembered.get(parentId);
-      if (parent?.status === "active") continue;
-
-      const parentEntry: RememberedEnvironmentEntry = {
-        record: { id: parentId, metadata: { ...env.metadata, registeredAt: nowIso } },
-        info: { canonicalSourceUrl: info.canonicalSourceUrl },
-        registeredAt: nowIso,
-        lastTouchedAt: nowIso,
-        activeUntil,
-        status: "active",
-        bundles: [],
-        bundleIds: [],
-        bundleCollectionPaths: [],
-        ...(contextText ? { contextText } : {}),
-      };
-      this.remembered.set(parentId, parentEntry);
-      this.logger.info(
-        { environmentId: parentId, parentOf: env.id, registeredAt: nowIso, activeUntil },
-        "environment auto-registered (parent)",
-      );
-    }
   }
 
-  /**
-   * Record a decision. Persistent decisions (approve/reject) go to SQLite.
-   * Session decisions (accept/ignore) are per-session in-memory and cleared on exit/expiry.
-   *
-   * @param sessionId required for session-scoped decisions (accept/ignore); optional for permanent.
-   */
   decideEnvironment(environmentId: string, decision: EnvironmentDecision, bundleHash?: string, sessionId?: string): void {
     this.pruneMemory();
     const decisionKey = bundleHash ?? environmentId;
@@ -343,11 +300,8 @@ export class EnvironmentManager {
       : undefined;
 
     if (decision === "approve" || decision === "reject") {
-      // Permanent: store in SQLite, clear session-level overrides.
       this.sessionDecisions.setPermanent(decisionKey, environmentId, bundle?.bundleId ?? null, decision);
     } else {
-      // Session-scoped: store per-session. If no sessionId is provided,
-      // apply to every session that has entered this environment (fallback).
       const targetSessions = sessionId
         ? [sessionId]
         : [...this.entered.entries()].filter(([, envs]) => envs.has(environmentId)).map(([sid]) => sid);
@@ -365,7 +319,6 @@ export class EnvironmentManager {
       );
     }
 
-    // When accepting or approving a bundle, reload skills for any session already inside this env.
     if (decision === "accept" || decision === "approve") {
       for (const [sid, entered] of this.entered.entries()) {
         if (!entered.has(environmentId)) continue;
@@ -373,12 +326,11 @@ export class EnvironmentManager {
         if (!listener) continue;
         const entry = this.remembered.get(environmentId);
         if (!entry || entry.status !== "active") continue;
-        listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sid), entry.contextText);
+        listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sid));
       }
     }
   }
 
-  /** Get the effective decision for a bundle hash from a session's perspective. */
   effectiveDecision(bundleHash: string, sessionId?: string): EffectiveDecision {
     this.pruneMemory();
     return this.sessionDecisions.effective(bundleHash, sessionId);
@@ -389,7 +341,6 @@ export class EnvironmentManager {
     this.listeners.set(sessionId, listener);
     if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
     if (!this.entered.has(sessionId)) this.entered.set(sessionId, new Set());
-    // Offers are deferred until the session enters an environment.
   }
 
   unsubscribe(sessionId: string): void {
@@ -419,17 +370,14 @@ export class EnvironmentManager {
         const binding = ensurePersonalEnvironmentBinding(environmentId);
         if (!binding) return null;
 
-        // Gather AGENTS.md content from every remembered bundle that has it.
         const agentsMdBundles = (remembered?.bundles ?? [])
           .filter((b) => b.agentsMd)
           .map((b) => ({ bundleId: b.bundleId, content: b.agentsMd! }));
 
         return {
           environmentId,
+          displayName: remembered ? deriveEnvironmentDisplayName(environmentId, remembered.record.metadata, remembered.info) : undefined,
           metadata: (remembered?.record.metadata ?? {}) as Record<string, unknown>,
-          sourceName: remembered?.info.sourceName,
-          canonicalSourceUrl: remembered?.info.canonicalSourceUrl,
-          contextText: remembered?.contextText,
           bindingDir: binding.personalBundleDir,
           skillsDir: binding.skillsDir,
           existingSkills: binding.existingSkills,
@@ -479,7 +427,6 @@ export class EnvironmentManager {
         registeredAt: entry.registeredAt,
         lastTouchedAt: entry.lastTouchedAt,
         activeUntil: entry.activeUntil,
-        contextText: entry.contextText,
         bundles: entry.bundles.map((bundle) => ({
           ...bundle,
           effectiveDecision: this.effectiveDecision(bundle.bundleHash, sessionId),
@@ -497,7 +444,6 @@ export class EnvironmentManager {
   environmentList(sessionId: string): {
     environmentId: string;
     displayName: string;
-    sourceName?: string;
     status: "active" | "recent";
     lastTouchedAt: string;
     entered: boolean;
@@ -514,8 +460,7 @@ export class EnvironmentManager {
       ).length;
       return {
         environmentId: entry.environmentId,
-        displayName: deriveEnvironmentDisplayName(entry.environmentId, entry.info.sourceName, entry.record.metadata),
-        sourceName: entry.info.sourceName,
+        displayName: deriveEnvironmentDisplayName(entry.environmentId, entry.record.metadata, entry.info),
         status: entry.status,
         lastTouchedAt: entry.lastTouchedAt,
         entered: entered.has(entry.environmentId),
@@ -524,7 +469,6 @@ export class EnvironmentManager {
       };
     });
 
-    // Sort: entered first, then active by recency, then recent by recency.
     list.sort((a, b) => {
       if (a.entered !== b.entered) return a.entered ? -1 : 1;
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -537,7 +481,7 @@ export class EnvironmentManager {
   private syncEnteredEnvironments(sessionId: string, listener: EnvironmentEventListener): string[] {
     if (!this.entered.has(sessionId)) this.entered.set(sessionId, new Set());
     const current = this.entered.get(sessionId)!;
-    const next = this.computeEffectiveEnteredSet(sessionId);
+    const next = new Set(this.explicitlyEntered.get(sessionId) ?? []);
 
     for (const environmentId of next) {
       if (current.has(environmentId)) continue;
@@ -545,18 +489,15 @@ export class EnvironmentManager {
       if (!entry) continue;
 
       ensurePersonalEnvironmentBinding(environmentId);
-      listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sessionId), entry.contextText);
+      listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sessionId));
 
-      // Offer undecided bundles only when this session enters the environment.
       for (const bundle of entry.bundles) {
         if (this.effectiveDecision(bundle.bundleHash, sessionId) !== "undecided") continue;
         listener.onEnvironmentOffered({
           environmentId,
-          displayName: deriveEnvironmentDisplayName(environmentId, entry.info.sourceName, entry.record.metadata),
+          displayName: deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info),
           bundleId: bundle.bundleId,
           bundleHash: bundle.bundleHash,
-          sourceName: entry.info.sourceName,
-          canonicalSourceUrl: entry.info.canonicalSourceUrl,
           skills: bundle.skills,
           mcpServers: bundle.mcpServers,
           apps: bundle.apps,
@@ -567,7 +508,6 @@ export class EnvironmentManager {
     for (const environmentId of current) {
       if (next.has(environmentId)) continue;
       listener.onEnvironmentExited(environmentId);
-      // Clear this session's decisions for the exited environment's bundles.
       const entry = this.remembered.get(environmentId);
       if (entry) {
         this.sessionDecisions.clearSessionForBundles(sessionId, entry.bundles.map((b) => b.bundleHash));
@@ -576,18 +516,6 @@ export class EnvironmentManager {
 
     this.entered.set(sessionId, next);
     return [...next];
-  }
-
-  private computeEffectiveEnteredSet(sessionId: string): Set<string> {
-    const effective = new Set<string>();
-    for (const environmentId of this.explicitlyEntered.get(sessionId) ?? []) {
-      for (const candidateId of environmentHierarchy(environmentId)) {
-        const entry = this.remembered.get(candidateId);
-        if (!entry) continue;
-        effective.add(candidateId);
-      }
-    }
-    return effective;
   }
 
   private skillPathsForEntry(entry: RememberedEnvironmentEntry, sessionId: string): string[] {
@@ -624,7 +552,6 @@ export class EnvironmentManager {
             status: "recent",
             activeUntil: undefined,
           });
-          // Clear all sessions' decisions for this environment's bundles.
           this.sessionDecisions.clearAllForBundles(entry.bundles.map((b) => b.bundleHash));
           for (const bundle of entry.bundles) {
             this.broadcastBundleResolution(environmentId, bundle.bundleId, bundle.bundleHash, "unavailable");

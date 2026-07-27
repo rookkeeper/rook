@@ -81,7 +81,7 @@ final class OBSStudioEnvironmentProvider: SpecializedEnvironmentProvider {
         var metadata = CandidateMetadata.base(app: app, title: title)
         metadata["sceneCollectionName"] = .string(context.sceneCollectionName)
         metadata["profileName"] = .string(context.profileName)
-        metadata["sourceName"] = .string("\(app.name) · \(context.sceneCollectionName)")
+        metadata["displayName"] = .string("\(app.name) · \(context.sceneCollectionName)")
 
         let sceneCollectionPath = configRoot
             .appendingPathComponent("scenes")

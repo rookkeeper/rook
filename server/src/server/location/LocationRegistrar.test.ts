@@ -38,9 +38,8 @@ describe("LocationRegistrar", () => {
         id: "location:cicis.com/a",
         metadata: expect.objectContaining({
           current: true,
-          sourceName: "location:cicis.com/a",
-          canonicalSourceUrl: "https://cicis.com/x",
-          contextText: expect.stringContaining("location:cicis.com/a"),
+          displayName: "location:cicis.com/a",
+          observedUrls: ["https://cicis.com/x"],
         }),
       }),
     );
@@ -49,7 +48,7 @@ describe("LocationRegistrar", () => {
       2,
       expect.objectContaining({
         id: "location:gamestop.com/b",
-        metadata: expect.objectContaining({ current: false, sourceName: "location:gamestop.com/b" }),
+        metadata: expect.objectContaining({ current: false, displayName: "location:gamestop.com/b" }),
       }),
     );
   });
@@ -76,7 +75,7 @@ describe("LocationRegistrar", () => {
     expect(s.registerCandidateEnvironment).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "location:c/3",
-        metadata: expect.objectContaining({ sourceName: "location:c/3", contextText: expect.any(String) }),
+        metadata: expect.objectContaining({ displayName: "location:c/3" }),
       }),
     );
   });

@@ -72,12 +72,6 @@ struct EnvironmentsScreen: View {
                         .font(.caption2.monospaced())
                         .foregroundStyle(PanelPalette.textMuted)
                         .lineLimit(1)
-                    if EnvironmentListPresentation.shouldDisplaySourceName(for: item), let sourceName = item.sourceName {
-                        Text(sourceName)
-                            .font(.caption2)
-                            .foregroundStyle(PanelPalette.textMuted)
-                            .lineLimit(1)
-                    }
                     HStack(spacing: 6) {
                         Text(item.status == "active" ? "Active" : "Recent")
                             .font(.caption2)

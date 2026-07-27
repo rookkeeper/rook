@@ -132,7 +132,7 @@ Related tables:
   - `skills[]`, `mcpServers[]`, `apps[]`, `errors[]`
 - `EnvironmentBundleOffer`
   - `environmentId`, `bundleId`, `bundleHash`
-  - `displayName`, `sourceName`, `canonicalSourceUrl`
+  - `displayName`
   - `skills[]`, `mcpServers[]`, `apps[]`
 
 ### Location identification
@@ -164,11 +164,12 @@ Related tables:
 7. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
 
 ### Environment offer and approval
-1. a provider registers an environment with `POST /api/environments/register`
-2. `EnvironmentManager` resolves matching bundles and hashes them
-3. undecided bundles are offered to subscribed sessions
-4. client resolves via REST decision or ACP extension resolution
-5. approved skill paths are attached to that session's launch configuration
+1. a provider registers an environment candidate with `POST /api/environments/register`
+2. the server finalizes it asynchronously, checking exact ids plus observed-path / observed-URL implied ids through `EnvironmentRepository`
+3. finalized environments resolve matching bundles and hash them
+4. undecided bundles are offered to subscribed sessions when that session enters the finalized environment
+5. client resolves via REST decision or ACP extension resolution
+6. approved skill paths are attached to that session's launch configuration
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment
