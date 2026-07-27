@@ -115,6 +115,7 @@ Tracked foreground environments include:
   - `mac:com.obsproject.obs-studio/<scene-collection>`
   - `mac:com.descript.beachcube/<project>`
   - `mac:com.hnc.Discord/<server>/<channel>`
+  - exact `dir:/...` folder environments discovered from Finder windows
 - frontmost browser pages as deepest `web:<host>/<path>` ids
 
 Examples:
@@ -127,7 +128,9 @@ Examples:
 - Descript in the `AI Tinkerers 2026.05.22` project →
   `mac:com.descript.beachcube/AI%20Tinkerers%202026.05.22`
 - Discord in `#self-promotion` on `Build With AI` →
-  `mac:com.hnc.Discord/Build%20With%20AI/%23self-promotion`
+  `mac:com.hnc.Discord/Build%20With%20AI/self-promotion`
+- Finder frontmost in `/Users/johnberryman/projects/github/rookkeeper` →
+  `dir:/Users/johnberryman/projects/github/rookkeeper`
 - `https://en.wikipedia.org/wiki/Main_Page?foo=bar` →
   `web:en.wikipedia.org/wiki/Main_Page`
 
@@ -137,14 +140,17 @@ The Mac app registers the exact encountered ID it sees at the moment, such as:
 - `mac:md.obsidian/Peeps`
 - `mac:com.obsproject.obs-studio/Untitled`
 - `mac:com.descript.beachcube/AI%20Tinkerers%202026.05.22`
-- `mac:com.hnc.Discord/Build%20With%20AI/%23self-promotion`
+- `mac:com.hnc.Discord/Build%20With%20AI/self-promotion`
+- `dir:/Users/johnberryman/projects/github/rookkeeper`
 - `web:en.wikipedia.org/wiki/Main_Page`
 
 Specialist providers now live under `Sources/Models/EnvironmentProviders/` and
 are assembled into an explicit bundle-id registry. Bundle IDs with no
-specialist use the generic provider. For Obsidian, vault parsing is title-based
-and works backwards so note names may contain dashes safely. For plain apps the
-base identity is the bundle id: `mac:<bundleId>`.
+specialist use the generic provider. Finder is a specialist too, but it emits
+`dir:/...` environments instead of Finder-specific IDs so local file context
+stays consistent. For Obsidian, vault parsing is title-based and works
+backwards so note names may contain dashes safely. For plain apps the base
+identity is the bundle id: `mac:<bundleId>`.
 
 Each newly encountered environment registers with a fresh `registeredAt`
 timestamp (`POST /api/environments/register`). If the same cached environment

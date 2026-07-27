@@ -32,6 +32,7 @@
 		B28FDE6264D3DCE11D737746 /* EnvironmentProviderSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5974426CBFD61E01CCD8FB3E /* EnvironmentProviderSupport.swift */; };
 		BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */; };
 		C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5143B8CA8023334102A62F2C /* InputSynthesizer.swift */; };
+		C315477A0C4A457CF110A6AD /* FinderEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E9E22AB1F639E8B0DA98B4 /* FinderEnvironmentProvider.swift */; };
 		C43A7D9F9F46BD625B1CEAF8 /* GenericEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5DBA5E0EAEC34DC430F3FF7 /* GenericEnvironmentProvider.swift */; };
 		CEEBCE8607A6BCB97868C2A0 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2330969071E5BF5037823E /* ChatView.swift */; };
 		D323C04BBED012225BCB910F /* AppEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB3BA363AD70B9B41E1823F /* AppEnvironmentProvider.swift */; };
@@ -53,6 +54,7 @@
 /* Begin PBXFileReference section */
 		0087B8D63F86E9DD505D802D /* LogViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogViewerView.swift; sourceTree = "<group>"; };
 		08EF90459F4F62F45D925B32 /* AXReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXReader.swift; sourceTree = "<group>"; };
+		25E9E22AB1F639E8B0DA98B4 /* FinderEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderEnvironmentProvider.swift; sourceTree = "<group>"; };
 		269B251888C4528269DA7E81 /* RookMacSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacSupport.swift; sourceTree = "<group>"; };
 		2970A475DCF3F26A17C649E2 /* Rook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		31A8FB01BC6227863C128862 /* SlackEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackEnvironmentProvider.swift; sourceTree = "<group>"; };
@@ -114,6 +116,7 @@
 				6978A7CFCFEF87F2952C4AC5 /* DescriptEnvironmentProvider.swift */,
 				FDC526470E2B392162B815AC /* DiscordEnvironmentProvider.swift */,
 				5974426CBFD61E01CCD8FB3E /* EnvironmentProviderSupport.swift */,
+				25E9E22AB1F639E8B0DA98B4 /* FinderEnvironmentProvider.swift */,
 				C5DBA5E0EAEC34DC430F3FF7 /* GenericEnvironmentProvider.swift */,
 				FA0E6742B34F0BC2C1D6A93B /* ObsidianEnvironmentProvider.swift */,
 				E0C3E8AE268D668490DA6072 /* OBSStudioEnvironmentProvider.swift */,
@@ -312,6 +315,7 @@
 				38F4F35F3EF2EC01A5D66DE7 /* EnvironmentOfferView.swift in Sources */,
 				B28FDE6264D3DCE11D737746 /* EnvironmentProviderSupport.swift in Sources */,
 				437DFA10167DD112587F7EB5 /* EnvironmentsDetailView.swift in Sources */,
+				C315477A0C4A457CF110A6AD /* FinderEnvironmentProvider.swift in Sources */,
 				1D381D9C5FAF51B3E9158694 /* ForegroundAppMonitor.swift in Sources */,
 				C43A7D9F9F46BD625B1CEAF8 /* GenericEnvironmentProvider.swift in Sources */,
 				ACFC98FFE07090B9A5C95D75 /* HotKey.swift in Sources */,

@@ -142,6 +142,7 @@ struct SpecialistProviderRegistry {
             OBSStudioEnvironmentProvider(register: register),
             DescriptEnvironmentProvider(register: register),
             DiscordEnvironmentProvider(register: register),
+            FinderEnvironmentProvider(register: register),
         ]
 
         var byBundleId: [String: SpecializedEnvironmentProvider] = [:]

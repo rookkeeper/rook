@@ -145,7 +145,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         return ids.map { EnvironmentCandidate(id: $0, metadata: metadata) }
     }
 
-    private static func normalizedAbsolutePath(from rawValue: String) -> String? {
+    static func normalizedAbsolutePath(from rawValue: String) -> String? {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         if let url = URL(string: trimmed), url.isFileURL {
