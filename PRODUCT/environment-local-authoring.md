@@ -28,7 +28,7 @@ When you enter an environment, Rook's system message is extended with three sect
 
 **2. Authoring instructions.** For each entered environment, Rook sees the exact paths where it can write skills, AGENTS.md, and MCP servers. It also sees what skills already exist.
 
-**3. Environment metadata.** Each entered environment dumps its metadata (app name, URL, window title, latitude/longitude, etc.) so Rook has context for what you're doing.
+**3. Environment metadata.** Each entered environment dumps its metadata (display name, app name, observed paths/URLs, window title, latitude/longitude, etc.) so Rook has context for what you're doing.
 
 Because Rook may be in several environments at once, the instructions remind Rook to clarify which environment a skill or instruction belongs to before writing anything.
 

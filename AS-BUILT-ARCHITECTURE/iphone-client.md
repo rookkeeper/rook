@@ -60,7 +60,6 @@ Same shared contract as other clients:
 - `blocks: [ChatBlock]`
 - pending environment offer
 - environment list items
-  - `EnvironmentsScreen` uses `EnvironmentListPresentation.shouldDisplaySourceName(...)` so web rows no longer show the raw page URL as a secondary label
 - current place name / `placeEnvironmentId`
 - `placeSkillStatus[slug] -> Bool`
 - `nearbyCandidates: [EnvironmentCandidate]`

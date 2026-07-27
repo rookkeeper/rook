@@ -109,7 +109,7 @@ final class ObsidianEnvironmentProvider: SpecializedEnvironmentProvider {
             var vaultMetadata = CandidateMetadata.base(app: app, title: title)
             vaultMetadata["vaultName"] = .string(vaultName)
             vaultMetadata["vaultPath"] = .string(vaultPath)
-            vaultMetadata["sourceName"] = .string("\(app.name) · \(vaultName)")
+            vaultMetadata["displayName"] = .string("\(app.name) · \(vaultName)")
             let vaultCandidate = EnvironmentCandidate(
                 id: "mac:\(app.bundleId)/\(EnvironmentIDEncoding.encodePathComponent(vaultName))",
                 metadata: vaultMetadata
@@ -119,7 +119,7 @@ final class ObsidianEnvironmentProvider: SpecializedEnvironmentProvider {
             for pluginId in enabledCommunityPlugins(vaultPath: vaultPath) {
                 var pluginMetadata = CandidateMetadata.base(app: app, title: title)
                 pluginMetadata["pluginId"] = .string(pluginId)
-                pluginMetadata["sourceName"] = .string("\(app.name) Plugin · \(pluginId)")
+                pluginMetadata["displayName"] = .string("\(app.name) Plugin · \(pluginId)")
                 let pluginCandidate = EnvironmentCandidate(
                     id: "mac:\(app.bundleId)/_plugin/\(EnvironmentIDEncoding.encodePathComponent(pluginId))",
                     metadata: pluginMetadata

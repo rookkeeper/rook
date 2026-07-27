@@ -19,7 +19,6 @@ The macOS client is a native SwiftUI menu bar app with a regular app window. It 
   - proxies current-session UI state from the active handle
 - `EnvironmentsDetailView`
   - renders the environment-memory list
-  - uses `RookKit.EnvironmentListPresentation` for shared presentation rules, including hiding raw URL `sourceName` rows for `web:` environments
 - `AcpSocket` and `RookAPI` from `RookKit`
   - ACP WebSocket transport and REST client
 - `ForegroundAppMonitor`
@@ -61,7 +60,7 @@ The client derives and registers:
 - `mac:<bundleId>/<context>` for richer app-specific contexts like Obsidian vaults, Slack workspaces/channels, OBS scene collections, Descript projects, and Discord servers/channels
 - exact `dir:/absolute/path` environments from Finder specialist detection of browsed folders
 - `mac:<bundleId>/_plugin/<plugin-id>` for app-specific plugin capabilities such as enabled Obsidian community plugins
-- exact `dir:/absolute/path` directory environments from generic Accessibility document signals
+- meaningful `dir:/absolute/path` project-like or agentic directory environments derived from generic Accessibility document signals
 - hierarchical `web:<host>` and `web:<host>/<path...>` IDs from generic Accessibility web/document signals
 
 ## Core data schemas
@@ -117,7 +116,7 @@ Via `RookKit`:
 1. `ForegroundAppMonitor` detects app activation or window-title change
 2. `AppEnvironmentProvider` always emits the base `mac:<bundleId>` app environment after a short dwell delay
 3. `AppEnvironmentProvider` activates either a bundle-id-specific specialist or the generic fallback provider
-4. `GenericEnvironmentProvider` polls every 5 seconds while active, reads Accessibility document and web signals, and emits `dir:` / `web:` candidates only when the normalized environment-id set is stable across two polls
+4. `GenericEnvironmentProvider` polls every 5 seconds while active, reads Accessibility document and web signals, inspects observed paths under `/Users/<username>`, and emits only project-like / agentic `dir:` candidates plus `web:` candidates when the normalized environment-id set is stable across two polls
 5. Specialist providers are selected by bundle-id from an explicit registry and currently include Obsidian, Slack, OBS Studio, Descript, Discord, and Finder
 6. `ObsidianEnvironmentProvider` polls local data every 5 seconds, reads `~/Library/Application Support/obsidian/obsidian.json`, emits open vault environments, and emits enabled community-plugin environments
 7. `SlackEnvironmentProvider` polls every 5 seconds, parses the focused window title, and emits workspace plus channel environments when the title exposes a stable channel context

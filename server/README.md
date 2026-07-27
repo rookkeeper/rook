@@ -115,7 +115,7 @@ On environment change, only the affected session's runtime is restarted — the 
 
 ### Environment system
 
-The environment system (registration, decision store, repository) continues to work through its existing HTTP API. `AgentRuntimeManager` subscribes per-session to `EnvironmentManager` and applies skill paths to runtime launch configuration. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
+The environment system (registration, decision store, repository) continues to work through its existing HTTP API. `/api/environments/register` is treated as candidate registration: the server finalizes candidates asynchronously, can inspect observed path/URL implied environment ids through `EnvironmentRepository`, and only finalized environments participate in offers / approvals / runtime updates. `AgentRuntimeManager` subscribes per-session to `EnvironmentManager` and applies skill paths to runtime launch configuration. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
 
 ### Key source files
 

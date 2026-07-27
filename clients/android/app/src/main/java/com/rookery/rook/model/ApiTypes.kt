@@ -151,8 +151,6 @@ data class EnvironmentOffer(
     val displayName: String?,
     val bundleId: String,
     val bundleHash: String,
-    val sourceName: String?,
-    val canonicalSourceUrl: String?,
     val skills: List<String>,
     val mcpServers: List<String>,
     val apps: List<String>
@@ -163,7 +161,6 @@ data class EnvironmentOffer(
 data class EnvironmentListItem(
     val environmentId: String,
     val displayName: String,
-    val sourceName: String? = null,
     val status: String,
     val lastTouchedAt: String,
     val entered: Boolean,

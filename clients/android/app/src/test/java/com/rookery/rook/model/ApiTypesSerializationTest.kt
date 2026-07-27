@@ -36,7 +36,7 @@ class ApiTypesSerializationTest {
     }
 
     @Test
-    fun environmentListItemDecodesMissingSourceNameAsNull() {
+    fun environmentListItemDecodesWithoutLegacyFields() {
         val item = json.decodeFromString<EnvironmentListItem>(
             """
             {
@@ -51,7 +51,6 @@ class ApiTypesSerializationTest {
             """.trimIndent()
         )
 
-        assertNull(item.sourceName)
         assertEquals("web:github.com/the-rooks-nest/rook", item.environmentId)
     }
 }

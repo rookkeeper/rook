@@ -38,7 +38,7 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
   (`~/Library/Logs/Rook/server.log`).
 - **Mac environment provider** - the app immediately registers newly seen
   user-visible environments, keeps them alive with periodic re-registration,
-  and forgets them locally after 4m45s without renewed user-visible focus.
+  and forgets them locally after 4m45s without renewed user-visible focus. Generic path-derived registration is now conservative: it only emits project-like or agentic `dir:/...` environments under `/Users/<username>` rather than every observed path segment.
 
 ## Voice (hands-free)
 

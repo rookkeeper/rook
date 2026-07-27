@@ -50,7 +50,7 @@ final class ObsidianEnvironmentProviderTests: XCTestCase {
             "mac:md.obsidian/_plugin/chat-with-agent",
             "mac:md.obsidian/_plugin/obsidian-todos-extension",
         ]))
-        XCTAssertEqual(candidates.first?.metadata["sourceName"], .string("Obsidian · Work Vault"))
+        XCTAssertEqual(candidates.first?.metadata["displayName"], .string("Obsidian · Work Vault"))
         XCTAssertEqual(candidates.first?.metadata["vaultName"], .string("Work Vault"))
         XCTAssertEqual(candidates.first?.metadata["windowTitle"], .string("Daily Note - Work Vault - Obsidian"))
     }

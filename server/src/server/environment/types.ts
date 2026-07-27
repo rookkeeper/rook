@@ -27,8 +27,6 @@ export type EffectiveDecision = EnvironmentDecision | "undecided";
 export type EnvironmentResolution = "approved" | "dismissed" | "unavailable";
 
 export interface EnvironmentOfferInfo {
-  sourceName?: string;
-  canonicalSourceUrl?: string;
   displayName?: string;
 }
 
@@ -48,9 +46,8 @@ export interface EnvironmentBundleOffer extends EnvironmentOfferInfo {
 export interface EnvironmentEventListener {
   /** An undecided bundle the user should review (prompt in UI). */
   onEnvironmentOffered(offer: EnvironmentBundleOffer): void;
-  /** Skills to load for this environment (approved/permanently-approved bundles only).
-   * `contextText` (when present) is ambient context pushed into the agent on enter. */
-  onEnvironmentEntered(environmentId: string, skillPaths: string[], contextText?: string): void;
+  /** Skills to load for this environment (approved/permanently-approved bundles only). */
+  onEnvironmentEntered(environmentId: string, skillPaths: string[]): void;
   /** Env left or was turned negative: remove skills (restart when idle). */
   onEnvironmentExited(environmentId: string): void;
   /** An offer was resolved (by any client, or because the env left): close prompts. */

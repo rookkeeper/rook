@@ -21,7 +21,7 @@ final class DiscordEnvironmentProviderTests: XCTestCase {
         ])
         XCTAssertEqual(candidates.last?.metadata["serverName"], .string("Build With AI"))
         XCTAssertEqual(candidates.last?.metadata["channelName"], .string("self-promotion"))
-        XCTAssertEqual(candidates.last?.metadata["sourceName"], .string("Discord · Build With AI · #self-promotion"))
+        XCTAssertEqual(candidates.last?.metadata["displayName"], .string("Discord · Build With AI · #self-promotion"))
     }
 
     func testTitleContextParsesDirectMessage() {

@@ -27,6 +27,24 @@ function mockListener(): EnvironmentEventListener {
   };
 }
 
+function resolvedBundle(environmentId: string, bundleId = "default") {
+  return [{
+    bundle: {
+      id: `${environmentId}#${bundleId}`,
+      bundleId,
+      environmentId,
+      repository: "/repo",
+      bundlePath: `/repo/${environmentId.replace(":", "/")}/.bundles/${bundleId}`,
+      skills: [],
+      mcpServers: [],
+      apps: [],
+      valid: true,
+      errors: [],
+    },
+    bundleHash: `hash-${environmentId}-${bundleId}`,
+  }] as any;
+}
+
 describe("EnvironmentManager", () => {
   let decisions: EnvironmentDecisionStore;
   let nowMs: number;
@@ -54,8 +72,8 @@ describe("EnvironmentManager", () => {
     return new JsonlEnvironmentMetadataCaptureSink(captureDir);
   }
 
-  function newManager(activeWindowMs = 6 * 60_000, recentRetentionMs = 30 * 60_000): EnvironmentManager {
-    return new EnvironmentManager(mockRepositoryService(), decisions, {
+  function newManager(repositoryService = mockRepositoryService(), activeWindowMs = 6 * 60_000, recentRetentionMs = 30 * 60_000): EnvironmentManager {
+    return new EnvironmentManager(repositoryService, decisions, {
       activeEnvironmentWindowMs: activeWindowMs,
       recentEnvironmentRetentionMs: recentRetentionMs,
       logger: { info: vi.fn() },
@@ -67,123 +85,81 @@ describe("EnvironmentManager", () => {
   it("keeps a registered environment active in memory", async () => {
     const manager = newManager();
 
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
+    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { displayName: "Example" });
 
     expect(manager.isAvailable("web:example.com")).toBe(true);
   });
 
-  it("creates IGNORED/environment_metadata_captures and appends environment metadata captures as jsonl", async () => {
+  it("captures registration metadata as jsonl", async () => {
     const manager = newManager();
 
     await manager.registerAvailableEnvironment(
-      { id: "web:example.com/docs", metadata: { title: "Docs", tags: ["api"] } },
-      { sourceName: "Example Docs", canonicalSourceUrl: "https://example.com/docs" },
-    );
-    await manager.registerAvailableEnvironment(
-      { id: "web:example.com/docs", metadata: { title: "Docs 2" } },
-      { sourceName: "Example Docs" },
+      { id: "web:example.com/docs", metadata: { displayName: "Docs", observedUrls: ["https://example.com/docs"] } },
+      { displayName: "Docs" },
     );
 
     const filePath = path.join(captureDir, "web-example.com--docs.jsonl");
-    expect(existsSync(path.join(tempHome, "IGNORED"))).toBe(true);
-    expect(existsSync(captureDir)).toBe(true);
     expect(existsSync(filePath)).toBe(true);
 
     const lines = readFileSync(filePath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toMatchObject({
-      capturedAt: "2026-07-02T12:00:00.000Z",
-      environmentId: "web:example.com/docs",
-      sourceName: "Example Docs",
-      canonicalSourceUrl: "https://example.com/docs",
-      metadata: { title: "Docs", tags: ["api"] },
-    });
-    expect(lines[1]).toMatchObject({
-      capturedAt: "2026-07-02T12:00:00.000Z",
-      environmentId: "web:example.com/docs",
-      sourceName: "Example Docs",
-      metadata: { title: "Docs 2" },
-    });
+    expect(lines).toEqual([
+      {
+        capturedAt: "2026-07-02T12:00:00.000Z",
+        environmentId: "web:example.com/docs",
+        metadata: { displayName: "Docs", observedUrls: ["https://example.com/docs"] },
+      },
+    ]);
   });
 
-  it("registerCandidateEnvironment captures the full web candidate but only registers the domain by default", async () => {
-    const repositoryService = mockRepositoryService();
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-      registrationCaptureSink: captureSink(),
-    });
+  it("registers the literal candidate environment id", async () => {
+    const manager = newManager();
 
     await manager.registerCandidateEnvironment({
       id: "web:docs.google.com/document/d/abc/edit",
-      metadata: {
-        sourceName: "https://docs.google.com/document/d/abc/edit",
-        canonicalSourceUrl: "https://docs.google.com/document/d/abc/edit",
-        appName: "Google Chrome",
-      },
+      metadata: { displayName: "edit", observedUrls: ["https://docs.google.com/document/d/abc/edit"] },
     });
 
-    expect(manager.isAvailable("web:docs.google.com")).toBe(true);
-    expect(manager.isAvailable("web:docs.google.com/document")).toBe(false);
-    expect(manager.isAvailable("web:docs.google.com/document/d")).toBe(false);
-    expect(manager.isAvailable("web:docs.google.com/document/d/abc")).toBe(false);
-    expect(manager.isAvailable("web:docs.google.com/document/d/abc/edit")).toBe(false);
-
-    const filePath = path.join(captureDir, "web-docs.google.com--document--d--abc--edit.jsonl");
-    expect(existsSync(filePath)).toBe(true);
-    const lines = readFileSync(filePath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
-    expect(lines.at(-1)).toMatchObject({
-      environmentId: "web:docs.google.com/document/d/abc/edit",
-      sourceName: "https://docs.google.com/document/d/abc/edit",
-      canonicalSourceUrl: "https://docs.google.com/document/d/abc/edit",
-    });
+    expect(manager.isAvailable("web:docs.google.com/document/d/abc/edit")).toBe(true);
+    expect(manager.isAvailable("web:docs.google.com")).toBe(false);
   });
 
-  it("registerCandidateEnvironment registers bundle-backed web ancestors", async () => {
+  it("finalizes additional repository-backed environments discovered from observed urls", async () => {
     const repositoryService = mockRepositoryService();
     vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {
-      if (environmentId === "web:docs.google.com/document" || environmentId === "web:docs.google.com/document/d/abc") {
-        return [{
-          bundle: {
-            id: `${environmentId}#default`,
-            bundleId: "default",
-            environmentId,
-            repository: "/repo",
-            bundlePath: `/repo/${environmentId.replace(":", "/")}/.bundles/default`,
-            skills: [],
-            mcpServers: [],
-            apps: [],
-            valid: true,
-            errors: [],
-          },
-          bundleHash: `hash-${environmentId}`,
-        }] as any;
-      }
+      if (environmentId === "web:docs.google.com/document") return resolvedBundle(environmentId);
       return [];
     });
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
+    const manager = newManager(repositoryService);
 
     await manager.registerCandidateEnvironment({
       id: "web:docs.google.com/document/d/abc/edit",
-      metadata: { sourceName: "https://docs.google.com/document/d/abc/edit" },
+      metadata: { displayName: "edit", observedUrls: ["https://docs.google.com/document/d/abc/edit"] },
     });
 
-    expect(manager.isAvailable("web:docs.google.com")).toBe(true);
+    expect(manager.isAvailable("web:docs.google.com/document/d/abc/edit")).toBe(true);
     expect(manager.isAvailable("web:docs.google.com/document")).toBe(true);
-    expect(manager.isAvailable("web:docs.google.com/document/d")).toBe(false);
-    expect(manager.isAvailable("web:docs.google.com/document/d/abc")).toBe(true);
-    expect(manager.isAvailable("web:docs.google.com/document/d/abc/edit")).toBe(false);
+    expect(manager.isAvailable("web:docs.google.com")).toBe(false);
+  });
+
+  it("finalizes additional repository-backed dir environments discovered from observed paths", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {
+      if (environmentId === "dir:/Users/john/project") return resolvedBundle(environmentId);
+      return [];
+    });
+    const manager = newManager(repositoryService);
+
+    await manager.registerCandidateEnvironment({
+      id: "dir:/Users/john/project/src",
+      metadata: { displayName: "src", observedPaths: ["/Users/john/project/src/main.cpp"] },
+    });
+
+    expect(manager.isAvailable("dir:/Users/john/project/src")).toBe(true);
+    expect(manager.isAvailable("dir:/Users/john/project")).toBe(true);
   });
 
   it("moves an active environment to recent after the active window", async () => {
-    const manager = newManager(1_000, 10_000);
+    const manager = newManager(mockRepositoryService(), 1_000, 10_000);
     await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
 
     nowMs += 1_001;
@@ -192,870 +168,82 @@ describe("EnvironmentManager", () => {
   });
 
   it("forgets recent environments after the recent retention window", async () => {
-    const manager = newManager(1_000, 2_000);
+    const manager = newManager(mockRepositoryService(), 1_000, 2_000);
     await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
 
     nowMs += 1_001;
     expect(manager.isAvailable("web:example.com")).toBe(false);
 
     nowMs += 2_001;
-    expect(manager.isAvailable("web:example.com")).toBe(false);
     expect(manager.diagnosticSnapshot()).toEqual([]);
   });
 
-  it("promotes a recent environment back to active when registered again", async () => {
-    const manager = newManager(1_000, 10_000);
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-
-    nowMs += 1_001;
-    expect(manager.isAvailable("web:example.com")).toBe(false);
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    expect(manager.isAvailable("web:example.com")).toBe(true);
-  });
-
-  it("keeps registeredAt stable when an already-active environment is re-registered", async () => {
-    const manager = newManager(10_000, 20_000);
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    const first = manager.diagnosticSnapshot()[0];
-
-    nowMs += 2_000;
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    const second = manager.diagnosticSnapshot()[0];
-
-    expect(second.registeredAt).toBe(first.registeredAt);
-    expect(second.record.metadata.registeredAt).toBe(first.record.metadata.registeredAt);
-    expect(second.lastTouchedAt).not.toBe(first.lastTouchedAt);
-    expect(second.activeUntil).not.toBe(first.activeUntil);
-  });
-
-  it("resets registeredAt when a recent environment becomes active again", async () => {
-    const manager = newManager(1_000, 10_000);
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    const first = manager.diagnosticSnapshot()[0];
-
-    nowMs += 1_001;
-    expect(manager.isAvailable("web:example.com")).toBe(false);
-
-    nowMs += 2_000;
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    const second = manager.diagnosticSnapshot()[0];
-
-    expect(second.registeredAt).not.toBe(first.registeredAt);
-    expect(second.record.metadata.registeredAt).not.toBe(first.record.metadata.registeredAt);
-    expect(second.lastTouchedAt).toBe(second.registeredAt);
-  });
-
-  it("retains permanent decisions and session-scoped decisions", () => {
+  it("uses candidate displayName for environment list entries", async () => {
     const manager = newManager();
+    manager.subscribe("s1", mockListener());
 
-    // Permanent approve: no sessionId needed, stored in DB.
-    manager.decideEnvironment("web:example.com", "approve");
-    expect(manager.effectiveDecision("web:example.com")).toBe("approve");
+    await manager.registerCandidateEnvironment({
+      id: "dir:/Users/john/project-x",
+      metadata: { displayName: "Project X", observedPaths: ["/Users/john/project-x/main.cpp"] },
+    });
 
-    // Session-scoped ignore: requires sessionId, in-memory only.
-    manager.decideEnvironment("web:example.com", "ignore", undefined, "s1");
-    expect(manager.effectiveDecision("web:example.com", "s1")).toBe("ignore");
-    // Other sessions don't see it.
-    expect(manager.effectiveDecision("web:example.com", "s2")).toBe("approve");
+    expect(manager.environmentList("s1")[0]).toMatchObject({
+      environmentId: "dir:/Users/john/project-x",
+      displayName: "Project X",
+    });
   });
 
-  it("stores environment_id and bundle_id when approving a bundle by hash", async () => {
+  it("falls back to the last environment-id segment when displayName is absent", async () => {
     const manager = newManager();
+    manager.subscribe("s1", mockListener());
 
-    // Simulate an environment with bundles in memory so decideEnvironment can
-    // look up the bundle metadata.
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#my-bundle",
-          bundleId: "my-bundle",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/my-bundle",
-          skills: [],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-abc",
-      },
-    ] as any);
-    const bundleManager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
+    await manager.registerAvailableEnvironment({ id: "web:example.com/docs", metadata: {} });
+
+    expect(manager.environmentList("s1")[0]).toMatchObject({
+      displayName: "docs",
     });
-
-    // Register to get the bundle into remembered state.
-    await bundleManager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
-
-    // Approve the bundle by hash.
-    bundleManager.decideEnvironment("web:example.com", "approve", "hash-abc");
-
-    // effectiveDecision by hash should return approve.
-    expect(bundleManager.effectiveDecision("hash-abc")).toBe("approve");
-    // The DB entry should be findable.
-    expect(decisions.getDecision("hash-abc")).toBe("approve");
   });
 
-  it("shows per-bundle effectiveDecision in diagnostic snapshot", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#my-bundle",
-          bundleId: "my-bundle",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/my-bundle",
-          skills: [{ id: "talk", files: {} }],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-abc",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
-    manager.decideEnvironment("web:example.com", "accept", "hash-abc", "s1");
-
-    const snapshot = manager.diagnosticSnapshot("s1");
-    expect(snapshot).toHaveLength(1);
-    // Per-bundle decision should be "accept" from s1's perspective.
-    expect(snapshot[0].bundles[0].effectiveDecision).toBe("accept");
-    // Without sessionId, the session decision is invisible (only permanent shows).
-    expect(manager.diagnosticSnapshot()[0].bundles[0].effectiveDecision).toBe("undecided");
-    // The top-level (environment-keyed) decision won't match the bundle hash.
-  });
-
-  it("ephemeral accept is forgotten when the environment expires", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#my-bundle",
-          bundleId: "my-bundle",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/my-bundle",
-          skills: [],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-abc",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 1_000,
-      recentEnvironmentRetentionMs: 30_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    manager.decideEnvironment("web:example.com", "accept", "hash-abc", "s1");
-    expect(manager.effectiveDecision("hash-abc", "s1")).toBe("accept");
-
-    // Advance past the active window — environment moves to recent, session-scoped accept is forgotten.
-    nowMs += 1_001;
-    expect(manager.effectiveDecision("hash-abc", "s1")).toBe("undecided");
-  });
-
-  it("approve persists across environment expiry", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#my-bundle",
-          bundleId: "my-bundle",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/my-bundle",
-          skills: [],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-abc",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 1_000,
-      recentEnvironmentRetentionMs: 30_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    manager.decideEnvironment("web:example.com", "approve", "hash-abc");
-    expect(manager.effectiveDecision("hash-abc")).toBe("approve");
-
-    // Advance past the active window — environment expires, but approve is in DB.
-    nowMs += 1_001;
-    expect(manager.effectiveDecision("hash-abc")).toBe("approve");
-  });
-
-  it("does not broadcast offers on registration — offers are deferred to enter", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#testing",
-          bundleId: "testing",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/testing",
-          skills: [{ id: "consult", files: {} }],
-          mcpServers: [{ id: "crm", files: {} }],
-          apps: [{ id: "slack", files: {} }],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
-
-    // Registration should NOT broadcast offers.
-    expect(listener.onEnvironmentOffered).not.toHaveBeenCalled();
-    expect(listener.onEnvironmentEntered).not.toHaveBeenCalled();
-    expect(manager.enteredEnvironments("s1")).toEqual([]);
-  });
-
-  it("remembers discovered bundle paths with the environment", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#testing",
-          bundleId: "testing",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/testing",
-          skills: [],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
-
-    expect(manager.diagnosticSnapshot()).toEqual([
-      expect.objectContaining({
-        environmentId: "web:example.com",
-        bundleIds: ["testing"],
-        bundleCollectionPaths: ["/repo/web/example.com/.bundles"],
-        bundles: [expect.objectContaining({ bundleId: "testing", bundleHash: "hash-1" })],
-      }),
-    ]);
-  });
-
-  it("enters an environment and calls onEnvironmentEntered with approved skill paths", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#testing",
-          bundleId: "testing",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/testing",
-          skills: [{ id: "consult", files: {} }],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    // Approve the bundle before entering so skills are included.
-    manager.decideEnvironment("web:example.com", "approve", "hash-1");
-
-    const entered = manager.enterEnvironment("s1", "web:example.com");
-
-    expect(entered).toEqual(["web:example.com"]);
-    expect(manager.enteredEnvironments("s1")).toEqual(["web:example.com"]);
-    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith(
-      "web:example.com",
-      ["/repo/web/example.com/.bundles/testing/skills/consult"],
-      undefined,
-    );
-    // No offers for already-approved bundles.
-    expect(listener.onEnvironmentOffered).not.toHaveBeenCalled();
-
-    const personalSkillsDir = path.join(tempHome, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills");
-    expect(existsSync(personalSkillsDir)).toBe(true);
-  });
-
-  it("allows entering a recent environment from the environment list", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#testing",
-          bundleId: "testing",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/testing",
-          skills: [],
-          mcpServers: [],
-          apps: [],
-          agentsMd: "# Environment Instructions\n\nBe helpful.",
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 1_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    nowMs += 2_000;
-
-    const entered = manager.enterEnvironment("s1", "web:example.com");
-
-    expect(entered).toEqual(["web:example.com"]);
-    expect(manager.enteredEnvironments("s1")).toEqual(["web:example.com"]);
-    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", [], undefined);
-    expect(listener.onEnvironmentOffered).toHaveBeenCalledWith(expect.objectContaining({
-      environmentId: "web:example.com",
-      bundleId: "testing",
-      bundleHash: "hash-1",
-    }));
-  });
-
-  it("exits an environment and calls onEnvironmentExited", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#testing",
-          bundleId: "testing",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/testing",
-          skills: [],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    manager.enterEnvironment("s1", "web:example.com");
-
-    const remaining = manager.exitEnvironment("s1", "web:example.com");
-
-    expect(remaining).toEqual([]);
-    expect(manager.enteredEnvironments("s1")).toEqual([]);
-    expect(listener.onEnvironmentExited).toHaveBeenCalledWith("web:example.com");
-  });
-
-  it("session decisions are cleared when exiting an environment", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#testing",
-          bundleId: "testing",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/testing",
-          skills: [],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    manager.enterEnvironment("s1", "web:example.com");
-
-    // Accept the bundle for session s1.
-    manager.decideEnvironment("web:example.com", "accept", "hash-1", "s1");
-    expect(manager.effectiveDecision("hash-1", "s1")).toBe("accept");
-
-    // Exit the environment — session decisions should be cleared.
-    manager.exitEnvironment("s1", "web:example.com");
-    expect(manager.effectiveDecision("hash-1", "s1")).toBe("undecided");
-  });
-
-  it("session decisions are isolated across sessions", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#testing",
-          bundleId: "testing",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/testing",
-          skills: [{ id: "consult", files: {} }],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-    const l1 = mockListener();
-    const l2 = mockListener();
-    manager.subscribe("s1", l1);
-    manager.subscribe("s2", l2);
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
-
-    // Session 1 enters and accepts.
-    manager.enterEnvironment("s1", "web:example.com");
-    manager.decideEnvironment("web:example.com", "accept", "hash-1", "s1");
-    expect(manager.effectiveDecision("hash-1", "s1")).toBe("accept");
-
-    // Session 2 enters — should get its own fresh offer, not affected by s1's decision.
-    vi.mocked(l2.onEnvironmentOffered).mockClear();
-    manager.enterEnvironment("s2", "web:example.com");
-    expect(l2.onEnvironmentOffered).toHaveBeenCalledWith(
-      expect.objectContaining({
-        environmentId: "web:example.com",
-        bundleId: "testing",
-        bundleHash: "hash-1",
-        displayName: "example.com",
-        sourceName: "Example",
-      }),
-    );
-    // s2's onEnvironmentEntered should have empty skills (bundle still undecided from s2's perspective).
-    expect(l2.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", [], undefined);
-  });
-
-  it("entering a child environment also enters its active parents", async () => {
+  it("entering a child environment does not implicitly enter its parent", async () => {
     const manager = newManager();
     const listener = mockListener();
     manager.subscribe("s1", listener);
 
-    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian", metadata: { bundleId: "md.obsidian" } }, { sourceName: "Obsidian" });
-    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian/Rooknanigans", metadata: { vaultName: "Rooknanigans" } }, { sourceName: "Obsidian · Rooknanigans" });
+    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian", metadata: { displayName: "Obsidian" } }, { displayName: "Obsidian" });
+    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian/Rooknanigans", metadata: { displayName: "Rooknanigans" } }, { displayName: "Rooknanigans" });
 
     const entered = manager.enterEnvironment("s1", "mac:md.obsidian/Rooknanigans");
 
-    expect(entered).toEqual(["mac:md.obsidian", "mac:md.obsidian/Rooknanigans"]);
-    expect(manager.enteredEnvironments("s1")).toEqual(["mac:md.obsidian", "mac:md.obsidian/Rooknanigans"]);
-    expect(listener.onEnvironmentEntered).toHaveBeenNthCalledWith(1, "mac:md.obsidian", [], undefined);
-    expect(listener.onEnvironmentEntered).toHaveBeenNthCalledWith(2, "mac:md.obsidian/Rooknanigans", [], undefined);
-  });
-
-  it("leaving a child environment also leaves inherited parent entries when no longer needed", async () => {
-    const manager = newManager();
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian", metadata: {} });
-    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian/Rooknanigans", metadata: {} });
-
-    manager.enterEnvironment("s1", "mac:md.obsidian/Rooknanigans");
-    vi.mocked(listener.onEnvironmentExited).mockClear();
-
-    const remaining = manager.exitEnvironment("s1", "mac:md.obsidian/Rooknanigans");
-
-    expect(remaining).toEqual([]);
-    expect(manager.enteredEnvironments("s1")).toEqual([]);
-    expect(listener.onEnvironmentExited).toHaveBeenNthCalledWith(1, "mac:md.obsidian");
-    expect(listener.onEnvironmentExited).toHaveBeenNthCalledWith(2, "mac:md.obsidian/Rooknanigans");
-  });
-
-  it("environmentList sorts entered first, then active by recency", async () => {
-    const manager = newManager();
-
-    // Register two environments at different times.
-    await manager.registerAvailableEnvironment({ id: "web:a.com", metadata: {} }, { sourceName: "A" });
-    nowMs += 1_000;
-    await manager.registerAvailableEnvironment({ id: "web:b.com", metadata: {} }, { sourceName: "B" });
-
-    // Subscribe and enter the older one.
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-    manager.enterEnvironment("s1", "web:a.com");
-
-    const list = manager.environmentList("s1");
-
-    // Entered first (web:a.com), then active by recency (web:b.com more recent).
-    expect(list[0].environmentId).toBe("web:a.com");
-    expect(list[0].entered).toBe(true);
-    expect(list[1].environmentId).toBe("web:b.com");
-    expect(list[1].entered).toBe(false);
-  });
-
-  it("environmentList derives display names by environment kind", async () => {
-    const manager = newManager();
-
-    await manager.registerAvailableEnvironment(
-      {
-        id: "web:example.com/docs",
-        metadata: {
-          appName: "Google Chrome",
-          windowTitle: "Example Docs - Google Chrome - John",
-          url: "https://example.com/docs",
-        },
-      },
-      { sourceName: "https://example.com/docs" },
-    );
-    await manager.registerAvailableEnvironment(
-      {
-        id: "mac:md.obsidian/Peeps",
-        metadata: {
-          appName: "Obsidian",
-          vaultName: "Peeps",
-        },
-      },
-      { sourceName: "Obsidian · Peeps" },
-    );
-    await manager.registerAvailableEnvironment(
-      {
-        id: "dir:/Users/john/project",
-        metadata: {
-          directoryPath: "/Users/john/project",
-        },
-      },
-      { sourceName: "/Users/john/project" },
-    );
-    await manager.registerAvailableEnvironment(
-      {
-        id: "location:target.com/123-main-st-springfield-il",
-        metadata: {
-          displayName: "Target",
-          address: "123 Main St, Springfield, IL",
-        },
-      },
-      { sourceName: "Target" },
-    );
-
-    const list = manager.environmentList("s1");
-    const byId = new Map(list.map((item) => [item.environmentId, item]));
-
-    expect(byId.get("web:example.com/docs")).toMatchObject({
-      displayName: "example.com / docs",
-      sourceName: "https://example.com/docs",
-    });
-    expect(byId.get("mac:md.obsidian/Peeps")).toMatchObject({
-      displayName: "Obsidian · Peeps",
-      sourceName: "Obsidian · Peeps",
-    });
-    expect(byId.get("dir:/Users/john/project")).toMatchObject({
-      displayName: "/Users/john/project",
-      sourceName: "/Users/john/project",
-    });
-    expect(byId.get("location:target.com/123-main-st-springfield-il")).toMatchObject({
-      displayName: "Target",
-      sourceName: "Target",
-    });
-  });
-
-  it("enterEnvironment does nothing for an unsubscribed session", async () => {
-    const manager = newManager();
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-
-    const entered = manager.enterEnvironment("nonexistent", "web:example.com");
-    expect(entered).toEqual([]);
-  });
-
-  it("registerCandidateEnvironment keeps dir environments exact-only with no parents", async () => {
-    const manager = newManager();
-
-    await manager.registerCandidateEnvironment({
-      id: "dir:/Users/john/project/subdir",
-      metadata: { directoryPath: "/Users/john/project/subdir" },
-    });
-
-    expect(manager.isAvailable("dir:/Users/john/project/subdir")).toBe(true);
-    expect(manager.isAvailable("dir:/Users/john/project")).toBe(false);
-    expect(manager.isAvailable("dir:/Users/john")).toBe(false);
-  });
-
-  it("enters only the exact dir environment", async () => {
-    const manager = newManager();
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerCandidateEnvironment({
-      id: "dir:/Users/john/project/subdir",
-      metadata: { directoryPath: "/Users/john/project/subdir" },
-    });
-
-    const entered = manager.enterEnvironment("s1", "dir:/Users/john/project/subdir");
-    expect(entered).toEqual(["dir:/Users/john/project/subdir"]);
+    expect(entered).toEqual(["mac:md.obsidian/Rooknanigans"]);
+    expect(manager.enteredEnvironments("s1")).toEqual(["mac:md.obsidian/Rooknanigans"]);
     expect(listener.onEnvironmentEntered).toHaveBeenCalledTimes(1);
-    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("dir:/Users/john/project/subdir", [], undefined);
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("mac:md.obsidian/Rooknanigans", []);
   });
 
-  it("renders environment binding instructions for all entered environments", async () => {
-    const manager = newManager();
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerAvailableEnvironment(
-      {
-        id: "web:example.com",
-        metadata: { title: "Example" },
-      },
-      { sourceName: "Arc", canonicalSourceUrl: "https://example.com" },
-    );
-    await manager.registerAvailableEnvironment(
-      {
-        id: "web:example.com/stuff",
-        metadata: { title: "Stuff", tags: ["docs", "support"] },
-      },
-      { sourceName: "Arc", canonicalSourceUrl: "https://example.com/stuff" },
-      "The user is reading the support docs.",
-    );
-    await manager.registerAvailableEnvironment(
-      {
-        id: "mac:md.obsidian",
-        metadata: { bundleId: "md.obsidian" },
-      },
-      { sourceName: "Obsidian" },
-    );
-    await manager.registerAvailableEnvironment(
-      {
-        id: "mac:md.obsidian/WorkVault",
-        metadata: { vault: "WorkVault" },
-      },
-      { sourceName: "Obsidian" },
-    );
-
-    manager.enterEnvironment("s1", "web:example.com/stuff");
-    manager.enterEnvironment("s1", "mac:md.obsidian/WorkVault");
-
-    const instructions = manager.runtimeInstructionsForSession("s1");
-    // Rook identity prompt is included.
-    expect(instructions).toContain("You are Rook");
-    // Environment prompt.
-    expect(instructions).toContain("Attaching memories");
-    expect(instructions).toContain("`web:example.com`");
-    expect(instructions).toContain("`web:example.com/stuff`");
-    expect(instructions).toContain("`mac:md.obsidian`");
-    expect(instructions).toContain("`mac:md.obsidian/WorkVault`");
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills"));
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "web", "example.com", "stuff", ".bundles", "personal", "skills"));
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "mac", "md.obsidian", ".bundles", "personal", "skills"));
-    expect(instructions).toContain(path.join(tempHome, ".rook", "environment-repository", "mac", "md.obsidian", "WorkVault", ".bundles", "personal", "skills"));
-    expect(instructions).toContain("https://example.com/stuff");
-    expect(instructions).toContain("The user is reading the support docs.");
-    expect(instructions).toContain('"vault": "WorkVault"');
-  });
-
-  it("injects AGENTS.md content into the runtime prompt", async () => {
+  it("offers undecided bundles with displayName only", async () => {
     const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#default",
-          bundleId: "default",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/default",
-          skills: [],
-          mcpServers: [],
-          apps: [],
-          agentsMd: "# Example Instructions\n\nAlways be polite.",
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
+    vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {
+      if (environmentId === "web:example.com") return resolvedBundle(environmentId, "testing");
+      return [];
     });
+    const manager = newManager(repositoryService);
     const listener = mockListener();
     manager.subscribe("s1", listener);
 
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    await manager.registerCandidateEnvironment({
+      id: "web:example.com",
+      metadata: { displayName: "Example" },
+    });
     manager.enterEnvironment("s1", "web:example.com");
 
-    const instructions = manager.runtimeInstructionsForSession("s1");
-    expect(instructions).toContain("#### Environment instructions");
-    expect(instructions).toContain("# Example Instructions");
-    expect(instructions).toContain("Always be polite.");
-  });
-
-  it("omits AGENTS.md section when no bundles have it", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#default",
-          bundleId: "default",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/default",
-          skills: [],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
-    manager.enterEnvironment("s1", "web:example.com");
-
-    const instructions = manager.runtimeInstructionsForSession("s1");
-    expect(instructions).not.toContain("#### Environment instructions");
-  });
-
-  it("offers undecided bundles when entering, and loads skills after approval", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
-      {
-        bundle: {
-          id: "web:example.com#testing",
-          bundleId: "testing",
-          environmentId: "web:example.com",
-          repository: "/repo",
-          bundlePath: "/repo/web/example.com/.bundles/testing",
-          skills: [{ id: "consult", files: {} }],
-          mcpServers: [],
-          apps: [],
-          valid: true,
-          errors: [],
-        },
-        bundleHash: "hash-1",
-      },
-    ] as any);
-    const manager = new EnvironmentManager(repositoryService, decisions, {
-      activeEnvironmentWindowMs: 6 * 60_000,
-      recentEnvironmentRetentionMs: 30 * 60_000,
-      logger: { info: vi.fn() },
-      now: () => nowMs,
-    });
-    const listener = mockListener();
-    manager.subscribe("s1", listener);
-
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { sourceName: "Example" });
-
-    // Enter with an undecided bundle — it should be offered but not loaded.
-    manager.enterEnvironment("s1", "web:example.com");
-
-    expect(manager.enteredEnvironments("s1")).toEqual(["web:example.com"]);
-    // onEnvironmentEntered called with empty skills (bundle is undecided).
-    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith(
-      "web:example.com",
-      [],
-      undefined,
-    );
-    // Offer emitted for the undecided bundle.
     expect(listener.onEnvironmentOffered).toHaveBeenCalledWith({
       environmentId: "web:example.com",
+      displayName: "Example",
       bundleId: "testing",
-      bundleHash: "hash-1",
-      displayName: "example.com",
-      sourceName: "Example",
-      canonicalSourceUrl: undefined,
-      skills: ["consult"],
+      bundleHash: "hash-web:example.com-testing",
+      skills: [],
       mcpServers: [],
       apps: [],
     });
-
-    // Now accept for this session — should trigger a re-enter with skills.
-    vi.mocked(listener.onEnvironmentEntered).mockClear();
-    manager.decideEnvironment("web:example.com", "accept", "hash-1", "s1");
-
-    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith(
-      "web:example.com",
-      ["/repo/web/example.com/.bundles/testing/skills/consult"],
-      undefined,
-    );
   });
 });

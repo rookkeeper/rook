@@ -83,12 +83,12 @@ final class DiscordEnvironmentProvider: SpecializedEnvironmentProvider {
         case let .serverChannel(serverName, channelName):
             var serverMetadata = CandidateMetadata.base(app: app, title: title)
             serverMetadata["serverName"] = .string(serverName)
-            serverMetadata["sourceName"] = .string("\(app.name) · \(serverName)")
+            serverMetadata["displayName"] = .string("\(app.name) · \(serverName)")
             let serverId = serverEnvironmentId(bundleId: app.bundleId, serverName: serverName)
 
             var channelMetadata = serverMetadata
             channelMetadata["channelName"] = .string(channelName)
-            channelMetadata["sourceName"] = .string("\(app.name) · \(serverName) · #\(channelName)")
+            channelMetadata["displayName"] = .string("\(app.name) · \(serverName) · #\(channelName)")
             let channelId = channelEnvironmentId(bundleId: app.bundleId, serverName: serverName, channelName: channelName)
 
             return [
@@ -99,7 +99,7 @@ final class DiscordEnvironmentProvider: SpecializedEnvironmentProvider {
         case let .directMessage(name):
             var metadata = CandidateMetadata.base(app: app, title: title)
             metadata["dmName"] = .string(name)
-            metadata["sourceName"] = .string("\(app.name) · \(name)")
+            metadata["displayName"] = .string("\(app.name) · \(name)")
             return [
                 EnvironmentCandidate(
                     id: directMessageEnvironmentId(bundleId: app.bundleId, name: name),

@@ -230,7 +230,6 @@ class AcpReduceTest {
                     put("displayName", "Store")
                     put("bundleId", "bundle-1")
                     put("bundleHash", "hash-1")
-                    put("sourceName", "Store")
                     putJsonArray("skills") { }
                     putJsonArray("mcpServers") { }
                     putJsonArray("apps") { }
