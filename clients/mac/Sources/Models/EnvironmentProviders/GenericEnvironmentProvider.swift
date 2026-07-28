@@ -256,17 +256,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
               let host = components.host?.lowercased(), !host.isEmpty else {
             return []
         }
-        let segments = components.percentEncodedPath
-            .split(separator: "/")
-            .map(String.init)
-            .filter { !$0.isEmpty }
-        var ids = ["web:\(host)"]
-        var current = host
-        for segment in segments {
-            current += "/\(segment)"
-            ids.append("web:\(current)")
-        }
-        return ids
+        return ["web:\(host)"]
     }
 
     private static func webDisplayName(for environmentId: String) -> String {
