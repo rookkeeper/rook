@@ -1,4 +1,4 @@
-import type { EnvironmentBundleResult } from "../../../shared/environmentRepository.js";
+import type { EnvironmentBundleResult } from "../../shared/environmentRepository.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
 const REPO_NAME = "location-context";

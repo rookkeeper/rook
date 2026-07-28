@@ -1,4 +1,4 @@
-import type { EnvironmentCandidate, IdentifyAvailableRequest } from "../../shared/environment.js";
+import type { EnvironmentCandidate, IdentifyAvailableRequest } from "../shared/environment.js";
 import type { BuildingSkillSuggester } from "./BuildingSkillSuggester.js";
 import { locationKey } from "./locationKey.js";
 import { storeNumberFromWebsite } from "./storeNumber.js";

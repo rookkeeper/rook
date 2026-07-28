@@ -1,4 +1,4 @@
-import type { CandidateEnvironmentMetadata, CandidateEnvironmentRecord, EnvironmentDecision } from "../../../shared/environment.js";
+import type { CandidateEnvironmentMetadata, CandidateEnvironmentRecord, EnvironmentDecision } from "../../shared/environment.js";
 
 export type { CandidateEnvironmentMetadata, CandidateEnvironmentRecord, EnvironmentDecision };
 

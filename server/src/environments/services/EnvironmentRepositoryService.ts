@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type { EnvironmentBundleResult, EnvironmentBundle } from "../../../shared/environmentRepository.js";
-import type { EnvironmentPreview } from "../../../shared/environment.js";
+import type { EnvironmentBundleResult, EnvironmentBundle } from "../../shared/environmentRepository.js";
+import type { EnvironmentPreview } from "../../shared/environment.js";
 import { EnvironmentRepository } from "../repositories/EnvironmentRepository.js";
 
 export interface ResolvedEnvironmentBundle {

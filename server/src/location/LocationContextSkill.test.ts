@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { EnvironmentCandidate } from "../../shared/environment.js";
+import type { EnvironmentCandidate } from "../shared/environment.js";
 import { renderLocationContextSkill, writeLocationContextSkill } from "./LocationContextSkill.js";
 
 function candidate(over: Partial<EnvironmentCandidate>): EnvironmentCandidate {

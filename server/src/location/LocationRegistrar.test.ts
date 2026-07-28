@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import type { EnvironmentCandidate } from "../../shared/environment.js";
+import type { EnvironmentCandidate } from "../shared/environment.js";
 import { isDwellArrival, LocationRegistrar, type LocationEnvironmentSink } from "./LocationRegistrar.js";
 
 function sink() {

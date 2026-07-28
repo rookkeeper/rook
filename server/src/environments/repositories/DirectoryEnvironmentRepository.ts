@@ -7,7 +7,7 @@ import type {
   EnvironmentBundleResult,
   EnvironmentRecord,
   RepositoryReadError,
-} from "../../../shared/environmentRepository.js";
+} from "../../shared/environmentRepository.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
 const RECOGNIZED_CONTENT_DIRS = ["skills", "mcp-servers", "apps"] as const;

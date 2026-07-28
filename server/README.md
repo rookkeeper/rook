@@ -47,11 +47,11 @@ The server is a single ACP-compliant agent from the client's perspective. Intern
 
 The server is organized **primarily by domain**:
 
-- `src/server/infrastructure/` — auth, config loading, path helpers, remote proxy, shared datastore bootstrap
-- `src/server/sessions/` — session routes, repository contract, SQLite session persistence, transcript storage/helpers
-- `src/server/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
-- `src/server/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
-- `src/server/location/` — location identification, POI providers, dwell logic, trace helpers, environment bridge helpers
+- `src/infrastructure/` — auth, config loading, path helpers, remote proxy, shared datastore bootstrap
+- `src/sessions/` — session routes, repository contract, SQLite session persistence, transcript storage/helpers
+- `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
+- `src/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
+- `src/location/` — location identification, POI providers, dwell logic, trace helpers, environment bridge helpers
 
 Within each domain, `routes/`, `services/`, `repositories/`, and `datastores/` appear only where that domain actually needs them.
 
@@ -122,17 +122,17 @@ The environment system (registration, decision store, repository) continues to w
 
 ### Key source files
 
-- `src/server/index.ts` — server bootstrap and wiring
-- `src/server/runtime/routes/acpFacadeRoute.ts` — ACP WebSocket facade
-- `src/server/runtime/routes/runtimeRoutes.ts` — `GET /api/agent_runtimes`
-- `src/server/environments/routes/environmentRoutes.ts` — environment HTTP endpoints
-- `src/server/runtime/services/AgentRuntimeManager.ts` — runtime catalog and per-session orchestration
-- `src/server/runtime/SessionRuntime.ts` — ACP stdio subprocess lifecycle
-- `src/server/runtime/runtimeLaunchPlan.ts` — provider-specific launch strategies
-- `src/server/infrastructure/datastores/RookDatastore.ts` — shared SQLite connection
-- `src/server/sessions/datastores/SqliteSessionRepository.ts` — session persistence
-- `src/server/infrastructure/config/agentRuntimes.ts` — runtime config loader
-- `src/server/agents/test-fixtures/mockAcpServer.mjs` — mock ACP runtime for testing
+- `src/index.ts` — server bootstrap and wiring
+- `src/runtime/routes/acpFacadeRoute.ts` — ACP WebSocket facade
+- `src/runtime/routes/runtimeRoutes.ts` — `GET /api/agent_runtimes`
+- `src/environments/routes/environmentRoutes.ts` — environment HTTP endpoints
+- `src/runtime/services/AgentRuntimeManager.ts` — runtime catalog and per-session orchestration
+- `src/runtime/SessionRuntime.ts` — ACP stdio subprocess lifecycle
+- `src/runtime/runtimeLaunchPlan.ts` — provider-specific launch strategies
+- `src/infrastructure/datastores/RookDatastore.ts` — shared SQLite connection
+- `src/sessions/datastores/SqliteSessionRepository.ts` — session persistence
+- `src/infrastructure/config/agentRuntimes.ts` — runtime config loader
+- `src/agents/test-fixtures/mockAcpServer.mjs` — mock ACP runtime for testing
 
 ## Tests
 
@@ -142,8 +142,8 @@ npm test -- --run     # run once (no watch)
 ```
 
 Key test files:
-- `src/server/runtime/acpFacade.test.ts` — ACP integration (initialize, session lifecycle, error cases)
-- `src/server/infrastructure/config/agentRuntimes.test.ts` — runtime config validation
-- `src/server/sessions/datastores/SqliteSessionRepository.test.ts` — session persistence
-- `src/server/environments/datastores/EnvironmentDecisionStore.test.ts` — decision store
-- `src/server/environments/services/EnvironmentManager.test.ts` — environment lifecycle
+- `src/runtime/acpFacade.test.ts` — ACP integration (initialize, session lifecycle, error cases)
+- `src/infrastructure/config/agentRuntimes.test.ts` — runtime config validation
+- `src/sessions/datastores/SqliteSessionRepository.test.ts` — session persistence
+- `src/environments/datastores/EnvironmentDecisionStore.test.ts` — decision store
+- `src/environments/services/EnvironmentManager.test.ts` — environment lifecycle

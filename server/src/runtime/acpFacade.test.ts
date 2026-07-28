@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { WebSocket } from "ws";
 import { buildServer } from "../index.js";
@@ -54,14 +57,34 @@ async function request(ws: any, id: number, method: string, params: Record<strin
 
 describe("ACP facade integration", { timeout: 30000 }, () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
+  let tempConfigDir: string;
+  const originalRuntimePath = process.env.ROOK_AGENT_RUNTIMES_PATH;
 
   beforeAll(async () => {
+    tempConfigDir = mkdtempSync(path.join(os.tmpdir(), "rook-acp-facade-"));
+    const mockServerPath = path.join(process.cwd(), "src", "agents", "test-fixtures", "mockAcpServer.mjs");
+    const runtimesPath = path.join(tempConfigDir, "agent-runtimes.json");
+    writeFileSync(runtimesPath, JSON.stringify({
+      profiles: [
+        {
+          id: "MockAcpAgent",
+          type: "acp",
+          command: "node",
+          args: [mockServerPath],
+          cwd: process.cwd(),
+        },
+      ],
+    }));
+    process.env.ROOK_AGENT_RUNTIMES_PATH = runtimesPath;
     app = await buildServer({ environmentDecisionStoreLocation: ":memory:", authToken: "" });
     await app.listen({ host: "127.0.0.1", port: PORT });
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
+    if (originalRuntimePath === undefined) delete process.env.ROOK_AGENT_RUNTIMES_PATH;
+    else process.env.ROOK_AGENT_RUNTIMES_PATH = originalRuntimePath;
+    rmSync(tempConfigDir, { recursive: true, force: true });
   });
 
   it("initializes and lists configured runtimes", async () => {

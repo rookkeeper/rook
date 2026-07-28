@@ -1,4 +1,4 @@
-import type { EnvironmentBundleResult, RepositoryReadError } from "../../../shared/environmentRepository.js";
+import type { EnvironmentBundleResult, RepositoryReadError } from "../../shared/environmentRepository.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
 export class CompositeEnvironmentRepository extends EnvironmentRepository {

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Rook's durable server-side state currently lives in one SQLite database, created by `server/src/server/infrastructure/datastores/RookDatastore.ts` at:
+Rook's durable server-side state currently lives in one SQLite database, created by `server/src/infrastructure/datastores/RookDatastore.ts` at:
 
 - `.var/rook/rook.sqlite` in normal local development
 - `:memory:` in tests when explicitly configured

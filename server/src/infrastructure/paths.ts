@@ -22,7 +22,7 @@ function findServerRoot(startDir: string): string {
     if (parent === current) {
       // In production builds (rootDir: "..") the compiled files live under dist/.
       // When the package root is unreachable by name, fall back to a fixed depth.
-      // Four levels from the server entry point in source: server/src/server/ → server/
+      // Three levels from the server entry point in source: server/src/ → server/
       return path.resolve(startDir, "..", "..", "..", "..");
     }
     current = parent;

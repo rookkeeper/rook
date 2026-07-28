@@ -1,7 +1,7 @@
 // Replays the real OSM GPX trace fixtures through the Android movement classifier
 // (MovementClassifier.emit + VoteDebouncer) and asserts the debounced movement matches each
 // trace's known nature. Same fixtures the server validates its parser against
-// (server/src/server/location/test-fixtures/gpx/), copied into test resources.
+// (server/src/location/test-fixtures/gpx/), copied into test resources.
 //
 // GPX carries no accelerometer, so this validates the SPEED-driven classification only:
 // - the VoteDebouncer must reject transient GPS speed spikes (no false Driving on hikes),

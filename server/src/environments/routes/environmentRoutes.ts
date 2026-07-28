@@ -4,7 +4,7 @@ import type { EnvironmentDecision } from "../support/types.js";
 import type { EnvironmentIdentifier } from "../../location/EnvironmentIdentifier.js";
 import type { LocationRegistrar } from "../../location/LocationRegistrar.js";
 import type { AgentRuntimeManager } from "../../runtime/services/AgentRuntimeManager.js";
-import type { CandidateEnvironmentRecord, CandidateEnvironmentMetadata, IdentifyAvailableRequest, IdentifySource } from "../../../shared/environment.js";
+import type { CandidateEnvironmentRecord, CandidateEnvironmentMetadata, IdentifyAvailableRequest, IdentifySource } from "../../shared/environment.js";
 
 export async function registerEnvironmentRoutes(
   app: FastifyInstance,

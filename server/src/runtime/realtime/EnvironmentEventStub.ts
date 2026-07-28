@@ -1,4 +1,4 @@
-import type { EnvironmentEventPayload } from "../../../shared/realtime.js";
+import type { EnvironmentEventPayload } from "../../shared/realtime.js";
 
 export interface EnvironmentEventPublisher {
   publish(sessionId: string, kind: string, payload?: unknown): Promise<void>;

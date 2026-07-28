@@ -1,5 +1,5 @@
-import type { AcpPermissionRequest, AcpSessionUpdateNotification } from "../../../shared/acp.js";
-import type { AcpOutboundMessage } from "../../../shared/realtime.js";
+import type { AcpPermissionRequest, AcpSessionUpdateNotification } from "../../shared/acp.js";
+import type { AcpOutboundMessage } from "../../shared/realtime.js";
 
 export type RoomSubscriber = (event: AcpOutboundMessage) => void;
 

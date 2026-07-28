@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { EnvironmentDecisionStore } from "../datastores/EnvironmentDecisionStore.js";
-import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../../shared/environment.js";
+import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../shared/environment.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import { ensurePersonalEnvironmentBinding } from "../support/EnvironmentBinding.js";
 import {

@@ -13,16 +13,16 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AdminReader } from "../../src/server/location/ptiles/AdminReader.js";
-import { queryBuilding, type BuildingMatch } from "../../src/server/location/ptiles/BuildingsReader.js";
-import { queryBusinesses } from "../../src/server/location/ptiles/BusinessReader.js";
-import { PtilesRangeSource, type FetchRange } from "../../src/server/location/ptiles/PtilesRangeSource.js";
-import { scoreBusinesses } from "../../src/server/location/ptiles/scoring.js";
-import { stateAbbrev } from "../../src/server/location/ptiles/usStates.js";
-import { restrictToPlace } from "../../src/server/location/PtilesPoiLookupProvider.js";
-import { locationKey } from "../../src/server/location/locationKey.js";
-import { domainFromWebsite, operatorDomain } from "../../src/server/location/operatorAliases.js";
-import { parseGpxPoints } from "../../src/server/location/gpx.js";
+import { AdminReader } from "../../src/location/ptiles/AdminReader.js";
+import { queryBuilding, type BuildingMatch } from "../../src/location/ptiles/BuildingsReader.js";
+import { queryBusinesses } from "../../src/location/ptiles/BusinessReader.js";
+import { PtilesRangeSource, type FetchRange } from "../../src/location/ptiles/PtilesRangeSource.js";
+import { scoreBusinesses } from "../../src/location/ptiles/scoring.js";
+import { stateAbbrev } from "../../src/location/ptiles/usStates.js";
+import { restrictToPlace } from "../../src/location/PtilesPoiLookupProvider.js";
+import { locationKey } from "../../src/location/locationKey.js";
+import { domainFromWebsite, operatorDomain } from "../../src/location/operatorAliases.js";
+import { parseGpxPoints } from "../../src/location/gpx.js";
 
 const BASE_URL = process.env.PTILES_BASE_URL ?? "https://maps.mydatatimeline.com/maps/";
 const directFetchRange: FetchRange = async (file, start, end) => {

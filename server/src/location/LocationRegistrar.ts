@@ -1,4 +1,4 @@
-import type { CandidateEnvironmentRecord, EnvironmentCandidate } from "../../shared/environment.js";
+import type { CandidateEnvironmentRecord, EnvironmentCandidate } from "../shared/environment.js";
 import { writeLocationContextSkill } from "./LocationContextSkill.js";
 
 /** The slice of EnvironmentManager the registrar needs (eases testing). */

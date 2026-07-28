@@ -6,7 +6,7 @@ The server is a Fastify service on `127.0.0.1:7665` with an optional second remo
 
 ## Main components
 
-- `server/src/server/index.ts`
+- `server/src/index.ts`
   - builds the Fastify app
   - wires infrastructure, domain services, repositories, and routes
 - `runtime/services/AgentRuntimeManager`
@@ -35,16 +35,16 @@ The server is now organized **primarily by domain**. Within a domain, subfolders
 
 Top-level layout:
 
-- `server/src/server/infrastructure/`
+- `server/src/infrastructure/`
   - cross-domain bootstrap/support code
   - auth, config loading, path helpers, remote proxy, shared SQLite connection bootstrap
-- `server/src/server/sessions/`
+- `server/src/sessions/`
   - session routes, repository contract, SQLite session repository, transcript persistence/helpers
-- `server/src/server/runtime/`
+- `server/src/runtime/`
   - ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers, runtime-only extension code
-- `server/src/server/environments/`
+- `server/src/environments/`
   - environment routes, services, repositories, datastores, prompt/binding/type support
-- `server/src/server/location/`
+- `server/src/location/`
   - location identification, POI lookup providers, dwell logic, trace helpers, and environment bridge helpers
 
 Important nuance:
