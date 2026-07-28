@@ -32,15 +32,15 @@ Runs server tests (vitest), RookKit Swift package tests, iPhone XCTest suite, an
 
 ## Development tools
 
-### MockAgent — replay transcripts without a real AI backend
+### Mock ACP test server — replay transcripts without a real AI backend
 
-MockAgent (`server/src/server/agents/MockAgent.ts`) is a subprocess-free agent that replays a pre-recorded transcript instead of calling a live AI. Useful for testing the UI, error surfacing, tool rendering, streaming behavior, and session lifecycle without burning API credits or needing network access.
+The mock ACP test server (`server/src/agents/test-fixtures/mockAcpServer.mjs`) replays a pre-recorded transcript instead of calling a live AI. Useful for testing the UI, error surfacing, tool rendering, streaming behavior, and session lifecycle without burning API credits or needing network access.
 
 **How it works:**
 - Reads `.var/example_transcript.json` — a JSON array of "turns", each containing thinking, agent messages, tool calls, and tool results
 - On each user message, ignores the input and replays the next turn token-by-token (split on whitespace, ~20ms per token, 500ms between messages)
 - Emits proper ACP session updates so the UI renders identically to a real agent
-- No subprocess, no ACP handshake — entirely self-contained
+- Minimal ACP subprocess that keeps the test/runtime surface deterministic
 
 **Transcript format** (see `.agents/skills/create-a-mock-transcript/SKILL.md` for details):
 ```json

@@ -6,45 +6,52 @@ The server is a Fastify service on `127.0.0.1:7665` with an optional second remo
 
 ## Main components
 
-- `server/src/server/index.ts`
+- `server/src/index.ts`
   - builds the Fastify app
-  - wires auth, routes, datastore, environment services, and runtime services
-- `AgentRuntimeManager`
+  - wires infrastructure, domain services, repositories, and routes
+- `runtime/services/AgentRuntimeManager`
   - owns configured runtime profiles
   - creates one `SessionRuntime` per public session
   - maps public session IDs to runtime-local ACP session IDs
   - restarts only the affected session when environment state changes
-- `SessionRuntime`
+- `runtime/SessionRuntime`
   - generic ACP stdio transport for a single session runtime process
   - initializes the subprocess, sends JSON-RPC, and relays notifications
-- `EnvironmentManager`
+- `environments/services/EnvironmentManager`
   - tracks available environments, offers, approvals, active/recent state, and session subscriptions
-- `EnvironmentRepositoryService`
+- `environments/services/EnvironmentRepositoryService`
   - resolves environment bundles from repo-backed repositories
-- `SqliteSessionRepository`
+- `sessions/datastores/SqliteSessionRepository`
   - persists sessions and session↔environment membership
-- `EnvironmentDecisionStore`
+- `environments/datastores/EnvironmentDecisionStore`
   - persists durable environment decisions keyed by bundle hash
 - location services
-  - `EnvironmentIdentifier` ranks nearby `location:` environments
-  - `LocationRegistrar` syncs identified locations into the environment manager
+  - `location/EnvironmentIdentifier` ranks nearby `location:` environments
+  - `location/LocationRegistrar` syncs identified locations into the environment manager
 
-## Structural convention
+## Source organization
 
-The server is moving toward a layered structure:
+The server is now organized **primarily by domain**. Within a domain, subfolders such as `routes/`, `services/`, `repositories/`, and `datastores/` are used only when that domain actually has those layers.
 
-- routes / API when a capability is externally exposed
-- services for orchestration and business rules
-- repositories or stores for persistence-facing interfaces
-- datastore for the underlying database connection
+Top-level layout:
+
+- `server/src/infrastructure/`
+  - cross-domain bootstrap/support code
+  - auth, config loading, path helpers, remote proxy, shared SQLite connection bootstrap
+- `server/src/sessions/`
+  - session routes, repository contract, SQLite session repository, transcript persistence/helpers
+- `server/src/runtime/`
+  - ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers, runtime-only extension code
+- `server/src/environments/`
+  - environment routes, services, repositories, datastores, prompt/binding/type support
+- `server/src/location/`
+  - location identification, POI lookup providers, dwell logic, trace helpers, and environment bridge helpers
 
 Important nuance:
-- not every feature needs every layer
+- not every domain needs every layer
 - internal-only behavior does not need routes
-- features with no persistence do not need repositories/datastore access
-- some domain modules may legitimately stop at the service layer
-
-As-built today, this structure is only partially regularized. Parts of the server already conform well, especially ACP/session persistence. Other areas — especially some environment and location code — still mix responsibilities more than the target architecture. Those are current exceptions we should gradually clean up, not a reason to abandon the layered direction.
+- features with no persistence do not need repositories/datastores
+- some support files intentionally stay adjacent to their domain instead of being forced into a generic shared layer
 
 See also: [database.md](./database.md)
 

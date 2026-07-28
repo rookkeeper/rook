@@ -1,0 +1,181 @@
+import type { FastifyInstance } from "fastify";
+import type { EnvironmentManager } from "../services/EnvironmentManager.js";
+import type { EnvironmentDecision } from "../support/types.js";
+import type { EnvironmentIdentifier } from "../../location/EnvironmentIdentifier.js";
+import type { LocationRegistrar } from "../../location/LocationRegistrar.js";
+import type { AgentRuntimeManager } from "../../runtime/services/AgentRuntimeManager.js";
+import type { CandidateEnvironmentRecord, CandidateEnvironmentMetadata, IdentifyAvailableRequest, IdentifySource } from "../../shared/environment.js";
+
+export async function registerEnvironmentRoutes(
+  app: FastifyInstance,
+  environmentManager: EnvironmentManager,
+  environmentIdentifier: EnvironmentIdentifier,
+  locationRegistrar: LocationRegistrar,
+  runtimeManager?: AgentRuntimeManager,
+): Promise<void> {
+  app.post<{ Body: { id?: unknown; metadata?: unknown } }>("/api/environments/register", async (request, reply) => {
+    const id = request.body?.id;
+    if (typeof id !== "string" || !id.trim()) {
+      reply.code(400).send({ error: "Missing environment id" });
+      return;
+    }
+
+    const metadata = request.body?.metadata;
+    if (metadata !== undefined && (typeof metadata !== "object" || metadata === null || Array.isArray(metadata))) {
+      reply.code(400).send({ error: "Invalid metadata" });
+      return;
+    }
+
+    const typedMetadata = (metadata ?? {}) as CandidateEnvironmentMetadata;
+    if (typedMetadata.displayName !== undefined && typeof typedMetadata.displayName !== "string") {
+      reply.code(400).send({ error: "Invalid metadata.displayName" });
+      return;
+    }
+    for (const [key, value] of [
+      ["observedPaths", typedMetadata.observedPaths],
+      ["observedUrls", typedMetadata.observedUrls],
+      ["detectedSkillPaths", typedMetadata.detectedSkillPaths],
+      ["detectedAgentsMdPaths", typedMetadata.detectedAgentsMdPaths],
+    ] as const) {
+      if (value !== undefined && (!Array.isArray(value) || value.some((item) => typeof item !== "string"))) {
+        reply.code(400).send({ error: `Invalid metadata.${key}` });
+        return;
+      }
+    }
+    for (const [key, value] of [
+      ["observerDeviceId", typedMetadata.observerDeviceId],
+      ["editableSkillPath", typedMetadata.editableSkillPath],
+      ["editableAgentMdPath", typedMetadata.editableAgentMdPath],
+    ] as const) {
+      if (value !== undefined && typeof value !== "string") {
+        reply.code(400).send({ error: `Invalid metadata.${key}` });
+        return;
+      }
+    }
+
+    const candidate: CandidateEnvironmentRecord = { id: id.trim(), metadata: typedMetadata };
+    request.log.info({ environmentId: candidate.id, displayName: candidate.metadata.displayName }, "environment candidate registered");
+
+    void environmentManager.registerCandidateEnvironment(candidate).catch((error) => {
+      request.log.warn({ environmentId: candidate.id, error }, "environment candidate finalization failed");
+    });
+    const registeredAt = new Date().toISOString();
+    return { ok: true, id: candidate.id, registeredAt };
+  });
+
+  app.post<{ Body: { environmentId?: unknown; bundleHash?: unknown; decision?: unknown; sessionId?: unknown } }>("/api/environments/decision", async (request, reply) => {
+    const environmentId = request.body?.environmentId;
+    const bundleHash = typeof request.body?.bundleHash === "string" && request.body.bundleHash.trim() ? request.body.bundleHash.trim() : undefined;
+    const decision = request.body?.decision;
+    const sessionId = typeof request.body?.sessionId === "string" && request.body.sessionId.trim() ? request.body.sessionId.trim() : undefined;
+    if (typeof environmentId !== "string" || !environmentId.trim()) {
+      reply.code(400).send({ error: "Missing environmentId" });
+      return;
+    }
+    if (decision !== "accept" && decision !== "approve" && decision !== "ignore" && decision !== "reject") {
+      reply.code(400).send({ error: "Invalid decision" });
+      return;
+    }
+    const trimmedEnvironmentId = environmentId.trim();
+    request.log.info({ environmentId: trimmedEnvironmentId, bundleHash, decision, sessionId }, "environment decision recorded");
+    environmentManager.decideEnvironment(trimmedEnvironmentId, decision as EnvironmentDecision, bundleHash, sessionId);
+    return { ok: true };
+  });
+
+  app.get<{ Querystring: { environmentId?: string } }>("/api/environments/preview", async (request, reply) => {
+    const environmentId = typeof request.query.environmentId === "string" ? request.query.environmentId.trim() : "";
+    if (!environmentId) {
+      reply.code(400).send({ error: "Missing environmentId" });
+      return;
+    }
+    const preview = await environmentManager.getEnvironmentPreview(environmentId);
+    return preview;
+  });
+
+  function parseIdentifyRequest(body: Record<string, unknown>): IdentifyAvailableRequest | null {
+    const latitude = body.latitude;
+    const longitude = body.longitude;
+    if (typeof latitude !== "number" || !Number.isFinite(latitude) || typeof longitude !== "number" || !Number.isFinite(longitude)) {
+      return null;
+    }
+    const source = body.source;
+    return {
+      latitude,
+      longitude,
+      ...(typeof body.horizontalAccuracy === "number" ? { horizontalAccuracy: body.horizontalAccuracy } : {}),
+      ...(source === "visit" || source === "region" || source === "manual" ? { source: source as IdentifySource } : {}),
+      ...(typeof body.dwellSeconds === "number" ? { dwellSeconds: body.dwellSeconds } : {}),
+      ...(typeof body.isStationary === "boolean" ? { isStationary: body.isStationary } : {}),
+      ...(typeof body.speedMetersPerSecond === "number" ? { speedMetersPerSecond: body.speedMetersPerSecond } : {}),
+      ...(typeof body.observedAt === "string" ? { observedAt: body.observedAt } : {}),
+    };
+  }
+
+  // Read-only: reverse-resolve a coordinate to candidate `location:` environments. No side effects.
+  app.post<{ Body: Record<string, unknown> }>("/api/environments/identify", async (request, reply) => {
+    const identifyRequest = parseIdentifyRequest(request.body ?? {});
+    if (!identifyRequest) {
+      reply.code(400).send({ error: "Missing or invalid latitude/longitude" });
+      return;
+    }
+    return { candidates: await environmentIdentifier.identifyAvailableEnvironments(identifyRequest) };
+  });
+
+  // Committing: identify, then register/auto-enter the dwell set into the SessionRoom/agent.
+  app.post<{ Body: Record<string, unknown> }>("/api/environments/register-location", async (request, reply) => {
+    const identifyRequest = parseIdentifyRequest(request.body ?? {});
+    if (!identifyRequest) {
+      reply.code(400).send({ error: "Missing or invalid latitude/longitude" });
+      return;
+    }
+    const candidates = await environmentIdentifier.identifyAvailableEnvironments(identifyRequest);
+    try {
+      await locationRegistrar.sync(candidates, {
+        isStationary: identifyRequest.isStationary,
+        dwellSeconds: identifyRequest.dwellSeconds,
+        speedMetersPerSecond: identifyRequest.speedMetersPerSecond,
+      });
+    } catch (error) {
+      app.log.warn(`location registration failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return { candidates };
+  });
+
+  app.post<{ Body: { sessionId?: unknown; enterEnvironmentIds?: unknown; leaveEnvironmentIds?: unknown } }>("/api/session/environments", async (request, reply) => {
+    if (!runtimeManager) {
+      reply.code(503).send({ error: "Session runtime service is unavailable" });
+      return;
+    }
+    const sessionId = typeof request.body?.sessionId === "string" ? request.body.sessionId.trim() : "";
+    const enterEnvironmentIds = validEnvironmentIds(request.body?.enterEnvironmentIds);
+    const leaveEnvironmentIds = validEnvironmentIds(request.body?.leaveEnvironmentIds);
+    if (!sessionId) {
+      reply.code(400).send({ error: "Missing sessionId" });
+      return;
+    }
+    if (!enterEnvironmentIds || !leaveEnvironmentIds) {
+      reply.code(400).send({ error: "Environment ID lists must be arrays of non-empty strings" });
+      return;
+    }
+    try {
+      return { ok: true, entered: await runtimeManager.applyEnvironmentChange(sessionId, enterEnvironmentIds, leaveEnvironmentIds) };
+    } catch (error) {
+      reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+  });
+
+  app.get<{ Querystring: { sessionId?: string } }>("/api/environments/list", async (request, reply) => {
+    const sessionId = typeof request.query.sessionId === "string" ? request.query.sessionId.trim() : "";
+    if (!sessionId) {
+      reply.code(400).send({ error: "Missing sessionId" });
+      return;
+    }
+    return environmentManager.environmentList(sessionId);
+  });
+}
+
+function validEnvironmentIds(value: unknown): string[] | undefined {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) return undefined;
+  return [...new Set(value.map((item) => item.trim()))];
+}

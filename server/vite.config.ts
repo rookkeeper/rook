@@ -16,7 +16,7 @@ export default defineConfig({
         "src/**/*.{test,spec}.{ts,tsx}",
         "src/test/**",
         "src/client/vitest.d.ts",
-        "src/server/extensions/**",
+        "src/runtime/extensions/**",
       ],
     },
   },
