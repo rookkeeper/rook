@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { AgentRuntimeProfile } from "../config/agentRuntimes.js";
+import type { AgentRuntimeProfile } from "../infrastructure/config/agentRuntimes.js";
 import type { JsonObject, RuntimeLaunchPlan, RuntimeLaunchPlanner, SessionRuntimeConfiguration } from "./SessionRuntime.js";
 
 /** Resolves provider-specific startup into a process plan, not a runtime subclass. */

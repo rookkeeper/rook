@@ -2,7 +2,7 @@
 
 ## Summary
 
-Rook's durable server-side state currently lives in one SQLite database, created by `server/src/server/datastore/RookDatastore.ts` at:
+Rook's durable server-side state currently lives in one SQLite database, created by `server/src/server/infrastructure/datastores/RookDatastore.ts` at:
 
 - `.var/rook/rook.sqlite` in normal local development
 - `:memory:` in tests when explicitly configured
@@ -11,19 +11,23 @@ This database is intentionally small. Today it stores session persistence and du
 
 ## Ownership and layering
 
-The target structure is:
+The server is now organized **primarily by domain**. Within a domain, layering appears only where it is actually needed:
 
 - routes/API when the behavior is externally exposed
 - services for orchestration and business rules
 - repositories or stores for persistence-facing interfaces
-- datastore for the underlying database connection
+- datastores for the underlying database connection or concrete persistence backend
 
 Not every feature needs every layer:
 - internal-only logic does not need routes
-- logic with no persistence does not need repositories/datastore access
+- logic with no persistence does not need repositories/datastores
 - pure in-memory services may stop at the service layer
 
-The direction of travel is still toward this layering, but the server is mid-transition. Some persistence-facing code still lives in domain-specific files like `environment/EnvironmentDecisionStore.ts` instead of a more uniform repository area, and some domain modules combine orchestration with storage concerns more than we ultimately want.
+As built today:
+- `infrastructure/datastores/RookDatastore.ts` owns the shared SQLite connection
+- `sessions/datastores/SqliteSessionRepository.ts` owns session/session-environment SQL
+- `environments/datastores/EnvironmentDecisionStore.ts` owns durable environment-decision SQL
+- `sessions/services/SessionTranscriptStore.ts` owns transcript-event SQL while remaining session-domain persistence code
 
 ## Current tables
 
@@ -72,6 +76,26 @@ Used by:
 - `SqliteSessionRepository.replaceEnvironmentIds(...)`
 - `AgentRuntimeManager.restoreEnvironmentMembership(...)`
 
+### `session_transcript_events`
+
+Purpose:
+- durable append-only normalized transcript history per session
+- lets second viewers hydrate from server state without asking the runtime to replay again
+
+Columns:
+- `sequence INTEGER PRIMARY KEY AUTOINCREMENT`
+- `session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE`
+- `created_at TEXT NOT NULL`
+- `event_json TEXT NOT NULL`
+
+Indexes:
+- `session_transcript_events_session_idx ON session_transcript_events(session_id, sequence ASC)`
+
+Used by:
+- `SessionTranscriptStore`
+- session transcript hydration route
+- live runtime-notification normalization in `AgentRuntimeManager`
+
 ### `environment_decisions`
 
 Purpose:
@@ -107,7 +131,7 @@ Role:
 
 Role:
 - repository for session rows and session-environment membership
-- hides SQL from the service layer
+- hides SQL from the rest of the session/runtime orchestration code
 
 Main methods:
 - `list()`
@@ -118,11 +142,22 @@ Main methods:
 - `environmentIds(sessionId)`
 - `replaceEnvironmentIds(sessionId, environmentIds)`
 
+### `SessionTranscriptStore`
+
+Role:
+- append-only persistence wrapper for normalized transcript events
+- session-domain persistence code even though it is named as a store rather than a repository
+
+Main methods:
+- `append(sessionId, event, createdAt?)`
+- `list(sessionId)`
+- `clear(sessionId)`
+
 ### `EnvironmentDecisionStore`
 
 Role:
 - persistence wrapper for durable bundle decisions
-- currently store-shaped rather than named as a repository, but serving the same architectural purpose
+- store-shaped rather than named as a repository, but serving the same architectural purpose
 
 Main methods:
 - `getDecision(bundleHash)`
@@ -143,9 +178,8 @@ Still in memory today:
 ## Current exceptions / cleanup targets
 
 Small footnote on as-built reality:
-- the intended layering is documented and partly implemented, but not fully regularized
-- `SqliteSessionRepository` is a clean example of the target shape
-- `EnvironmentDecisionStore` is also persistence-layer code, but it lives under `environment/` rather than a shared repository area
-- some environment and location modules still mix domain logic, orchestration, and persistence-adjacent concerns more than the long-term structure should
+- the server now has a clearer domain-first organization
+- persistence naming is still intentionally mixed between `Repository` and `Store` where the existing behavior and public understanding were preserved
+- some environment and location modules still mix domain logic, orchestration, and persistence-adjacent concerns more than the long-term structure might eventually want
 
-That is acceptable for now, but these are good candidates for future cleanup as the server architecture gets more consistent.
+That is acceptable for now because the refactor preserved behavior, APIs, and schema while improving navigability.

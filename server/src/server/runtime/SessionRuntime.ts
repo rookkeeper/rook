@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
-import type { AgentRuntimeProfile } from "../config/agentRuntimes.js";
+import type { AgentRuntimeProfile } from "../infrastructure/config/agentRuntimes.js";
 
 export type JsonObject = Record<string, unknown>;
 export type JsonRpcId = string | number;

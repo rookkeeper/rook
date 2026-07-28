@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { EnvironmentCandidate } from "../../shared/environment.js";
-import { REPO_ROOT } from "../paths.js";
+import { REPO_ROOT } from "../infrastructure/paths.js";
 
 /** Gitignored runtime location for the generated location-context skill bundle. */
 const CONTEXT_DIR = path.join(REPO_ROOT, ".var", "agent-station", "location-context");
