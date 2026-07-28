@@ -3,17 +3,17 @@ import XCTest
 
 @MainActor
 final class EnvironmentProviderSupportTests: XCTestCase {
-    func testGenericWebEnvironmentIdsBuildHierarchy() {
+    func testGenericWebEnvironmentIdsEmitOnlyHostEnvironment() {
         XCTAssertEqual(
             GenericEnvironmentProvider.webEnvironmentIds(from: "https://example.com/a/b%20c?x=1"),
-            ["web:example.com", "web:example.com/a", "web:example.com/a/b%20c"]
+            ["web:example.com"]
         )
     }
 
-    func testGenericWebEnvironmentIdsLowercaseHostAndSkipEmptySegments() {
+    func testGenericWebEnvironmentIdsLowercaseHost() {
         XCTAssertEqual(
             GenericEnvironmentProvider.webEnvironmentIds(from: "https://Example.COM//A//B/"),
-            ["web:example.com", "web:example.com/A", "web:example.com/A/B"]
+            ["web:example.com"]
         )
     }
 
