@@ -116,7 +116,7 @@ Tracked foreground environments include:
   - `mac:com.descript.beachcube/<project>`
   - `mac:com.hnc.Discord/<server>/<channel>`
   - exact `dir:/...` folder environments discovered from Finder windows
-- frontmost browser pages as deepest `web:<host>/<path>` ids
+- frontmost browser pages as host-level `web:<host>` ids
 
 Examples:
 
@@ -132,7 +132,7 @@ Examples:
 - Finder frontmost in `/Users/johnberryman/projects/github/rookkeeper` →
   `dir:/Users/johnberryman/projects/github/rookkeeper`
 - `https://en.wikipedia.org/wiki/Main_Page?foo=bar` →
-  `web:en.wikipedia.org/wiki/Main_Page`
+  `web:en.wikipedia.org`
 
 The Mac app registers the exact encountered ID it sees at the moment, such as:
 
@@ -142,7 +142,7 @@ The Mac app registers the exact encountered ID it sees at the moment, such as:
 - `mac:com.descript.beachcube/AI%20Tinkerers%202026.05.22`
 - `mac:com.hnc.Discord/Build%20With%20AI/self-promotion`
 - `dir:/Users/johnberryman/projects/github/rookkeeper`
-- `web:en.wikipedia.org/wiki/Main_Page`
+- `web:en.wikipedia.org`
 
 Specialist providers now live under `Sources/Models/EnvironmentProviders/` and
 are assembled into an explicit bundle-id registry. Bundle IDs with no
