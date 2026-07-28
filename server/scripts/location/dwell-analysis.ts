@@ -7,23 +7,23 @@
  * (seconds) + speed — to separate real visits (sustained, slow) from drive-by hits
  * (brief, fast). Writes a per-trace + aggregate report to .var/validation-traces/.
  *
- * Corpus = committed fixtures (src/server/location/test-fixtures/gpx) plus anything in
+ * Corpus = committed fixtures (src/location/test-fixtures/gpx) plus anything in
  * .var/validation-traces/*.gpx (from fetch-validation-traces). Diagnostic: fetches
  * ptiles ranges directly. Usage: npm run dwell:analysis
  */
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AdminReader } from "../../src/server/location/ptiles/AdminReader.js";
-import { queryBuilding } from "../../src/server/location/ptiles/BuildingsReader.js";
-import { queryBusinesses } from "../../src/server/location/ptiles/BusinessReader.js";
-import { haversineMeters } from "../../src/server/location/ptiles/geo.js";
-import { PtilesRangeSource, type FetchRange } from "../../src/server/location/ptiles/PtilesRangeSource.js";
-import { scoreBusinesses } from "../../src/server/location/ptiles/scoring.js";
-import { stateAbbrev } from "../../src/server/location/ptiles/usStates.js";
-import { restrictToPlace } from "../../src/server/location/PtilesPoiLookupProvider.js";
-import { parseGpxTrack, type GpxTrackPoint } from "../../src/server/location/gpx.js";
-import { REPO_ROOT } from "../../src/server/paths.js";
+import { AdminReader } from "../../src/location/ptiles/AdminReader.js";
+import { queryBuilding } from "../../src/location/ptiles/BuildingsReader.js";
+import { queryBusinesses } from "../../src/location/ptiles/BusinessReader.js";
+import { haversineMeters } from "../../src/location/ptiles/geo.js";
+import { PtilesRangeSource, type FetchRange } from "../../src/location/ptiles/PtilesRangeSource.js";
+import { scoreBusinesses } from "../../src/location/ptiles/scoring.js";
+import { stateAbbrev } from "../../src/location/ptiles/usStates.js";
+import { restrictToPlace } from "../../src/location/PtilesPoiLookupProvider.js";
+import { parseGpxTrack, type GpxTrackPoint } from "../../src/location/gpx.js";
+import { REPO_ROOT } from "../../src/infrastructure/paths.js";
 
 const BASE_URL = process.env.PTILES_BASE_URL ?? "https://maps.mydatatimeline.com/maps/";
 const fetchRange: FetchRange = async (file, start, end) => {
@@ -31,7 +31,7 @@ const fetchRange: FetchRange = async (file, start, end) => {
   return { status: r.status, body: new Uint8Array(await r.arrayBuffer()) };
 };
 
-const FIXTURES = path.join(REPO_ROOT, "server", "src", "server", "location", "test-fixtures", "gpx");
+const FIXTURES = path.join(REPO_ROOT, "server", "src", "location", "test-fixtures", "gpx");
 const VALIDATION = path.join(REPO_ROOT, ".var", "validation-traces");
 const MAX_LOOKUPS = 2500; // cap per trace; stride longer ones (dwell seconds stay correct)
 const GAP_BREAK_S = 120; // a time gap larger than this splits motion segments

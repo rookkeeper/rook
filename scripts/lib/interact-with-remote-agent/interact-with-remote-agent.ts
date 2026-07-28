@@ -443,7 +443,7 @@ async function printRawAcpSession(baseUrl: string, options: {
 async function main() {
   const { agent, session, prompt, restart, replay, filter, rawAcp, listAgents, modeId, steerText, steerAfterMs, cancelAfterMs, permissionMode } = parseArgs(process.argv.slice(2));
 
-  const serverEntry = pathToFileURL(path.join(SERVER_ROOT, "src/server/index.js")).href;
+  const serverEntry = pathToFileURL(path.join(SERVER_ROOT, "src/index.js")).href;
   const { buildServer } = await import(serverEntry);
   const app = await buildServer({ enableClient: false, logger: false });
   try {

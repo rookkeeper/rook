@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { REPO_ROOT } from "../../src/server/paths.js";
+import { REPO_ROOT } from "../../src/infrastructure/paths.js";
 
 interface TraceEntry {
   state: string;

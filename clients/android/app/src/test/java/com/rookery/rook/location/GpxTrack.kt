@@ -1,4 +1,4 @@
-// Mirrors server/src/server/location/gpx.ts (parseGpxTrack) — test-only.
+// Mirrors server/src/location/gpx.ts (parseGpxTrack) — test-only.
 //
 // Extracts ordered <trkpt>/<rtept> points with their <time> child parsed to epoch ms (when
 // present), handling both self-closing and child-bearing point tags. Used by GpxRouteTest to

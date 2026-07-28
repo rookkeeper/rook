@@ -14,4 +14,4 @@ Run from the `server/` directory via the npm aliases below.
 
 `validation-traces.manifest.json` — list of OSM traces (state, id, mode, area) to download.
 `fixtures/` — small sample GPX used for ad-hoc runs. Committed unit-test traces live in
-`src/server/location/test-fixtures/gpx/`.
+`src/location/test-fixtures/gpx/`.

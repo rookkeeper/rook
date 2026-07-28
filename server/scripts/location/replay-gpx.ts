@@ -13,8 +13,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseGpxPoints } from "../../src/server/location/gpx.js";
-import { REPO_ROOT } from "../../src/server/paths.js";
+import { parseGpxPoints } from "../../src/location/gpx.js";
+import { REPO_ROOT } from "../../src/infrastructure/paths.js";
 
 const CONTEXT_SKILL = path.join(REPO_ROOT, ".var", "agent-station", "location-context", "location-context", "SKILL.md");
 

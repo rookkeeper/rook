@@ -1,5 +1,5 @@
 {
-  "_comment": "Reproducible corpus of real OSM public GPS traces (ODbL) for dwell/motion validation of the location pipeline. `fixture` entries are also committed under src/server/location/test-fixtures/gpx (downloader skips them). Others download (decompressed) into .var/validation-traces/. Building footprints now work in all surveyed states (the earlier NC/TN-only buildings-index gap was fixed upstream), so add >=1 city-looking trace per state here over time — favoring pedestrian + vehicle coverage.",
+  "_comment": "Reproducible corpus of real OSM public GPS traces (ODbL) for dwell/motion validation of the location pipeline. `fixture` entries are also committed under src/location/test-fixtures/gpx (downloader skips them). Others download (decompressed) into .var/validation-traces/. Building footprints now work in all surveyed states (the earlier NC/TN-only buildings-index gap was fixed upstream), so add >=1 city-looking trace per state here over time — favoring pedestrian + vehicle coverage.",
   "source": "https://www.openstreetmap.org/traces/<id>/data",
   "license": "ODbL (OpenStreetMap)",
   "traces": [

@@ -43,13 +43,17 @@ A `MockAcpAgent` is configured for fast CLI-driven testing — it stores transcr
 
 The server is a single ACP-compliant agent from the client's perspective. Internally it's a broker that lazily manages per-session runtime subprocesses.
 
-### Layering
+### Organization
 
-Target structure:
-- **API layer** (`src/server/routes/`) when the capability is externally exposed
-- **Service layer** (`src/server/services/`) for orchestration and business rules
-- **Repository / store layer** for persistence-facing interfaces
-- **Datastore layer** (`src/server/datastore/`) for the underlying database connection
+The server is organized **primarily by domain**:
+
+- `src/infrastructure/` — auth, config loading, path helpers, remote proxy, shared datastore bootstrap
+- `src/sessions/` — session routes, repository contract, SQLite session persistence, transcript storage/helpers
+- `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
+- `src/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
+- `src/location/` — location identification, POI providers, dwell logic, trace helpers, environment bridge helpers
+
+Within each domain, `routes/`, `services/`, `repositories/`, and `datastores/` appear only where that domain actually needs them.
 
 Important nuance:
 - not every feature needs every layer of the stack
@@ -57,15 +61,14 @@ Important nuance:
 - features with no persistence do not need repository/datastore layers
 - some modules legitimately stop at the service layer
 
-As-built today, the server is only partway through this transition.
+For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTURE/database.md](../AS-BUILT-ARCHITECTURE/database.md).
 
-Examples:
-- `SqliteSessionRepository` is a good example of the intended repository shape
-- `RookDatastore` is the shared SQLite connection owner
-- some environment/location code still mixes domain logic and persistence-adjacent concerns more than we ultimately want
-- `EnvironmentDecisionStore` is persistence-layer code, but today it lives under `src/server/environment/` rather than a more uniform repository area
+### Key examples
 
-So this layering is the direction we are aiming toward, not a claim that every current module is already perfectly arranged.
+- `sessions/datastores/SqliteSessionRepository.ts` — session persistence
+- `infrastructure/datastores/RookDatastore.ts` — shared SQLite connection owner
+- `runtime/services/AgentRuntimeManager.ts` — per-session runtime orchestration
+- `environments/services/EnvironmentManager.ts` — environment lifecycle/orchestration
 
 For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTURE/database.md](../AS-BUILT-ARCHITECTURE/database.md).
 
@@ -119,17 +122,17 @@ The environment system (registration, decision store, repository) continues to w
 
 ### Key source files
 
-- `src/server/index.ts` — server bootstrap and wiring
-- `src/server/routes/acpFacadeRoute.ts` — ACP WebSocket facade
-- `src/server/routes/runtimeRoutes.ts` — `GET /api/agent_runtimes`
-- `src/server/routes/environmentRoutes.ts` — environment HTTP endpoints
-- `src/server/services/AgentRuntimeManager.ts` — runtime catalog and per-session orchestration
-- `src/server/runtime/SessionRuntime.ts` — ACP stdio subprocess lifecycle
-- `src/server/runtime/runtimeLaunchPlan.ts` — provider-specific launch strategies
-- `src/server/datastore/RookDatastore.ts` — shared SQLite connection
-- `src/server/datastore/SqliteSessionRepository.ts` — session persistence
-- `src/server/config/agentRuntimes.ts` — runtime config loader
-- `src/server/agents/test-fixtures/mockAcpServer.mjs` — mock ACP runtime for testing
+- `src/index.ts` — server bootstrap and wiring
+- `src/runtime/routes/acpFacadeRoute.ts` — ACP WebSocket facade
+- `src/runtime/routes/runtimeRoutes.ts` — `GET /api/agent_runtimes`
+- `src/environments/routes/environmentRoutes.ts` — environment HTTP endpoints
+- `src/runtime/services/AgentRuntimeManager.ts` — runtime catalog and per-session orchestration
+- `src/runtime/SessionRuntime.ts` — ACP stdio subprocess lifecycle
+- `src/runtime/runtimeLaunchPlan.ts` — provider-specific launch strategies
+- `src/infrastructure/datastores/RookDatastore.ts` — shared SQLite connection
+- `src/sessions/datastores/SqliteSessionRepository.ts` — session persistence
+- `src/infrastructure/config/agentRuntimes.ts` — runtime config loader
+- `src/agents/test-fixtures/mockAcpServer.mjs` — mock ACP runtime for testing
 
 ## Tests
 
@@ -139,8 +142,8 @@ npm test -- --run     # run once (no watch)
 ```
 
 Key test files:
-- `src/server/acpFacade.test.ts` — ACP integration (initialize, session lifecycle, error cases)
-- `src/server/config/agentRuntimes.test.ts` — runtime config validation
-- `src/server/datastore/SqliteSessionRepository.test.ts` — session persistence
-- `src/server/environment/EnvironmentDecisionStore.test.ts` — decision store
-- `src/server/environment/EnvironmentManager.test.ts` — environment lifecycle
+- `src/runtime/acpFacade.test.ts` — ACP integration (initialize, session lifecycle, error cases)
+- `src/infrastructure/config/agentRuntimes.test.ts` — runtime config validation
+- `src/sessions/datastores/SqliteSessionRepository.test.ts` — session persistence
+- `src/environments/datastores/EnvironmentDecisionStore.test.ts` — decision store
+- `src/environments/services/EnvironmentManager.test.ts` — environment lifecycle
