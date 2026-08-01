@@ -10,6 +10,7 @@ The most important constraint is that user-authored skills and instructions must
 
 - [`brainstorming.md`](./brainstorming.md) — research, open questions, and design exploration.
 - [`DECISIONS.md`](./DECISIONS.md) — decisions and working agreements reached so far.
+- [`CONTRACT.md`](./CONTRACT.md) — the current working bundle, capability, decision, repository, and runtime contract.
 - [`FAQ.md`](./FAQ.md) — concise answers to recurring questions and reminders about scope.
 
 This directory is a design log, not yet an implementation plan or commitment to every future feature.
