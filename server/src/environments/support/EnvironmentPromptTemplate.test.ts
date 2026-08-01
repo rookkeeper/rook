@@ -41,7 +41,7 @@ describe("renderEnvironmentPrompt", () => {
 
   it("includes skills directory path", () => {
     const result = renderEnvironmentPrompt([makeEntry()]);
-    expect(result!).toContain("Write skills to:");
+    expect(result!).toContain("Write personal skills to:");
     expect(result!).toContain("/tmp/.rook/env/web/example.com/.bundles/personal/skills");
   });
 

@@ -396,6 +396,9 @@ export class EnvironmentManager {
           bundleName: bundle.bundleId === "default" || bundle.bundleId === "personal" ? "Personal capabilities" : "Environment capabilities",
           editable: bundle.bundleId === "personal" || bundle.repository === "project-directory",
           writeBackSkill: (skillId, files) => this.repositoryService.replaceArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files),
+          writeBackInstructions: bundle.bundleId === "personal" || bundle.repository === "project-directory"
+            ? (content) => this.repositoryService.replaceBundleInstructions(environmentId, bundle.bundleId, content)
+            : undefined,
           bundle,
         });
       }
@@ -412,7 +415,7 @@ export class EnvironmentManager {
     return [...(this.entered.get(sessionId) ?? [])];
   }
 
-  runtimeInstructionsForSession(sessionId: string): string | undefined {
+  runtimeInstructionsForSession(sessionId: string, authoringRoot?: string): string | undefined {
     const entries = this.enteredEnvironments(sessionId)
       .map((environmentId) => {
         const remembered = this.remembered.get(environmentId);
@@ -427,8 +430,8 @@ export class EnvironmentManager {
           environmentId,
           displayName: remembered ? deriveEnvironmentDisplayName(environmentId, remembered.record.metadata, remembered.info) : undefined,
           metadata: (remembered?.record.metadata ?? {}) as Record<string, unknown>,
-          bindingDir: binding.personalBundleDir,
-          skillsDir: binding.skillsDir,
+          bindingDir: authoringRoot ?? binding.personalBundleDir,
+          skillsDir: authoringRoot ? path.join(authoringRoot, ".agent", "skills") : binding.skillsDir,
           existingSkills: binding.existingSkills,
           agentsMdBundles,
         };

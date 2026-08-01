@@ -14,6 +14,23 @@ export class CompositeEnvironmentRepository extends EnvironmentRepository {
     return { environment, bundles, errors };
   }
 
+  async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
+    const repository = await this.repositoryForBundle(environmentId, bundleId);
+    return repository ? repository.replaceArtifactFiles(environmentId, bundleId, kind, artifactId, files) : false;
+  }
+
+  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string): Promise<boolean> {
+    const repository = await this.repositoryForBundle(environmentId, bundleId);
+    return repository ? repository.replaceBundleInstructions(environmentId, bundleId, content) : false;
+  }
+
+  private async repositoryForBundle(environmentId: string, bundleId: string): Promise<EnvironmentRepository | null> {
+    const result = await this.getBundles(environmentId);
+    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
+    return bundle ? this.repositories.find((candidate) => candidate.repositoryId === bundle.repository) ?? null : null;
+  }
+
+
   async listEnvironments(): Promise<EnvironmentRecord[]> {
     const environments = (await Promise.all(this.repositories.map((repository) => repository.listEnvironments()))).flat();
     return uniqueBy(environments, (environment) => environment.id);

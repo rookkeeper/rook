@@ -197,6 +197,15 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     }
   }
 
+  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string): Promise<boolean> {
+    const result = await this.getBundles(environmentId);
+    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
+    if (!bundle) throw new Error(`Unknown bundle ${environmentId}#${bundleId}`);
+    bundle.agentsMd = content;
+    this.saveBundle(bundle);
+    return true;
+  }
+
   async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
     const result = await this.getBundles(environmentId);
     const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);

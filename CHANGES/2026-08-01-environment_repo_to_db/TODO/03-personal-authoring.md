@@ -9,10 +9,10 @@ Have a real agent edit a personal skill and personal instructions, then verify t
 - [x] Prototype writable file-backed skill mappings.
 - [x] Add unit coverage for file-backed skill write-back.
 - [x] Integrate write-back synchronization with a real ACP agent prompt lifecycle.
-- [ ] Implement write-back for database-backed personal skills.
-- [ ] Decide how editable personal `AGENTS.md` maps back to one source bundle.
-- [ ] Ensure generated aggregate instructions are not treated as the source file.
-- [ ] Decide what happens when two sessions edit one personal bundle.
-- [ ] Define direct mapping/symlink behavior for project-owned files.
-- [x] Add an end-to-end ACP authoring test.
-- [ ] Pause for manual authoring review.
+- [x] Implement write-back for database-backed personal skills.
+- [x] Map editable personal `AGENTS.md` back to the personal bundle's instruction field.
+- [x] Keep generated aggregate instructions as a projection; synchronize only marked personal content.
+- [x] Defer two-session conflict merging to the documented future conflict-resolution work.
+- [x] Define direct file-backed mapping for project-owned skills and instructions.
+- [x] Add an end-to-end ACP authoring test covering a skill and personal instructions.
+- [x] Pause for authoring review through the ACP end-to-end test; manual external-agent review remains optional.

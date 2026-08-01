@@ -204,6 +204,15 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
     return bundle;
   }
 
+  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string): Promise<boolean> {
+    const result = await this.getBundles(environmentId);
+    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
+    if (!bundle?.bundlePath) return false;
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(path.join(bundle.bundlePath, "AGENTS.md"), content, "utf8");
+    return true;
+  }
+
   private invalidBundle(environmentId: string, bundleId: string, bundleDir: string, errors: RepositoryReadError[]): EnvironmentBundle {
     return {
       id: `${environmentId}#${bundleId}`,

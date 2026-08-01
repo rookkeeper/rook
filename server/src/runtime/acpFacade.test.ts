@@ -81,6 +81,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const personalSkillDir = path.join(tempConfigDir, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills", "personal-skill");
     mkdirSync(personalSkillDir, { recursive: true });
     writeFileSync(path.join(personalSkillDir, "SKILL.md"), "original personal skill", "utf8");
+    writeFileSync(path.join(tempConfigDir, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "AGENTS.md"), "original personal instructions", "utf8");
     app = await buildServer({ environmentDecisionStoreLocation: ":memory:", authToken: "" });
     await app.listen({ host: "127.0.0.1", port: PORT });
   });
@@ -166,6 +167,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const workspaceRoot = path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId);
     const materializedSkill = path.join(workspaceRoot, ".agent", "skills", "testing-fixture", "SKILL.md");
     expect(existsSync(materializedSkill)).toBe(true);
+    await request(ws, 3, "session/close", { sessionId });
     ws.close();
     removeReadOnlyTree(workspaceRoot);
   });
@@ -207,9 +209,17 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       prompt: [{ type: "text", text: `edit personal skill write-to:${workspaceSkill}` }],
     });
 
-    const sourceSkill = path.join(tempConfigDir, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills", "personal-skill", "SKILL.md");
-    expect(readFileSync(sourceSkill, "utf8")).toBe("updated by the mock agent");
-    await request(ws, 5, "session/close", { sessionId });
+    const afterSkill = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; skills: Array<{ id: string; files: Record<string, string> }> }> };
+    const personalAfterSkill = afterSkill.bundles.find((candidate) => candidate.bundleId === "personal");
+    expect(personalAfterSkill?.skills.find((skill) => skill.id === "personal-skill")?.files["personal-skill/SKILL.md"]).toBe("updated by the mock agent");
+    const workspaceAgents = path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId, "AGENTS.md");
+    await request(ws, 5, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: `edit personal instructions write-to:${workspaceAgents}` }],
+    });
+    const afterInstructions = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; agentsMd?: string }> };
+    expect(afterInstructions.bundles.find((candidate) => candidate.bundleId === "personal")?.agentsMd).toBe("updated by the mock agent");
+    await request(ws, 6, "session/close", { sessionId });
     ws.close();
     removeReadOnlyTree(path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId));
   });

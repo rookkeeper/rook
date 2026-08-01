@@ -9,6 +9,7 @@ export interface AgentWorkspaceBundle {
   editable: boolean;
   bundle: EnvironmentBundle;
   writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
+  writeBackInstructions?: (content: string) => Promise<boolean>;
 }
 
 export interface AgentWorkspaceSkillMapping {
@@ -26,7 +27,15 @@ export interface AgentWorkspaceResult {
   skillsRoot: string;
   skillPaths: string[];
   skillMappings: AgentWorkspaceSkillMapping[];
+  instructionMappings: AgentWorkspaceInstructionMapping[];
   mcpPaths: string[];
+}
+
+export interface AgentWorkspaceInstructionMapping {
+  startMarker: string;
+  endMarker: string;
+  writable: boolean;
+  writeBack?: (content: string) => Promise<boolean>;
 }
 
 /**
@@ -83,9 +92,9 @@ export class AgentWorkspaceMaterializer {
     }
 
     const agentsPath = path.join(root, "AGENTS.md");
-    const agentsContent = renderAgentsFile(bundles, inlineFacts);
-    await writeFile(agentsPath, agentsContent, "utf8");
-    return { root, agentsPath, agentsContent, skillsRoot, skillPaths, skillMappings, mcpPaths };
+    const renderedInstructions = renderAgentsFile(bundles, inlineFacts);
+    await writeFile(agentsPath, renderedInstructions.content, "utf8");
+    return { root, agentsPath, agentsContent: renderedInstructions.content, skillsRoot, skillPaths, skillMappings, instructionMappings: renderedInstructions.mappings, mcpPaths };
   }
 
   /** Copies edits from writable, file-backed skill sources back to their source directories. */
@@ -101,6 +110,25 @@ export class AgentWorkspaceMaterializer {
       }
       const handled = mapping.writeBack ? await mapping.writeBack(files) : false;
       if (!handled && mapping.sourcePath) await copyDirectory(mapping.workspacePath, mapping.sourcePath);
+    }
+
+    if (result.instructionMappings.length === 0) return;
+    let instructions: string;
+    try {
+      instructions = await readFile(result.agentsPath, "utf8");
+    } catch (error) {
+      if (isMissingPath(error)) return;
+      throw error;
+    }
+    for (const mapping of result.instructionMappings) {
+      if (!mapping.writable || !mapping.writeBack) continue;
+      const start = instructions.indexOf(mapping.startMarker);
+      const end = instructions.indexOf(mapping.endMarker, start + mapping.startMarker.length);
+      const content = start !== -1 && end !== -1
+        ? instructions.slice(start + mapping.startMarker.length, end).trim()
+        : result.instructionMappings.length === 1 ? instructions.trim() : undefined;
+      if (content === undefined) continue;
+      await mapping.writeBack(content);
     }
   }
 }
@@ -192,7 +220,8 @@ function generatedReferenceSkill(id: string, sourceName: string, content: string
   };
 }
 
-function renderAgentsFile(bundles: AgentWorkspaceBundle[], inlineFacts: InlineFact[]): string {
+function renderAgentsFile(bundles: AgentWorkspaceBundle[], inlineFacts: InlineFact[]): { content: string; mappings: AgentWorkspaceInstructionMapping[] } {
+  const mappings: AgentWorkspaceInstructionMapping[] = [];
   const blocks = bundles.flatMap((entry) => {
     const content = entry.bundle.agentsMd?.trim();
     if (!content) return [];
@@ -200,7 +229,7 @@ function renderAgentsFile(bundles: AgentWorkspaceBundle[], inlineFacts: InlineFa
     const bundleName = escapeMarkup(entry.bundleName);
     const editable = entry.editable ? ' editable="true"' : "";
     const indented = content.split("\n").map((line) => `      ${line}`).join("\n");
-    return [`  <environment name="${environmentName}">
+    const block = `  <environment name="${environmentName}">
 
     <bundle name="${bundleName}"${editable}>
 
@@ -210,7 +239,15 @@ ${indented}
 
     </bundle>
 
-  </environment>`];
+  </environment>`;
+    if (entry.editable && entry.writeBackInstructions) {
+      const markerNumber = mappings.length + 1;
+      const startMarker = `<!-- BEGIN ROOK PERSONAL INSTRUCTIONS ${markerNumber} -->`;
+      const endMarker = `<!-- END ROOK PERSONAL INSTRUCTIONS ${markerNumber} -->`;
+      mappings.push({ startMarker, endMarker, writable: true, writeBack: entry.writeBackInstructions });
+      return [`${startMarker}\n${block}\n${endMarker}`];
+    }
+    return [block];
   });
   const factBlocks = inlineFacts.map((fact) => `  <environment name="${escapeMarkup(fact.environmentName)}">
 
@@ -224,7 +261,7 @@ ${fact.content.split("\n").map((line) => `        ${line}`).join("\n")}
 
   </environment>`);
 
-  return `# Rook environment context\n\n${[...blocks, ...factBlocks].join("\n\n")}\n`;
+  return { content: `# Rook environment context\n\n${[...blocks, ...factBlocks].join("\n\n")}\n`, mappings };
 }
 
 function isMissingPath(error: unknown): boolean {

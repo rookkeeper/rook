@@ -10,6 +10,19 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
     super();
   }
 
+  async replaceBundleInstructions(environmentId: string, _bundleId: string, content: string): Promise<boolean> {
+    const directory = projectPath(environmentId);
+    if (!directory) return false;
+    const projectMarker = "# Project instructions";
+    const claudeMarker = "# Claude project instructions";
+    const claudeIndex = content.indexOf(claudeMarker);
+    const projectContent = content.slice(projectMarker.length, claudeIndex === -1 ? content.length : claudeIndex).trim();
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(path.join(directory, "AGENTS.md"), projectContent ? `${projectContent}\n` : "", "utf8");
+    if (claudeIndex !== -1) await writeFile(path.join(directory, "CLAUDE.md"), `${content.slice(claudeIndex + claudeMarker.length).trim()}\n`, "utf8");
+    return true;
+  }
+
   async getBundles(environmentId: string): Promise<EnvironmentBundleResult> {
     const directory = projectPath(environmentId);
     if (!directory || !existsSync(directory) || !statSync(directory).isDirectory()) return { environment: null, bundles: [], errors: [] };

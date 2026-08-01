@@ -30,6 +30,10 @@ export class EnvironmentRepositoryService {
     return this.repository.replaceArtifactFiles(environmentId, bundleId, kind, artifactId, files);
   }
 
+  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string): Promise<boolean> {
+    return this.repository.replaceBundleInstructions(environmentId, bundleId, content);
+  }
+
   async getResolvedBundles(environmentId: string): Promise<ResolvedEnvironmentBundle[]> {
     const result = await this.repository.getBundles(environmentId);
     const valid = result.bundles.filter((bundle) => bundle.valid);

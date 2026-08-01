@@ -26,7 +26,8 @@ The server is a Fastify service on `127.0.0.1:7665` with an optional second remo
 - `environments/repositories/ProjectDirectoryEnvironmentRepository`
   - reads project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files in place
 - `runtime/AgentWorkspaceMaterializer`
-  - projects approved bundle content into per-session capability workspaces and synchronizes writable file-backed skills
+  - projects approved bundle content into per-session capability workspaces
+  - keeps canonical/external projections read-only and synchronizes writable personal skills/instruction sections back to SQLite or project sources
 - `sessions/datastores/SqliteSessionRepository`
   - persists sessions and session↔environment membership
 - `environments/datastores/EnvironmentDecisionStore`
@@ -187,7 +188,7 @@ Related tables:
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment
-2. `AgentRuntimeManager` resolves approved bundle content, materializes it into a per-session capability workspace, and computes `skillPaths`, `enteredEnvironmentIds`, and appended prompt text
+2. `AgentRuntimeManager` resolves approved bundle content, materializes it into a per-session capability workspace, and computes `skillPaths`, `enteredEnvironmentIds`, and appended prompt text with workspace authoring paths
 3. it creates a replacement `SessionRuntime`
 4. replacement must successfully `session/load` the exact existing runtime session
 5. only then is the old subprocess retired

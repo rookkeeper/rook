@@ -94,21 +94,15 @@ function renderIntro(): string {
 
 You have entered one or more Rook environments. Because you are Rook you can **write new capabilities directly into the user's personal bundle** for each environment. These capabilities will be loaded every time you enter this environment in the future.
 
-### Directory layout of a personal bundle
+### Session capability workspace
 
-Each environment has exactly one writable personal bundle. It lives at:
-
-\`\`\`
-~/.rook/environment-repository/<kind>/<path>/.bundles/personal/
-\`\`\`
-
-Inside the personal bundle you can write three kinds of assets:
+The current session exposes database-backed bundle content through a file workspace. Personal skills and the marked personal instruction section are writable and synchronized back to the personal repository. Canonical and project-owned content is read-only.
 
 | Asset       | Path                                                                   |
 |-------------|------------------------------------------------------------------------|
-| Skill       | \`.../.bundles/personal/skills/<skill-name>/SKILL.md\`                   |
-| AGENTS.md   | \`.../.bundles/personal/AGENTS.md\`                                      |
-| MCP server  | \`.../.bundles/personal/mcp-servers/<server-name>/\`                     |
+| Skill       | \`<session-workspace>/.agent/skills/<skill-name>/SKILL.md\`              |
+| AGENTS.md   | \`<session-workspace>/AGENTS.md\`                                        |
+| MCP content | \`<session-workspace>/.agent/mcp-servers/\` (read-only; lifecycle deferred) |
 
 A skill directory may also contain a \`references/\` subdirectory (for larger reference files that SKILL.md links to), a \`scripts/\` subdirectory (for executable scripts that the skill invokes), and an \`assets/\` subdirectory (for images, data files, and other static resources).
 
@@ -118,7 +112,7 @@ A skill directory may also contain a \`references/\` subdirectory (for larger re
 
 **AGENTS.md** -- Use for information that must be read every time you enter this environment. This includes conventions and patterns you observe, to-do lists associated with the environment, general reminders, and anything time-sensitive. When tracking a to-do list include the date and time each item was written, modified, and completed. Ask whether completed items should be removed (usually yes).
 
-**MCP servers** -- Use for functionality encoded as a small set of functions that other skills or the agent can call.
+**MCP servers** -- Existing configuration/content is available for review under the read-only MCP workspace. Starting, authenticating, and invoking MCP servers is deferred.
 
 ### Before you write anything, verify
 
@@ -152,9 +146,9 @@ ${renderContext(entry.metadata)}
   <bundle name="Personal capabilities" editable="true">
 
     <instructions>
-      Write skills to: \`${entry.skillsDir}/<skill-name>/SKILL.md\`
-      Write AGENTS.md to: \`${entry.bindingDir}/AGENTS.md\`
-      Write MCP servers to: \`${entry.bindingDir}/mcp-servers/<server-name>/\`
+      Write personal skills to: \`${entry.skillsDir}/<skill-name>/SKILL.md\`
+      Write personal instructions to the marked personal section in: \`${entry.bindingDir}/AGENTS.md\`
+      Review existing MCP content at: \`${entry.bindingDir}/.agent/mcp-servers/\` (read-only)
       Existing personal skills: ${skillsList(entry.existingSkills)}
     </instructions>
 

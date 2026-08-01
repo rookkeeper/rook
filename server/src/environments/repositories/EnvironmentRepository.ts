@@ -1,6 +1,8 @@
 import type { EnvironmentBundle, EnvironmentBundleResult, EnvironmentRecord } from "../../shared/environmentRepository.js";
 
 export abstract class EnvironmentRepository {
+  readonly repositoryId?: string;
+
   abstract getBundles(environmentId: string): Promise<EnvironmentBundleResult>;
 
   /** Optional discovery API. Repositories may add it without changing bundle reads. */
@@ -15,6 +17,11 @@ export abstract class EnvironmentRepository {
 
   /** Optional write API for user-owned database-backed artifacts. */
   async replaceArtifactFiles(_environmentId: string, _bundleId: string, _kind: "skills" | "mcp-servers" | "apps", _artifactId: string, _files: Record<string, string>): Promise<boolean> {
+    return false;
+  }
+
+  /** Optional write API for user-owned bundle instructions. */
+  async replaceBundleInstructions(_environmentId: string, _bundleId: string, _content: string): Promise<boolean> {
     return false;
   }
 }

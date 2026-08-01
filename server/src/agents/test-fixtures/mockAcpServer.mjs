@@ -255,10 +255,10 @@ async function handlePrompt(message) {
     return;
   }
 
-  if (lower.includes('edit personal skill')) {
+  if (lower.includes('edit personal skill') || lower.includes('edit personal instructions')) {
     const target = text.match(/write-to:(\S+)/i)?.[1];
     if (target) writeFileSync(target, 'updated by the mock agent', 'utf8');
-    const response = target ? 'Updated the personal skill.' : 'No write target was provided.';
+    const response = target ? 'Updated the personal content.' : 'No write target was provided';
     session.lastAssistantMessage = response;
     session.transcript.push({ role: 'assistant', text: response });
     await streamText(sessionId, response);

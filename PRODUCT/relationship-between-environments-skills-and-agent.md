@@ -21,7 +21,7 @@ For some terminology, there are many "known" environments (ones that are availab
 
 ## Environment repositories
 
-Catalog of environment → bundle content. Same API whether local disk or remote HTTP/Git.
+Catalog of environment → bundle content. SQLite is the canonical/personal storage API; directory and project sources remain import/authoring integrations.
 
 See also: [`PRODUCT/environment-repository.md`](./environment-repository.md)
 
@@ -31,24 +31,24 @@ See also: [`PRODUCT/environment-repository.md`](./environment-repository.md)
 EnvironmentRepository
   └── environments[]
         └── environment   # id + metadata
-        └── skills[]
-              └── skill   # id + metadata + SKILL.md body
-              └── references[], scripts[]
+        └── capabilities[]
+              └── skills, facts, MCP content, apps, and llms.txt references
 ```
 
 **Types of environment repositories:**
 
-- **Canonical** — curated, trusted catalog (official Rook repo; today lives at `environment-repository/` in monorepo)
-- **Local** — user-owned disk repo for personal envs/skills – not built as separate path yet; same directory-backed repository backend, different root – users can some somehow instruct the Rook agent to add and update skills in environments.
-- **External** — repositories from other providers
+- **Canonical** — curated, trusted SQLite catalog initialized from `environment-repository/`.
+- **Personal** — user-owned SQLite repository; personal skills and instructions remain writable through the session workspace.
+- **Project** — direct project files such as `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json`.
+- **External** — repositories from other providers; stronger sandboxing and publishing/signing are deferred.
 
 And environment repository needs to be searchable so that you can find environments and skills that might be useful.
 
 ## EnvironmentManager
 
-Runtime coordinator that serves as a connection between Rook agents, the environments, and the skills. It also remembers skill choices.
+Runtime coordinator that serves as a connection between Rook agents, environments, and capabilities. It also remembers bundle choices.
 
-When a new environment candidate becomes available, the environment manager can finalize it into one or more real environments by checking known repository-backed capabilities (including exact ids plus path/url-implied known environments). Then the user can review the skills of any finalized environment and "allow once", "allow always", "reject", "ignore".
+When a new environment candidate becomes available, the environment manager can finalize it into one or more real environments by checking known repository-backed capabilities (including exact ids plus path/url-implied known environments). Then the user can review the capabilities of any finalized environment and "allow once", "allow always", "reject", "ignore".
 
 - If "allow once" or "allow always", the skills are injected into the running session.
 - If "reject" or "ignore", then the skills are not injected.

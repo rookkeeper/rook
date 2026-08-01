@@ -372,7 +372,7 @@ export class AgentRuntimeManager {
       const materialized = await this.workspaceMaterializer.materialize(workspaceRoot, runtimeBundles);
       this.workspaceResults.set(sessionId, materialized);
       const promptParts = [
-        this.environmentManager?.runtimeInstructionsForSession(sessionId),
+        this.environmentManager?.runtimeInstructionsForSession(sessionId, materialized.root),
         materialized.agentsContent.trim(),
       ].filter((value): value is string => Boolean(value));
       const configuration: SessionRuntimeConfiguration = {
