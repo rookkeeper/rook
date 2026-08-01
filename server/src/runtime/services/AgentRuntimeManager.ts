@@ -7,7 +7,7 @@ import { SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotif
 import { runtimeLaunchPlan, runtimeSessionParams } from "../runtimeLaunchPlan.js";
 import { SessionTranscriptStore } from "../../sessions/services/SessionTranscriptStore.js";
 import { normalizedEventsFromRuntimeMessage, runCompletedEvent, runFailedEvent } from "../../sessions/services/sessionTranscriptEvents.js";
-import { AgentWorkspaceMaterializer } from "../AgentWorkspaceMaterializer.js";
+import { AgentWorkspaceMaterializer, type AgentWorkspaceResult } from "../AgentWorkspaceMaterializer.js";
 
 /**
  * Owns the configured runtime catalog and lazily creates one isolated
@@ -30,6 +30,7 @@ export class AgentRuntimeManager {
   private readonly privateReplayWaiters = new Map<string, Set<() => void>>();
   private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
   private readonly workspaceMaterializer = new AgentWorkspaceMaterializer();
+  private readonly workspaceResults = new Map<string, AgentWorkspaceResult>();
 
   constructor(
     profiles: AgentRuntimeProfile[],
@@ -113,6 +114,7 @@ export class AgentRuntimeManager {
       if (method === "session/prompt") {
         const stopReason = typeof (result as JsonObject | undefined)?.stopReason === "string" ? String((result as JsonObject).stopReason) : "end_turn";
         await this.transcriptStore?.append(sessionId, runCompletedEvent(stopReason));
+        await this.syncWorkspace(sessionId);
       }
       await this.sessions.touch(sessionId);
       this.timingLog("request_complete", {
@@ -197,6 +199,7 @@ export class AgentRuntimeManager {
 
   async closeSession(sessionId: string): Promise<unknown> {
     const record = await this.requireSession(sessionId);
+    await this.syncWorkspace(sessionId);
     const runtime = this.runtimeFor(record);
     const result = await runtime.request("session/close", { sessionId: record.runtimeSessionId });
     await runtime.close();
@@ -246,6 +249,7 @@ export class AgentRuntimeManager {
     this.environmentSkillPaths.clear();
     this.environmentRestartQueues.clear();
     this.restoredEnvironmentMembership.clear();
+    this.workspaceResults.clear();
   }
 
   private runtimeFor(record: SessionRecord): SessionRuntime {
@@ -305,6 +309,7 @@ export class AgentRuntimeManager {
     this.environmentSkillPaths.delete(sessionId);
     this.environmentRestartQueues.delete(sessionId);
     this.restoredEnvironmentMembership.delete(sessionId);
+    this.workspaceResults.delete(sessionId);
   }
 
   private subscribeToEnvironments(sessionId: string): void {
@@ -360,10 +365,12 @@ export class AgentRuntimeManager {
 
   private scheduleEnvironmentRestart(sessionId: string): void {
     const restart = async () => {
+      await this.syncWorkspace(sessionId);
       const paths = this.environmentSkillPaths.get(sessionId);
       const workspaceRoot = path.join(this.repoRoot, ".var", "rook", "agent-workspaces", sessionId);
       const runtimeBundles = await this.environmentManager?.runtimeBundlesForSession(sessionId) ?? [];
       const materialized = await this.workspaceMaterializer.materialize(workspaceRoot, runtimeBundles);
+      this.workspaceResults.set(sessionId, materialized);
       const promptParts = [
         this.environmentManager?.runtimeInstructionsForSession(sessionId),
         materialized.agentsContent.trim(),
@@ -379,6 +386,16 @@ export class AgentRuntimeManager {
     const previous = this.environmentRestartQueues.get(sessionId) ?? Promise.resolve();
     const queued = previous.then(restart, restart);
     this.environmentRestartQueues.set(sessionId, queued);
+  }
+
+  private async syncWorkspace(sessionId: string): Promise<void> {
+    const workspace = this.workspaceResults.get(sessionId);
+    if (!workspace) return;
+    try {
+      await this.workspaceMaterializer.syncWritableChanges(workspace);
+    } catch (error) {
+      this.logger.info({ component: "AgentRuntimeManager", sessionId, error: error instanceof Error ? error.message : String(error) }, "workspace write-back failed");
+    }
   }
 
   private beginPrivateReplay(sessionId: string, listener: RuntimeNotification): void {
