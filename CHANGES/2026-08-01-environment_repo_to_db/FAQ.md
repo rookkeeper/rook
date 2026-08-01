@@ -20,9 +20,9 @@ The exception is an environment that intentionally points at an existing project
 
 ## How can user-created skills remain editable?
 
-The agent must receive a writable projection that has a defined path back to the personal bundle's source of truth. The exact mechanism is still open: direct mapping, a writable materialized copy with a watcher/write-back service, or runtime-specific tools.
+The agent receives a writable per-session projection under `.var/rook/agent-workspaces/<session-id>/.agent/skills`. At workspace synchronization points, the materializer sends changed files through the repository service, which writes a new personal SQLite revision. Personal instruction edits use marked sections in the generated `AGENTS.md` and write back to the bundle instruction field.
 
-This is a required part of the migration, not an optional later polish, because user-authored skills currently work end-to-end.
+This is covered by the ACP end-to-end authoring test. Concurrent conflict merging remains deferred.
 
 ## How can external skills be read-only?
 
@@ -75,9 +75,9 @@ Rook fetches and caches the full text, and the fetched content participates in t
 
 ## What is special about MCP servers?
 
-They follow the same bundle approval flow, but their runtime behavior needs separate design. Rook likely needs to inspect or start an MCP server to discover its tools and relevant configuration, cache that reviewable representation, and then materialize or launch the server for sessions.
+They follow the same bundle approval flow. The current migration stores and previews their configuration/content and materializes it into a separate read-only workspace area. Rook does not yet start MCP servers, enumerate live tools, manage authentication, or define sharing/lifecycle permissions.
 
-The security and lifecycle model remains open.
+Those runtime and security questions remain explicitly deferred.
 
 ## What does the content hash protect?
 
@@ -95,12 +95,12 @@ Bundles may be renamed, updated, or mutable for personal content. A decision app
 
 ## What is the first useful implementation?
 
-The first meaningful cut should move the existing canonical and personal bundle catalog behind SQLite while preserving:
+The first meaningful cut now moves the canonical and personal bundle catalog behind SQLite while preserving:
 
-- the current bundle API
-- bundle-level decisions
-- session behavior
-- user-authored skill editing
-- runtime materialization into files
+- the compatibility bundle API and separate environment/bundle search
+- bundle-level decisions keyed by exact content hash
+- session behavior and per-session runtime workspaces
+- user-authored skill and instruction editing
+- runtime materialization into ordinary files
 
-The directory reader can be an import tool during that cutover, but should not remain as a second live implementation.
+The directory reader is an import/compatibility tool, not a second normal live repository.

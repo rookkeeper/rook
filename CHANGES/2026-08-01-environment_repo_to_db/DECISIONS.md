@@ -65,15 +65,15 @@ Facts should normally become instruction-like context. Large facts may be wrappe
 
 - The database is the source of truth for database-backed capabilities.
 - Each session has its own agent working directory.
-- Runtime startup/restart should eventually re-materialize all associated bundle content instead of trusting whatever files happen to remain in the working directory. This is explicitly deferred for now.
+- Runtime startup/restart re-materializes all associated bundle content instead of trusting whatever files happen to remain in the working directory. This was completed in Gate 2.
 - Different capability types may materialize differently:
   - skills become skills directories
   - facts and `llms.txt` may become pseudo-skills when large or on-demand
   - instructions contribute to generated agent instructions
   - MCP servers need a separate materialization and lifecycle design
-- Generated `AGENTS.md` content should include provenance markers identifying the environment, bundle, and source file for each inserted section.
-- A generated aggregate `AGENTS.md` is derived output, not an obvious write-back target. The write-back story for editable instructions must be designed before claiming full database-backed authoring.
-- Project-directory environments may point directly at existing `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and MCP files. Those files already have an external source of truth and may need direct mapping or symlinking.
+- Generated `AGENTS.md` content uses readable environment/bundle sections and markers for writable personal instruction sections without exposing machine identifiers in the visible markup.
+- A generated aggregate `AGENTS.md` is derived output. Only its marked personal instruction section is synchronized back to the personal bundle; it is never treated as the database source wholesale.
+- Project-directory environments point directly at existing `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and MCP files. Skills and supported instruction mappings write back to those external source files.
 
 ## Write protection
 
@@ -94,4 +94,4 @@ Facts should normally become instruction-like context. Large facts may be wrappe
 - repository prompt-injection validation
 - final manifest design
 - substantial UI redesign
-- automatic startup/restart re-injection, beyond the current work-directory behavior
+- richer MCP startup/review lifecycle and stronger runtime-specific re-injection policies beyond the current materializer

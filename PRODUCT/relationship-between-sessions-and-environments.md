@@ -1,31 +1,37 @@
-# Relationship between Sessions and Environments
+# Relationship between sessions and environments
 
-An environment is a context the user finds themselves in — a website, a physical location, a directory, a Mac app surface, or any other recognizable domain. Each environment can have zero or more **capability bundles** associated with it. A bundle contains skills, MCP servers, and app instructions that an agent can use while the user is in that environment.
+A session is one public Rook conversation backed by one ACP runtime subprocess. An environment is a context such as a website, physical location, app surface, or project directory. A session may explicitly enter multiple environments.
 
-## Bundle decisions are app-wide, not per-session
+## Bundle decisions
 
-When a bundle is presented to the user as an environment offer, the user makes a decision about that specific bundle (identified by its content hash). That decision is **app-wide** — it applies to all sessions:
+The user decides on bundles, not individual capabilities. Decisions are keyed by the exact canonical content hash:
 
-- **Accept** / **Ignore**: ephemeral. The decision lives in memory only while the environment is active. When the environment expires from memory, the decision is forgotten and the bundle can be offered again next time.
+- **Accept** — allow this bundle for the current session/visit.
+- **Ignore** — skip it for the current session/visit.
+- **Approve** — persist approval for this exact revision across future sessions.
+- **Reject** — persist rejection for this exact revision across future sessions.
 
-- **Approve** / **Reject**: persistent. The decision is stored in the database, keyed by the bundle's content hash (a Merkle tree of every file in the bundle directory). The same bundle will never be offered again — across any session — once approved or rejected.
+Only `approve` and `reject` are stored durably in the application database. `accept` and `ignore` are session-scoped in memory. Personal bundles are trusted user content and bypass the offer flow.
 
-## How sessions consume environments
+A changed agent-visible bundle content hash is a new reviewable revision, even if its publisher version or bundle name is unchanged.
 
-When any session wants to join an environment, it receives all bundles of that environment whose **effective decision** is positive (accepted or approved). The session does not make its own decisions about bundles — it inherits the app-wide decisions.
+## How a session consumes environments
 
-This means:
-- If you accept a Lowe's bundle while in your shopping session, then switch to your coding session, the coding session will also gain Lowe's skills if it enters that environment.
-- Use "Ignore" (not "Reject") if you only want to skip a bundle for the current visit without affecting other sessions.
-- Use "Reject" to permanently opt out of a bundle everywhere.
+1. A provider registers an environment candidate.
+2. The server resolves known repository environments and matching bundles.
+3. The session explicitly enters an environment.
+4. Offers are presented for undecided non-personal bundles.
+5. Accepted/approved or personal bundles are materialized into the session workspace.
+6. The runtime is restarted with the new skill paths and generated instructions.
 
-## What about session-specific concerns?
+The session does not implicitly enter parent environments, and availability does not itself load capabilities.
 
-The product doc previously considered per-session decisions to avoid cross-contamination (e.g., Lowe's skills leaking into a coding session). The resolution is:
+## Session isolation
 
-1. Sessions don't auto-enter environments from mere availability — they only enter environments the user or agent explicitly joins.
-2. Entering an environment is literal — joining `mac:md.obsidian/Rooknanigans` does not implicitly join `mac:md.obsidian`.
-3. The agent can help decide whether to enter an environment based on the current session's context.
-4. The UI provides affordances to see and manage which environments are active for a session.
+Each public session has its own ACP runtime subprocess, materialized capability workspace, entered-environment membership, and ephemeral accept/ignore decisions. The durable approve/reject record is application-wide by content hash. Thus approving a canonical bundle in one session can make it eligible in another session, but the second session must still explicitly enter the environment.
 
-If session-specific bundle gating is needed in the future, it would be a separate layer on top of the app-wide bundle decisions.
+## Restart behavior
+
+Environment changes do not mutate an existing runtime's files in place. Rook synchronizes writable edits, rebuilds the workspace from repository content, starts a replacement runtime, and only retires the old process after successful ACP session loading. Transcript and session membership remain durable.
+
+Concurrent edits to one personal bundle are currently last-write-wins/deferred; conflict merging is future work.

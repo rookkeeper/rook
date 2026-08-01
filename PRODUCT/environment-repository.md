@@ -1,53 +1,37 @@
 # Environment repository
 
-This document is the terse product-level description of the environment repository architecture and filesystem shape.
+This is the product-level description of Rook's environment-linked capability catalog.
 
 ## Purpose
 
-An environment repository is the catalog of environment-linked bundles that Rook can discover and review.
+An environment repository maps recognizable environments to capability bundles that Rook can discover, preview, approve, and load. It is intentionally broader than a skill repository. A bundle may contain skills, instructions, facts, `llms.txt` reference material, app metadata, and MCP configuration/content.
 
-It is intentionally broader than a skill repository.
+Bundles remain the atomic publication, review, approval, and runtime-loading unit. Capabilities are not approved independently in the current product.
 
-An environment may have one or more bundles, and a bundle may contain:
-- skills
-- MCP server configuration/content
-- app-related instructions / metadata
-- facts
-- `llms.txt` references
-- other environment-bound artifacts later
+## Current storage model
 
-## Layered architecture
+The live repository abstraction is:
 
 ```text
-API / controllers
+API/routes
     ↓
-Service
+Environment services
     ↓
 EnvironmentRepository
     ↓
-Storage
+SQLite or an intentional source adapter
 ```
 
-Current intent by layer:
-- **API / controllers** — optional for now; if present, exposes environment/bundle inspection to clients
-- **Service** — thin business-logic layer that looks up an environment and returns its bundles
-- **EnvironmentRepository** — repository abstraction for reading environments/bundles from one or more backing stores
-- **Storage** — SQLite is the live canonical/personal repository store; filesystem directories remain import and authoring sources where needed
+The live server uses one logical union of:
 
-## Repository model
+- the canonical SQLite database at `environment-repository.db`
+- the personal SQLite database at `~/.rook/environment-repository.db`
+- project-directory sources for existing project files
+- synthetic repositories such as location context
 
-We want a shared repository abstraction:
-- `EnvironmentRepository`
+SQLite is the source of truth for database-backed canonical and personal content. The legacy directory reader is retained for import and migration compatibility, not as a second normal live store. A project-directory environment is intentionally different: the project files are already the source of truth.
 
-First implementations:
-- `SQLiteEnvironmentRepository`
-- `DirectoryEnvironmentRepository` (legacy import and compatible external source)
-- `ProjectDirectoryEnvironmentRepository` (project-owned authoring source)
-- `CompositeEnvironmentRepository`
-
-The canonical repository is stored in `environment-repository.db`; the user-local/personal repository is stored separately under the Rook data directory. Directory bundles remain importable, and writable personal/project content is synchronized back to its source files.
-
-At runtime these are presented as one logical union repository. SQLite revisions retain content hashes, fetch/source metadata, and provenance so approval applies to exact agent-visible content.
+Each repository revision records the content hash plus source/fetch/provenance fields. The application database remains separate and stores sessions, transcripts, membership, and durable bundle decisions.
 
 ## Environment ids
 
@@ -57,136 +41,109 @@ Environment ids use:
 <type>:<uri-like-path>
 ```
 
-Current top-level environment types we want to standardize around:
-- `location`
-- `web`
-- `mac`
-- `dir`
-- `iphone`
-- `android`
-- `windows`
+Current kinds include `location`, `web`, `mac`, `dir`, `iphone`, `android`, and `windows`.
 
 Examples:
+
 - `mac:md.obsidian`
-- `mac:md.obsidian/reading_vault`
 - `web:example.com`
-- `web:example.com/stuff`
 - `location:office`
 - `dir:/Users/johnberryman/projects/github/rookkeeper/rook`
 
-## Filesystem shape
+Registration and entry are literal. Observed paths and URLs can help discover known repository environments, but entering a child environment does not implicitly enter its parent.
 
-Top level is organized by environment type:
+## Bundle and revision model
 
-```text
-environment-repository/
-├── android/
-├── dir/
-├── iphone/
-├── location/
-├── mac/
-├── web/
-└── windows/
-```
+A bundle identity is the repository, environment, and bundle name. A revision is one stored content snapshot of that identity. The canonical content hash is authoritative for approval; an optional publisher version is provenance, not a substitute for the hash.
 
-Environment ids map directly to nested directories under those type roots.
+A bundle may contain:
 
-Examples:
-- `mac:md.obsidian` → `mac/md.obsidian/`
-- `mac:md.obsidian/reading_vault` → `mac/md.obsidian/reading_vault/`
-- `location:office` → `location/office/`
-- `dir:/Users/johnberryman/projects/github/rookkeeper/rook` → `dir/Users/johnberryman/projects/github/rookkeeper/rook/`
-- `web:example.com` → `web/example.com/`
+- **Skills** — complete nested file maps, including references, scripts, and assets.
+- **Instructions** — bundle-level `AGENTS.md`-like text.
+- **Facts** — small facts inline in generated instructions; large facts become generated reference skills.
+- **`llms.txt`** — fetched full text stored and exposed as a generated reference skill.
+- **MCP content** — configuration/content projected into a separate read-only area. MCP startup and tool discovery are deferred.
+- **Apps/metadata** — reviewable bundle content where supported.
 
-## Bundles
+Only agent-visible or runtime-controlling content participates in approval hashing. Display-only metadata does not.
 
-Each environment directory may contain:
+## Repository and source adapters
 
-```text
-.bundles/
-```
+The first implementations are:
 
-Bundles live at:
+- `SQLiteEnvironmentRepository` — live canonical/personal storage, revisions, search, import, and write-back.
+- `DirectoryEnvironmentRepository` — filesystem importer and compatibility source.
+- `ProjectDirectoryEnvironmentRepository` — direct project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` content.
+- `CompositeEnvironmentRepository` — one logical view over those sources.
+
+A directory import can bootstrap SQLite, but the runtime does not require repository paths. `AgentWorkspaceMaterializer` converts resolved content into the ordinary files expected by the selected ACP runtime.
+
+## Runtime projection
+
+Each session gets a separate workspace under:
 
 ```text
-<environment>/.bundles/<bundle-id>/
+.var/rook/agent-workspaces/<session-id>/
 ```
 
-Bundle ids are local to the environment.
+The workspace contains:
 
-Bundle identifiers conceptually use:
+- `.agent/skills/` — materialized skill directories
+- `AGENTS.md` — generated readable environment/bundle instructions
+- `.agent/mcp-servers/` — read-only MCP configuration/content
+
+Canonical and external materializations are read-only by filesystem policy. Personal skills and marked personal instruction sections are writable. Skills synchronize to the personal SQLite bundle; instruction edits synchronize to that bundle's instruction field. Project-owned skills/instructions map back to project files. The generated aggregate `AGENTS.md` remains a projection, not a database source file.
+
+Changing entered environments or restoring a session rematerializes the workspace and restarts only the affected runtime after the existing ACP session has been successfully loaded.
+
+## Decisions and approval
+
+Decisions are bundle-scoped:
+
+- `accept` — allow this bundle for the current session/visit.
+- `ignore` — skip it for the current session/visit.
+- `approve` — persist approval for the exact content hash.
+- `reject` — persist rejection for the exact content hash.
+
+Personal bundles are user-owned and do not require approval. External/canonical bundles remain immutable to the user and require the normal decision flow. If agent-visible content changes, its hash changes and the durable decision no longer applies.
+
+## Search, preview, and review
+
+Environment and bundle search are separate operations. The current bundle endpoint supports a repository filter:
 
 ```text
-<environment-id>#<bundle-id>
+GET /api/environments/search?query=...
+GET /api/bundles/search?query=...&repository=canonical|personal|project-directory
+GET /api/environments/preview?environmentId=...
 ```
 
-## Bundle contents
+Previews expose bundle identity, repository, validity/errors, canonical hash, revision source/fetch metadata, nested artifacts, facts, `llms.txt`, and instructions. Client artifact views use a file-tree/content presentation so users review the actual agent-visible content.
 
-Bundle contents are grouped by type inside the bundle directory.
+## Filesystem compatibility shape
 
-Current first-pass content directories are:
-- `skills/`
-- `mcp-servers/`
-- `apps/`
-- `facts/` (large fact sets may be represented as pseudo-skills)
-- `llms.txt` (materialized as a generated reference skill)
-
-Examples:
-- `skills/<skill-name>/SKILL.md`
-- `mcp-servers/config.json`
-- `apps/instructions.md`
-
-A bundle may contain only the content groups it needs.
-
-## Example layout
+The canonical directory tree remains useful as an import fixture and human-authored source during migration:
 
 ```text
-environment-repository/
-├── mac/
-│   └── md.obsidian/
-│       ├── .bundles/
-│       │   └── using-obsidian/
-│       │       ├── .manifest
-│       │       ├── apps/
-│       │       │   └── instructions.md
-│       │       └── skills/
-│       │           └── obsidian-cli/
-│       │               └── SKILL.md
-│       ├── .manifest
-│       └── reading_vault/
-│           ├── .bundles/
-│           │   ├── save-documents-to-read/
-│           │   │   └── skills/
-│           │   │       └── save-documents-to-read/
-│           │   │           └── SKILL.md
-│           │   └── identify-next-most-important-read/
-│           │       └── skills/
-│           │           └── identify-next-most-important-read/
-│           │               ├── references/
-│           │               ├── scripts/
-│           │               └── SKILL.md
-│           └── .manifest
-├── location/
-└── web/
+environment-repository/<kind>/<path>/.bundles/<bundle-id>/
+  skills/<skill-name>/SKILL.md
+  mcp-servers/...
+  apps/...
+  facts/...
+  llms.txt
+  AGENTS.md
 ```
 
-## Database and authoring projections
+This shape is not the live database schema. Manifests remain future work; current import behavior is based on recognized content and explicit metadata.
 
-SQLite is the source of truth for published bundle content and immutable revisions. Runtime agents still receive file-backed projections: generated instructions, nested skills, and read-only external capability areas. Personal skills and instruction files remain writable and synchronize back to the personal database. Project-directory environments read existing project files without copying them into the repository.
+## Deferred product work
 
-## Other dot-paths
+The migration intentionally does not finish:
 
-Other environment-level and bundle-level metadata should live in dot-paths.
-
-Current expected locations:
-- environment manifest: `<environment>/.manifest`
-- bundle manifest: `<environment>/.bundles/<bundle>/.manifest`
-
-## Preview / review intent
-
-The repository itself does not store separate preview files.
-
-Review UI should render the actual contents of a bundle as a filesystem-style review:
-- file tree on the left
-- file contents on the right
-- bundle errors shown per-bundle
+- publishing, sharing, signed publishers, or formal provenance
+- remote repository adapters and revalidation scheduling
+- capability-level approval or dependency graphs
+- conflict merging for concurrent personal edits
+- prompt-injection validation of repository content
+- strong OS-level sandboxing beyond filesystem permissions
+- MCP startup, authentication, tool enumeration, sharing, and lifecycle
+- substantial UI redesign

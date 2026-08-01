@@ -137,38 +137,53 @@ Catalog of repository-known environments and their display metadata.
 
 Bundle identity and current revision pointer:
 
-- `bundle_key`
+- `bundle_key` primary key
 - `repository_id`
-- `environment_id`
+- `environment_id` foreign key to the repository environment
 - `bundle_id`
-- validity/errors
-- source bundle path/locator
+- validity and serialized repository read errors
+- optional compatibility `source_bundle_path`
 - `current_revision_key`
+- unique `(repository_id, environment_id, bundle_id)`
 
 ### `environment_repository_bundle_revisions`
 
 Immutable fetched content snapshots:
 
-- `revision_key`
-- `bundle_key`
+- `revision_key` primary key
+- `bundle_key` foreign key
 - `content_hash`
-- optional publisher version
-- fetched timestamp
-- source locator
-- provenance metadata
+- optional `publisher_version`
+- required `fetched_at`
+- optional `source_locator`
+- serialized `provenance_json`
+- unique `(bundle_key, content_hash)`
+
+The current bundle row points at one revision, while older revisions remain available for exact-hash history.
 
 ### `environment_repository_revision_artifacts`
 
-Capability artifact content belonging to one revision. Skills retain their complete nested file map; MCP, app, fact, and `llms.txt` artifacts use the same content representation for now.
+Capability artifact content belonging to one revision:
+
+- `revision_key`
+- `artifact_kind` (`skills`, `mcp-servers`, `apps`, `facts`, or `llms-txt`)
+- `artifact_id`
+- `files_json` containing the complete nested file map
+- optional `source_path`
+- primary key `(revision_key, artifact_kind, artifact_id)`
+
+Skills retain their complete nested file map; MCP, app, fact, and `llms.txt` artifacts use the same representation for now. Bundle instructions remain on the bundle row because they are the generated-instruction source field.
 
 ## Current persistence interfaces
 
 ### `RookDatastore`
 
 Role:
-- owns the shared SQLite connection
+- owns the application SQLite connection
 - creates the database directory when needed
-- is the lowest-level persistence primitive currently in use
+- stores sessions, transcript events, session membership, and durable approve/reject decisions
+
+It is intentionally separate from canonical and personal environment repository databases.
 
 ### `SqliteSessionRepository`
 
@@ -206,6 +221,12 @@ Main methods:
 - `getDecision(bundleHash)`
 - `setDecision(bundleHash, environmentId, bundleId, decision)`
 - `clearDecision(bundleHash)`
+
+## Repository write-back and projections
+
+`SQLiteEnvironmentRepository` writes a changed personal skill or instruction by creating/updating the current revision and recalculating the canonical content hash. The runtime never writes directly to the repository database; `AgentWorkspaceMaterializer` performs the synchronization at workspace lifecycle boundaries.
+
+Project-directory sources are intentionally direct file-backed exceptions. Canonical/external projections are read-only by filesystem policy, while personal and project-owned projections have explicit write-back mappings.
 
 ## What is not yet in the database
 

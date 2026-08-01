@@ -1,43 +1,69 @@
 # Environment-local authoring
 
-When you're inside an environment, Rook can write skills, instructions, and tools directly into that environment's personal bundle. Whatever Rook writes will come back the next time you enter the environment.
+Rook can learn environment-specific skills and instructions from the user. Personal content is writable and is stored in the personal environment-repository SQLite database.
 
-## Personal bundles
+## Personal bundle
 
-Every environment has exactly one writable personal bundle in the personal SQLite repository. Rook may expose a compatibility filesystem projection for authoring, but the database is the source of truth.
+Each environment has one user-owned `personal` bundle in the personal repository. It is created or imported as needed. Personal content bypasses approval while it remains user-owned; it is still revisioned and hashed when stored.
 
-Inside the personal bundle you can write these assets:
+The old directory-shaped personal repository can be imported for migration. It is not the live source of truth after SQLite cutover.
 
-| Asset | Path |
-|---|---|
-| Skill | `.../.bundles/personal/skills/<skill-name>/SKILL.md` |
-| AGENTS.md | `.../.bundles/personal/AGENTS.md` |
-| MCP configuration/content | stored as a bundle artifact; runtime lifecycle is deferred |
+## Session authoring workspace
 
-The personal bundle is created automatically when you enter an environment — no setup needed.
-
-## What Rook sees
-
-When you enter an environment, Rook's system message is extended with three sections:
-
-**1. Rook identity prompt.** Explains what Rook is, how environments and bundles work, and that Rook can write into any entered environment's personal bundle.
-
-**2. Authoring instructions.** For each entered environment, Rook sees the exact projected paths where it can write personal skills and `AGENTS.md`, plus the existing capability files. Writable changes synchronize back to the personal repository; external/canonical projections are read-only.
-
-**3. Environment metadata.** Each entered environment dumps its metadata (display name, app name, observed paths/URLs, window title, latitude/longitude, etc.) so Rook has context for what you're doing.
-
-Because Rook may be in several environments at once, the instructions remind Rook to clarify which environment a skill or instruction belongs to before writing anything.
-
-## AGENTS.md in bundles
-
-Anyone can put an `AGENTS.md` at the root of a bundle directory:
+When a session enters an environment, Rook materializes capabilities into:
 
 ```text
-environment-repository/web/x.com/.bundles/using-x/AGENTS.md
+.var/rook/agent-workspaces/<session-id>/
+├── AGENTS.md
+└── .agent/
+    ├── skills/
+    └── mcp-servers/
 ```
 
-When a bundle is accepted, its `AGENTS.md` content is injected into Rook's system message under a "Environment instructions" section. This is additive across bundles — you can have instructions from the canonical repo and the personal bundle all at once. Approval is tied to the bundle's exact content hash.
+The runtime prompt receives the actual session workspace paths. A personal skill is edited at:
 
-## Over time
+```text
+<workspace>/.agent/skills/<skill-name>/SKILL.md
+```
 
-This should settle into a rhythm. You do something with Rook in an environment. After a few rounds you tell Rook "remember this for next time." Rook writes a skill or updates `AGENTS.md`. Next time you're there, it just works.
+The generated `<workspace>/AGENTS.md` contains readable environment and bundle sections. The personal section is marked so its contents can be written back to the personal bundle. The aggregate file itself is derived output and is recreated on materialization.
+
+MCP content is exposed for review in the read-only `.agent/mcp-servers/` area. MCP execution and authentication are deliberately deferred.
+
+## Write-back behavior
+
+At an environment restart or other workspace synchronization point:
+
+1. writable skill files are read from the session workspace
+2. the matching personal bundle artifact is updated in SQLite and gets a new revision/hash
+3. the marked personal instruction section is written to the bundle instruction field
+4. the next materialization sees the updated content
+
+Project-directory environments are a separate direct-source case. Their existing `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files remain the source of truth, and writable mappings update those files where supported.
+
+Canonical and external content is projected read-only. The current permission boundary is not a strong defense against an agent that can execute arbitrary commands as the same OS user; stronger sandboxing is future work.
+
+## Agent guidance
+
+The environment prompt tells Rook:
+
+- which environment it is in
+- where personal skills can be written
+- where the editable personal instruction section lives
+- which skills already exist
+- where read-only external/MCP content can be reviewed
+
+Because several environments can be entered, Rook should clarify the intended environment before creating or changing a personal capability.
+
+## Authoring lifecycle
+
+A typical cycle is:
+
+1. enter an environment
+2. use the environment's existing capabilities
+3. ask Rook to remember a repeatable procedure or preference
+4. Rook edits a personal skill or instruction section
+5. the server writes the change back to SQLite
+6. the next session entry loads the new revision
+
+Concurrent-session conflict merging, publishing personal capabilities, and sharing are not part of the current implementation.

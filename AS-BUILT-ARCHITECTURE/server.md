@@ -93,6 +93,8 @@ See also: [database.md](./database.md)
 - `POST /api/environments/register`
 - `POST /api/environments/decision`
 - `GET /api/environments/preview`
+- `GET /api/environments/search?query=...`
+- `GET /api/bundles/search?query=...&repository=...`
 - `POST /api/environments/identify`
 - `POST /api/environments/register-location`
 - `POST /api/session/environments`
@@ -144,11 +146,13 @@ Related tables:
   - `bundles[]`
 - `EnvironmentBundlePreview`
   - `id`, `bundleId`, `environmentId`, `repository`, `valid`, `bundleHash`
-  - `skills[]`, `mcpServers[]`, `apps[]`, `errors[]`
+  - optional revision metadata: `contentHash`, publisher version, fetched time, source locator, provenance
+  - `skills[]`, `mcpServers[]`, `apps[]`, `facts[]`, optional `llmsTxt`, `agentsMd`, `errors[]`
+- bundle search supports filtering by repository id (`canonical`, `personal`, or source-specific ids)
 - `EnvironmentBundleOffer`
   - `environmentId`, `bundleId`, `bundleHash`
   - `displayName`
-  - `skills[]`, `mcpServers[]`, `apps[]`
+  - capability summary for skills, MCP/apps, facts, `llms.txt`, and instructions as available
 
 ### Location identification
 `IdentifyAvailableRequest`:
@@ -184,7 +188,7 @@ Related tables:
 3. finalized environments resolve matching bundles and hash them
 4. undecided bundles are offered to subscribed sessions when that session enters the finalized environment
 5. client resolves via REST decision or ACP extension resolution
-6. approved skill paths are attached to that session's launch configuration
+6. approved/personal bundle content is resolved for runtime materialization; skill paths are attached to the launch configuration and generated instructions are appended to the runtime prompt
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment
@@ -209,4 +213,5 @@ Related tables:
 - approved bundle content is materialized into per-session capability workspaces
 - durable decisions, transcript history, and session membership are SQLite-backed
 - canonical and personal environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
+- facts and `llms.txt` use capability-specific projections; MCP content is reviewable/read-only but not started by the runtime
 - location identification is provider-pluggable behind `PoiLookupProvider`

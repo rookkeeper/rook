@@ -12,5 +12,6 @@ The most important constraint is that user-authored skills and instructions must
 - [`DECISIONS.md`](./DECISIONS.md) — decisions and working agreements reached so far.
 - [`CONTRACT.md`](./CONTRACT.md) — the current working bundle, capability, decision, repository, and runtime contract.
 - [`FAQ.md`](./FAQ.md) — concise answers to recurring questions and reminders about scope.
+- [`recap.md`](./recap.md) — implementation recap, goal assessment, and hands-on verification checklist.
 
-This directory is a design log, not yet an implementation plan or commitment to every future feature.
+The ordered TODOs now record the completed migration gates and the explicitly deferred follow-up work.

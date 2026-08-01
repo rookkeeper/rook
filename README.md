@@ -10,6 +10,7 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - [Product notes](PRODUCT/)
 - [As-built architecture notes](AS-BUILT-ARCHITECTURE/)
 - [Environment repository migration design log](CHANGES/2026-08-01-environment_repo_to_db/)
+- [Environment repository migration recap and verification guide](CHANGES/2026-08-01-environment_repo_to_db/recap.md)
 
 ## Packages
 

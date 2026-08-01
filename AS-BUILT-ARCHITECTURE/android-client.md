@@ -64,6 +64,7 @@ StateFlows for:
 Android defines Kotlin equivalents of the Swift shared models:
 - `AgentDefinition`, `AgentSessionSummary`
 - `EnvironmentOffer`, `EnvironmentCandidate`, `EnvironmentListItem`, `EnvironmentPreview`
+- `EnvironmentBundlePreview` with facts, `llms.txt`, and revision/source metadata
 - `ChatBlock`, `ChatBlockKind`, `ToolBlockState`, `PlanEntry`
 - `AcpClientEvent`
 

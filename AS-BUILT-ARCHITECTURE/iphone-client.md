@@ -59,7 +59,7 @@ Same shared contract as other clients:
 - server and session state
 - `blocks: [ChatBlock]`
 - pending environment offer
-- environment list items
+- environment list items and bundle previews
 - current place name / `placeEnvironmentId`
 - `placeSkillStatus[slug] -> Bool`
 - `nearbyCandidates: [EnvironmentCandidate]`
