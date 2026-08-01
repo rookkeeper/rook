@@ -12,5 +12,7 @@ Stop for review before building storage or changing runtime assembly.
 - [ ] Define the initial capability types and their runtime treatment.
 - [ ] Define repository, source/origin, publisher, and cache terminology.
 - [ ] Define bundle-level decision semantics and approval boundaries.
-- [ ] Define the repository API for the first migration.
-- [ ] Record what is intentionally deferred.
+- [x] Record the initial decision model, capability direction, runtime projection direction, and deferred scope.
+- [x] Sketch the first repository API additions for listing and bundle search.
+- [ ] Define the complete repository API for the first migration.
+- [ ] Record the final target model and close the design checkpoint.

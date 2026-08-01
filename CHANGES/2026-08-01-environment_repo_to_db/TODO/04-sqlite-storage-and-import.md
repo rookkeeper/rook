@@ -16,4 +16,5 @@ Only start this after the materialization and authoring seams work against the c
 - [x] Preserve complete skill file trees and other approval-relevant content.
 - [x] Add database-backed bundle reads and writes.
 - [x] Add repository tests against imported and directly stored data.
+- [x] Add automated coverage for SQLite round-tripping, importing, searching, and compatibility projection.
 - [ ] Add full parity tests between imported content and the existing repository.
