@@ -43,20 +43,52 @@ function skillsList(names: string[]): string {
   return names.length > 0 ? names.map((s) => `\`${s}\``).join(", ") : "(none yet)";
 }
 
-function bundleLabel(id: string): string {
-  return id === "default" ? "personal" : id;
+function bundleLabel(id: string): { name: string; editable: boolean } {
+  return id === "default"
+    ? { name: "Personal capabilities", editable: true }
+    : { name: "Environment capabilities", editable: false };
 }
 
 function agentsMdBlock(bundles: EnvironmentPromptEntry["agentsMdBundles"]): string {
   if (bundles.length === 0) return "";
-  const blocks = bundles.map(
-    ({ bundleId, content }) =>
-      `**${bundleLabel(bundleId)}**\n\n${content
-        .split("\n")
-        .map((line) => `    ${line}`)
-        .join("\n")}`,
-  );
-  return `#### Environment instructions:\n${blocks.join("\n\n")}`;
+  const blocks = bundles.map(({ bundleId, content }) => {
+    const label = bundleLabel(bundleId);
+    const editable = label.editable ? ' editable="true"' : "";
+    const indented = content.split("\n").map((line) => `      ${line}`).join("\n");
+    return `  <bundle name="${label.name}"${editable}>\n\n    <instructions>\n${indented}\n    </instructions>\n\n  </bundle>`;
+  });
+  return blocks.join("\n\n");
+}
+
+const USEFUL_METADATA_KEYS = new Set([
+  "website",
+  "observedUrls",
+  "observedPaths",
+  "appName",
+  "windowTitle",
+  "operator",
+  "storeNumber",
+  "address",
+  "latitude",
+  "longitude",
+]);
+
+function renderContext(metadata: Record<string, unknown>): string {
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(metadata)) {
+    if (!USEFUL_METADATA_KEYS.has(key)) continue;
+    const values = Array.isArray(value) ? value : [value];
+    for (const item of values) {
+      if (typeof item !== "string" && typeof item !== "number") continue;
+      const tag = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+      lines.push(`    <${tag}>${escapePseudoMarkup(String(item))}</${tag}>`);
+    }
+  }
+  return lines.length > 0 ? lines.join("\n") : "    No additional context was provided.";
+}
+
+function escapePseudoMarkup(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 // -- intro (rendered once, above all environment entries) ----------------------
@@ -112,21 +144,27 @@ The metadata shown for each environment below may contain useful details you can
 // -- per-environment entry -----------------------------------------------------
 
 function renderEnvEntry(entry: EnvironmentPromptEntry): string {
-  const meta: string[] = [];
-
-  if (entry.displayName) meta.push(`- Display name: ${entry.displayName}`);
-
+  const environmentName = escapePseudoMarkup(entry.displayName ?? "Current environment");
   const agents = agentsMdBlock(entry.agentsMdBundles);
 
-  return `### \`${entry.environmentId}\`
-- Personal bundle: \`${entry.bindingDir}\`
-  - Write skills to: \`${entry.skillsDir}/<skill-name>/SKILL.md\`
-  - Write AGENTS.md to: \`${entry.bindingDir}/AGENTS.md\`
-  - Write MCP servers to: \`${entry.bindingDir}/mcp-servers/<server-name>/\`
-- Existing user-created skills in this bundle: ${skillsList(entry.existingSkills)}
-${meta.join("\n")}
-- Metadata:
-${jsonBlock(entry.metadata)}${agents ? `\n${agents}` : ""}`;
+  return `<environment name="${environmentName}">
+
+  <context>
+${renderContext(entry.metadata)}
+  </context>
+
+  <bundle name="Personal capabilities" editable="true">
+
+    <instructions>
+      Write skills to: \`${entry.skillsDir}/<skill-name>/SKILL.md\`
+      Write AGENTS.md to: \`${entry.bindingDir}/AGENTS.md\`
+      Write MCP servers to: \`${entry.bindingDir}/mcp-servers/<server-name>/\`
+      Existing personal skills: ${skillsList(entry.existingSkills)}
+    </instructions>
+
+  </bundle>${agents ? `\n\n${agents}` : ""}
+
+</environment>`;
 }
 
 // -- template ------------------------------------------------------------------

@@ -27,14 +27,15 @@ describe("renderEnvironmentPrompt", () => {
     expect(result!).toContain("## Attaching memories and capabilities to an environment");
   });
 
-  it("includes environmentId in header", () => {
-    const result = renderEnvironmentPrompt([makeEntry({ environmentId: "web:example.com" })]);
-    expect(result!).toContain("### `web:example.com`");
+  it("does not expose the machine environment id", () => {
+    const result = renderEnvironmentPrompt([makeEntry({ environmentId: "web:example.com", displayName: "Example" })]);
+    expect(result!).toContain('<environment name="Example">');
+    expect(result!).not.toContain('<environment name="web:example.com">');
   });
 
   it("includes personal bundle path", () => {
     const result = renderEnvironmentPrompt([makeEntry()]);
-    expect(result!).toContain("Personal bundle:");
+    expect(result!).toContain('<bundle name="Personal capabilities" editable="true">');
     expect(result!).toContain("/tmp/.rook/env/web/example.com/.bundles/personal");
   });
 
@@ -54,22 +55,22 @@ describe("renderEnvironmentPrompt", () => {
     expect(result!).toContain("(none yet)");
   });
 
-  it("includes display name when provided", () => {
+  it("includes display name in the environment tag", () => {
     const result = renderEnvironmentPrompt([makeEntry({ displayName: "Obsidian" })]);
-    expect(result!).toContain("Display name: Obsidian");
+    expect(result!).toContain('<environment name="Obsidian">');
   });
 
-  it("omits display name line when absent", () => {
+  it("uses a human fallback when display name is absent", () => {
     const result = renderEnvironmentPrompt([makeEntry({ displayName: undefined })]);
-    expect(result!).not.toContain("Display name:");
+    expect(result!).toContain('<environment name="Current environment">');
   });
 
-  it("renders metadata as JSON block", () => {
-    const meta = { registeredAt: "2026-01-01T00:00:00Z", appName: "TestApp" };
+  it("renders useful metadata as context tags", () => {
+    const meta = { registeredAt: "2026-01-01T00:00:00Z", appName: "TestApp", website: "https://example.com" };
     const result = renderEnvironmentPrompt([makeEntry({ metadata: meta })]);
-    expect(result!).toContain("```json");
-    expect(result!).toContain('"registeredAt"');
-    expect(result!).toContain('"appName": "TestApp"');
+    expect(result!).toContain("<app_name>TestApp</app_name>");
+    expect(result!).toContain("<website>https://example.com</website>");
+    expect(result!).not.toContain("registeredAt");
   });
 
   it("includes AGENTS.md bundles when present", () => {
@@ -81,10 +82,9 @@ describe("renderEnvironmentPrompt", () => {
         ],
       }),
     ]);
-    expect(result!).toContain("Environment instructions:");
-    expect(result!).toContain("**personal**");
+    expect(result!).toContain('<bundle name="Personal capabilities" editable="true">');
     expect(result!).toContain("Always say hello.");
-    expect(result!).toContain("**extra**");
+    expect(result!).toContain('<bundle name="Environment capabilities">');
     expect(result!).toContain("Keep track of todos.");
   });
 
@@ -98,8 +98,8 @@ describe("renderEnvironmentPrompt", () => {
       makeEntry({ environmentId: "web:z.com" }),
       makeEntry({ environmentId: "web:a.com" }),
     ]);
-    const aIndex = result!.indexOf("### `web:a.com`");
-    const zIndex = result!.indexOf("### `web:z.com`");
+    const aIndex = result!.indexOf('<environment name="Current environment">');
+    const zIndex = result!.lastIndexOf('<environment name="Current environment">');
     expect(aIndex).toBeLessThan(zIndex);
   });
 
@@ -109,8 +109,8 @@ describe("renderEnvironmentPrompt", () => {
         agentsMdBundles: [{ bundleId: "default", content: "Line one\nLine two" }],
       }),
     ]);
-    // Content lines should be indented with 4 spaces
-    expect(result!).toContain("    Line one");
-    expect(result!).toContain("    Line two");
+    // Content lines should remain readable inside pseudo-markup.
+    expect(result!).toContain("      Line one");
+    expect(result!).toContain("      Line two");
   });
 });
