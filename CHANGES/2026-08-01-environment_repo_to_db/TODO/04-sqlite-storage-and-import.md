@@ -10,10 +10,10 @@ Stop for review after parity tests pass and personal content can be read and wri
 
 Only start this after the materialization and authoring seams work against the current repository.
 
-- [ ] Define the SQLite schema for bundles, revisions, capabilities, and membership.
-- [ ] Create canonical and personal repository databases.
-- [ ] Import the existing filesystem repository data.
-- [ ] Preserve complete skill file trees and other approval-relevant content.
-- [ ] Add database-backed reads and writes for personal content.
-- [ ] Add repository tests against the imported data.
-- [ ] Add parity tests between imported content and the existing repository.
+- [x] Define the initial SQLite schema for bundles, capabilities, and membership.
+- [x] Create the repository datastore abstraction for canonical or personal database locations.
+- [x] Import the existing filesystem repository data.
+- [x] Preserve complete skill file trees and other approval-relevant content.
+- [x] Add database-backed bundle reads and writes.
+- [x] Add repository tests against imported and directly stored data.
+- [ ] Add full parity tests between imported content and the existing repository.

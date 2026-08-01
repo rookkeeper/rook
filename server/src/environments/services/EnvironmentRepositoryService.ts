@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { EnvironmentBundleResult, EnvironmentBundle } from "../../shared/environmentRepository.js";
 import type { EnvironmentPreview } from "../../shared/environment.js";
@@ -30,7 +29,7 @@ export class EnvironmentRepositoryService {
     const valid = result.bundles.filter((bundle) => bundle.valid);
     const resolved: ResolvedEnvironmentBundle[] = [];
     for (const bundle of valid) {
-      resolved.push({ bundle, bundleHash: await hashBundle(bundle) });
+      resolved.push({ bundle, bundleHash: hashEnvironmentBundle(bundle) });
     }
     return resolved;
   }
@@ -59,7 +58,7 @@ export class EnvironmentRepositoryService {
         environmentId: bundle.environmentId,
         repository: bundle.repository,
         valid: bundle.valid,
-        bundleHash: await hashBundle(bundle),
+        bundleHash: hashEnvironmentBundle(bundle),
         skills: bundle.skills,
         mcpServers: bundle.mcpServers,
         apps: bundle.apps,
@@ -80,70 +79,27 @@ function unique(values: string[]): string[] {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
-async function hashBundle(bundle: EnvironmentBundle): Promise<string> {
+/**
+ * Hashes canonical bundle content, not its storage path. This keeps approval
+ * stable when the same bundle moves between repository backends or is
+ * materialized into a different working directory.
+ */
+export function hashEnvironmentBundle(bundle: EnvironmentBundle): string {
   const hash = crypto.createHash("sha256");
-  hash.update("rook-environment-bundle-v2\n");
-
-  if (bundle.bundlePath) {
-    // Merkle tree: walk the directory and hash every file.
-    const fileHashes = await collectFileHashes(bundle.bundlePath);
-    for (const [relativePath, fileHash] of fileHashes) {
-      hash.update(`${relativePath}\n${fileHash}\n`);
-    }
-  } else {
-    // Fallback: hash parsed artifact content when no bundlePath is available.
-    for (const [groupName, artifacts] of [
-      ["skills", bundle.skills],
-      ["mcp-servers", bundle.mcpServers],
-      ["apps", bundle.apps],
-    ] as const) {
-      hash.update(`${groupName}\n`);
-      for (const artifact of [...artifacts].sort((a, b) => a.id.localeCompare(b.id))) {
-        hash.update(`${artifact.id}\n`);
-        for (const filePath of Object.keys(artifact.files).sort((a, b) => a.localeCompare(b))) {
-          hash.update(`${filePath}\n`);
-          hash.update(artifact.files[filePath]);
-          hash.update("\n\u0000\n");
-        }
+  hash.update("rook-environment-bundle-content-v3\n");
+  for (const [groupName, artifacts] of [
+    ["skills", bundle.skills],
+    ["mcp-servers", bundle.mcpServers],
+    ["apps", bundle.apps],
+  ] as const) {
+    hash.update(`${groupName}\u0000`);
+    for (const artifact of [...artifacts].sort((a, b) => a.id.localeCompare(b.id))) {
+      hash.update(`${artifact.id}\u0000`);
+      for (const filePath of Object.keys(artifact.files).sort((a, b) => a.localeCompare(b))) {
+        hash.update(`${filePath}\u0000${artifact.files[filePath]}\u0000`);
       }
     }
-    if (bundle.agentsMd) {
-      hash.update("AGENTS.md\n");
-      hash.update(bundle.agentsMd);
-      hash.update("\n\u0000\n");
-    }
   }
-
+  hash.update(`agents-md\u0000${bundle.agentsMd ?? ""}\u0000`);
   return hash.digest("hex");
-}
-
-async function collectFileHashes(rootDir: string): Promise<[string, string][]> {
-  const result: [string, string][] = [];
-  await walkDirectory(rootDir, "", result);
-  result.sort((a, b) => a[0].localeCompare(b[0]));
-  return result;
-}
-
-async function walkDirectory(
-  dir: string,
-  relativePrefix: string,
-  result: [string, string][],
-): Promise<void> {
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    const relativePath = relativePrefix ? `${relativePrefix}/${entry.name}` : entry.name;
-    const absolutePath = path.join(dir, entry.name);
-    if (entry.isDirectory() || entry.isSymbolicLink()) {
-      await walkDirectory(absolutePath, relativePath, result);
-    } else if (entry.isFile()) {
-      const content = await readFile(absolutePath);
-      const fileHash = crypto.createHash("sha256").update(content).digest("hex");
-      result.push([relativePath, fileHash]);
-    }
-  }
 }
