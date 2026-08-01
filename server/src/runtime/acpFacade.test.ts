@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -59,6 +59,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
   let tempConfigDir: string;
   const originalRuntimePath = process.env.ROOK_AGENT_RUNTIMES_PATH;
+  const originalHome = process.env.HOME;
 
   beforeAll(async () => {
     tempConfigDir = mkdtempSync(path.join(os.tmpdir(), "rook-acp-facade-"));
@@ -76,6 +77,10 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       ],
     }));
     process.env.ROOK_AGENT_RUNTIMES_PATH = runtimesPath;
+    process.env.HOME = tempConfigDir;
+    const personalSkillDir = path.join(tempConfigDir, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills", "personal-skill");
+    mkdirSync(personalSkillDir, { recursive: true });
+    writeFileSync(path.join(personalSkillDir, "SKILL.md"), "original personal skill", "utf8");
     app = await buildServer({ environmentDecisionStoreLocation: ":memory:", authToken: "" });
     await app.listen({ host: "127.0.0.1", port: PORT });
   });
@@ -84,6 +89,8 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     await app?.close();
     if (originalRuntimePath === undefined) delete process.env.ROOK_AGENT_RUNTIMES_PATH;
     else process.env.ROOK_AGENT_RUNTIMES_PATH = originalRuntimePath;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
     rmSync(tempConfigDir, { recursive: true, force: true });
   });
 
@@ -122,6 +129,89 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
 
     await request(ws, 6, "session/close", { sessionId });
     ws.close();
+  });
+
+  it("materializes approved environment skills during an environment restart", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "materializer-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "materializer-test" },
+    });
+    const sessionId = created.sessionId as string;
+
+    await fetch(`http://127.0.0.1:${PORT}/api/environments/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "web:example.com", metadata: { displayName: "Example" } }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ valid: boolean; bundleHash: string; bundleId: string }> };
+    const bundle = preview.bundles.find((candidate) => candidate.valid && candidate.bundleId === "testing-fixture");
+    expect(bundle).toBeDefined();
+    await fetch(`http://127.0.0.1:${PORT}/api/environments/decision`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ environmentId: "web:example.com", bundleHash: bundle!.bundleHash, decision: "approve" }),
+    });
+
+    const entered = await fetch(`http://127.0.0.1:${PORT}/api/session/environments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, enterEnvironmentIds: ["web:example.com"], leaveEnvironmentIds: [] }),
+    }).then((response) => response.json()) as { entered: string[] };
+    expect(entered.entered).toContain("web:example.com");
+
+    const workspaceRoot = path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId);
+    const materializedSkill = path.join(workspaceRoot, ".agent", "skills", "testing-fixture", "SKILL.md");
+    expect(existsSync(materializedSkill)).toBe(true);
+    ws.close();
+    removeReadOnlyTree(workspaceRoot);
+  });
+
+  it("writes a personal skill edit back after an agent prompt", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "authoring-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "authoring-test" },
+    });
+    const sessionId = created.sessionId as string;
+
+    await fetch(`http://127.0.0.1:${PORT}/api/environments/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "web:example.com", metadata: { displayName: "Example" } }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ valid: boolean; bundleHash: string; bundleId: string }> };
+    const bundle = preview.bundles.find((candidate) => candidate.valid && candidate.bundleId === "personal");
+    expect(bundle).toBeDefined();
+    await fetch(`http://127.0.0.1:${PORT}/api/environments/decision`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ environmentId: "web:example.com", bundleHash: bundle!.bundleHash, decision: "approve" }),
+    });
+    await fetch(`http://127.0.0.1:${PORT}/api/session/environments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, enterEnvironmentIds: ["web:example.com"], leaveEnvironmentIds: [] }),
+    });
+
+    const workspaceSkill = path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId, ".agent", "skills", "personal-skill", "SKILL.md");
+    expect(readFileSync(workspaceSkill, "utf8")).toBe("original personal skill");
+    await request(ws, 4, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: `edit personal skill write-to:${workspaceSkill}` }],
+    });
+
+    const sourceSkill = path.join(tempConfigDir, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills", "personal-skill", "SKILL.md");
+    expect(readFileSync(sourceSkill, "utf8")).toBe("updated by the mock agent");
+    await request(ws, 5, "session/close", { sessionId });
+    ws.close();
+    removeReadOnlyTree(path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId));
   });
 
   it("accepts session/cancel as a JSON-RPC notification and cancels the turn", async () => {
@@ -330,3 +420,18 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     wsB.close();
   });
 });
+
+function removeReadOnlyTree(root: string): void {
+  if (!existsSync(root)) return;
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const child = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      chmodSync(child, 0o755);
+      removeReadOnlyTree(child);
+    } else {
+      chmodSync(child, 0o644);
+    }
+  }
+  chmodSync(root, 0o755);
+  rmSync(root, { recursive: true, force: true });
+}

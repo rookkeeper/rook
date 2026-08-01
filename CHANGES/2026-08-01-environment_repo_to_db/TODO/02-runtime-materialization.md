@@ -14,6 +14,6 @@ Start or restart a real session with entered bundle content, inspect its working
 - [x] Make environment runtime skill paths come from the materialized workspace.
 - [x] Make generated instructions reach the runtime prompt path.
 - [x] Add `EnvironmentManager` coverage for approved runtime bundle resolution.
-- [ ] Add a real ACP session integration test using materialized content.
+- [x] Add a real ACP session integration test using materialized content.
 - [ ] Decide and implement startup/restart reinjection rather than trusting stale files.
 - [ ] Pause for manual runtime review.
