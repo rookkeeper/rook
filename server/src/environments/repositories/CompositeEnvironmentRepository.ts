@@ -1,4 +1,4 @@
-import type { EnvironmentBundleResult, RepositoryReadError } from "../../shared/environmentRepository.js";
+import type { EnvironmentBundle, EnvironmentBundleResult, EnvironmentRecord, RepositoryReadError } from "../../shared/environmentRepository.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
 export class CompositeEnvironmentRepository extends EnvironmentRepository {
@@ -13,4 +13,24 @@ export class CompositeEnvironmentRepository extends EnvironmentRepository {
     const errors: RepositoryReadError[] = results.flatMap((result) => result.errors);
     return { environment, bundles, errors };
   }
+
+  async listEnvironments(): Promise<EnvironmentRecord[]> {
+    const environments = (await Promise.all(this.repositories.map((repository) => repository.listEnvironments()))).flat();
+    return uniqueBy(environments, (environment) => environment.id);
+  }
+
+  async searchBundles(query: string): Promise<EnvironmentBundle[]> {
+    const bundles = (await Promise.all(this.repositories.map((repository) => repository.searchBundles(query)))).flat();
+    return uniqueBy(bundles, (bundle) => `${bundle.repository}:${bundle.id}`);
+  }
+}
+
+function uniqueBy<T>(values: T[], key: (value: T) => string): T[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const valueKey = key(value);
+    if (seen.has(valueKey)) return false;
+    seen.add(valueKey);
+    return true;
+  });
 }

@@ -17,6 +17,14 @@ export class EnvironmentRepositoryService {
     return this.repository.getBundles(environmentId);
   }
 
+  async listEnvironments() {
+    return this.repository.listEnvironments();
+  }
+
+  async searchBundles(query: string): Promise<EnvironmentBundle[]> {
+    return this.repository.searchBundles(query);
+  }
+
   async getResolvedBundles(environmentId: string): Promise<ResolvedEnvironmentBundle[]> {
     const result = await this.repository.getBundles(environmentId);
     const valid = result.bundles.filter((bundle) => bundle.valid);
