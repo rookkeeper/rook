@@ -84,6 +84,8 @@ For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTU
 - `POST /api/environments/register` — mark an environment available
 - `POST /api/environments/decision` — record accept/approve/ignore/reject
 - `GET /api/environments/preview` — bundle/file preview data
+- `GET /api/environments/search?query=...` — repository environment search
+- `GET /api/bundles/search?query=...` — repository bundle search
 - `GET /api/environments/list` — per-session environment list for client UI (`displayName`, `environmentId`, status, bundle counts)
 - `GET /api/diagnostics/environments` — active/recent environment diagnostics
 - `GET /api/ws` — session-bound ACP WebSocket facade (`?sessionId=<public-session-id>` preferred)

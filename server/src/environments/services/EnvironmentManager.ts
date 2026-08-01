@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { EnvironmentDecisionStore } from "../datastores/EnvironmentDecisionStore.js";
 import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../shared/environment.js";
+import type { EnvironmentBundle, EnvironmentRecord } from "../../shared/environmentRepository.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import { ensurePersonalEnvironmentBinding } from "../support/EnvironmentBinding.js";
 import {
@@ -352,6 +353,18 @@ export class EnvironmentManager {
 
   async getEnvironmentPreview(environmentId: string): Promise<EnvironmentPreview> {
     return this.repositoryService.getEnvironmentPreview(environmentId);
+  }
+
+  async searchEnvironments(query: string): Promise<EnvironmentRecord[]> {
+    const normalized = query.trim().toLowerCase();
+    const environments = await this.repositoryService.listEnvironments();
+    if (!normalized) return environments;
+    return environments.filter((environment) => [environment.id, environment.displayName, environment.description]
+      .some((value) => value.toLowerCase().includes(normalized)));
+  }
+
+  async searchBundles(query: string): Promise<EnvironmentBundle[]> {
+    return this.repositoryService.searchBundles(query);
   }
 
   isAvailable(environmentId: string): boolean {

@@ -8,7 +8,7 @@ Exercise environment search, bundle search, previews, decisions, and the updated
 
 Stop for final review before removing terminology or compatibility code that may still be useful.
 
-- [ ] Add separate environment-search and bundle-search operations.
+- [x] Add initial separate environment-search and bundle-search operations.
 - [ ] Add source/repository filters and useful cached-content status.
 - [ ] Update previews and decision UI only where the new model requires it.
 - [ ] Update clients, tests, README files, product docs, and architecture docs.

@@ -35,10 +35,6 @@ export interface EnvironmentPromptEntry {
 
 // -- helpers -------------------------------------------------------------------
 
-function jsonBlock(value: Record<string, unknown>): string {
-  return `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
-}
-
 function skillsList(names: string[]): string {
   return names.length > 0 ? names.map((s) => `\`${s}\``).join(", ") : "(none yet)";
 }

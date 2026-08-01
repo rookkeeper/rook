@@ -21,6 +21,23 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
     super();
   }
 
+  async listEnvironments(): Promise<EnvironmentRecord[]> {
+    const ids = await discoverEnvironmentIds(this.root);
+    const results = await Promise.all(ids.map((environmentId) => this.getBundles(environmentId)));
+    return results.flatMap((result) => result.environment ? [result.environment] : []);
+  }
+
+  async searchBundles(query: string): Promise<EnvironmentBundle[]> {
+    const normalizedQuery = query.trim().toLowerCase();
+    const ids = await discoverEnvironmentIds(this.root);
+    const results = await Promise.all(ids.map((environmentId) => this.getBundles(environmentId)));
+    return results.flatMap((result) => result.bundles.filter((bundle) => {
+      if (!normalizedQuery) return true;
+      return [bundle.bundleId, bundle.agentsMd ?? "", ...bundle.skills.map((item) => item.id), ...bundle.mcpServers.map((item) => item.id), ...bundle.apps.map((item) => item.id)]
+        .some((value) => value.toLowerCase().includes(normalizedQuery));
+    }));
+  }
+
   async getBundles(environmentId: string): Promise<EnvironmentBundleResult> {
     const envDir = this.resolveEnvironmentDir(environmentId);
     if (!envDir) {
@@ -251,4 +268,30 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
       }
     }
   }
+}
+
+export async function discoverEnvironmentIds(root: string): Promise<string[]> {
+  const result: string[] = [];
+  async function walk(directory: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    if (entries.some((entry) => entry.isDirectory() && entry.name === ".bundles")) {
+      const relative = path.relative(root, directory).split(path.sep).filter(Boolean);
+      if (relative.length >= 2) {
+        const kind = relative[0];
+        const remainder = relative.slice(1).join("/");
+        result.push(kind === "dir" ? `dir:/${remainder}` : `${kind}:${remainder}`);
+      }
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name !== ".git" && !entry.name.startsWith(".")) await walk(path.join(directory, entry.name));
+    }
+  }
+  await walk(root);
+  return [...new Set(result)].sort((a, b) => a.localeCompare(b));
 }
