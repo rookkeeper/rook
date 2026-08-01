@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { chmod, mkdir, mkdtemp, readFile, stat, rm, writeFile } from "node:fs/promises";
+import { readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { AgentWorkspaceMaterializer } from "./AgentWorkspaceMaterializer.js";
@@ -68,6 +69,29 @@ describe("AgentWorkspaceMaterializer", () => {
     }
   });
 
+  it("materializes facts, llms.txt, and MCP content by type", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rook-agent-workspace-"));
+    try {
+      const result = await new AgentWorkspaceMaterializer().materialize(root, [{
+        environmentName: "Gmail",
+        bundleName: "Environment capabilities",
+        editable: false,
+        bundle: bundle({
+          facts: [{ id: "timezone", files: { "timezone.txt": "The user is in Eastern Time." } }],
+          llmsTxt: "# Gmail docs\n\nUse Gmail search.",
+          mcpServers: [{ id: "gmail-tools", files: { "config.json": '{"server":"gmail"}' } }],
+        }),
+      }]);
+      const agents = await readFile(result.agentsPath, "utf8");
+      expect(agents).toContain("The user is in Eastern Time.");
+      expect(await readFile(path.join(root, ".agent", "skills", "llms-environment-capabilities", "SKILL.md"), "utf8")).toContain("Use Gmail search.");
+      expect(await readFile(path.join(root, ".agent", "mcp-servers", "gmail-tools", "config.json"), "utf8")).toContain("gmail");
+      expect(result.mcpPaths).toHaveLength(1);
+    } finally {
+      await cleanup(root);
+    }
+  });
+
   it("marks externally sourced skill files read-only", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "rook-agent-workspace-"));
     try {
@@ -99,10 +123,20 @@ describe("AgentWorkspaceMaterializer", () => {
 });
 
 async function cleanup(root: string): Promise<void> {
-  const skillsRoot = path.join(root, ".agent", "skills");
-  const skillDir = path.join(skillsRoot, "gmail-search");
-  await chmod(path.join(skillDir, "references"), 0o755).catch(() => undefined);
-  await chmod(skillDir, 0o755).catch(() => undefined);
-  await chmod(skillsRoot, 0o755).catch(() => undefined);
+  await makeWritable(root);
   await rm(root, { recursive: true, force: true });
+}
+
+async function makeWritable(directory: string): Promise<void> {
+  const entries = readdirSync(directory, { withFileTypes: true });
+  for (const entry of entries) {
+    const child = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      await chmod(child, 0o755).catch(() => undefined);
+      await makeWritable(child);
+    } else {
+      await chmod(child, 0o644).catch(() => undefined);
+    }
+  }
+  await chmod(directory, 0o755).catch(() => undefined);
 }

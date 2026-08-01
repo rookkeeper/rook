@@ -104,6 +104,8 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
         skills: grouped.skills,
         mcpServers: grouped["mcp-servers"],
         apps: grouped.apps,
+        ...(grouped.facts.length > 0 ? { facts: grouped.facts } : {}),
+        ...(grouped["llms-txt"][0] ? { llmsTxt: firstArtifactText(grouped["llms-txt"][0]) } : {}),
         ...(typeof value.agents_md === "string" ? { agentsMd: value.agents_md } : {}),
         valid: Number(value.valid) === 1,
         errors: bundleErrors,
@@ -140,7 +142,7 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     const bundles: EnvironmentBundle[] = [];
     for (const row of rows) {
       const result = await this.getBundles(String((row as Record<string, unknown>).environment_id));
-      bundles.push(...result.bundles.filter((bundle) => bundle.bundleId.toLowerCase().includes(query.toLowerCase()) || bundle.skills.some((skill) => skill.id.toLowerCase().includes(query.toLowerCase())) || bundle.mcpServers.some((server) => server.id.toLowerCase().includes(query.toLowerCase())) || bundle.apps.some((app) => app.id.toLowerCase().includes(query.toLowerCase())) || bundle.agentsMd?.toLowerCase().includes(query.toLowerCase())));
+      bundles.push(...result.bundles.filter((bundle) => bundle.bundleId.toLowerCase().includes(query.toLowerCase()) || bundle.skills.some((skill) => skill.id.toLowerCase().includes(query.toLowerCase())) || bundle.mcpServers.some((server) => server.id.toLowerCase().includes(query.toLowerCase())) || bundle.apps.some((app) => app.id.toLowerCase().includes(query.toLowerCase())) || bundle.facts?.some((fact) => fact.id.toLowerCase().includes(query.toLowerCase())) || bundle.llmsTxt?.toLowerCase().includes(query.toLowerCase()) || bundle.agentsMd?.toLowerCase().includes(query.toLowerCase())));
     }
     return bundles;
   }
@@ -186,8 +188,11 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
       INSERT INTO environment_repository_revision_artifacts (revision_key, artifact_kind, artifact_id, files_json, source_path)
       VALUES (?, ?, ?, ?, ?)
     `);
-    for (const [kind, artifacts] of [["skills", bundle.skills], ["mcp-servers", bundle.mcpServers], ["apps", bundle.apps]] as const) {
+    for (const [kind, artifacts] of [["skills", bundle.skills], ["mcp-servers", bundle.mcpServers], ["apps", bundle.apps], ["facts", bundle.facts ?? []]] as const) {
       for (const artifact of artifacts) insert.run(revisionKey, kind, artifact.id, JSON.stringify(artifact.files), artifact.sourcePath ?? null);
+    }
+    if (bundle.llmsTxt !== undefined) {
+      insert.run(revisionKey, "llms-txt", "llms.txt", JSON.stringify({ "llms.txt": bundle.llmsTxt }), null);
     }
   }
 
@@ -227,7 +232,7 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     if (!bundlePath) return;
     await rm(bundlePath, { recursive: true, force: true });
     await mkdir(bundlePath, { recursive: true });
-    for (const [groupName, artifacts] of [["skills", bundle.skills], ["mcp-servers", bundle.mcpServers], ["apps", bundle.apps]] as const) {
+    for (const [groupName, artifacts] of [["skills", bundle.skills], ["mcp-servers", bundle.mcpServers], ["apps", bundle.apps], ["facts", bundle.facts ?? []]] as const) {
       for (const artifact of artifacts) {
         const groupPath = path.join(bundlePath, groupName);
         for (const [rawPath, content] of Object.entries(artifact.files)) {
@@ -242,6 +247,7 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
       }
     }
     if (bundle.agentsMd !== undefined) await writeFile(path.join(bundlePath, "AGENTS.md"), bundle.agentsMd, "utf8");
+    if (bundle.llmsTxt !== undefined) await writeFile(path.join(bundlePath, "llms.txt"), bundle.llmsTxt, "utf8");
   }
 } 
 
@@ -272,8 +278,8 @@ function environmentFromRow(row: unknown): EnvironmentRecord {
   };
 }
 
-function groupArtifacts(rows: unknown[]): Record<"skills" | "mcp-servers" | "apps", BundleArtifact[]> {
-  const grouped: Record<"skills" | "mcp-servers" | "apps", BundleArtifact[]> = { skills: [], "mcp-servers": [], apps: [] };
+function groupArtifacts(rows: unknown[]): Record<"skills" | "mcp-servers" | "apps" | "facts" | "llms-txt", BundleArtifact[]> {
+  const grouped: Record<"skills" | "mcp-servers" | "apps" | "facts" | "llms-txt", BundleArtifact[]> = { skills: [], "mcp-servers": [], apps: [], facts: [], "llms-txt": [] };
   for (const row of rows) {
     const value = row as Record<string, unknown>;
     const kind = String(value.artifact_kind) as keyof typeof grouped;
@@ -285,6 +291,10 @@ function groupArtifacts(rows: unknown[]): Record<"skills" | "mcp-servers" | "app
     });
   }
   return grouped;
+}
+
+function firstArtifactText(artifact: BundleArtifact): string {
+  return Object.values(artifact.files)[0] ?? "";
 }
 
 function parseJson<T>(value: unknown, fallback: T): T {

@@ -159,7 +159,7 @@ Immutable fetched content snapshots:
 
 ### `environment_repository_revision_artifacts`
 
-Capability artifact content belonging to one revision. Skills retain their complete nested file map; MCP and app artifacts use the same content representation for now.
+Capability artifact content belonging to one revision. Skills retain their complete nested file map; MCP, app, fact, and `llms.txt` artifacts use the same content representation for now.
 
 ## Current persistence interfaces
 

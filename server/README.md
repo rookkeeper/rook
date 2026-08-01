@@ -145,6 +145,7 @@ The materializer is intentionally a separate seam: it turns resolved bundle cont
 - `src/runtime/AgentWorkspaceMaterializer.ts` — bundle-to-working-directory projection
 - `src/environments/repositories/SQLiteEnvironmentRepository.ts` — SQLite repository
 - `src/environments/datastores/EnvironmentRepositoryDatastore.ts` — repository database connection/schema
+- `src/environments/repositories/ProjectDirectoryEnvironmentRepository.ts` — direct project-file capability source
 - `scripts/environment/import-directory.ts` — legacy directory importer
 - `src/agents/test-fixtures/mockAcpServer.mjs` — mock ACP runtime for testing
 

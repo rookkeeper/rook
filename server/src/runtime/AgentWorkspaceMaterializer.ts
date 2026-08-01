@@ -26,6 +26,7 @@ export interface AgentWorkspaceResult {
   skillsRoot: string;
   skillPaths: string[];
   skillMappings: AgentWorkspaceSkillMapping[];
+  mcpPaths: string[];
 }
 
 /**
@@ -42,38 +43,62 @@ export class AgentWorkspaceMaterializer {
 
     const skillPaths: string[] = [];
     const skillMappings: AgentWorkspaceSkillMapping[] = [];
+    const mcpPaths: string[] = [];
+    const inlineFacts: InlineFact[] = [];
     const seenSkillNames = new Set<string>();
+    const addSkill = async (entry: AgentWorkspaceBundle, skill: BundleArtifact): Promise<void> => {
+      if (seenSkillNames.has(skill.id)) {
+        throw new Error(`Multiple entered bundles provide the skill ${skill.id}; skill names must be unique in a runtime workspace.`);
+      }
+      seenSkillNames.add(skill.id);
+      const skillPath = path.join(skillsRoot, skill.id);
+      await writeArtifact(skillPath, skill, true);
+      if (!entry.editable) await makeReadOnly(skillPath);
+      skillPaths.push(skillPath);
+      skillMappings.push({
+        workspacePath: skillPath,
+        artifactId: skill.id,
+        sourcePath: skill.sourcePath,
+        writable: entry.editable,
+        ...(entry.writeBackSkill ? { writeBack: (files) => entry.writeBackSkill!(skill.id, files) } : {}),
+      });
+    };
+
     for (const entry of bundles) {
-      for (const skill of entry.bundle.skills) {
-        if (seenSkillNames.has(skill.id)) {
-          throw new Error(`Multiple entered bundles provide the skill ${skill.id}; skill names must be unique in a runtime workspace.`);
-        }
-        seenSkillNames.add(skill.id);
-        const skillPath = path.join(skillsRoot, skill.id);
-        await writeArtifact(skillPath, skill, true);
-        if (!entry.editable) await makeReadOnly(skillPath);
-        skillPaths.push(skillPath);
-        skillMappings.push({
-          workspacePath: skillPath,
-          artifactId: skill.id,
-          sourcePath: skill.sourcePath,
-          writable: entry.editable,
-          ...(entry.writeBackSkill ? { writeBack: (files) => entry.writeBackSkill!(skill.id, files) } : {}),
-        });
+      for (const skill of entry.bundle.skills) await addSkill(entry, skill);
+      for (const fact of entry.bundle.facts ?? []) {
+        const content = artifactText(fact);
+        if (content.length <= 4000) inlineFacts.push({ environmentName: entry.environmentName, bundleName: entry.bundleName, name: fact.id, content });
+        else await addSkill(entry, generatedReferenceSkill(`fact-${safeName(fact.id)}`, fact.id, content));
+      }
+      if (entry.bundle.llmsTxt !== undefined) {
+        await addSkill(entry, generatedReferenceSkill(`llms-${safeName(entry.bundleName)}`, "llms.txt", entry.bundle.llmsTxt));
+      }
+      for (const server of entry.bundle.mcpServers) {
+        const mcpPath = path.join(root, ".agent", "mcp-servers", safeName(server.id));
+        await writeArtifact(mcpPath, server, false);
+        if (!entry.editable) await makeReadOnly(mcpPath);
+        mcpPaths.push(mcpPath);
       }
     }
 
     const agentsPath = path.join(root, "AGENTS.md");
-    const agentsContent = renderAgentsFile(bundles);
+    const agentsContent = renderAgentsFile(bundles, inlineFacts);
     await writeFile(agentsPath, agentsContent, "utf8");
-    return { root, agentsPath, agentsContent, skillsRoot, skillPaths, skillMappings };
+    return { root, agentsPath, agentsContent, skillsRoot, skillPaths, skillMappings, mcpPaths };
   }
 
   /** Copies edits from writable, file-backed skill sources back to their source directories. */
   async syncWritableChanges(result: AgentWorkspaceResult): Promise<void> {
     for (const mapping of result.skillMappings) {
       if (!mapping.writable) continue;
-      const files = await readWorkspaceFiles(mapping.workspacePath, mapping.artifactId);
+      let files: Record<string, string>;
+      try {
+        files = await readWorkspaceFiles(mapping.workspacePath, mapping.artifactId);
+      } catch (error) {
+        if (isMissingPath(error)) continue;
+        throw error;
+      }
       const handled = mapping.writeBack ? await mapping.writeBack(files) : false;
       if (!handled && mapping.sourcePath) await copyDirectory(mapping.workspacePath, mapping.sourcePath);
     }
@@ -143,7 +168,31 @@ async function makeReadOnly(root: string): Promise<void> {
   // an agent that can execute arbitrary commands as the same OS user.
 }
 
-function renderAgentsFile(bundles: AgentWorkspaceBundle[]): string {
+interface InlineFact {
+  environmentName: string;
+  bundleName: string;
+  name: string;
+  content: string;
+}
+
+function artifactText(artifact: BundleArtifact): string {
+  return Object.values(artifact.files).join("\n\n");
+}
+
+function safeName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "reference";
+}
+
+function generatedReferenceSkill(id: string, sourceName: string, content: string): BundleArtifact {
+  return {
+    id,
+    files: {
+      [`${id}/SKILL.md`]: `---\nname: ${id}\ndescription: Reference material from ${sourceName}.\n---\n\n# ${sourceName}\n\n${content}`,
+    },
+  };
+}
+
+function renderAgentsFile(bundles: AgentWorkspaceBundle[], inlineFacts: InlineFact[]): string {
   const blocks = bundles.flatMap((entry) => {
     const content = entry.bundle.agentsMd?.trim();
     if (!content) return [];
@@ -163,8 +212,23 @@ ${indented}
 
   </environment>`];
   });
+  const factBlocks = inlineFacts.map((fact) => `  <environment name="${escapeMarkup(fact.environmentName)}">
 
-  return `# Rook environment context\n\n${blocks.join("\n\n")}\n`;
+    <bundle name="${escapeMarkup(fact.bundleName)}">
+
+      <facts name="${escapeMarkup(fact.name)}">
+${fact.content.split("\n").map((line) => `        ${line}`).join("\n")}
+      </facts>
+
+    </bundle>
+
+  </environment>`);
+
+  return `# Rook environment context\n\n${[...blocks, ...factBlocks].join("\n\n")}\n`;
+}
+
+function isMissingPath(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "ENOENT";
 }
 
 function escapeMarkup(value: string): string {

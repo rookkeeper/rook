@@ -23,6 +23,8 @@ The server is a Fastify service on `127.0.0.1:7665` with an optional second remo
   - resolves environment bundles from repo-backed repositories and canonical content hashes
 - `environments/repositories/SQLiteEnvironmentRepository`
   - stores canonical and personal bundle content/revisions in separate SQLite repositories
+- `environments/repositories/ProjectDirectoryEnvironmentRepository`
+  - reads project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files in place
 - `runtime/AgentWorkspaceMaterializer`
   - projects approved bundle content into per-session capability workspaces and synchronizes writable file-backed skills
 - `sessions/datastores/SqliteSessionRepository`
@@ -203,5 +205,7 @@ Related tables:
 - `session/load` replay is requester-private; it no longer fans out to every watcher of that session
 - the server owns a durable normalized transcript for each session so additional viewers can hydrate without runtime replay
 - environment state is session-specific at runtime launch time
+- approved bundle content is materialized into per-session capability workspaces
 - durable decisions, transcript history, and session membership are SQLite-backed
+- canonical and personal environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
 - location identification is provider-pluggable behind `PoiLookupProvider`

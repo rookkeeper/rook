@@ -50,7 +50,7 @@ export class EnvironmentRepositoryDatastore {
 
       CREATE TABLE IF NOT EXISTS environment_repository_revision_artifacts (
         revision_key TEXT NOT NULL REFERENCES environment_repository_bundle_revisions(revision_key) ON DELETE CASCADE,
-        artifact_kind TEXT NOT NULL CHECK (artifact_kind IN ('skills', 'mcp-servers', 'apps')),
+        artifact_kind TEXT NOT NULL CHECK (artifact_kind IN ('skills', 'mcp-servers', 'apps', 'facts', 'llms-txt')),
         artifact_id TEXT NOT NULL,
         files_json TEXT NOT NULL,
         source_path TEXT,

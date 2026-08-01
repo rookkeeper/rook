@@ -129,6 +129,22 @@ describe("DirectoryEnvironmentRepository", () => {
     expect(result.bundles[0]?.valid).toBe(true);
   });
 
+  it("reads facts and llms.txt as capability content", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rook-env-repo-"));
+    tempDirs.push(root);
+    const bundleDir = path.join(root, "web", "example.com", ".bundles", "context");
+    await mkdir(path.join(bundleDir, "facts", "timezone"), { recursive: true });
+    await writeFile(path.join(bundleDir, "facts", "timezone", "fact.txt"), "Eastern Time");
+    await writeFile(path.join(bundleDir, "llms.txt"), "# Documentation\n\nUse the official docs.");
+
+    const repo = new DirectoryEnvironmentRepository(root);
+    const result = await repo.getBundles("web:example.com");
+
+    expect(result.bundles[0]?.facts?.map((fact) => fact.id)).toEqual(["timezone"]);
+    expect(result.bundles[0]?.llmsTxt).toContain("Use the official docs.");
+    expect(result.bundles[0]?.valid).toBe(true);
+  });
+
   it("supports symlinked skill directories", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "rook-env-repo-"));
     tempDirs.push(root);

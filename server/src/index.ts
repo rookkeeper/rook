@@ -9,6 +9,7 @@ import { EnvironmentDecisionStore } from "./environments/datastores/EnvironmentD
 import { EnvironmentManager } from "./environments/services/EnvironmentManager.js";
 import { CompositeEnvironmentRepository } from "./environments/repositories/CompositeEnvironmentRepository.js";
 import { SQLiteEnvironmentRepository } from "./environments/repositories/SQLiteEnvironmentRepository.js";
+import { ProjectDirectoryEnvironmentRepository } from "./environments/repositories/ProjectDirectoryEnvironmentRepository.js";
 import { LocationContextRepository } from "./environments/repositories/LocationContextRepository.js";
 import { EnvironmentRepositoryService } from "./environments/services/EnvironmentRepositoryService.js";
 import { JsonlEnvironmentMetadataCaptureSink } from "./environments/services/environmentMetadataCapture.js";
@@ -98,6 +99,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   const environmentRepository = new CompositeEnvironmentRepository([
     canonicalEnvironmentRepository,
     personalEnvironmentRepository,
+    new ProjectDirectoryEnvironmentRepository(),
     locationContextRepository,
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);

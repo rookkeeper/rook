@@ -45,6 +45,10 @@ export interface EnvironmentBundle {
   skills: BundleArtifact[];
   mcpServers: BundleArtifact[];
   apps: BundleArtifact[];
+  /** Small arbitrary facts/references that may be injected as instructions or skills. */
+  facts?: BundleArtifact[];
+  /** Fetched llms.txt content when the bundle provides it. */
+  llmsTxt?: string;
   /** Raw content of AGENTS.md at the bundle root, when present. */
   agentsMd?: string;
   valid: boolean;

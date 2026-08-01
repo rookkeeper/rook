@@ -10,7 +10,7 @@ import type {
 } from "../../shared/environmentRepository.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
-const RECOGNIZED_CONTENT_DIRS = ["skills", "mcp-servers", "apps"] as const;
+const RECOGNIZED_CONTENT_DIRS = ["skills", "mcp-servers", "apps", "facts"] as const;
 type RecognizedContentDir = typeof RECOGNIZED_CONTENT_DIRS[number];
 
 export class DirectoryEnvironmentRepository extends EnvironmentRepository {
@@ -122,6 +122,7 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
     for (const entry of unknownEntries) {
       if (entry.name === ".manifest") continue;
       if (entry.name === "AGENTS.md") continue;
+      if (entry.name === "llms.txt") continue;
       errors.push({
         code: "invalid_bundle_directory",
         message: `Unrecognized bundle entry ${entry.name}`,
@@ -138,8 +139,9 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
       if (artifacts.length > 0) groups.set(groupName, artifacts);
     }
 
-    // AGENTS.md is a flat file at the bundle root (not a directory of artifacts).
+    // AGENTS.md and llms.txt are flat files at the bundle root.
     let agentsMd: string | undefined;
+    let llmsTxt: string | undefined;
     if (existsSync(path.join(bundleDir, "AGENTS.md"))) {
       try {
         agentsMd = await readFile(path.join(bundleDir, "AGENTS.md"), "utf8");
@@ -154,8 +156,22 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
         });
       }
     }
+    if (existsSync(path.join(bundleDir, "llms.txt"))) {
+      try {
+        llmsTxt = await readFile(path.join(bundleDir, "llms.txt"), "utf8");
+      } catch {
+        errors.push({
+          code: "unreadable_path",
+          message: `Could not read llms.txt in bundle ${bundleId}`,
+          repository: this.repositoryId,
+          environmentId,
+          bundleId,
+          path: path.join(bundleDir, "llms.txt"),
+        });
+      }
+    }
 
-    const hasRecognizedContent = groups.size > 0 || Boolean(agentsMd?.trim());
+    const hasRecognizedContent = groups.size > 0 || Boolean(agentsMd?.trim()) || Boolean(llmsTxt?.trim());
     const bundle: EnvironmentBundle = {
       id: `${environmentId}#${bundleId}`,
       bundleId,
@@ -165,6 +181,8 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
       skills: groups.get("skills") ?? [],
       mcpServers: groups.get("mcp-servers") ?? [],
       apps: groups.get("apps") ?? [],
+      facts: groups.get("facts") ?? [],
+      ...(llmsTxt !== undefined ? { llmsTxt } : {}),
       agentsMd,
       valid: errors.length === 0 && hasRecognizedContent,
       errors,
@@ -173,7 +191,7 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
     if (!hasRecognizedContent) {
       bundle.errors.push({
         code: "invalid_bundle_contents",
-        message: `Bundle ${bundleId} has no recognized content directories or AGENTS.md`,
+        message: `Bundle ${bundleId} has no recognized content directories, AGENTS.md, or llms.txt`,
         repository: this.repositoryId,
         environmentId,
         bundleId,
@@ -195,6 +213,7 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
       skills: [],
       mcpServers: [],
       apps: [],
+      facts: [],
       valid: false,
       errors: errors.length > 0 ? errors : [{
         code: "invalid_bundle_directory",

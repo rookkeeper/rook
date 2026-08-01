@@ -9,6 +9,7 @@ export function hashEnvironmentBundle(bundle: EnvironmentBundle): string {
     ["skills", bundle.skills],
     ["mcp-servers", bundle.mcpServers],
     ["apps", bundle.apps],
+    ["facts", bundle.facts ?? []],
   ] as const) {
     hash.update(`${groupName}\u0000`);
     for (const artifact of [...artifacts].sort((a, b) => a.id.localeCompare(b.id))) {
@@ -19,5 +20,6 @@ export function hashEnvironmentBundle(bundle: EnvironmentBundle): string {
     }
   }
   hash.update(`agents-md\u0000${bundle.agentsMd ?? ""}\u0000`);
+  hash.update(`llms-txt\u0000${bundle.llmsTxt ?? ""}\u0000`);
   return hash.digest("hex");
 }
