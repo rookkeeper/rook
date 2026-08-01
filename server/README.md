@@ -122,7 +122,7 @@ On environment change, only the affected session's runtime is restarted — the 
 
 ### Environment system
 
-The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The current live server still uses the directory-backed repository by default. Set `ROOK_ENVIRONMENT_REPOSITORY_DB` (or pass `environmentRepositoryDatabase` in tests) to opt into the SQLite-backed repository with a compatibility filesystem projection. Environment-driven runtime restarts now materialize approved bundle skills into per-session capability workspaces; the real ACP integration test and startup/restart reinjection policy remain future checkpoints. The directory-to-SQLite migration tool is available as:
+The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The current live server still uses the directory-backed repository by default. Set `ROOK_ENVIRONMENT_REPOSITORY_DB` (and optionally `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB`; tests can pass the corresponding options) to opt into canonical plus personal SQLite repositories with compatibility filesystem projections. Environment-driven runtime restarts now materialize approved bundle skills into per-session capability workspaces; the real ACP integration test and startup/restart reinjection policy remain future checkpoints. The directory-to-SQLite migration tool is available as:
 
 ```bash
 npm run environment:import-directory -- <source-root> <database-path> [repository-id]

@@ -9,6 +9,7 @@ import type {
   RepositoryReadError,
 } from "../../shared/environmentRepository.js";
 import { EnvironmentRepositoryDatastore } from "../datastores/EnvironmentRepositoryDatastore.js";
+import { hashEnvironmentBundle } from "../../shared/environmentBundleHash.js";
 import { DirectoryEnvironmentRepository } from "./DirectoryEnvironmentRepository.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
@@ -65,9 +66,11 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     `).get(environmentId);
     const environment = environmentRow ? environmentFromRow(environmentRow) : defaultEnvironmentRecord(environmentId);
     const bundleRows = this.db.prepare(`
-      SELECT bundle_key, bundle_id, environment_id, repository_id, valid, agents_md, source_bundle_path, errors_json
-      FROM environment_repository_bundles
-      WHERE repository_id = ? AND environment_id = ?
+      SELECT b.bundle_key, b.bundle_id, b.environment_id, b.repository_id, b.valid, b.agents_md, b.source_bundle_path, b.errors_json,
+             b.current_revision_key, r.content_hash, r.publisher_version, r.fetched_at, r.source_locator, r.provenance_json
+      FROM environment_repository_bundles b
+      LEFT JOIN environment_repository_bundle_revisions r ON r.revision_key = b.current_revision_key
+      WHERE b.repository_id = ? AND b.environment_id = ?
       ORDER BY bundle_id
     `).all(this.repositoryId, environmentId);
 
@@ -76,11 +79,12 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     for (const row of bundleRows) {
       const value = row as Record<string, unknown>;
       const bundleKey = String(value.bundle_key);
-      const artifacts = this.db.prepare(`
+      const revisionKey = typeof value.current_revision_key === "string" ? value.current_revision_key : undefined;
+      const artifacts = revisionKey ? this.db.prepare(`
         SELECT artifact_kind, artifact_id, files_json, source_path
-        FROM environment_repository_artifacts WHERE bundle_key = ?
+        FROM environment_repository_revision_artifacts WHERE revision_key = ?
         ORDER BY artifact_kind, artifact_id
-      `).all(bundleKey);
+      `).all(revisionKey) : [];
       const grouped = groupArtifacts(artifacts);
       const bundleErrors = parseJson<RepositoryReadError[]>(value.errors_json, []);
       const bundle: EnvironmentBundle = {
@@ -88,6 +92,15 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
         bundleId: String(value.bundle_id),
         environmentId,
         repository: String(value.repository_id),
+        ...(typeof value.content_hash === "string" ? {
+          revision: {
+            contentHash: value.content_hash,
+            ...(typeof value.publisher_version === "string" ? { publisherVersion: value.publisher_version } : {}),
+            ...(typeof value.fetched_at === "string" ? { fetchedAt: value.fetched_at } : {}),
+            ...(typeof value.source_locator === "string" ? { sourceLocator: value.source_locator } : {}),
+            provenance: parseJson<Record<string, unknown>>(value.provenance_json, {}),
+          },
+        } : {}),
         skills: grouped.skills,
         mcpServers: grouped["mcp-servers"],
         apps: grouped.apps,
@@ -118,7 +131,8 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     const rows = this.db.prepare(`
       SELECT DISTINCT b.environment_id
       FROM environment_repository_bundles b
-      LEFT JOIN environment_repository_artifacts a ON a.bundle_key = b.bundle_key
+      LEFT JOIN environment_repository_bundle_revisions r ON r.revision_key = b.current_revision_key
+      LEFT JOIN environment_repository_revision_artifacts a ON a.revision_key = r.revision_key
       WHERE b.repository_id = ?
         AND (lower(b.bundle_id) LIKE ? OR lower(coalesce(b.agents_md, '')) LIKE ? OR lower(a.artifact_id) LIKE ?)
       ORDER BY b.environment_id
@@ -155,19 +169,38 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
 
   saveBundle(bundle: EnvironmentBundle): void {
     const bundleKey = this.bundleKey(bundle.environmentId, bundle.bundleId);
+    const contentHash = hashEnvironmentBundle(bundle);
+    const revisionKey = `${bundleKey}\n${contentHash}`;
     this.db.prepare(`
-      INSERT INTO environment_repository_bundles (bundle_key, repository_id, environment_id, bundle_id, valid, agents_md, source_bundle_path, errors_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(bundle_key) DO UPDATE SET valid = excluded.valid, agents_md = excluded.agents_md, source_bundle_path = excluded.source_bundle_path, errors_json = excluded.errors_json
-    `).run(bundleKey, this.repositoryId, bundle.environmentId, bundle.bundleId, bundle.valid ? 1 : 0, bundle.agentsMd ?? null, bundle.bundlePath ?? null, JSON.stringify(bundle.errors));
-    this.db.prepare("DELETE FROM environment_repository_artifacts WHERE bundle_key = ?").run(bundleKey);
+      INSERT INTO environment_repository_bundles (bundle_key, repository_id, environment_id, bundle_id, valid, agents_md, source_bundle_path, errors_json, current_revision_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(bundle_key) DO UPDATE SET valid = excluded.valid, agents_md = excluded.agents_md, source_bundle_path = excluded.source_bundle_path, errors_json = excluded.errors_json, current_revision_key = excluded.current_revision_key
+    `).run(bundleKey, this.repositoryId, bundle.environmentId, bundle.bundleId, bundle.valid ? 1 : 0, bundle.agentsMd ?? null, bundle.bundlePath ?? null, JSON.stringify(bundle.errors), revisionKey);
+    this.db.prepare(`
+      INSERT INTO environment_repository_bundle_revisions (revision_key, bundle_key, content_hash, publisher_version, fetched_at, source_locator, provenance_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(revision_key) DO UPDATE SET fetched_at = excluded.fetched_at, source_locator = excluded.source_locator, provenance_json = excluded.provenance_json
+    `).run(revisionKey, bundleKey, contentHash, bundle.revision?.publisherVersion ?? null, bundle.revision?.fetchedAt ?? new Date().toISOString(), bundle.revision?.sourceLocator ?? bundle.bundlePath ?? null, JSON.stringify(bundle.revision?.provenance ?? {}));
+    this.db.prepare("DELETE FROM environment_repository_revision_artifacts WHERE revision_key = ?").run(revisionKey);
     const insert = this.db.prepare(`
-      INSERT INTO environment_repository_artifacts (bundle_key, artifact_kind, artifact_id, files_json, source_path)
+      INSERT INTO environment_repository_revision_artifacts (revision_key, artifact_kind, artifact_id, files_json, source_path)
       VALUES (?, ?, ?, ?, ?)
     `);
     for (const [kind, artifacts] of [["skills", bundle.skills], ["mcp-servers", bundle.mcpServers], ["apps", bundle.apps]] as const) {
-      for (const artifact of artifacts) insert.run(bundleKey, kind, artifact.id, JSON.stringify(artifact.files), artifact.sourcePath ?? null);
+      for (const artifact of artifacts) insert.run(revisionKey, kind, artifact.id, JSON.stringify(artifact.files), artifact.sourcePath ?? null);
     }
+  }
+
+  async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
+    const result = await this.getBundles(environmentId);
+    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
+    if (!bundle) throw new Error(`Unknown bundle ${environmentId}#${bundleId}`);
+    const artifacts = kind === "skills" ? bundle.skills : kind === "mcp-servers" ? bundle.mcpServers : bundle.apps;
+    const artifact = artifacts.find((candidate) => candidate.id === artifactId);
+    if (!artifact) throw new Error(`Unknown ${kind} artifact ${artifactId}`);
+    artifact.files = files;
+    this.saveBundle(bundle);
+    return true;
   }
 
   async importDirectory(root: string): Promise<number> {

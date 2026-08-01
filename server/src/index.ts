@@ -54,6 +54,8 @@ export interface BuildServerOptions {
   authToken?: string;
   /** Optional canonical environment repository database. Directory storage remains the default until cutover. */
   environmentRepositoryDatabase?: string;
+  /** Optional user-local environment repository database used with the canonical database. */
+  personalEnvironmentRepositoryDatabase?: string;
   /** Test hook: observe registered routes. */
   onRoute?: (route: { method: string | readonly string[]; url: string; websocket?: boolean }) => void;
 }
@@ -75,15 +77,21 @@ export async function buildServer(options: BuildServerOptions = {}) {
   // Programmatic repo for the synthesized location-context bundle (no extraSkillPaths).
   const locationContextRepository = new LocationContextRepository();
   const environmentRepositoryDatabase = options.environmentRepositoryDatabase ?? process.env.ROOK_ENVIRONMENT_REPOSITORY_DB;
-  const sqliteEnvironmentRepository = environmentRepositoryDatabase
-    ? new SQLiteEnvironmentRepository(
-        environmentRepositoryDatabase,
-        "canonical",
-        { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "canonical") },
-      )
-    : null;
+  const personalEnvironmentRepositoryDatabase = options.personalEnvironmentRepositoryDatabase ?? process.env.ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB;
+  const sqliteEnvironmentRepositories = environmentRepositoryDatabase ? [
+    new SQLiteEnvironmentRepository(
+      environmentRepositoryDatabase,
+      "canonical",
+      { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "canonical") },
+    ),
+    new SQLiteEnvironmentRepository(
+      personalEnvironmentRepositoryDatabase ?? path.join(os.homedir(), ".rook", "environment-repository.db"),
+      "personal",
+      { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "personal") },
+    ),
+  ] : [];
   const environmentRepository = new CompositeEnvironmentRepository([
-    ...(sqliteEnvironmentRepository ? [sqliteEnvironmentRepository] : [
+    ...(sqliteEnvironmentRepositories.length > 0 ? sqliteEnvironmentRepositories : [
       new DirectoryEnvironmentRepository(path.join(REPO_ROOT, "environment-repository")),
       new DirectoryEnvironmentRepository(path.join(os.homedir(), ".rook", "environment-repository")),
     ]),
@@ -123,7 +131,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   app.addHook("onClose", async () => {
     environmentManager.close();
     await runtimeManager.close();
-    sqliteEnvironmentRepository?.close();
+    for (const repository of sqliteEnvironmentRepositories) repository.close();
     datastore.close();
   });
 

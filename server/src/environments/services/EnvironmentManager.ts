@@ -389,6 +389,7 @@ export class EnvironmentManager {
           environmentName: deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info),
           bundleName: bundle.bundleId === "default" || bundle.bundleId === "personal" ? "Personal capabilities" : "Environment capabilities",
           editable: bundle.bundleId === "personal",
+          writeBackSkill: (skillId, files) => this.repositoryService.replaceArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files),
           bundle,
         });
       }

@@ -8,12 +8,15 @@ export interface AgentWorkspaceBundle {
   bundleName: string;
   editable: boolean;
   bundle: EnvironmentBundle;
+  writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
 }
 
 export interface AgentWorkspaceSkillMapping {
   workspacePath: string;
+  artifactId: string;
   sourcePath?: string;
   writable: boolean;
+  writeBack?: (files: Record<string, string>) => Promise<boolean>;
 }
 
 export interface AgentWorkspaceResult {
@@ -50,7 +53,13 @@ export class AgentWorkspaceMaterializer {
         await writeArtifact(skillPath, skill, true);
         if (!entry.editable) await makeReadOnly(skillPath);
         skillPaths.push(skillPath);
-        skillMappings.push({ workspacePath: skillPath, sourcePath: skill.sourcePath, writable: entry.editable });
+        skillMappings.push({
+          workspacePath: skillPath,
+          artifactId: skill.id,
+          sourcePath: skill.sourcePath,
+          writable: entry.editable,
+          ...(entry.writeBackSkill ? { writeBack: (files) => entry.writeBackSkill!(skill.id, files) } : {}),
+        });
       }
     }
 
@@ -63,10 +72,26 @@ export class AgentWorkspaceMaterializer {
   /** Copies edits from writable, file-backed skill sources back to their source directories. */
   async syncWritableChanges(result: AgentWorkspaceResult): Promise<void> {
     for (const mapping of result.skillMappings) {
-      if (!mapping.writable || !mapping.sourcePath) continue;
-      await copyDirectory(mapping.workspacePath, mapping.sourcePath);
+      if (!mapping.writable) continue;
+      const files = await readWorkspaceFiles(mapping.workspacePath, mapping.artifactId);
+      const handled = mapping.writeBack ? await mapping.writeBack(files) : false;
+      if (!handled && mapping.sourcePath) await copyDirectory(mapping.workspacePath, mapping.sourcePath);
     }
   }
+}
+
+async function readWorkspaceFiles(root: string, artifactId: string): Promise<Record<string, string>> {
+  const files: Record<string, string> = {};
+  async function walk(directory: string, prefix: string): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const child = path.join(directory, entry.name);
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) await walk(child, relative);
+      else if (entry.isFile()) files[`${artifactId}/${relative}`] = await readFile(child, "utf8");
+    }
+  }
+  await walk(root, "");
+  return files;
 }
 
 async function copyDirectory(sourceRoot: string, targetRoot: string): Promise<void> {

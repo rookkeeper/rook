@@ -12,4 +12,9 @@ export abstract class EnvironmentRepository {
   async searchBundles(_query: string): Promise<EnvironmentBundle[]> {
     return [];
   }
+
+  /** Optional write API for user-owned database-backed artifacts. */
+  async replaceArtifactFiles(_environmentId: string, _bundleId: string, _kind: "skills" | "mcp-servers" | "apps", _artifactId: string, _files: Record<string, string>): Promise<boolean> {
+    return false;
+  }
 }

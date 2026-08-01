@@ -1,8 +1,10 @@
-import crypto from "node:crypto";
 import path from "node:path";
 import type { EnvironmentBundleResult, EnvironmentBundle } from "../../shared/environmentRepository.js";
 import type { EnvironmentPreview } from "../../shared/environment.js";
 import { EnvironmentRepository } from "../repositories/EnvironmentRepository.js";
+import { hashEnvironmentBundle } from "../../shared/environmentBundleHash.js";
+
+export { hashEnvironmentBundle } from "../../shared/environmentBundleHash.js";
 
 export interface ResolvedEnvironmentBundle {
   bundle: EnvironmentBundle;
@@ -22,6 +24,10 @@ export class EnvironmentRepositoryService {
 
   async searchBundles(query: string): Promise<EnvironmentBundle[]> {
     return this.repository.searchBundles(query);
+  }
+
+  async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
+    return this.repository.replaceArtifactFiles(environmentId, bundleId, kind, artifactId, files);
   }
 
   async getResolvedBundles(environmentId: string): Promise<ResolvedEnvironmentBundle[]> {
@@ -57,6 +63,7 @@ export class EnvironmentRepositoryService {
         bundleId: bundle.bundleId,
         environmentId: bundle.environmentId,
         repository: bundle.repository,
+        revision: bundle.revision,
         valid: bundle.valid,
         bundleHash: hashEnvironmentBundle(bundle),
         skills: bundle.skills,
@@ -79,27 +86,3 @@ function unique(values: string[]): string[] {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
-/**
- * Hashes canonical bundle content, not its storage path. This keeps approval
- * stable when the same bundle moves between repository backends or is
- * materialized into a different working directory.
- */
-export function hashEnvironmentBundle(bundle: EnvironmentBundle): string {
-  const hash = crypto.createHash("sha256");
-  hash.update("rook-environment-bundle-content-v3\n");
-  for (const [groupName, artifacts] of [
-    ["skills", bundle.skills],
-    ["mcp-servers", bundle.mcpServers],
-    ["apps", bundle.apps],
-  ] as const) {
-    hash.update(`${groupName}\u0000`);
-    for (const artifact of [...artifacts].sort((a, b) => a.id.localeCompare(b.id))) {
-      hash.update(`${artifact.id}\u0000`);
-      for (const filePath of Object.keys(artifact.files).sort((a, b) => a.localeCompare(b))) {
-        hash.update(`${filePath}\u0000${artifact.files[filePath]}\u0000`);
-      }
-    }
-  }
-  hash.update(`agents-md\u0000${bundle.agentsMd ?? ""}\u0000`);
-  return hash.digest("hex");
-}

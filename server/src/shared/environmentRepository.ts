@@ -25,11 +25,21 @@ export interface BundleArtifact {
   sourcePath?: string;
 }
 
+export interface EnvironmentBundleRevision {
+  contentHash: string;
+  publisherVersion?: string;
+  fetchedAt?: string;
+  sourceLocator?: string;
+  provenance?: Record<string, unknown>;
+}
+
 export interface EnvironmentBundle {
   id: string;
   bundleId: string;
   environmentId: string;
   repository: string;
+  /** Current immutable content revision when supplied by a repository backend. */
+  revision?: EnvironmentBundleRevision;
   /** Path to the bundle directory/root when one exists on disk (or an equivalent synthesized bundle root). */
   bundlePath?: string;
   skills: BundleArtifact[];

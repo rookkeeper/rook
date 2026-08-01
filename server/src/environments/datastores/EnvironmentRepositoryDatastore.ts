@@ -29,20 +29,42 @@ export class EnvironmentRepositoryDatastore {
         agents_md TEXT,
         source_bundle_path TEXT,
         errors_json TEXT NOT NULL DEFAULT '[]',
+        current_revision_key TEXT,
         UNIQUE(repository_id, environment_id, bundle_id)
       );
       CREATE INDEX IF NOT EXISTS environment_repository_bundles_environment_idx
         ON environment_repository_bundles(environment_id);
 
-      CREATE TABLE IF NOT EXISTS environment_repository_artifacts (
+      CREATE TABLE IF NOT EXISTS environment_repository_bundle_revisions (
+        revision_key TEXT PRIMARY KEY,
         bundle_key TEXT NOT NULL REFERENCES environment_repository_bundles(bundle_key) ON DELETE CASCADE,
+        content_hash TEXT NOT NULL,
+        publisher_version TEXT,
+        fetched_at TEXT NOT NULL,
+        source_locator TEXT,
+        provenance_json TEXT NOT NULL DEFAULT '{}',
+        UNIQUE(bundle_key, content_hash)
+      );
+      CREATE INDEX IF NOT EXISTS environment_repository_revisions_bundle_idx
+        ON environment_repository_bundle_revisions(bundle_key, fetched_at DESC);
+
+      CREATE TABLE IF NOT EXISTS environment_repository_revision_artifacts (
+        revision_key TEXT NOT NULL REFERENCES environment_repository_bundle_revisions(revision_key) ON DELETE CASCADE,
         artifact_kind TEXT NOT NULL CHECK (artifact_kind IN ('skills', 'mcp-servers', 'apps')),
         artifact_id TEXT NOT NULL,
         files_json TEXT NOT NULL,
         source_path TEXT,
-        PRIMARY KEY(bundle_key, artifact_kind, artifact_id)
+        PRIMARY KEY(revision_key, artifact_kind, artifact_id)
       );
     `);
+    // Databases created by the first prototype may lack this column. The old
+    // artifact table is intentionally left untouched until an explicit importer
+    // rewrites those databases into the revision-aware shape.
+    try {
+      this.db.exec("ALTER TABLE environment_repository_bundles ADD COLUMN current_revision_key TEXT");
+    } catch {
+      // Column already exists.
+    }
   }
 
   close(): void {

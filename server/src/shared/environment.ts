@@ -2,7 +2,7 @@ import type { EnvironmentBundle, BundleArtifact, RepositoryReadError } from "./e
 
 export interface BundleArtifactPreview extends BundleArtifact {}
 
-export interface EnvironmentBundlePreview extends Pick<EnvironmentBundle, "id" | "bundleId" | "environmentId" | "repository" | "valid" | "agentsMd"> {
+export interface EnvironmentBundlePreview extends Pick<EnvironmentBundle, "id" | "bundleId" | "environmentId" | "repository" | "revision" | "valid" | "agentsMd"> {
   bundleHash: string;
   skills: BundleArtifactPreview[];
   mcpServers: BundleArtifactPreview[];
