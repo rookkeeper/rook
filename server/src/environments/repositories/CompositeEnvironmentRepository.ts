@@ -19,8 +19,8 @@ export class CompositeEnvironmentRepository extends EnvironmentRepository {
     return uniqueBy(environments, (environment) => environment.id);
   }
 
-  async searchBundles(query: string): Promise<EnvironmentBundle[]> {
-    const bundles = (await Promise.all(this.repositories.map((repository) => repository.searchBundles(query)))).flat();
+  async searchBundles(query: string, repositoryId?: string): Promise<EnvironmentBundle[]> {
+    const bundles = (await Promise.all(this.repositories.map((repository) => repository.searchBundles(query, repositoryId)))).flat();
     return uniqueBy(bundles, (bundle) => `${bundle.repository}:${bundle.id}`);
   }
 }

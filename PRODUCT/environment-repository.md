@@ -10,8 +10,10 @@ It is intentionally broader than a skill repository.
 
 An environment may have one or more bundles, and a bundle may contain:
 - skills
-- MCP server configuration
+- MCP server configuration/content
 - app-related instructions / metadata
+- facts
+- `llms.txt` references
 - other environment-bound artifacts later
 
 ## Layered architecture
@@ -30,7 +32,7 @@ Current intent by layer:
 - **API / controllers** — optional for now; if present, exposes environment/bundle inspection to clients
 - **Service** — thin business-logic layer that looks up an environment and returns its bundles
 - **EnvironmentRepository** — repository abstraction for reading environments/bundles from one or more backing stores
-- **Storage** — filesystem today; other storage types later
+- **Storage** — SQLite is the live canonical/personal repository store; filesystem directories remain import and authoring sources where needed
 
 ## Repository model
 
@@ -38,17 +40,14 @@ We want a shared repository abstraction:
 - `EnvironmentRepository`
 
 First implementations:
-- `DirectoryEnvironmentRepository`
+- `SQLiteEnvironmentRepository`
+- `DirectoryEnvironmentRepository` (legacy import and compatible external source)
+- `ProjectDirectoryEnvironmentRepository` (project-owned authoring source)
 - `CompositeEnvironmentRepository`
 
-Initially we support two directory-backed repositories with the same layout:
-- canonical repo in this monorepo at `environment-repository/`
-- local user repo at `~/.rook/environment-repository/`
+The canonical repository is stored in `environment-repository.db`; the user-local/personal repository is stored separately under the Rook data directory. Directory bundles remain importable, and writable personal/project content is synchronized back to its source files.
 
-The monorepo repository is the canonical/shared bundle catalog.
-The `~/.rook/environment-repository/` repository is the user-local/personal one.
-
-At runtime these are presented as one logical union repository.
+At runtime these are presented as one logical union repository. SQLite revisions retain content hashes, fetch/source metadata, and provenance so approval applies to exact agent-visible content.
 
 ## Environment ids
 
@@ -129,6 +128,8 @@ Current first-pass content directories are:
 - `skills/`
 - `mcp-servers/`
 - `apps/`
+- `facts/` (large fact sets may be represented as pseudo-skills)
+- `llms.txt` (materialized as a generated reference skill)
 
 Examples:
 - `skills/<skill-name>/SKILL.md`
@@ -168,6 +169,10 @@ environment-repository/
 ├── location/
 └── web/
 ```
+
+## Database and authoring projections
+
+SQLite is the source of truth for published bundle content and immutable revisions. Runtime agents still receive file-backed projections: generated instructions, nested skills, and read-only external capability areas. Personal skills and instruction files remain writable and synchronize back to the personal database. Project-directory environments read existing project files without copying them into the repository.
 
 ## Other dot-paths
 

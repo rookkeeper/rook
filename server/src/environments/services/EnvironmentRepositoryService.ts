@@ -22,8 +22,8 @@ export class EnvironmentRepositoryService {
     return this.repository.listEnvironments();
   }
 
-  async searchBundles(query: string): Promise<EnvironmentBundle[]> {
-    return this.repository.searchBundles(query);
+  async searchBundles(query: string, repositoryId?: string): Promise<EnvironmentBundle[]> {
+    return this.repository.searchBundles(query, repositoryId);
   }
 
   async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
@@ -69,6 +69,8 @@ export class EnvironmentRepositoryService {
         skills: bundle.skills,
         mcpServers: bundle.mcpServers,
         apps: bundle.apps,
+        facts: bundle.facts ?? [],
+        llmsTxt: bundle.llmsTxt,
         agentsMd: bundle.agentsMd,
         errors: bundle.errors,
       });

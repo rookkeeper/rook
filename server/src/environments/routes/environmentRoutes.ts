@@ -97,9 +97,10 @@ export async function registerEnvironmentRoutes(
     return { environments: await environmentManager.searchEnvironments(query) };
   });
 
-  app.get<{ Querystring: { query?: string } }>("/api/bundles/search", async (request) => {
+  app.get<{ Querystring: { query?: string; repository?: string } }>("/api/bundles/search", async (request) => {
     const query = typeof request.query.query === "string" ? request.query.query : "";
-    return { bundles: await environmentManager.searchBundles(query) };
+    const repositoryId = typeof request.query.repository === "string" ? request.query.repository.trim() || undefined : undefined;
+    return { bundles: await environmentManager.searchBundles(query, repositoryId) };
   });
 
   function parseIdentifyRequest(body: Record<string, unknown>): IdentifyAvailableRequest | null {

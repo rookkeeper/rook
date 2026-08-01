@@ -376,8 +376,8 @@ export class EnvironmentManager {
       .some((value) => value.toLowerCase().includes(normalized)));
   }
 
-  async searchBundles(query: string): Promise<EnvironmentBundle[]> {
-    return this.repositoryService.searchBundles(query);
+  async searchBundles(query: string, repositoryId?: string): Promise<EnvironmentBundle[]> {
+    return this.repositoryService.searchBundles(query, repositoryId);
   }
 
   /** Resolves the currently approved bundle content for runtime materialization. */

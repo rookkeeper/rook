@@ -217,6 +217,22 @@ public struct RepositoryReadError: Codable, Equatable, Identifiable {
     public var id: String { [code, repository, environmentId, bundleId ?? "", path ?? ""].joined(separator: "|") }
 }
 
+public struct EnvironmentRevisionPreview: Codable, Equatable {
+    public let contentHash: String
+    public let publisherVersion: String?
+    public let fetchedAt: String?
+    public let sourceLocator: String?
+    public let provenance: [String: JSONValue]
+
+    public init(contentHash: String, publisherVersion: String? = nil, fetchedAt: String? = nil, sourceLocator: String? = nil, provenance: [String: JSONValue] = [:]) {
+        self.contentHash = contentHash
+        self.publisherVersion = publisherVersion
+        self.fetchedAt = fetchedAt
+        self.sourceLocator = sourceLocator
+        self.provenance = provenance
+    }
+}
+
 public struct EnvironmentBundlePreview: Codable, Equatable, Identifiable {
     public let id: String
     public let bundleId: String
@@ -224,26 +240,32 @@ public struct EnvironmentBundlePreview: Codable, Equatable, Identifiable {
     public let repository: String
     public let valid: Bool
     public let bundleHash: String
+    public let revision: EnvironmentRevisionPreview?
     public let skills: [EnvironmentArtifactPreview]
     public let mcpServers: [EnvironmentArtifactPreview]
     public let apps: [EnvironmentArtifactPreview]
+    public let facts: [EnvironmentArtifactPreview]
+    public let llmsTxt: String?
     public let errors: [RepositoryReadError]
 
-    public init(id: String, bundleId: String, environmentId: String, repository: String, valid: Bool, bundleHash: String, skills: [EnvironmentArtifactPreview], mcpServers: [EnvironmentArtifactPreview], apps: [EnvironmentArtifactPreview], errors: [RepositoryReadError]) {
+    public init(id: String, bundleId: String, environmentId: String, repository: String, valid: Bool, bundleHash: String, skills: [EnvironmentArtifactPreview], mcpServers: [EnvironmentArtifactPreview], apps: [EnvironmentArtifactPreview], errors: [RepositoryReadError], revision: EnvironmentRevisionPreview? = nil, facts: [EnvironmentArtifactPreview] = [], llmsTxt: String? = nil) {
         self.id = id
         self.bundleId = bundleId
         self.environmentId = environmentId
         self.repository = repository
         self.valid = valid
         self.bundleHash = bundleHash
+        self.revision = revision
         self.skills = skills
         self.mcpServers = mcpServers
         self.apps = apps
+        self.facts = facts
+        self.llmsTxt = llmsTxt
         self.errors = errors
     }
 
     public var allArtifacts: [EnvironmentArtifactPreview] {
-        skills + mcpServers + apps
+        skills + mcpServers + apps + facts
     }
 
     public var allFilePaths: [String] {

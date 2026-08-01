@@ -27,7 +27,8 @@ export class DirectoryEnvironmentRepository extends EnvironmentRepository {
     return results.flatMap((result) => result.environment ? [result.environment] : []);
   }
 
-  async searchBundles(query: string): Promise<EnvironmentBundle[]> {
+  async searchBundles(query: string, repositoryId?: string): Promise<EnvironmentBundle[]> {
+    if (repositoryId && repositoryId !== this.repositoryId) return [];
     const normalizedQuery = query.trim().toLowerCase();
     const ids = await discoverEnvironmentIds(this.root);
     const results = await Promise.all(ids.map((environmentId) => this.getBundles(environmentId)));

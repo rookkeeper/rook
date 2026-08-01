@@ -9,7 +9,7 @@ export abstract class EnvironmentRepository {
   }
 
   /** Optional search API. Repositories may add it without changing bundle reads. */
-  async searchBundles(_query: string): Promise<EnvironmentBundle[]> {
+  async searchBundles(_query: string, _repositoryId?: string): Promise<EnvironmentBundle[]> {
     return [];
   }
 

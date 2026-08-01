@@ -4,19 +4,15 @@ When you're inside an environment, Rook can write skills, instructions, and tool
 
 ## Personal bundles
 
-Every environment has exactly one writable personal bundle at:
+Every environment has exactly one writable personal bundle in the personal SQLite repository. Rook may expose a compatibility filesystem projection for authoring, but the database is the source of truth.
 
-```text
-~/.rook/environment-repository/<kind>/<path>/.bundles/personal/
-```
-
-Inside the personal bundle you can write three kinds of assets:
+Inside the personal bundle you can write these assets:
 
 | Asset | Path |
 |---|---|
 | Skill | `.../.bundles/personal/skills/<skill-name>/SKILL.md` |
 | AGENTS.md | `.../.bundles/personal/AGENTS.md` |
-| MCP server | `.../.bundles/personal/mcp-servers/<server-name>/` |
+| MCP configuration/content | stored as a bundle artifact; runtime lifecycle is deferred |
 
 The personal bundle is created automatically when you enter an environment — no setup needed.
 
@@ -26,7 +22,7 @@ When you enter an environment, Rook's system message is extended with three sect
 
 **1. Rook identity prompt.** Explains what Rook is, how environments and bundles work, and that Rook can write into any entered environment's personal bundle.
 
-**2. Authoring instructions.** For each entered environment, Rook sees the exact paths where it can write skills, AGENTS.md, and MCP servers. It also sees what skills already exist.
+**2. Authoring instructions.** For each entered environment, Rook sees the exact projected paths where it can write personal skills and `AGENTS.md`, plus the existing capability files. Writable changes synchronize back to the personal repository; external/canonical projections are read-only.
 
 **3. Environment metadata.** Each entered environment dumps its metadata (display name, app name, observed paths/URLs, window title, latitude/longitude, etc.) so Rook has context for what you're doing.
 
@@ -40,7 +36,7 @@ Anyone can put an `AGENTS.md` at the root of a bundle directory:
 environment-repository/web/x.com/.bundles/using-x/AGENTS.md
 ```
 
-When a bundle is accepted, its `AGENTS.md` content is injected into Rook's system message under a "Environment instructions" section. This is additive across bundles — you can have instructions from the canonical repo, community bundles, and your personal bundle all at once.
+When a bundle is accepted, its `AGENTS.md` content is injected into Rook's system message under a "Environment instructions" section. This is additive across bundles — you can have instructions from the canonical repo and the personal bundle all at once. Approval is tied to the bundle's exact content hash.
 
 ## Over time
 

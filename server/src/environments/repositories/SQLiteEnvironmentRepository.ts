@@ -128,7 +128,8 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     `).all().map(environmentFromRow);
   }
 
-  async searchBundles(query: string): Promise<EnvironmentBundle[]> {
+  async searchBundles(query: string, repositoryId?: string): Promise<EnvironmentBundle[]> {
+    if (repositoryId && repositoryId !== this.repositoryId) return [];
     const term = `%${query.trim().toLowerCase()}%`;
     const rows = this.db.prepare(`
       SELECT DISTINCT b.environment_id

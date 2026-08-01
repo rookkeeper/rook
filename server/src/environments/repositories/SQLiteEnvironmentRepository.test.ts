@@ -117,6 +117,8 @@ describe("SQLiteEnvironmentRepository", () => {
 
     expect((await repository.listEnvironments()).map((environment) => environment.id)).toEqual(["web:example.com"]);
     expect((await repository.searchBundles("mail-search")).map((bundle) => bundle.bundleId)).toEqual(["mail"]);
+    expect((await repository.searchBundles("mail-search", "personal")).map((bundle) => bundle.bundleId)).toEqual([]);
+    expect((await repository.searchBundles("mail-search", "canonical")).map((bundle) => bundle.bundleId)).toEqual(["mail"]);
   });
 
   it("combines canonical and personal database repositories", async () => {
