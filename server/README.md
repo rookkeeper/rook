@@ -51,7 +51,7 @@ The server is organized **primarily by domain**:
 - `src/sessions/` — session routes, repository contract, SQLite session persistence, transcript storage/helpers
 - `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
 - `src/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
-  - `SQLiteEnvironmentRepository` and `EnvironmentRepositoryDatastore` are the experimental database-backed repository path
+  - `SQLiteEnvironmentRepository` and `EnvironmentRepositoryDatastore` are the live database-backed repository path
 - `src/runtime/AgentWorkspaceMaterializer.ts` — experimental session workspace projection for resolved bundle content
 - `src/location/` — location identification, POI providers, dwell logic, trace helpers, environment bridge helpers
 
@@ -122,7 +122,7 @@ On environment change, only the affected session's runtime is restarted — the 
 
 ### Environment system
 
-The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The current live server still uses the directory-backed repository by default. Set `ROOK_ENVIRONMENT_REPOSITORY_DB` (and optionally `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB`; tests can pass the corresponding options) to opt into canonical plus personal SQLite repositories with compatibility filesystem projections. Environment-driven runtime restarts now materialize approved bundle skills into per-session capability workspaces; the real ACP integration test and startup/restart reinjection policy remain future checkpoints. The directory-to-SQLite migration tool is available as:
+The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The live server now uses canonical and personal SQLite repositories by default, with compatibility filesystem projections for existing path-based runtime consumers. `ROOK_ENVIRONMENT_REPOSITORY_DB` and `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB` can override their locations. Environment-driven runtime restarts materialize approved bundle skills into per-session capability workspaces; startup/restart reinjection policy remains a future checkpoint. The directory-to-SQLite migration tool is available as:
 
 ```bash
 npm run environment:import-directory -- <source-root> <database-path> [repository-id]
@@ -143,8 +143,9 @@ The materializer is intentionally a separate seam: it turns resolved bundle cont
 - `src/sessions/datastores/SqliteSessionRepository.ts` — session persistence
 - `src/infrastructure/config/agentRuntimes.ts` — runtime config loader
 - `src/runtime/AgentWorkspaceMaterializer.ts` — bundle-to-working-directory projection
-- `src/environments/repositories/SQLiteEnvironmentRepository.ts` — experimental SQLite repository
-- `scripts/environment/import-directory.ts` — directory repository importer
+- `src/environments/repositories/SQLiteEnvironmentRepository.ts` — SQLite repository
+- `src/environments/datastores/EnvironmentRepositoryDatastore.ts` — repository database connection/schema
+- `scripts/environment/import-directory.ts` — legacy directory importer
 - `src/agents/test-fixtures/mockAcpServer.mjs` — mock ACP runtime for testing
 
 ## Tests

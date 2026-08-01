@@ -3,11 +3,11 @@ import fastify from "fastify";
 import websocket from "@fastify/websocket";
 import os from "node:os";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { EnvironmentDecisionStore } from "./environments/datastores/EnvironmentDecisionStore.js";
 import { EnvironmentManager } from "./environments/services/EnvironmentManager.js";
 import { CompositeEnvironmentRepository } from "./environments/repositories/CompositeEnvironmentRepository.js";
-import { DirectoryEnvironmentRepository } from "./environments/repositories/DirectoryEnvironmentRepository.js";
 import { SQLiteEnvironmentRepository } from "./environments/repositories/SQLiteEnvironmentRepository.js";
 import { LocationContextRepository } from "./environments/repositories/LocationContextRepository.js";
 import { EnvironmentRepositoryService } from "./environments/services/EnvironmentRepositoryService.js";
@@ -76,25 +76,28 @@ export async function buildServer(options: BuildServerOptions = {}) {
   });
   // Programmatic repo for the synthesized location-context bundle (no extraSkillPaths).
   const locationContextRepository = new LocationContextRepository();
-  const environmentRepositoryDatabase = options.environmentRepositoryDatabase ?? process.env.ROOK_ENVIRONMENT_REPOSITORY_DB;
-  const personalEnvironmentRepositoryDatabase = options.personalEnvironmentRepositoryDatabase ?? process.env.ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB;
-  const sqliteEnvironmentRepositories = environmentRepositoryDatabase ? [
-    new SQLiteEnvironmentRepository(
-      environmentRepositoryDatabase,
-      "canonical",
-      { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "canonical") },
-    ),
-    new SQLiteEnvironmentRepository(
-      personalEnvironmentRepositoryDatabase ?? path.join(os.homedir(), ".rook", "environment-repository.db"),
-      "personal",
-      { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "personal") },
-    ),
-  ] : [];
+  const environmentRepositoryDatabase = options.environmentRepositoryDatabase ?? process.env.ROOK_ENVIRONMENT_REPOSITORY_DB ?? path.join(REPO_ROOT, "environment-repository.db");
+  const personalEnvironmentRepositoryDatabase = options.personalEnvironmentRepositoryDatabase ?? process.env.ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB ?? path.join(os.homedir(), ".rook", "environment-repository.db");
+  const canonicalEnvironmentRepository = new SQLiteEnvironmentRepository(
+    environmentRepositoryDatabase,
+    "canonical",
+    { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "canonical") },
+  );
+  const personalEnvironmentRepository = new SQLiteEnvironmentRepository(
+    personalEnvironmentRepositoryDatabase,
+    "personal",
+    { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "personal") },
+  );
+  if ((await canonicalEnvironmentRepository.listEnvironments()).length === 0 && existsSync(path.join(REPO_ROOT, "environment-repository"))) {
+    await canonicalEnvironmentRepository.importDirectory(path.join(REPO_ROOT, "environment-repository"));
+  }
+  const legacyPersonalRoot = path.join(os.homedir(), ".rook", "environment-repository");
+  if ((await personalEnvironmentRepository.listEnvironments()).length === 0 && existsSync(legacyPersonalRoot)) {
+    await personalEnvironmentRepository.importDirectory(legacyPersonalRoot);
+  }
   const environmentRepository = new CompositeEnvironmentRepository([
-    ...(sqliteEnvironmentRepositories.length > 0 ? sqliteEnvironmentRepositories : [
-      new DirectoryEnvironmentRepository(path.join(REPO_ROOT, "environment-repository")),
-      new DirectoryEnvironmentRepository(path.join(os.homedir(), ".rook", "environment-repository")),
-    ]),
+    canonicalEnvironmentRepository,
+    personalEnvironmentRepository,
     locationContextRepository,
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
@@ -131,7 +134,8 @@ export async function buildServer(options: BuildServerOptions = {}) {
   app.addHook("onClose", async () => {
     environmentManager.close();
     await runtimeManager.close();
-    for (const repository of sqliteEnvironmentRepositories) repository.close();
+    canonicalEnvironmentRepository.close();
+    personalEnvironmentRepository.close();
     datastore.close();
   });
 

@@ -7,11 +7,11 @@ Run the server with SQLite as the normal repository, then verify registration, d
 ## TODO
 
 - [x] Add controlled opt-in SQLite server wiring.
-- [ ] Make SQLite the default live repository implementation.
-- [ ] Include canonical and personal repositories in the live logical view.
-- [ ] Keep the directory reader only as an explicit migration/import utility.
-- [ ] Verify environment discovery and bundle previews.
-- [ ] Verify accept/approve/ignore/reject behavior against canonical content hashes.
-- [ ] Verify runtime loading and personal authoring after cutover.
-- [ ] Remove obsolete live filesystem repository wiring.
-- [ ] Pause before deleting compatibility code.
+- [x] Make SQLite the default live repository implementation.
+- [x] Include canonical and personal repositories in the live logical view.
+- [x] Keep the directory reader behind the migration/import path rather than live repository wiring.
+- [x] Verify environment discovery and bundle previews.
+- [x] Verify accept/approve/ignore/reject behavior against canonical content hashes.
+- [x] Verify runtime loading and personal authoring after cutover.
+- [x] Remove obsolete live filesystem repository wiring from server bootstrap.
+- [x] Pause point reached: compatibility importer/projections remain intentionally for migration and path-based runtime consumers.

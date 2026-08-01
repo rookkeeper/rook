@@ -2,12 +2,17 @@
 
 ## Summary
 
-Rook's durable server-side state currently lives in one SQLite database, created by `server/src/infrastructure/datastores/RookDatastore.ts` at:
+Rook's durable server-side state is split across SQLite databases with different ownership:
 
-- `.var/rook/rook.sqlite` in normal local development
-- `:memory:` in tests when explicitly configured
+- the application database, created by `server/src/infrastructure/datastores/RookDatastore.ts`:
+  - `.var/rook/rook.sqlite` in normal local development
+  - `:memory:` in tests when explicitly configured
+- the canonical environment repository database:
+  - `environment-repository.db` in the repository by default
+- the personal environment repository database:
+  - `~/.rook/environment-repository.db` by default
 
-This database is intentionally small. Today it stores session persistence and durable environment decisions. Other environment state, runtime process state, subscriptions, and active/recent caches are still in memory.
+The application database stores sessions, transcripts, session-environment membership, and user decisions. Repository databases store environments, bundles, content revisions, and capability artifacts. Runtime process state, subscriptions, and active/recent environment caches remain in memory.
 
 ## Ownership and layering
 
@@ -24,10 +29,12 @@ Not every feature needs every layer:
 - pure in-memory services may stop at the service layer
 
 As built today:
-- `infrastructure/datastores/RookDatastore.ts` owns the shared SQLite connection
+- `infrastructure/datastores/RookDatastore.ts` owns the application SQLite connection
+- `environments/datastores/EnvironmentRepositoryDatastore.ts` owns one environment-repository SQLite connection
 - `sessions/datastores/SqliteSessionRepository.ts` owns session/session-environment SQL
-- `environments/datastores/EnvironmentDecisionStore.ts` owns durable environment-decision SQL
+- `environments/datastores/EnvironmentDecisionStore.ts` owns durable environment-decision SQL in the application database
 - `sessions/services/SessionTranscriptStore.ts` owns transcript-event SQL while remaining session-domain persistence code
+- `environments/repositories/SQLiteEnvironmentRepository.ts` owns repository content queries, revisions, imports, and artifact write-back
 
 ## Current tables
 
@@ -117,6 +124,42 @@ Used by:
 - `EnvironmentDecisionStore`
 - `EnvironmentManager`
 - environment offer resolution and durable approvals/rejections
+
+## Environment repository tables
+
+These tables live in each environment repository database, not in the application database.
+
+### `environment_repository_environments`
+
+Catalog of repository-known environments and their display metadata.
+
+### `environment_repository_bundles`
+
+Bundle identity and current revision pointer:
+
+- `bundle_key`
+- `repository_id`
+- `environment_id`
+- `bundle_id`
+- validity/errors
+- source bundle path/locator
+- `current_revision_key`
+
+### `environment_repository_bundle_revisions`
+
+Immutable fetched content snapshots:
+
+- `revision_key`
+- `bundle_key`
+- `content_hash`
+- optional publisher version
+- fetched timestamp
+- source locator
+- provenance metadata
+
+### `environment_repository_revision_artifacts`
+
+Capability artifact content belonging to one revision. Skills retain their complete nested file map; MCP and app artifacts use the same content representation for now.
 
 ## Current persistence interfaces
 

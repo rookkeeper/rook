@@ -20,7 +20,11 @@ The server is a Fastify service on `127.0.0.1:7665` with an optional second remo
 - `environments/services/EnvironmentManager`
   - tracks available environments, offers, approvals, active/recent state, and session subscriptions
 - `environments/services/EnvironmentRepositoryService`
-  - resolves environment bundles from repo-backed repositories
+  - resolves environment bundles from repo-backed repositories and canonical content hashes
+- `environments/repositories/SQLiteEnvironmentRepository`
+  - stores canonical and personal bundle content/revisions in separate SQLite repositories
+- `runtime/AgentWorkspaceMaterializer`
+  - projects approved bundle content into per-session capability workspaces and synchronizes writable file-backed skills
 - `sessions/datastores/SqliteSessionRepository`
   - persists sessions and session↔environment membership
 - `environments/datastores/EnvironmentDecisionStore`
@@ -97,11 +101,12 @@ See also: [database.md](./database.md)
 
 ## Persistence shape
 
-Current durable persistence is SQLite-backed and centered on:
-- session records
-- append-only normalized transcript events per session
-- session-environment membership
-- durable environment bundle decisions
+Current durable persistence is SQLite-backed and split between:
+
+- the application database: session records, append-only normalized transcript events, session-environment membership, and durable environment decisions
+- the environment repository databases: environments, bundles, immutable content revisions, and capability artifact files for canonical and personal repositories
+
+The legacy directory repository remains only as an explicit import path for migration and project-directory sources.
 
 The database details live in [database.md](./database.md).
 
