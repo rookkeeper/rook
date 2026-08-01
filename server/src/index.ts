@@ -8,6 +8,7 @@ import { EnvironmentDecisionStore } from "./environments/datastores/EnvironmentD
 import { EnvironmentManager } from "./environments/services/EnvironmentManager.js";
 import { CompositeEnvironmentRepository } from "./environments/repositories/CompositeEnvironmentRepository.js";
 import { DirectoryEnvironmentRepository } from "./environments/repositories/DirectoryEnvironmentRepository.js";
+import { SQLiteEnvironmentRepository } from "./environments/repositories/SQLiteEnvironmentRepository.js";
 import { LocationContextRepository } from "./environments/repositories/LocationContextRepository.js";
 import { EnvironmentRepositoryService } from "./environments/services/EnvironmentRepositoryService.js";
 import { JsonlEnvironmentMetadataCaptureSink } from "./environments/services/environmentMetadataCapture.js";
@@ -51,6 +52,8 @@ export interface BuildServerOptions {
   poiProvider?: PoiLookupProvider;
   /** Optional bearer token required by all HTTP + WebSocket requests. */
   authToken?: string;
+  /** Optional canonical environment repository database. Directory storage remains the default until cutover. */
+  environmentRepositoryDatabase?: string;
   /** Test hook: observe registered routes. */
   onRoute?: (route: { method: string | readonly string[]; url: string; websocket?: boolean }) => void;
 }
@@ -71,9 +74,19 @@ export async function buildServer(options: BuildServerOptions = {}) {
   });
   // Programmatic repo for the synthesized location-context bundle (no extraSkillPaths).
   const locationContextRepository = new LocationContextRepository();
+  const environmentRepositoryDatabase = options.environmentRepositoryDatabase ?? process.env.ROOK_ENVIRONMENT_REPOSITORY_DB;
+  const sqliteEnvironmentRepository = environmentRepositoryDatabase
+    ? new SQLiteEnvironmentRepository(
+        environmentRepositoryDatabase,
+        "canonical",
+        { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "canonical") },
+      )
+    : null;
   const environmentRepository = new CompositeEnvironmentRepository([
-    new DirectoryEnvironmentRepository(path.join(REPO_ROOT, "environment-repository")),
-    new DirectoryEnvironmentRepository(path.join(os.homedir(), ".rook", "environment-repository")),
+    ...(sqliteEnvironmentRepository ? [sqliteEnvironmentRepository] : [
+      new DirectoryEnvironmentRepository(path.join(REPO_ROOT, "environment-repository")),
+      new DirectoryEnvironmentRepository(path.join(os.homedir(), ".rook", "environment-repository")),
+    ]),
     locationContextRepository,
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
@@ -110,6 +123,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   app.addHook("onClose", async () => {
     environmentManager.close();
     await runtimeManager.close();
+    sqliteEnvironmentRepository?.close();
     datastore.close();
   });
 

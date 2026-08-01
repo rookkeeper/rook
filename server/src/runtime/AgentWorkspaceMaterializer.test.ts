@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { chmod, mkdtemp, readFile, stat, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, stat, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { AgentWorkspaceMaterializer } from "./AgentWorkspaceMaterializer.js";
@@ -46,6 +46,25 @@ describe("AgentWorkspaceMaterializer", () => {
       expect(agents).not.toContain("web:example.com");
     } finally {
       await cleanup(root);
+    }
+  });
+
+  it("writes edits from writable file-backed skills back to their source", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rook-agent-workspace-"));
+    const sourceRoot = await mkdtemp(path.join(os.tmpdir(), "rook-agent-source-"));
+    const sourceSkill = path.join(sourceRoot, "personal-skill");
+    await mkdir(sourceSkill, { recursive: true });
+    await writeFile(path.join(sourceSkill, "SKILL.md"), "old source", "utf8");
+    try {
+      const sourceBundle = bundle({ skills: [{ id: "personal-skill", sourcePath: sourceSkill, files: { "personal-skill/SKILL.md": "old source" } }] });
+      const materializer = new AgentWorkspaceMaterializer();
+      const result = await materializer.materialize(root, [{ environmentName: "Gmail", bundleName: "Personal", editable: true, bundle: sourceBundle }]);
+      await writeFile(path.join(root, ".agent", "skills", "personal-skill", "SKILL.md"), "new source", "utf8");
+      await materializer.syncWritableChanges(result);
+      expect(await readFile(path.join(sourceSkill, "SKILL.md"), "utf8")).toBe("new source");
+    } finally {
+      await cleanup(root);
+      await rm(sourceRoot, { recursive: true, force: true });
     }
   });
 

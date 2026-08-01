@@ -1,4 +1,4 @@
-import { chmod, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { EnvironmentBundle, BundleArtifact } from "../shared/environmentRepository.js";
 
@@ -10,11 +10,18 @@ export interface AgentWorkspaceBundle {
   bundle: EnvironmentBundle;
 }
 
+export interface AgentWorkspaceSkillMapping {
+  workspacePath: string;
+  sourcePath?: string;
+  writable: boolean;
+}
+
 export interface AgentWorkspaceResult {
   root: string;
   agentsPath: string;
   skillsRoot: string;
   skillPaths: string[];
+  skillMappings: AgentWorkspaceSkillMapping[];
 }
 
 /**
@@ -30,6 +37,7 @@ export class AgentWorkspaceMaterializer {
     await mkdir(skillsRoot, { recursive: true });
 
     const skillPaths: string[] = [];
+    const skillMappings: AgentWorkspaceSkillMapping[] = [];
     const seenSkillNames = new Set<string>();
     for (const entry of bundles) {
       for (const skill of entry.bundle.skills) {
@@ -41,12 +49,32 @@ export class AgentWorkspaceMaterializer {
         await writeArtifact(skillPath, skill, true);
         if (!entry.editable) await makeReadOnly(skillPath);
         skillPaths.push(skillPath);
+        skillMappings.push({ workspacePath: skillPath, sourcePath: skill.sourcePath, writable: entry.editable });
       }
     }
 
     const agentsPath = path.join(root, "AGENTS.md");
     await writeFile(agentsPath, renderAgentsFile(bundles), "utf8");
-    return { root, agentsPath, skillsRoot, skillPaths };
+    return { root, agentsPath, skillsRoot, skillPaths, skillMappings };
+  }
+
+  /** Copies edits from writable, file-backed skill sources back to their source directories. */
+  async syncWritableChanges(result: AgentWorkspaceResult): Promise<void> {
+    for (const mapping of result.skillMappings) {
+      if (!mapping.writable || !mapping.sourcePath) continue;
+      await copyDirectory(mapping.workspacePath, mapping.sourcePath);
+    }
+  }
+}
+
+async function copyDirectory(sourceRoot: string, targetRoot: string): Promise<void> {
+  await mkdir(targetRoot, { recursive: true });
+  const entries = await readdir(sourceRoot, { withFileTypes: true });
+  for (const entry of entries) {
+    const source = path.join(sourceRoot, entry.name);
+    const target = path.join(targetRoot, entry.name);
+    if (entry.isDirectory()) await copyDirectory(source, target);
+    else if (entry.isFile()) await writeFile(target, await readFile(source));
   }
 }
 

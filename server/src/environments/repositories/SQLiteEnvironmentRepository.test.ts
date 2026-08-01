@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { EnvironmentRepositoryDatastore } from "../datastores/EnvironmentRepositoryDatastore.js";
@@ -77,12 +77,17 @@ describe("SQLiteEnvironmentRepository", () => {
     expect((await repository.searchBundles("mail-search")).map((bundle) => bundle.bundleId)).toEqual(["mail"]);
   });
 
-  it("keeps bundle paths optional for database-backed content", async () => {
+  it("can materialize a compatibility bundle path for existing consumers", async () => {
     const datastore = new EnvironmentRepositoryDatastore(":memory:");
     datastores.push(datastore);
-    const repository = new SQLiteEnvironmentRepository(datastore, "canonical");
+    const projection = await mkdtemp(path.join(os.tmpdir(), "rook-environment-projection-"));
+    tempDirs.push(projection);
+    const repository = new SQLiteEnvironmentRepository(datastore, "canonical", { materializationRoot: projection });
     repository.saveResult(result());
     const loaded = await repository.getBundles("web:example.com");
-    expect(loaded.bundles[0]?.bundlePath).toBeUndefined();
+    const bundlePath = loaded.bundles[0]?.bundlePath;
+    expect(bundlePath).toBeDefined();
+    expect(await readFile(path.join(bundlePath!, "skills", "mail-search", "SKILL.md"), "utf8")).toBe("Search mail.");
+    expect(await readFile(path.join(bundlePath!, "AGENTS.md"), "utf8")).toBe("Confirm before sending.");
   });
 });

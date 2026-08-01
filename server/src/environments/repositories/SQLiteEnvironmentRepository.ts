@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type {
@@ -88,7 +88,6 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
         bundleId: String(value.bundle_id),
         environmentId,
         repository: String(value.repository_id),
-        ...(this.materializationRoot ? { bundlePath: this.bundleProjectionPath(environmentId, String(value.bundle_id)) } : {}),
         skills: grouped.skills,
         mcpServers: grouped["mcp-servers"],
         apps: grouped.apps,
@@ -96,6 +95,10 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
         valid: Number(value.valid) === 1,
         errors: bundleErrors,
       };
+      if (this.materializationRoot) {
+        bundle.bundlePath = this.bundleProjectionPath(environmentId, String(value.bundle_id));
+        await this.materializeBundle(bundle);
+      }
       bundles.push(bundle);
       errors.push(...bundleErrors);
     }
@@ -185,6 +188,35 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   private bundleProjectionPath(environmentId: string, bundleId: string): string {
     return path.join(this.materializationRoot!, encodePath(environmentId), encodePath(bundleId));
   }
+
+  private async materializeBundle(bundle: EnvironmentBundle): Promise<void> {
+    const bundlePath = bundle.bundlePath;
+    if (!bundlePath) return;
+    await rm(bundlePath, { recursive: true, force: true });
+    await mkdir(bundlePath, { recursive: true });
+    for (const [groupName, artifacts] of [["skills", bundle.skills], ["mcp-servers", bundle.mcpServers], ["apps", bundle.apps]] as const) {
+      for (const artifact of artifacts) {
+        const groupPath = path.join(bundlePath, groupName);
+        for (const [rawPath, content] of Object.entries(artifact.files)) {
+          const normalized = rawPath.replaceAll("\\\\", "/");
+          const prefix = `${artifact.id}/`;
+          const relative = groupName === "skills" && normalized.startsWith(prefix) ? normalized.slice(prefix.length) : normalized;
+          const targetRoot = groupName === "skills" ? path.join(groupPath, artifact.id) : groupPath;
+          const target = safePath(targetRoot, relative);
+          await mkdir(path.dirname(target), { recursive: true });
+          await writeFile(target, content, "utf8");
+        }
+      }
+    }
+    if (bundle.agentsMd !== undefined) await writeFile(path.join(bundlePath, "AGENTS.md"), bundle.agentsMd, "utf8");
+  }
+} 
+
+function safePath(root: string, relative: string): string {
+  if (!relative || path.posix.isAbsolute(relative)) throw new Error(`Invalid repository artifact path: ${relative}`);
+  const normalized = path.posix.normalize(relative);
+  if (normalized === ".." || normalized.startsWith("../") || normalized.includes("\0")) throw new Error(`Repository artifact path escapes its bundle: ${relative}`);
+  return path.join(root, ...normalized.split("/"));
 }
 
 function validEnvironmentId(environmentId: string): boolean {
