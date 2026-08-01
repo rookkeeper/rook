@@ -1,4 +1,6 @@
-# Project 4: Preserve personal authoring and write-back
+# Project 3: Preserve personal authoring and write-back
+
+This project proves authoring through the new runtime seam while the existing filesystem repository is still the source of truth. It must work end-to-end before storage is changed.
 
 - [ ] Keep user-created skills and instructions readable by the agent.
 - [ ] Define how writable personal content is mapped into a session working directory.
