@@ -1,5 +1,13 @@
 # Project 3: Preserve personal authoring and write-back
 
+## Demonstration
+
+Have an agent edit a personal skill or instruction through the working directory and verify that the source file changes.
+
+## Pause point
+
+Stop for manual review before moving repository storage to SQLite.
+
 This project proves authoring through the new runtime seam while the existing filesystem repository is still the source of truth. It must work end-to-end before storage is changed.
 
 - [ ] Keep user-created skills and instructions readable by the agent.

@@ -1,5 +1,13 @@
 # Project 2: Build session runtime materialization
 
+## Demonstration
+
+Given today's directory-backed bundles, build a session working directory and inspect the generated skills and readable `AGENTS.md` sections.
+
+## Pause point
+
+Stop for review after confirming the materialized files match the current runtime behavior.
+
 This project introduces the runtime working-directory seam without changing repository storage. It should consume today's existing `EnvironmentBundle` objects first.
 
 - [ ] Build each session's agent working directory from resolved bundles.
