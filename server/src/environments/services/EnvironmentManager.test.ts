@@ -220,6 +220,40 @@ describe("EnvironmentManager", () => {
     expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("mac:md.obsidian/Rooknanigans", []);
   });
 
+  it("resolves approved bundle content for runtime materialization", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {
+      if (environmentId !== "web:example.com") return [];
+      return [{
+        bundle: {
+          id: "web:example.com#mail",
+          bundleId: "mail",
+          environmentId,
+          repository: "canonical",
+          skills: [{ id: "mail-search", files: { "mail-search/SKILL.md": "Search mail." } }],
+          mcpServers: [],
+          apps: [],
+          agentsMd: "Confirm before sending.",
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-mail",
+      }] as any;
+    });
+    const manager = newManager(repositoryService);
+    manager.subscribe("s1", mockListener());
+    await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: { displayName: "Gmail" } });
+    manager.enterEnvironment("s1", "web:example.com");
+    manager.decideEnvironment("web:example.com", "approve", "hash-mail", "s1");
+
+    await expect(manager.runtimeBundlesForSession("s1")).resolves.toMatchObject([{
+      environmentName: "Gmail",
+      bundleName: "Environment capabilities",
+      editable: false,
+      bundle: { bundleId: "mail", agentsMd: "Confirm before sending." },
+    }]);
+  });
+
   it("offers undecided bundles with displayName only", async () => {
     const repositoryService = mockRepositoryService();
     vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {

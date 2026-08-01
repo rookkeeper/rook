@@ -9,11 +9,11 @@ Start or restart a real session with entered bundle content, inspect its working
 - [x] Prototype materialization of nested skills.
 - [x] Prototype generated readable environment/bundle instructions.
 - [x] Test duplicate skill names, nested files, and external read-only projections.
-- [ ] Connect the materializer to `AgentRuntimeManager` session startup.
-- [ ] Connect it to environment-driven runtime restarts.
-- [ ] Choose a stable per-session workspace location without breaking project `cwd`.
-- [ ] Make actual runtime skill paths come from the materialized workspace.
-- [ ] Make generated instructions reach the actual runtime prompt path.
-- [ ] Add a real session integration test.
+- [x] Connect the materializer to `AgentRuntimeManager` environment restart handling.
+- [x] Choose a per-session capability workspace under `.var/rook/agent-workspaces/` without changing project `cwd`.
+- [x] Make environment runtime skill paths come from the materialized workspace.
+- [x] Make generated instructions reach the runtime prompt path.
+- [x] Add `EnvironmentManager` coverage for approved runtime bundle resolution.
+- [ ] Add a real ACP session integration test using materialized content.
 - [ ] Decide and implement startup/restart reinjection rather than trusting stale files.
 - [ ] Pause for manual runtime review.

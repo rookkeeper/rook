@@ -180,7 +180,7 @@ Related tables:
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment
-2. `AgentRuntimeManager` computes merged `skillPaths`, `enteredEnvironmentIds`, and appended prompt text
+2. `AgentRuntimeManager` resolves approved bundle content, materializes it into a per-session capability workspace, and computes `skillPaths`, `enteredEnvironmentIds`, and appended prompt text
 3. it creates a replacement `SessionRuntime`
 4. replacement must successfully `session/load` the exact existing runtime session
 5. only then is the old subprocess retired

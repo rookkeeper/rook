@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { EnvironmentDecisionStore } from "../datastores/EnvironmentDecisionStore.js";
 import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../shared/environment.js";
-import type { EnvironmentBundle, EnvironmentRecord } from "../../shared/environmentRepository.js";
+import type { EnvironmentBundle } from "../../shared/environmentRepository.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import { ensurePersonalEnvironmentBinding } from "../support/EnvironmentBinding.js";
 import {
@@ -41,6 +41,13 @@ interface RememberedEnvironmentEntry {
   bundles: RememberedBundleEntry[];
   bundleIds: string[];
   bundleCollectionPaths: string[];
+}
+
+export interface RuntimeEnvironmentBundle {
+  environmentName: string;
+  bundleName: string;
+  editable: boolean;
+  bundle: EnvironmentBundle;
 }
 
 export interface DiagnosticEnvironmentEntry {
@@ -365,6 +372,28 @@ export class EnvironmentManager {
 
   async searchBundles(query: string): Promise<EnvironmentBundle[]> {
     return this.repositoryService.searchBundles(query);
+  }
+
+  /** Resolves the currently approved bundle content for runtime materialization. */
+  async runtimeBundlesForSession(sessionId: string): Promise<RuntimeEnvironmentBundle[]> {
+    this.pruneMemory();
+    const result: RuntimeEnvironmentBundle[] = [];
+    for (const environmentId of this.enteredEnvironments(sessionId)) {
+      const entry = this.remembered.get(environmentId);
+      if (!entry || entry.status !== "active") continue;
+      const resolved = await this.repositoryService.getResolvedBundles(environmentId);
+      for (const { bundle, bundleHash } of resolved) {
+        const decision = this.sessionDecisions.effective(bundleHash, sessionId);
+        if (decision !== "accept" && decision !== "approve") continue;
+        result.push({
+          environmentName: deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info),
+          bundleName: bundle.bundleId === "default" || bundle.bundleId === "personal" ? "Personal capabilities" : "Environment capabilities",
+          editable: bundle.bundleId === "personal",
+          bundle,
+        });
+      }
+    }
+    return result;
   }
 
   isAvailable(environmentId: string): boolean {

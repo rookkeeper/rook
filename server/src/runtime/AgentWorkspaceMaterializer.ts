@@ -19,6 +19,7 @@ export interface AgentWorkspaceSkillMapping {
 export interface AgentWorkspaceResult {
   root: string;
   agentsPath: string;
+  agentsContent: string;
   skillsRoot: string;
   skillPaths: string[];
   skillMappings: AgentWorkspaceSkillMapping[];
@@ -54,8 +55,9 @@ export class AgentWorkspaceMaterializer {
     }
 
     const agentsPath = path.join(root, "AGENTS.md");
-    await writeFile(agentsPath, renderAgentsFile(bundles), "utf8");
-    return { root, agentsPath, skillsRoot, skillPaths, skillMappings };
+    const agentsContent = renderAgentsFile(bundles);
+    await writeFile(agentsPath, agentsContent, "utf8");
+    return { root, agentsPath, agentsContent, skillsRoot, skillPaths, skillMappings };
   }
 
   /** Copies edits from writable, file-backed skill sources back to their source directories. */

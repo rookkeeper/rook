@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { AgentRuntimeProfile } from "../../infrastructure/config/agentRuntimes.js";
 import type { EnvironmentManager } from "../../environments/services/EnvironmentManager.js";
 import type { EnvironmentBundleOffer, EnvironmentEventListener, EnvironmentResolution } from "../../environments/support/types.js";
@@ -6,6 +7,7 @@ import { SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotif
 import { runtimeLaunchPlan, runtimeSessionParams } from "../runtimeLaunchPlan.js";
 import { SessionTranscriptStore } from "../../sessions/services/SessionTranscriptStore.js";
 import { normalizedEventsFromRuntimeMessage, runCompletedEvent, runFailedEvent } from "../../sessions/services/sessionTranscriptEvents.js";
+import { AgentWorkspaceMaterializer } from "../AgentWorkspaceMaterializer.js";
 
 /**
  * Owns the configured runtime catalog and lazily creates one isolated
@@ -27,6 +29,7 @@ export class AgentRuntimeManager {
   private readonly privateReplayIdleTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly privateReplayWaiters = new Map<string, Set<() => void>>();
   private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
+  private readonly workspaceMaterializer = new AgentWorkspaceMaterializer();
 
   constructor(
     profiles: AgentRuntimeProfile[],
@@ -358,11 +361,18 @@ export class AgentRuntimeManager {
   private scheduleEnvironmentRestart(sessionId: string): void {
     const restart = async () => {
       const paths = this.environmentSkillPaths.get(sessionId);
+      const workspaceRoot = path.join(this.repoRoot, ".var", "rook", "agent-workspaces", sessionId);
+      const runtimeBundles = await this.environmentManager?.runtimeBundlesForSession(sessionId) ?? [];
+      const materialized = await this.workspaceMaterializer.materialize(workspaceRoot, runtimeBundles);
+      const promptParts = [
+        this.environmentManager?.runtimeInstructionsForSession(sessionId),
+        materialized.agentsContent.trim(),
+      ].filter((value): value is string => Boolean(value));
       const configuration: SessionRuntimeConfiguration = {
         enteredEnvironmentIds: [...(paths?.keys() ?? [])],
-        skillPaths: [...new Set([...(paths?.values() ?? [])].flat())],
+        skillPaths: materialized.skillPaths,
         extensionPaths: [],
-        appendSystemPrompt: this.environmentManager?.runtimeInstructionsForSession(sessionId),
+        appendSystemPrompt: promptParts.join("\\n\\n"),
       };
       await this.restartSessionForEnvironmentChange(sessionId, configuration);
     };
