@@ -1,21 +1,17 @@
-# Project 3: Preserve personal authoring and write-back
+# Gate 3 — Prove personal authoring
 
 ## Demonstration
 
-Have an agent edit a personal skill or instruction through the working directory and verify that the source file changes.
+Have a real agent edit a personal skill and personal instructions, then verify the source of truth changed and the next session sees the edit.
 
-## Pause point
+## TODO
 
-Stop for manual review before moving repository storage to SQLite.
-
-This project proves authoring through the new runtime seam while the existing filesystem repository is still the source of truth. It must work end-to-end before storage is changed.
-
-- [x] Keep user-created skills readable by the agent.
-- [x] Define how writable file-backed personal skills are mapped into a session working directory.
-- [x] Write skill edits back to the file-backed personal repository source of truth.
-- [x] Add automated coverage for writable skill write-back.
-- [ ] Write-back for database-backed personal content.
-- [ ] Decide how editable `AGENTS.md` content maps back to its originating bundle.
-- [ ] Establish an initial policy for simultaneous edits from multiple sessions.
-- [x] Define the first practical read-only behavior for external skill files.
-- [ ] Integrate the authoring seam with an actual running agent session.
+- [x] Prototype writable file-backed skill mappings.
+- [x] Add unit coverage for file-backed skill write-back.
+- [ ] Integrate write-back with a real agent session.
+- [ ] Implement write-back for database-backed personal skills.
+- [ ] Decide how editable personal `AGENTS.md` maps back to one source bundle.
+- [ ] Ensure generated aggregate instructions are not treated as the source file.
+- [ ] Decide what happens when two sessions edit one personal bundle.
+- [ ] Define direct mapping/symlink behavior for project-owned files.
+- [ ] Add end-to-end authoring tests and pause for manual review.
