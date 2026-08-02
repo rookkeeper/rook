@@ -254,6 +254,10 @@ describe("EnvironmentManager", () => {
     }]);
   });
 
+  it("provides the Rook identity for plain sessions", () => {
+    expect(newManager().runtimeIdentityInstructions()).toContain("## You are Rook");
+  });
+
   it("offers undecided bundles with displayName only", async () => {
     const repositoryService = mockRepositoryService();
     vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {
