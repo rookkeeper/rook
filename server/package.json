@@ -19,8 +19,7 @@
     "trace:map": "node ./node_modules/tsx/dist/cli.mjs scripts/location/trace-map.ts",
     "dwell:analysis": "node ./node_modules/tsx/dist/cli.mjs scripts/location/dwell-analysis.ts",
     "fetch:traces": "node ./node_modules/tsx/dist/cli.mjs scripts/location/fetch-validation-traces.ts",
-    "maps:traces": "node ./node_modules/tsx/dist/cli.mjs scripts/location/render-trace-maps.ts",
-    "environment:import-directory": "node ./node_modules/tsx/dist/cli.mjs scripts/environment/import-directory.ts"
+    "maps:traces": "node ./node_modules/tsx/dist/cli.mjs scripts/location/render-trace-maps.ts"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.44.0",

@@ -1,9 +1,10 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { WebSocket } from "ws";
 import { buildServer } from "../index.js";
+import { SQLiteEnvironmentRepository } from "../environments/repositories/SQLiteEnvironmentRepository.js";
 
 const PORT = 18999;
 
@@ -78,10 +79,24 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     }));
     process.env.ROOK_AGENT_RUNTIMES_PATH = runtimesPath;
     process.env.HOME = tempConfigDir;
-    const personalSkillDir = path.join(tempConfigDir, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "skills", "personal-skill");
-    mkdirSync(personalSkillDir, { recursive: true });
-    writeFileSync(path.join(personalSkillDir, "SKILL.md"), "original personal skill", "utf8");
-    writeFileSync(path.join(tempConfigDir, ".rook", "environment-repository", "web", "example.com", ".bundles", "personal", "AGENTS.md"), "original personal instructions", "utf8");
+    const personalRepository = new SQLiteEnvironmentRepository(path.join(tempConfigDir, ".rook", "environment-repository.db"), "personal");
+    personalRepository.saveResult({
+      environment: { id: "web:example.com", displayName: "Example", description: "Example website" },
+      bundles: [{
+        id: "web:example.com#personal",
+        bundleId: "personal",
+        environmentId: "web:example.com",
+        repository: "personal",
+        skills: [{ id: "personal-skill", files: { "personal-skill/SKILL.md": "original personal skill" } }],
+        mcpServers: [],
+        apps: [],
+        agentsMd: "original personal instructions",
+        valid: true,
+        errors: [],
+      }],
+      errors: [],
+    });
+    personalRepository.close();
     app = await buildServer({ environmentDecisionStoreLocation: ":memory:", authToken: "" });
     await app.listen({ host: "127.0.0.1", port: PORT });
   });
@@ -102,6 +117,22 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const meta = result._meta as Record<string, unknown>;
     expect(Array.isArray(meta.runtimeIds)).toBe(true);
     ws.close();
+  });
+
+  it("loads migrated Mac environment capabilities from SQLite without source directories", async () => {
+    expect(existsSync(path.resolve(process.cwd(), "..", "environment-repository"))).toBe(false);
+    const response = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=mac:md.obsidian`);
+    const preview = await response.json() as { bundles: Array<{ bundleId: string; skills: Array<{ id: string }>; agentsMd?: string }> };
+    const bundle = preview.bundles.find((candidate) => candidate.bundleId === "default");
+    expect(bundle).toBeDefined();
+    expect(bundle?.agentsMd).toBeTruthy();
+    expect(bundle?.skills.map((skill) => skill.id)).toEqual([
+      "content-production",
+      "how-to-use-peeps-obsidian",
+      "how-to-use-reads-obsidian",
+      "intro-email",
+      "video-editor",
+    ]);
   });
 
   it("creates, prompts, and closes a session on the same websocket", async () => {

@@ -1,11 +1,10 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { EnvironmentRepositoryDatastore } from "../datastores/EnvironmentRepositoryDatastore.js";
 import { hashEnvironmentBundle } from "../../shared/environmentBundleHash.js";
-import { DirectoryEnvironmentRepository } from "./DirectoryEnvironmentRepository.js";
 import { CompositeEnvironmentRepository } from "./CompositeEnvironmentRepository.js";
 import { SQLiteEnvironmentRepository } from "./SQLiteEnvironmentRepository.js";
 import { AgentWorkspaceMaterializer } from "../../runtime/AgentWorkspaceMaterializer.js";
@@ -86,29 +85,6 @@ describe("SQLiteEnvironmentRepository", () => {
     expect(updated.skills[0]?.files["mail-search/SKILL.md"]).toBe("Edited in the agent workspace.");
   });
 
-  it("imports the existing directory repository shape", async () => {
-    const source = await mkdtemp(path.join(os.tmpdir(), "rook-directory-repo-"));
-    tempDirs.push(source);
-    const skillDir = path.join(source, "web", "example.com", ".bundles", "mail", "skills", "mail-search");
-    await mkdir(skillDir, { recursive: true });
-    await writeFile(path.join(skillDir, "SKILL.md"), "Search mail.");
-    await writeFile(path.join(source, "web", "example.com", ".bundles", "mail", "AGENTS.md"), "Confirm before sending.");
-
-    const datastore = new EnvironmentRepositoryDatastore(":memory:");
-    datastores.push(datastore);
-    const repository = new SQLiteEnvironmentRepository(datastore, "canonical");
-    expect(await repository.importDirectory(source)).toBe(1);
-
-    const loaded = await repository.getBundles("web:example.com");
-    expect(loaded.bundles.map((bundle) => bundle.bundleId)).toEqual(["mail"]);
-    expect(loaded.bundles[0]?.skills[0]?.files["mail-search/SKILL.md"]).toBe("Search mail.");
-    expect(loaded.bundles[0]?.agentsMd).toBe("Confirm before sending.");
-
-    const directoryResult = await new DirectoryEnvironmentRepository(source, "canonical").getBundles("web:example.com");
-    expect(loaded.bundles[0]?.revision?.contentHash).toBe(hashEnvironmentBundle(directoryResult.bundles[0]!));
-    expect(loaded.bundles[0]?.skills).toEqual(directoryResult.bundles[0]?.skills);
-  });
-
   it("lists environments and searches bundle content", async () => {
     const datastore = new EnvironmentRepositoryDatastore(":memory:");
     datastores.push(datastore);
@@ -137,17 +113,4 @@ describe("SQLiteEnvironmentRepository", () => {
     expect(loaded.bundles.map((bundle) => `${bundle.repository}:${bundle.bundleId}`)).toEqual(["canonical:mail", "personal:personal"]);
   });
 
-  it("can materialize a compatibility bundle path for existing consumers", async () => {
-    const datastore = new EnvironmentRepositoryDatastore(":memory:");
-    datastores.push(datastore);
-    const projection = await mkdtemp(path.join(os.tmpdir(), "rook-environment-projection-"));
-    tempDirs.push(projection);
-    const repository = new SQLiteEnvironmentRepository(datastore, "canonical", { materializationRoot: projection });
-    repository.saveResult(result());
-    const loaded = await repository.getBundles("web:example.com");
-    const bundlePath = loaded.bundles[0]?.bundlePath;
-    expect(bundlePath).toBeDefined();
-    expect(await readFile(path.join(bundlePath!, "skills", "mail-search", "SKILL.md"), "utf8")).toBe("Search mail.");
-    expect(await readFile(path.join(bundlePath!, "AGENTS.md"), "utf8")).toBe("Confirm before sending.");
-  });
 });

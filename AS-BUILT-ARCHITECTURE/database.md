@@ -34,7 +34,7 @@ As built today:
 - `sessions/datastores/SqliteSessionRepository.ts` owns session/session-environment SQL
 - `environments/datastores/EnvironmentDecisionStore.ts` owns durable environment-decision SQL in the application database
 - `sessions/services/SessionTranscriptStore.ts` owns transcript-event SQL while remaining session-domain persistence code
-- `environments/repositories/SQLiteEnvironmentRepository.ts` owns repository content queries, revisions, imports, and artifact write-back
+- `environments/repositories/SQLiteEnvironmentRepository.ts` owns repository content queries, revisions, and artifact write-back
 
 ## Current tables
 
@@ -142,7 +142,6 @@ Bundle identity and current revision pointer:
 - `environment_id` foreign key to the repository environment
 - `bundle_id`
 - validity and serialized repository read errors
-- optional compatibility `source_bundle_path`
 - `current_revision_key`
 - unique `(repository_id, environment_id, bundle_id)`
 
@@ -169,7 +168,6 @@ Capability artifact content belonging to one revision:
 - `artifact_kind` (`skills`, `mcp-servers`, `apps`, `facts`, or `llms-txt`)
 - `artifact_id`
 - `files_json` containing the complete nested file map
-- optional `source_path`
 - primary key `(revision_key, artifact_kind, artifact_id)`
 
 Skills retain their complete nested file map; MCP, app, fact, and `llms.txt` artifacts use the same representation for now. Bundle instructions remain on the bundle row because they are the generated-instruction source field.
@@ -226,7 +224,7 @@ Main methods:
 
 `SQLiteEnvironmentRepository` writes a changed personal skill or instruction by creating/updating the current revision and recalculating the canonical content hash. The runtime never writes directly to the repository database; `AgentWorkspaceMaterializer` performs the synchronization at workspace lifecycle boundaries.
 
-Project-directory sources are intentionally direct file-backed exceptions. Canonical/external projections are read-only by filesystem policy, while personal and project-owned projections have explicit write-back mappings.
+Canonical and personal repository content is SQLite-only. Project-directory sources are intentionally direct file-backed exceptions. Canonical/external projections are read-only by filesystem policy, while personal and project-owned projections have explicit write-back mappings.
 
 ## What is not yet in the database
 

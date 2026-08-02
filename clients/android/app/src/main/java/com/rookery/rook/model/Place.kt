@@ -6,7 +6,7 @@ import java.util.Locale
 
 /**
  * A user-defined place. `id` is the slug used to build the environment id `location:<id>`
- * and to resolve `environment-repository/location/<id>/`.
+ * and to resolve its server-side capabilities.
  */
 @Serializable
 data class Place(

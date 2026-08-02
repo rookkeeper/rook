@@ -13,7 +13,7 @@ function mockRepositoryService(): EnvironmentRepositoryService {
   return {
     getResolvedBundles: vi.fn(async () => []),
     getValidBundles: vi.fn(async () => []),
-    getBundleCollectionPaths: vi.fn(async () => []),
+    hasKnownEnvironment: vi.fn(async () => false),
     getEnvironmentPreview: vi.fn().mockResolvedValue({ environmentId: "web:example.com", bundles: [] }),
   } as unknown as EnvironmentRepositoryService;
 }

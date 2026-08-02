@@ -29,7 +29,7 @@ The live server uses one logical union of:
 - project-directory sources for existing project files
 - synthetic repositories such as location context
 
-SQLite is the source of truth for database-backed canonical and personal content. The legacy directory reader is retained for import and migration compatibility, not as a second normal live store. A project-directory environment is intentionally different: the project files are already the source of truth.
+SQLite is the sole source of truth for canonical and personal content. A project-directory environment is intentionally different: the project files are already the source of truth.
 
 Each repository revision records the content hash plus source/fetch/provenance fields. The application database remains separate and stores sessions, transcripts, membership, and durable bundle decisions.
 
@@ -71,8 +71,7 @@ Only agent-visible or runtime-controlling content participates in approval hashi
 
 The first implementations are:
 
-- `SQLiteEnvironmentRepository` — live canonical/personal storage, revisions, search, import, and write-back.
-- `DirectoryEnvironmentRepository` — filesystem importer and compatibility source.
+- `SQLiteEnvironmentRepository` — live canonical/personal storage, revisions, search, and write-back.
 - `ProjectDirectoryEnvironmentRepository` — direct project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` content.
 - `CompositeEnvironmentRepository` — one logical view over those sources.
 
@@ -119,21 +118,9 @@ GET /api/environments/preview?environmentId=...
 
 Previews expose bundle identity, repository, validity/errors, canonical hash, revision source/fetch metadata, nested artifacts, facts, `llms.txt`, and instructions. Client artifact views use a file-tree/content presentation so users review the actual agent-visible content.
 
-## Filesystem compatibility shape
+## Storage boundary
 
-The canonical directory tree remains useful as an import fixture and human-authored source during migration:
-
-```text
-environment-repository/<kind>/<path>/.bundles/<bundle-id>/
-  skills/<skill-name>/SKILL.md
-  mcp-servers/...
-  apps/...
-  facts/...
-  llms.txt
-  AGENTS.md
-```
-
-This shape is not the live database schema. Manifests remain future work; current import behavior is based on recognized content and explicit metadata.
+Canonical and personal capability content exists in SQLite only. Runtimes receive per-session workspace projections, not repository storage paths. Project-directory environments remain the explicit exception because their project files are themselves the source of truth.
 
 ## Deferred product work
 

@@ -27,7 +27,6 @@ export class EnvironmentRepositoryDatastore {
         bundle_id TEXT NOT NULL,
         valid INTEGER NOT NULL,
         agents_md TEXT,
-        source_bundle_path TEXT,
         errors_json TEXT NOT NULL DEFAULT '[]',
         current_revision_key TEXT,
         UNIQUE(repository_id, environment_id, bundle_id)
@@ -53,13 +52,9 @@ export class EnvironmentRepositoryDatastore {
         artifact_kind TEXT NOT NULL CHECK (artifact_kind IN ('skills', 'mcp-servers', 'apps', 'facts', 'llms-txt')),
         artifact_id TEXT NOT NULL,
         files_json TEXT NOT NULL,
-        source_path TEXT,
         PRIMARY KEY(revision_key, artifact_kind, artifact_id)
       );
     `);
-    // Databases created by the first prototype may lack this column. The old
-    // artifact table is intentionally left untouched until an explicit importer
-    // rewrites those databases into the revision-aware shape.
     try {
       this.db.exec("ALTER TABLE environment_repository_bundles ADD COLUMN current_revision_key TEXT");
     } catch {

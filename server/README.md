@@ -122,13 +122,7 @@ On environment change, only the affected session's runtime is restarted — the 
 
 ### Environment system
 
-The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The live server uses canonical and personal SQLite repositories by default, with compatibility filesystem projections for path-based consumers. `ROOK_ENVIRONMENT_REPOSITORY_DB` and `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB` can override their locations. Environment-driven runtime restarts rebuild per-session capability workspaces, materialize approved/personal skills and capability-specific content, and reinject generated instructions before loading the existing ACP session. The directory-to-SQLite migration tool is available as:
-
-```bash
-npm run environment:import-directory -- <source-root> <database-path> [repository-id]
-```
-
-The materializer is intentionally a separate seam: it turns resolved bundle content into a session agent working directory without making repository storage paths part of the runtime contract. `/api/environments/register` is treated as candidate registration: the server finalizes candidates asynchronously, can inspect observed path/URL implied environment ids through `EnvironmentRepository`, and only finalized environments participate in offers / approvals / runtime updates. `AgentRuntimeManager` subscribes per-session to `EnvironmentManager`, materializes `.agent/skills`, generated `AGENTS.md`, and read-only MCP content, and applies the resulting skill paths and prompt text to runtime launch configuration. Personal skills and marked personal instructions write back to SQLite at workspace synchronization points. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
+The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The live server uses canonical and personal SQLite repositories exclusively. `ROOK_ENVIRONMENT_REPOSITORY_DB` and `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB` can override their locations. Environment-driven runtime restarts rebuild per-session capability workspaces, materialize approved/personal skills and capability-specific content, and reinject generated instructions before loading the existing ACP session. The materializer is intentionally a separate seam: it turns resolved bundle content into a session agent working directory without making repository storage paths part of the runtime contract. `/api/environments/register` is treated as candidate registration: the server finalizes candidates asynchronously, can inspect observed path/URL implied environment ids through `EnvironmentRepository`, and only finalized environments participate in offers / approvals / runtime updates. `AgentRuntimeManager` subscribes per-session to `EnvironmentManager`, materializes `.agent/skills`, generated `AGENTS.md`, and read-only MCP content, and applies the resulting skill paths and prompt text to runtime launch configuration. Personal skills and marked personal instructions write back to SQLite at workspace synchronization points. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
 
 ### Key source files
 
@@ -146,7 +140,6 @@ The materializer is intentionally a separate seam: it turns resolved bundle cont
 - `src/environments/repositories/SQLiteEnvironmentRepository.ts` — SQLite repository
 - `src/environments/datastores/EnvironmentRepositoryDatastore.ts` — repository database connection/schema
 - `src/environments/repositories/ProjectDirectoryEnvironmentRepository.ts` — direct project-file capability source
-- `scripts/environment/import-directory.ts` — legacy directory importer
 - `src/agents/test-fixtures/mockAcpServer.mjs` — mock ACP runtime for testing
 
 ## Tests

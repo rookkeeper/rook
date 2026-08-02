@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { EnvironmentBundleResult, EnvironmentBundle } from "../../shared/environmentRepository.js";
 import type { EnvironmentPreview } from "../../shared/environment.js";
 import { EnvironmentRepository } from "../repositories/EnvironmentRepository.js";
@@ -48,14 +47,8 @@ export class EnvironmentRepositoryService {
     return (await this.getResolvedBundles(environmentId)).map(({ bundle }) => bundle);
   }
 
-  async getBundleCollectionPaths(environmentId: string): Promise<string[]> {
-    const bundles = (await this.getResolvedBundles(environmentId)).map(({ bundle }) => bundle);
-    return unique(
-      bundles
-        .map((bundle) => bundle.bundlePath)
-        .filter((bundlePath): bundlePath is string => Boolean(bundlePath))
-        .map((bundlePath) => path.dirname(bundlePath)),
-    );
+  async hasKnownEnvironment(environmentId: string): Promise<boolean> {
+    return (await this.getResolvedBundles(environmentId)).length > 0;
   }
 
   async getEnvironmentPreview(environmentId: string): Promise<EnvironmentPreview> {
@@ -87,8 +80,3 @@ export class EnvironmentRepositoryService {
     return result.bundles;
   }
 }
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
-}
-

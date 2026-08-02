@@ -3,7 +3,6 @@ import type { EnvironmentDecisionStore } from "../datastores/EnvironmentDecision
 import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../shared/environment.js";
 import type { EnvironmentBundle } from "../../shared/environmentRepository.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
-import { ensurePersonalEnvironmentBinding } from "../support/EnvironmentBinding.js";
 import {
   NoopEnvironmentRegistrationCaptureSink,
   type EnvironmentRegistrationCaptureSink,
@@ -25,7 +24,6 @@ interface RememberedBundleEntry {
   repository: string;
   bundleId: string;
   bundleHash: string;
-  bundlePath?: string;
   skills: string[];
   mcpServers: string[];
   apps: string[];
@@ -41,7 +39,6 @@ interface RememberedEnvironmentEntry {
   status: "active" | "recent";
   bundles: RememberedBundleEntry[];
   bundleIds: string[];
-  bundleCollectionPaths: string[];
 }
 
 export interface RuntimeEnvironmentBundle {
@@ -61,7 +58,6 @@ export interface DiagnosticEnvironmentEntry {
   activeUntil?: string;
   bundles: Array<RememberedBundleEntry & { effectiveDecision: EffectiveDecision }>;
   bundleIds: string[];
-  bundleCollectionPaths: string[];
   effectiveDecision: EffectiveDecision;
 }
 
@@ -253,19 +249,12 @@ export class EnvironmentManager {
       repository: bundle.repository,
       bundleId: bundle.bundleId,
       bundleHash,
-      bundlePath: bundle.bundlePath,
       skills: bundle.skills.map((artifact) => artifact.id).sort((a, b) => a.localeCompare(b)),
       mcpServers: bundle.mcpServers.map((artifact) => artifact.id).sort((a, b) => a.localeCompare(b)),
       apps: bundle.apps.map((artifact) => artifact.id).sort((a, b) => a.localeCompare(b)),
       agentsMd: bundle.agentsMd,
     }));
     const bundleIds = bundles.map((bundle) => bundle.bundleId);
-    const bundleCollectionPaths = [...new Set(
-      bundles
-        .map((bundle) => bundle.bundlePath)
-        .filter((bundlePath): bundlePath is string => Boolean(bundlePath))
-        .map((bundlePath) => path.dirname(bundlePath)),
-    )].sort((a, b) => a.localeCompare(b));
     const entry: RememberedEnvironmentEntry = {
       record: {
         id: env.id,
@@ -281,7 +270,6 @@ export class EnvironmentManager {
       status: "active",
       bundles,
       bundleIds,
-      bundleCollectionPaths,
     };
     this.remembered.set(env.id, entry);
     this.logger.info(
@@ -292,7 +280,6 @@ export class EnvironmentManager {
         activeUntil,
         displayName: deriveEnvironmentDisplayName(env.id, entry.record.metadata, info),
         bundleIds,
-        bundleCollectionPaths,
       },
       "environment registered",
     );
@@ -423,8 +410,6 @@ export class EnvironmentManager {
     const entries = this.enteredEnvironments(sessionId)
       .map((environmentId) => {
         const remembered = this.remembered.get(environmentId);
-        const binding = ensurePersonalEnvironmentBinding(environmentId);
-        if (!binding) return null;
 
         const agentsMdBundles = (remembered?.bundles ?? [])
           .filter((b) => b.agentsMd)
@@ -438,9 +423,11 @@ export class EnvironmentManager {
           environmentId,
           displayName: remembered ? deriveEnvironmentDisplayName(environmentId, remembered.record.metadata, remembered.info) : undefined,
           metadata: (remembered?.record.metadata ?? {}) as Record<string, unknown>,
-          bindingDir: authoringRoot ?? binding.personalBundleDir,
-          skillsDir: authoringRoot ? path.join(authoringRoot, ".agent", "skills") : binding.skillsDir,
-          existingSkills: binding.existingSkills,
+          bindingDir: authoringRoot ?? "the session workspace",
+          skillsDir: authoringRoot ? path.join(authoringRoot, ".agent", "skills") : "the session workspace/.agent/skills",
+          existingSkills: (remembered?.bundles ?? [])
+            .filter((bundle) => isUserOwnedRepository(bundle.repository))
+            .flatMap((bundle) => bundle.skills),
           agentsMdBundles,
         };
       })
@@ -492,7 +479,6 @@ export class EnvironmentManager {
           effectiveDecision: this.effectiveDecision(bundle.bundleHash, sessionId),
         })),
         bundleIds: entry.bundleIds,
-        bundleCollectionPaths: entry.bundleCollectionPaths,
         effectiveDecision: this.effectiveDecision(environmentId, sessionId),
       }))
       .sort((a, b) => {
@@ -548,7 +534,6 @@ export class EnvironmentManager {
       const entry = this.remembered.get(environmentId);
       if (!entry) continue;
 
-      ensurePersonalEnvironmentBinding(environmentId);
       listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sessionId));
 
       for (const bundle of entry.bundles) {
@@ -583,10 +568,7 @@ export class EnvironmentManager {
     for (const bundle of entry.bundles) {
       const decision = this.sessionDecisions.effective(bundle.bundleHash, sessionId);
       if (!isUserOwnedRepository(bundle.repository) && decision !== "accept" && decision !== "approve") continue;
-      if (!bundle.bundlePath) continue;
-      for (const skillId of bundle.skills) {
-        skillPaths.push(path.join(bundle.bundlePath, "skills", skillId));
-      }
+      skillPaths.push(...bundle.skills);
     }
     return skillPaths;
   }

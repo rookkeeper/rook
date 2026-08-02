@@ -3,7 +3,6 @@ import fastify from "fastify";
 import websocket from "@fastify/websocket";
 import os from "node:os";
 import path from "node:path";
-import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { EnvironmentDecisionStore } from "./environments/datastores/EnvironmentDecisionStore.js";
 import { EnvironmentManager } from "./environments/services/EnvironmentManager.js";
@@ -79,23 +78,8 @@ export async function buildServer(options: BuildServerOptions = {}) {
   const locationContextRepository = new LocationContextRepository();
   const environmentRepositoryDatabase = options.environmentRepositoryDatabase ?? process.env.ROOK_ENVIRONMENT_REPOSITORY_DB ?? path.join(REPO_ROOT, "environment-repository.db");
   const personalEnvironmentRepositoryDatabase = options.personalEnvironmentRepositoryDatabase ?? process.env.ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB ?? path.join(os.homedir(), ".rook", "environment-repository.db");
-  const canonicalEnvironmentRepository = new SQLiteEnvironmentRepository(
-    environmentRepositoryDatabase,
-    "canonical",
-    { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "canonical") },
-  );
-  const personalEnvironmentRepository = new SQLiteEnvironmentRepository(
-    personalEnvironmentRepositoryDatabase,
-    "personal",
-    { materializationRoot: path.join(REPO_ROOT, ".var", "rook", "environment-repository-projection", "personal") },
-  );
-  if ((await canonicalEnvironmentRepository.listEnvironments()).length === 0 && existsSync(path.join(REPO_ROOT, "environment-repository"))) {
-    await canonicalEnvironmentRepository.importDirectory(path.join(REPO_ROOT, "environment-repository"));
-  }
-  const legacyPersonalRoot = path.join(os.homedir(), ".rook", "environment-repository");
-  if ((await personalEnvironmentRepository.listEnvironments()).length === 0 && existsSync(legacyPersonalRoot)) {
-    await personalEnvironmentRepository.importDirectory(legacyPersonalRoot);
-  }
+  const canonicalEnvironmentRepository = new SQLiteEnvironmentRepository(environmentRepositoryDatabase, "canonical");
+  const personalEnvironmentRepository = new SQLiteEnvironmentRepository(personalEnvironmentRepositoryDatabase, "personal");
   const environmentRepository = new CompositeEnvironmentRepository([
     canonicalEnvironmentRepository,
     personalEnvironmentRepository,

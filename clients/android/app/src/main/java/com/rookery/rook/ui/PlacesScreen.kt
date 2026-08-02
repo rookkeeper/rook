@@ -162,7 +162,7 @@ fun PlacesScreen(viewModel: RookViewModel) {
 
         Text(
             "Define a place here, and create a matching skill bundle on the server at " +
-                "environment-repository/location/<slug>/. When you arrive, Rook offers that place's skills.",
+                "the server database. When you arrive, Rook offers that place's capabilities.",
             fontSize = 11.sp,
             color = PanelPalette.textMuted
         )

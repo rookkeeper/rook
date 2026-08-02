@@ -276,8 +276,7 @@ final class RookModel: ObservableObject {
     }
 
     /// Pre-check each place against the server so the Places screen can show
-    /// whether a matching `environment-repository/location/<slug>/` bundle exists —
-    /// otherwise a slug mismatch is invisible until you physically arrive.
+    /// whether matching location capabilities exist before you physically arrive.
     func refreshPlaceSkillStatus() {
         guard serverState == .online else {
             return
