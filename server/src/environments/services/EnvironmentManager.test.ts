@@ -12,6 +12,7 @@ import type { EnvironmentEventListener } from "../support/types.js";
 function mockRepositoryService(): EnvironmentRepositoryService {
   return {
     getResolvedBundles: vi.fn(async () => []),
+    ensurePersonalBundle: vi.fn(async () => true),
     getValidBundles: vi.fn(async () => []),
     hasKnownEnvironment: vi.fn(async () => false),
     getEnvironmentPreview: vi.fn().mockResolvedValue({ environmentId: "web:example.com", bundles: [] }),

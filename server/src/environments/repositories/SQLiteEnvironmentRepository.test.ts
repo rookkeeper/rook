@@ -85,6 +85,21 @@ describe("SQLiteEnvironmentRepository", () => {
     expect(updated.skills[0]?.files["mail-search/SKILL.md"]).toBe("Edited in the agent workspace.");
   });
 
+  it("creates an empty personal bundle and accepts a newly authored skill", async () => {
+    const datastore = new EnvironmentRepositoryDatastore(":memory:");
+    datastores.push(datastore);
+    const repository = new SQLiteEnvironmentRepository(datastore, "personal");
+
+    expect(await repository.ensurePersonalBundle("web:xkcd.com")).toBe(true);
+    expect(await repository.createArtifactFiles("web:xkcd.com", "personal", "skills", "navigating-xkcd", {
+      "navigating-xkcd/SKILL.md": "---\nname: navigating-xkcd\ndescription: Navigate XKCD.\n---\n",
+    })).toBe(true);
+
+    const loaded = (await repository.getBundles("web:xkcd.com")).bundles[0]!;
+    expect(loaded.valid).toBe(true);
+    expect(loaded.skills.map((skill) => skill.id)).toEqual(["navigating-xkcd"]);
+  });
+
   it("lists environments and searches bundle content", async () => {
     const datastore = new EnvironmentRepositoryDatastore(":memory:");
     datastores.push(datastore);

@@ -24,4 +24,14 @@ export abstract class EnvironmentRepository {
   async replaceBundleInstructions(_environmentId: string, _bundleId: string, _content: string): Promise<boolean> {
     return false;
   }
+
+  /** Optional creation API for a newly authored skill. */
+  async createArtifactFiles(_environmentId: string, _bundleId: string, _kind: "skills" | "mcp-servers" | "apps", _artifactId: string, _files: Record<string, string>): Promise<boolean> {
+    return false;
+  }
+
+  /** Optional initialization API for an empty personal bundle. */
+  async ensurePersonalBundle(_environmentId: string): Promise<boolean> {
+    return false;
+  }
 }

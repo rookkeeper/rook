@@ -33,6 +33,14 @@ export class EnvironmentRepositoryService {
     return this.repository.replaceBundleInstructions(environmentId, bundleId, content);
   }
 
+  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
+    return this.repository.createArtifactFiles(environmentId, bundleId, kind, artifactId, files);
+  }
+
+  async ensurePersonalBundle(environmentId: string): Promise<boolean> {
+    return this.repository.ensurePersonalBundle(environmentId);
+  }
+
   async getResolvedBundles(environmentId: string): Promise<ResolvedEnvironmentBundle[]> {
     const result = await this.repository.getBundles(environmentId);
     const valid = result.bundles.filter((bundle) => bundle.valid);

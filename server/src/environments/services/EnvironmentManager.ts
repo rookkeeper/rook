@@ -46,6 +46,9 @@ export interface RuntimeEnvironmentBundle {
   bundleName: string;
   editable: boolean;
   bundle: EnvironmentBundle;
+  writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
+  writeBackNewSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
+  writeBackInstructions?: (content: string) => Promise<boolean>;
 }
 
 export interface DiagnosticEnvironmentEntry {
@@ -244,6 +247,7 @@ export class EnvironmentManager {
     const existing = this.remembered.get(env.id);
     const registeredAt = existing?.status === "active" ? (existing.registeredAt ?? nowIso) : nowIso;
     const activeUntil = new Date(now + this.activeEnvironmentWindowMs).toISOString();
+    await this.repositoryService.ensurePersonalBundle(env.id);
     const resolvedBundles = await this.repositoryService.getResolvedBundles(env.id);
     const bundles = resolvedBundles.map(({ bundle, bundleHash }) => ({
       repository: bundle.repository,
@@ -383,6 +387,7 @@ export class EnvironmentManager {
           bundleName: bundle.bundleId === "default" || bundle.bundleId === "personal" ? "Personal capabilities" : "Environment capabilities",
           editable: bundle.bundleId === "personal" || bundle.repository === "project-directory",
           writeBackSkill: (skillId, files) => this.repositoryService.replaceArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files),
+          ...(bundle.bundleId === "personal" ? { writeBackNewSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.createArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files) } : {}),
           writeBackInstructions: bundle.bundleId === "personal" || bundle.repository === "project-directory"
             ? (content) => this.repositoryService.replaceBundleInstructions(environmentId, bundle.bundleId, content)
             : undefined,

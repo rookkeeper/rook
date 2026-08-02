@@ -69,6 +69,36 @@ describe("AgentWorkspaceMaterializer", () => {
     }
   });
 
+  it("writes a newly created personal skill back to its bundle", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rook-agent-workspace-"));
+    const writes: Array<{ id: string; files: Record<string, string> }> = [];
+    try {
+      const result = await new AgentWorkspaceMaterializer().materialize(root, [{
+        environmentName: "XKCD",
+        bundleName: "Personal",
+        editable: true,
+        bundle: bundle({ skills: [], agentsMd: undefined }),
+        writeBackNewSkill: async (id, files) => {
+          writes.push({ id, files });
+          return true;
+        },
+        writeBackInstructions: async () => true,
+      }]);
+      const skillRoot = path.join(root, ".agent", "skills", "navigating-xkcd");
+      await mkdir(skillRoot, { recursive: true });
+      await writeFile(path.join(skillRoot, "SKILL.md"), "---\nname: navigating-xkcd\ndescription: Navigate XKCD.\n---\n", "utf8");
+      await new AgentWorkspaceMaterializer().syncWritableChanges(result);
+
+      expect(writes).toEqual([{
+        id: "navigating-xkcd",
+        files: { "navigating-xkcd/SKILL.md": "---\nname: navigating-xkcd\ndescription: Navigate XKCD.\n---\n" },
+      }]);
+      expect(result.agentsContent).toContain("BEGIN ROOK PERSONAL INSTRUCTIONS");
+    } finally {
+      await cleanup(root);
+    }
+  });
+
   it("materializes facts, llms.txt, and MCP content by type", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "rook-agent-workspace-"));
     try {

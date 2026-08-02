@@ -193,12 +193,57 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
     const result = await this.getBundles(environmentId);
     const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
-    if (!bundle) throw new Error(`Unknown bundle ${environmentId}#${bundleId}`);
+    if (!bundle) throw new Error(`Unknown ${kind} artifact ${environmentId}#${bundleId}/${artifactId}`);
     const artifacts = kind === "skills" ? bundle.skills : kind === "mcp-servers" ? bundle.mcpServers : bundle.apps;
     const artifact = artifacts.find((candidate) => candidate.id === artifactId);
-    if (!artifact) throw new Error(`Unknown ${kind} artifact ${artifactId}`);
+    if (!artifact) throw new Error(`Unknown ${kind} artifact ${environmentId}#${bundleId}/${artifactId}`);
     artifact.files = files;
     this.saveBundle(bundle);
+    return true;
+  }
+
+  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
+    if (this.repositoryId !== "personal" || kind !== "skills") return false;
+    const result = await this.getBundles(environmentId);
+    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
+    if (!bundle) throw new Error(`Unknown bundle ${environmentId}#${bundleId}`);
+    const artifacts = kind === "skills" ? bundle.skills : kind === "mcp-servers" ? bundle.mcpServers : bundle.apps;
+    if (artifacts.some((artifact) => artifact.id === artifactId)) return false;
+    artifacts.push({ id: artifactId, files });
+    bundle.valid = true;
+    bundle.errors = [];
+    this.saveBundle(bundle);
+    return true;
+  }
+
+  async ensurePersonalBundle(environmentId: string): Promise<boolean> {
+    if (this.repositoryId !== "personal") return false;
+    const result = await this.getBundles(environmentId);
+    const existing = result.bundles.find((bundle) => bundle.bundleId === "personal");
+    if (existing) {
+      if (!existing.valid) {
+        existing.valid = true;
+        existing.errors = [];
+        this.saveBundle(existing);
+      }
+      return true;
+    }
+    if (!result.environment) return false;
+    this.saveResult({
+      environment: result.environment,
+      bundles: [{
+        id: `${environmentId}#personal`,
+        bundleId: "personal",
+        environmentId,
+        repository: "personal",
+        skills: [],
+        mcpServers: [],
+        apps: [],
+        valid: true,
+        errors: [],
+      }],
+      errors: [],
+    });
     return true;
   }
 

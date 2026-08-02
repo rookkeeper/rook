@@ -24,6 +24,16 @@ export class CompositeEnvironmentRepository extends EnvironmentRepository {
     return repository ? repository.replaceBundleInstructions(environmentId, bundleId, content) : false;
   }
 
+  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
+    const repository = await this.repositoryForBundle(environmentId, bundleId);
+    return repository ? repository.createArtifactFiles(environmentId, bundleId, kind, artifactId, files) : false;
+  }
+
+  async ensurePersonalBundle(environmentId: string): Promise<boolean> {
+    const repository = this.repositories.find((candidate) => candidate.repositoryId === "personal");
+    return repository ? repository.ensurePersonalBundle(environmentId) : false;
+  }
+
   private async repositoryForBundle(environmentId: string, bundleId: string): Promise<EnvironmentRepository | null> {
     const result = await this.getBundles(environmentId);
     const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);

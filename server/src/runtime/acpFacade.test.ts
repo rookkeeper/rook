@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -251,6 +251,43 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const afterInstructions = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; agentsMd?: string }> };
     expect(afterInstructions.bundles.find((candidate) => candidate.bundleId === "personal")?.agentsMd).toBe("updated by the mock agent");
     await request(ws, 6, "session/close", { sessionId });
+    ws.close();
+    removeReadOnlyTree(path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId));
+  });
+
+  it("writes a newly created personal skill to SQLite", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "new-skill-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "new-skill-test" },
+    });
+    const sessionId = created.sessionId as string;
+    const environmentId = "web:new-skill.example";
+
+    await fetch(`http://127.0.0.1:${PORT}/api/environments/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: environmentId, metadata: { displayName: "New Skill Test" } }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const entered = await fetch(`http://127.0.0.1:${PORT}/api/session/environments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, enterEnvironmentIds: [environmentId], leaveEnvironmentIds: [] }),
+    }).then((response) => response.json()) as { entered: string[] };
+    expect(entered.entered).toContain(environmentId);
+
+    const workspaceSkill = path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId, ".agent", "skills", "navigating-xkcd");
+    mkdirSync(workspaceSkill, { recursive: true });
+    writeFileSync(path.join(workspaceSkill, "SKILL.md"), "---\nname: navigating-xkcd\ndescription: Navigate XKCD.\n---\n", "utf8");
+    await request(ws, 3, "session/prompt", { sessionId, prompt: [{ type: "text", text: "say hi briefly" }] });
+
+    const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=${environmentId}`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; skills: Array<{ id: string; files: Record<string, string> }> }> };
+    const personal = preview.bundles.find((bundle) => bundle.bundleId === "personal");
+    expect(personal?.skills.find((skill) => skill.id === "navigating-xkcd")?.files["navigating-xkcd/SKILL.md"]).toContain("Navigate XKCD.");
+    await request(ws, 4, "session/close", { sessionId });
     ws.close();
     removeReadOnlyTree(path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId));
   });

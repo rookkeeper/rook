@@ -9,6 +9,7 @@ export interface AgentWorkspaceBundle {
   editable: boolean;
   bundle: EnvironmentBundle;
   writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
+  writeBackNewSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
   writeBackInstructions?: (content: string) => Promise<boolean>;
 }
 
@@ -27,6 +28,7 @@ export interface AgentWorkspaceResult {
   skillsRoot: string;
   skillPaths: string[];
   skillMappings: AgentWorkspaceSkillMapping[];
+  newSkillTargets: Array<(skillId: string, files: Record<string, string>) => Promise<boolean>>;
   instructionMappings: AgentWorkspaceInstructionMapping[];
   mcpPaths: string[];
 }
@@ -52,6 +54,7 @@ export class AgentWorkspaceMaterializer {
 
     const skillPaths: string[] = [];
     const skillMappings: AgentWorkspaceSkillMapping[] = [];
+    const newSkillTargets: Array<(skillId: string, files: Record<string, string>) => Promise<boolean>> = [];
     const mcpPaths: string[] = [];
     const inlineFacts: InlineFact[] = [];
     const seenSkillNames = new Set<string>();
@@ -74,6 +77,7 @@ export class AgentWorkspaceMaterializer {
     };
 
     for (const entry of bundles) {
+      if (entry.writeBackNewSkill) newSkillTargets.push(entry.writeBackNewSkill);
       for (const skill of entry.bundle.skills) await addSkill(entry, skill);
       for (const fact of entry.bundle.facts ?? []) {
         const content = artifactText(fact);
@@ -94,7 +98,7 @@ export class AgentWorkspaceMaterializer {
     const agentsPath = path.join(root, "AGENTS.md");
     const renderedInstructions = renderAgentsFile(bundles, inlineFacts);
     await writeFile(agentsPath, renderedInstructions.content, "utf8");
-    return { root, agentsPath, agentsContent: renderedInstructions.content, skillsRoot, skillPaths, skillMappings, instructionMappings: renderedInstructions.mappings, mcpPaths };
+    return { root, agentsPath, agentsContent: renderedInstructions.content, skillsRoot, skillPaths, skillMappings, newSkillTargets, instructionMappings: renderedInstructions.mappings, mcpPaths };
   }
 
   /** Copies edits from writable, file-backed skill sources back to their source directories. */
@@ -110,6 +114,24 @@ export class AgentWorkspaceMaterializer {
       }
       const handled = mapping.writeBack ? await mapping.writeBack(files) : false;
       if (!handled && mapping.sourcePath) await copyDirectory(mapping.workspacePath, mapping.sourcePath);
+    }
+
+    if (result.newSkillTargets.length === 1) {
+      const knownWorkspacePaths = new Set(result.skillMappings.map((mapping) => mapping.workspacePath));
+      for (const entry of await readdir(result.skillsRoot, { withFileTypes: true })) {
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+        const skillPath = path.join(result.skillsRoot, entry.name);
+        if (knownWorkspacePaths.has(skillPath)) continue;
+        let files: Record<string, string>;
+        try {
+          files = await readWorkspaceFiles(skillPath, entry.name);
+        } catch (error) {
+          if (isMissingPath(error)) continue;
+          throw error;
+        }
+        if (!(`${entry.name}/SKILL.md` in files)) continue;
+        await result.newSkillTargets[0](entry.name, files);
+      }
     }
 
     if (result.instructionMappings.length === 0) return;
@@ -223,8 +245,8 @@ function generatedReferenceSkill(id: string, sourceName: string, content: string
 function renderAgentsFile(bundles: AgentWorkspaceBundle[], inlineFacts: InlineFact[]): { content: string; mappings: AgentWorkspaceInstructionMapping[] } {
   const mappings: AgentWorkspaceInstructionMapping[] = [];
   const blocks = bundles.flatMap((entry) => {
-    const content = entry.bundle.agentsMd?.trim();
-    if (!content) return [];
+    const content = entry.bundle.agentsMd?.trim() ?? "";
+    if (!content && !(entry.editable && entry.writeBackInstructions)) return [];
     const environmentName = escapeMarkup(entry.environmentName);
     const bundleName = escapeMarkup(entry.bundleName);
     const editable = entry.editable ? ' editable="true"' : "";
