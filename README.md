@@ -22,7 +22,7 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - [clients/cli](clients/cli/) — minimal ACP-first command-line client
 - [clients/RookKit](clients/RookKit/) — shared Swift package for the native clients
 - [skills/](skills/) — repo-local Pi skills that Rook injects into Pi sessions (currently includes `create-skills`)
-- [dev-tools/](dev-tools/) — repo-local Pi development/debug extensions (currently includes provider-payload trace logging to `.var/pi-traces.jsonl`)
+- [dev-tools/](dev-tools/) — repo-local Pi development/debug extensions (currently includes provider-payload trace logging to `/tmp/pi/provider-payload.jsonl`)
 
 ## Common entry points
 
@@ -32,7 +32,7 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - `./scripts/run-rook.sh android`
 - `./scripts/run-rook.sh stop`
 - `./scripts/print-environments.sh` — dump active/recent environment diagnostics from the server
-- `./scripts/tail-pi-traces.sh` — inspect provider-payload traces in `.var/pi-traces.jsonl` (follows by default; use `--once` for one-shot output)
+- `./scripts/tail-logs.sh` — inspect provider-payload traces in `/tmp/pi/provider-payload.jsonl` (use `--instructions` and/or `--tools` for structured output)
 - `./scripts/run-tests.sh` — run the known server, Swift package, iPhone, and macOS test/build checks
 
 ## High-level docs map
