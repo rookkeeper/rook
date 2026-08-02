@@ -252,6 +252,39 @@ describe("EnvironmentManager", () => {
       editable: false,
       bundle: { bundleId: "mail", agentsMd: "Confirm before sending." },
     }]);
+
+    const prompt = manager.runtimeInstructionsForSession("s1", "/tmp/session-workspace");
+    expect(prompt).toContain('<bundle name="Environment capabilities">');
+    expect(prompt).toContain("Confirm before sending.");
+  });
+
+  it("does not render unapproved canonical bundle instructions", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([{
+      bundle: {
+        id: "web:example.com#mail",
+        bundleId: "mail",
+        environmentId: "web:example.com",
+        repository: "canonical",
+        skills: [],
+        mcpServers: [],
+        apps: [],
+        agentsMd: "Do not show this until approved.",
+        valid: true,
+        errors: [],
+      },
+      bundleHash: "hash-mail",
+    }] as any);
+    const manager = newManager(repositoryService);
+    manager.subscribe("s1", mockListener());
+    await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: { displayName: "Gmail" } });
+    manager.enterEnvironment("s1", "web:example.com");
+
+    expect(manager.runtimeInstructionsForSession("s1", "/tmp/session-workspace")).not.toContain("Do not show this until approved.");
+
+    manager.decideEnvironment("web:example.com", "approve", "hash-mail", "s1");
+
+    expect(manager.runtimeInstructionsForSession("s1", "/tmp/session-workspace")).toContain("Do not show this until approved.");
   });
 
   it("provides the Rook identity for plain sessions", () => {

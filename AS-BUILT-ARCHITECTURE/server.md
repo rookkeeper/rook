@@ -189,7 +189,7 @@ Related tables:
 3. finalized environments resolve matching bundles and hash them
 4. undecided bundles are offered to subscribed sessions when that session enters the finalized environment
 5. client resolves via REST decision or ACP extension resolution
-6. approved/personal bundle content is resolved for runtime materialization; skill paths are attached to the launch configuration and generated instructions are appended to the runtime prompt
+6. approved/personal bundle content is resolved for runtime materialization; skill paths are attached to the launch configuration and generated instructions are appended to the runtime prompt. The environment prompt template renders bundle `AGENTS.md` text only for approved or user-owned bundles.
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment

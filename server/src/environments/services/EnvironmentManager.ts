@@ -428,6 +428,10 @@ export class EnvironmentManager {
 
         const agentsMdBundles = (remembered?.bundles ?? [])
           .filter((b) => b.agentsMd)
+          .filter((b) => {
+            const decision = this.sessionDecisions.effective(b.bundleHash, sessionId);
+            return isUserOwnedRepository(b.repository) || decision === "accept" || decision === "approve";
+          })
           .map((b) => ({ bundleId: b.bundleId, content: b.agentsMd! }));
 
         return {
