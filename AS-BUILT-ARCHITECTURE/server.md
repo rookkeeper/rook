@@ -111,7 +111,7 @@ Current durable persistence is SQLite-backed and split between:
 - the application database: session records, append-only normalized transcript events, session-environment membership, and durable environment decisions
 - the environment repository databases: environments, bundles, immutable content revisions, and capability artifact files for canonical and personal repositories
 
-The legacy directory repository remains only as an explicit import path for migration and project-directory sources.
+Canonical and personal environment-repository content is SQLite-only; the legacy directory repository and importer are no longer runtime or migration sources. Project-directory environments remain the intentional direct file-backed exception.
 
 The database details live in [database.md](./database.md).
 
@@ -194,9 +194,10 @@ Related tables:
 ### Environment-driven runtime restart
 1. session enters or exits an environment
 2. `AgentRuntimeManager` resolves approved bundle content, materializes it into a per-session capability workspace, and computes `skillPaths`, `enteredEnvironmentIds`, and appended prompt text with workspace authoring paths
-3. it creates a replacement `SessionRuntime`
-4. replacement must successfully `session/load` the exact existing runtime session
-5. only then is the old subprocess retired
+3. writable personal skills and instruction sections are synchronized back to SQLite before rematerialization; newly created skill directories are persisted when there is exactly one personal bundle target
+4. it creates a replacement `SessionRuntime`
+5. replacement must successfully `session/load` the exact existing runtime session
+6. only then is the old subprocess retired
 
 ### Location registration
 1. phone client posts `register-location`
@@ -215,4 +216,5 @@ Related tables:
 - durable decisions, transcript history, and session membership are SQLite-backed
 - canonical and personal environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
 - facts and `llms.txt` use capability-specific projections; MCP content is reviewable/read-only but not started by the runtime
+- personal authoring uses a writable workspace projection and server-mediated SQLite write-back; filesystem permissions are not a strong sandbox against same-user arbitrary shell access
 - location identification is provider-pluggable behind `PoiLookupProvider`

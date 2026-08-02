@@ -222,9 +222,9 @@ Main methods:
 
 ## Repository write-back and projections
 
-`SQLiteEnvironmentRepository` writes a changed personal skill or instruction by creating/updating the current revision and recalculating the canonical content hash. The runtime never writes directly to the repository database; `AgentWorkspaceMaterializer` performs the synchronization at workspace lifecycle boundaries.
+`SQLiteEnvironmentRepository` writes changed personal skill or instruction content by creating/updating the current revision and recalculating the content hash. Existing personal skills are synchronized by artifact mapping; newly authored skill directories containing `SKILL.md` are created as personal artifacts when the runtime has exactly one personal bundle target. The runtime never writes directly to the repository database; `AgentWorkspaceMaterializer` performs server-mediated synchronization after prompts and before workspace close or rematerialization.
 
-Canonical and personal repository content is SQLite-only. Project-directory sources are intentionally direct file-backed exceptions. Canonical/external projections are read-only by filesystem policy, while personal and project-owned projections have explicit write-back mappings.
+Canonical and personal repository content is SQLite-only. Project-directory sources are intentionally direct file-backed exceptions. Canonical/external projections are read-only by filesystem policy, while personal and project-owned projections have explicit write-back mappings. The filesystem permissions are an accidental-write boundary, not a strong security sandbox against an agent with arbitrary same-user shell access.
 
 ## What is not yet in the database
 
