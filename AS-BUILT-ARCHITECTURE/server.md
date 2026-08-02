@@ -174,13 +174,14 @@ Related tables:
 5. server returns that public session ID and binds the same websocket to it
 
 ### Prompt execution
-1. client sends ACP `session/prompt` on a session-bound websocket
-2. ACP facade resolves the public session
-3. `AgentRuntimeManager` rewrites to the runtime-local session ID
-4. `SessionRuntime` forwards the request to the subprocess
-5. runtime emits `session/update` notifications
-6. server normalizes live transcript events into `session_transcript_events`
-7. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
+1. every configured runtime starts with the base `## You are Rook` identity prompt; environment-specific additions are appended when environments are entered
+2. client sends ACP `session/prompt` on a session-bound websocket
+3. ACP facade resolves the public session
+4. `AgentRuntimeManager` rewrites to the runtime-local session ID
+5. `SessionRuntime` forwards the request to the subprocess
+6. runtime emits `session/update` notifications
+7. server normalizes live transcript events into `session_transcript_events`
+8. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
 
 ### Environment offer and approval
 1. a provider registers an environment candidate with `POST /api/environments/register`

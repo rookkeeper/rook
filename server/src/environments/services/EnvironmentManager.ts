@@ -415,6 +415,10 @@ export class EnvironmentManager {
     return [...(this.entered.get(sessionId) ?? [])];
   }
 
+  runtimeIdentityInstructions(): string {
+    return renderRookIdentityPrompt();
+  }
+
   runtimeInstructionsForSession(sessionId: string, authoringRoot?: string): string | undefined {
     const entries = this.enteredEnvironments(sessionId)
       .map((environmentId) => {

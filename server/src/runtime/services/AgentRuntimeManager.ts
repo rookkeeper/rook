@@ -261,8 +261,17 @@ export class AgentRuntimeManager {
     return runtime;
   }
 
-  private createSessionRuntime(profile: AgentRuntimeProfile): SessionRuntime {
-    return new SessionRuntime(profile, this.repoRoot, runtimeLaunchPlan, undefined, this.logger);
+  private createSessionRuntime(profile: AgentRuntimeProfile, configuration: SessionRuntimeConfiguration = this.baseRuntimeConfiguration()): SessionRuntime {
+    return new SessionRuntime(profile, this.repoRoot, runtimeLaunchPlan, configuration, this.logger);
+  }
+
+  private baseRuntimeConfiguration(): SessionRuntimeConfiguration {
+    return {
+      enteredEnvironmentIds: [],
+      skillPaths: [],
+      extensionPaths: [],
+      ...(this.environmentManager ? { appendSystemPrompt: this.environmentManager.runtimeIdentityInstructions() } : {}),
+    };
   }
 
   private attachSessionRuntime(sessionId: string, runtime: SessionRuntime): void {

@@ -20,6 +20,8 @@ The server maps public session ids to runtime-local ACP session ids and owns nor
 
 ## Environment integration
 
+Every configured runtime receives the base Rook identity prompt, including sessions with no entered environment. Environment-specific instructions are added later through the same runtime configuration.
+
 Environment changes are Rook orchestration around ACP:
 
 1. resolve approved/personal bundle revisions
