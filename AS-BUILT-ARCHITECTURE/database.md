@@ -31,10 +31,12 @@ Not every feature needs every layer:
 As built today:
 - `infrastructure/datastores/RookDatastore.ts` owns the application SQLite connection
 - `environments/datastores/EnvironmentRepositoryDatastore.ts` owns one environment-repository SQLite connection
-- `sessions/datastores/SqliteSessionRepository.ts` owns session/session-environment SQL
-- `environments/datastores/EnvironmentDecisionStore.ts` owns durable environment-decision SQL in the application database
-- `sessions/services/SessionTranscriptStore.ts` owns transcript-event SQL while remaining session-domain persistence code
+- `sessions/repositories/SqliteSessionRepository.ts` owns session/session-environment SQL
+- `environments/repositories/EnvironmentDecisionRepository.ts` owns durable environment-decision SQL in the application database
+- `sessions/repositories/SessionTranscriptRepository.ts` owns transcript-event SQL
 - `environments/repositories/SQLiteEnvironmentRepository.ts` owns repository content queries, revisions, and artifact write-back
+
+The `*Datastore` classes provide concrete SQLite connections and schema bootstrap. Repository implementations directly execute SQL against those connections; there is no additional query abstraction between repositories and SQLite.
 
 ## Current tables
 
@@ -99,7 +101,7 @@ Indexes:
 - `session_transcript_events_session_idx ON session_transcript_events(session_id, sequence ASC)`
 
 Used by:
-- `SessionTranscriptStore`
+- `SessionTranscriptRepository`
 - session transcript hydration route
 - live runtime-notification normalization in `AgentRuntimeManager`
 
@@ -121,7 +123,7 @@ Important note:
 - `accept` and `ignore` are intentionally in-memory session-scoped decisions managed by `EnvironmentManager`
 
 Used by:
-- `EnvironmentDecisionStore`
+- `EnvironmentDecisionRepository`
 - `EnvironmentManager`
 - environment offer resolution and durable approvals/rejections
 
@@ -198,22 +200,22 @@ Main methods:
 - `environmentIds(sessionId)`
 - `replaceEnvironmentIds(sessionId, environmentIds)`
 
-### `SessionTranscriptStore`
+### `SessionTranscriptRepository`
 
 Role:
-- append-only persistence wrapper for normalized transcript events
-- session-domain persistence code even though it is named as a store rather than a repository
+- append-only repository for normalized transcript events
+- directly executes transcript SQL against the application SQLite connection
 
 Main methods:
 - `append(sessionId, event, createdAt?)`
 - `list(sessionId)`
 - `clear(sessionId)`
 
-### `EnvironmentDecisionStore`
+### `EnvironmentDecisionRepository`
 
 Role:
-- persistence wrapper for durable bundle decisions
-- store-shaped rather than named as a repository, but serving the same architectural purpose
+- repository for durable bundle decisions
+- directly executes decision SQL against the application SQLite connection
 
 Main methods:
 - `getDecision(bundleHash)`

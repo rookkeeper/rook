@@ -4,7 +4,7 @@ import websocket from "@fastify/websocket";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { EnvironmentDecisionStore } from "./environments/datastores/EnvironmentDecisionStore.js";
+import { EnvironmentDecisionRepository } from "./environments/repositories/EnvironmentDecisionRepository.js";
 import { EnvironmentManager } from "./environments/services/EnvironmentManager.js";
 import { CompositeEnvironmentRepository } from "./environments/repositories/CompositeEnvironmentRepository.js";
 import { SQLiteEnvironmentRepository } from "./environments/repositories/SQLiteEnvironmentRepository.js";
@@ -27,9 +27,9 @@ import { registerAcpFacadeRoute } from "./runtime/routes/acpFacadeRoute.js";
 import { ServerAuth } from "./infrastructure/auth.js";
 import { loadAgentRuntimes } from "./infrastructure/config/agentRuntimes.js";
 import { RookDatastore } from "./infrastructure/datastores/RookDatastore.js";
-import { SqliteSessionRepository } from "./sessions/datastores/SqliteSessionRepository.js";
+import { SqliteSessionRepository } from "./sessions/repositories/SqliteSessionRepository.js";
 import { AgentRuntimeManager } from "./runtime/services/AgentRuntimeManager.js";
-import { SessionTranscriptStore } from "./sessions/services/SessionTranscriptStore.js";
+import { SessionTranscriptRepository } from "./sessions/repositories/SessionTranscriptRepository.js";
 import { startRemoteProxy } from "./infrastructure/remoteProxy.js";
 
 dotenv.config({ path: path.join(REPO_ROOT, ".env") });
@@ -88,10 +88,10 @@ export async function buildServer(options: BuildServerOptions = {}) {
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
   const datastore = new RookDatastore(options.environmentDecisionStoreLocation);
-  const environmentDecisionStore = new EnvironmentDecisionStore(datastore);
+  const environmentDecisionRepository = new EnvironmentDecisionRepository(datastore);
   const environmentMetadataCaptureSink = new JsonlEnvironmentMetadataCaptureSink();
   await environmentMetadataCaptureSink.initialize();
-  const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionStore, {
+  const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionRepository, {
     activeEnvironmentWindowMs: options.environmentActiveWindowMs ?? Number(process.env.ROOK_ENVIRONMENT_ACTIVE_WINDOW_MS ?? 5 * 60_000 + 15_000),
     recentEnvironmentRetentionMs: options.environmentRecentRetentionMs ?? Number(process.env.ROOK_ENVIRONMENT_RECENT_RETENTION_MS ?? 30 * 60_000),
     logger: app.log,
@@ -107,8 +107,8 @@ export async function buildServer(options: BuildServerOptions = {}) {
   });
   const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
   const sessionRepository = new SqliteSessionRepository(datastore);
-  const transcriptStore = new SessionTranscriptStore(datastore);
-  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, environmentManager, transcriptStore, app.log);
+  const transcriptRepository = new SessionTranscriptRepository(datastore);
+  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, environmentManager, transcriptRepository, app.log);
   await app.register(websocket);
 
   app.addHook("onRequest", async (request, reply) => {
@@ -127,7 +127,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
   app.get("/api/health", async () => ({ ok: true, service: "rook" }));
   await registerRuntimeRoutes(app, runtimeManager);
-  await registerSessionRoutes(app, runtimeManager, transcriptStore);
+  await registerSessionRoutes(app, runtimeManager, transcriptRepository);
   await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar, runtimeManager);
   await registerDiagnosticRoutes(app, environmentManager);
   await registerAcpFacadeRoute(app, runtimeManager, auth);

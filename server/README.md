@@ -67,7 +67,7 @@ For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTU
 
 ### Key examples
 
-- `sessions/datastores/SqliteSessionRepository.ts` — session persistence
+- `sessions/repositories/SqliteSessionRepository.ts` — session persistence
 - `infrastructure/datastores/RookDatastore.ts` — shared SQLite connection owner
 - `runtime/services/AgentRuntimeManager.ts` — per-session runtime orchestration
 - `environments/services/EnvironmentManager.ts` — environment lifecycle/orchestration
@@ -134,7 +134,7 @@ The environment system (registration, decision store, repository) continues to w
 - `src/runtime/SessionRuntime.ts` — ACP stdio subprocess lifecycle
 - `src/runtime/runtimeLaunchPlan.ts` — provider-specific launch strategies
 - `src/infrastructure/datastores/RookDatastore.ts` — shared SQLite connection
-- `src/sessions/datastores/SqliteSessionRepository.ts` — session persistence
+- `src/sessions/repositories/SqliteSessionRepository.ts` — session persistence
 - `src/infrastructure/config/agentRuntimes.ts` — runtime config loader
 - `src/runtime/AgentWorkspaceMaterializer.ts` — bundle-to-working-directory projection
 - `src/environments/repositories/SQLiteEnvironmentRepository.ts` — SQLite repository
@@ -152,6 +152,6 @@ npm test -- --run     # run once (no watch)
 Key test files:
 - `src/runtime/acpFacade.test.ts` — ACP integration (initialize, session lifecycle, error cases)
 - `src/infrastructure/config/agentRuntimes.test.ts` — runtime config validation
-- `src/sessions/datastores/SqliteSessionRepository.test.ts` — session persistence
-- `src/environments/datastores/EnvironmentDecisionStore.test.ts` — decision store
+- `src/sessions/repositories/SqliteSessionRepository.test.ts` — session persistence
+- `src/environments/repositories/EnvironmentDecisionRepository.test.ts` — decision repository
 - `src/environments/services/EnvironmentManager.test.ts` — environment lifecycle

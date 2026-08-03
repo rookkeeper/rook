@@ -9,11 +9,11 @@ export interface TranscriptEventRecord {
 }
 
 /**
- * Durable append-only store of normalized session transcript events.
+ * Durable append-only repository of normalized session transcript events.
  * This is owned by the server, not the runtime, so second viewers can hydrate
  * without asking the runtime to replay again.
  */
-export class SessionTranscriptStore {
+export class SessionTranscriptRepository {
   private readonly db: DatabaseSync;
 
   constructor(datastore: RookDatastore) {

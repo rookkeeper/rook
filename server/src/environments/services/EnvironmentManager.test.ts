@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EnvironmentManager } from "./EnvironmentManager.js";
-import { EnvironmentDecisionStore } from "../datastores/EnvironmentDecisionStore.js";
+import { EnvironmentDecisionRepository } from "../repositories/EnvironmentDecisionRepository.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import { JsonlEnvironmentMetadataCaptureSink } from "./environmentMetadataCapture.js";
 import type { EnvironmentEventListener } from "../support/types.js";
@@ -47,14 +47,14 @@ function resolvedBundle(environmentId: string, bundleId = "default") {
 }
 
 describe("EnvironmentManager", () => {
-  let decisions: EnvironmentDecisionStore;
+  let decisions: EnvironmentDecisionRepository;
   let nowMs: number;
   let originalHome: string | undefined;
   let tempHome: string;
   let captureDir: string;
 
   beforeEach(() => {
-    decisions = new EnvironmentDecisionStore(":memory:");
+    decisions = new EnvironmentDecisionRepository(":memory:");
     nowMs = Date.parse("2026-07-02T12:00:00.000Z");
     originalHome = process.env.HOME;
     tempHome = mkdtempSync(path.join(os.tmpdir(), "rook-home-"));

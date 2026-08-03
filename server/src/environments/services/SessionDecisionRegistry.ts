@@ -1,11 +1,11 @@
 import type { SessionDecision, EffectiveDecision, PermanentDecision } from "../support/types.js";
-import type { EnvironmentDecisionStore } from "../datastores/EnvironmentDecisionStore.js";
+import type { EnvironmentDecisionRepository } from "../repositories/EnvironmentDecisionRepository.js";
 
 /**
  * Per-session, in-memory decision registry.
  *
  * Each session gets its own map of (bundleHash → accept/ignore).
- * Permanent decisions (approve/reject) live in the EnvironmentDecisionStore (SQLite)
+ * Permanent decisions (approve/reject) live in the EnvironmentDecisionRepository (SQLite)
  * and are consulted as a fallback via the provided store reference.
  *
  * Session decisions are cleared when:
@@ -17,7 +17,7 @@ import type { EnvironmentDecisionStore } from "../datastores/EnvironmentDecision
 export class SessionDecisionRegistry {
   private readonly perSession = new Map<string, Map<string, SessionDecision>>();
 
-  constructor(private readonly permanentStore: EnvironmentDecisionStore) {}
+  constructor(private readonly permanentRepository: EnvironmentDecisionRepository) {}
 
   /** Effective decision for a bundle hash from a session's perspective. */
   effective(bundleHash: string, sessionId?: string): EffectiveDecision {
@@ -25,12 +25,12 @@ export class SessionDecisionRegistry {
       const sessionDecision = this.perSession.get(sessionId)?.get(bundleHash);
       if (sessionDecision) return sessionDecision;
     }
-    return this.permanentStore.getDecision(bundleHash) ?? "undecided";
+    return this.permanentRepository.getDecision(bundleHash) ?? "undecided";
   }
 
   /** Store a permanent decision (clears any session-level override for this hash). */
   setPermanent(bundleHash: string, environmentId: string, bundleId: string | null, decision: PermanentDecision): void {
-    this.permanentStore.setDecision(bundleHash, environmentId, bundleId, decision);
+    this.permanentRepository.setDecision(bundleHash, environmentId, bundleId, decision);
     this.clearAllForBundle(bundleHash);
   }
 

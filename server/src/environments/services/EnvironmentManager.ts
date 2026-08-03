@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { EnvironmentDecisionStore } from "../datastores/EnvironmentDecisionStore.js";
+import type { EnvironmentDecisionRepository } from "../repositories/EnvironmentDecisionRepository.js";
 import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../shared/environment.js";
 import type { EnvironmentBundle } from "../../shared/environmentRepository.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
@@ -166,7 +166,7 @@ export class EnvironmentManager {
 
   constructor(
     private readonly repositoryService: EnvironmentRepositoryService,
-    decisions: EnvironmentDecisionStore,
+    decisions: EnvironmentDecisionRepository,
     options: EnvironmentManagerOptions = {},
   ) {
     this.sessionDecisions = new SessionDecisionRegistry(decisions);

@@ -5,7 +5,7 @@ import type { EnvironmentBundleOffer, EnvironmentEventListener, EnvironmentResol
 import type { SessionRecord, SessionRepository } from "../../sessions/repositories/SessionRepository.js";
 import { SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotification, type SessionRuntimeConfiguration } from "../SessionRuntime.js";
 import { runtimeLaunchPlan, runtimeSessionParams } from "../runtimeLaunchPlan.js";
-import { SessionTranscriptStore } from "../../sessions/services/SessionTranscriptStore.js";
+import { SessionTranscriptRepository } from "../../sessions/repositories/SessionTranscriptRepository.js";
 import { normalizedEventsFromRuntimeMessage, runCompletedEvent, runFailedEvent } from "../../sessions/services/sessionTranscriptEvents.js";
 import { AgentWorkspaceMaterializer, type AgentWorkspaceResult } from "../AgentWorkspaceMaterializer.js";
 
@@ -37,7 +37,7 @@ export class AgentRuntimeManager {
     private readonly sessions: SessionRepository,
     private readonly repoRoot: string,
     private readonly environmentManager?: EnvironmentManager,
-    private readonly transcriptStore?: SessionTranscriptStore,
+    private readonly transcriptRepository?: SessionTranscriptRepository,
     private readonly logger: { info: (obj: Record<string, unknown>, msg?: string) => void } = console,
   ) {
     this.profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
@@ -113,7 +113,7 @@ export class AgentRuntimeManager {
       const result = await runtime.request(method, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration));
       if (method === "session/prompt") {
         const stopReason = typeof (result as JsonObject | undefined)?.stopReason === "string" ? String((result as JsonObject).stopReason) : "end_turn";
-        await this.transcriptStore?.append(sessionId, runCompletedEvent(stopReason));
+        await this.transcriptRepository?.append(sessionId, runCompletedEvent(stopReason));
         await this.syncWorkspace(sessionId);
       }
       await this.sessions.touch(sessionId);
@@ -126,7 +126,7 @@ export class AgentRuntimeManager {
       return rewriteResultSessionId(record, result);
     } catch (error) {
       if (method === "session/prompt") {
-        await this.transcriptStore?.append(sessionId, runFailedEvent(error instanceof Error ? error.message : String(error)));
+        await this.transcriptRepository?.append(sessionId, runFailedEvent(error instanceof Error ? error.message : String(error)));
       }
       this.timingLog("request_failed", {
         method,
@@ -443,7 +443,7 @@ export class AgentRuntimeManager {
 
   private async captureTranscriptEvents(sessionId: string, message: JsonRpcMessage): Promise<void> {
     for (const event of normalizedEventsFromRuntimeMessage(message)) {
-      await this.transcriptStore?.append(sessionId, event);
+      await this.transcriptRepository?.append(sessionId, event);
     }
   }
 

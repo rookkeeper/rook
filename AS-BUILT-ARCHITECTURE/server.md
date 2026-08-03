@@ -28,10 +28,10 @@ The server is a Fastify service on `127.0.0.1:7665` with an optional second remo
 - `runtime/AgentWorkspaceMaterializer`
   - projects approved bundle content into per-session capability workspaces
   - keeps canonical/external projections read-only and synchronizes writable personal skills/instruction sections back to SQLite or project sources
-- `sessions/datastores/SqliteSessionRepository`
-  - persists sessions and session↔environment membership
-- `environments/datastores/EnvironmentDecisionStore`
-  - persists durable environment decisions keyed by bundle hash
+- `sessions/repositories/SqliteSessionRepository`
+  - persists sessions and session↔environment membership directly in SQLite
+- `environments/repositories/EnvironmentDecisionRepository`
+  - persists durable environment decisions keyed by bundle hash directly in SQLite
 - location services
   - `location/EnvironmentIdentifier` ranks nearby `location:` environments
   - `location/LocationRegistrar` syncs identified locations into the environment manager

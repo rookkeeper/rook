@@ -3,7 +3,7 @@ import type { PermanentDecision } from "../support/types.js";
 import { RookDatastore } from "../../infrastructure/datastores/RookDatastore.js";
 
 /**
- * Repository layer for persistent bundle decisions (Approve / Reject).
+ * Repository for persistent bundle decisions (Approve / Reject).
  *
  * Backed by Node's built-in `node:sqlite`. The service layer never sees SQL — if we
  * later swap in another backend, only this file changes. Ephemeral decisions
@@ -12,7 +12,7 @@ import { RookDatastore } from "../../infrastructure/datastores/RookDatastore.js"
  * The stored key is a bundle-content hash. Each row also records which
  * environment and bundle the decision was made for, for auditability.
  */
-export class EnvironmentDecisionStore {
+export class EnvironmentDecisionRepository {
   private readonly db: DatabaseSync;
   private readonly ownedDatastore: RookDatastore | null;
 

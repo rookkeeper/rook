@@ -1,8 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { SessionRecord, SessionRepository } from "../repositories/SessionRepository.js";
+import type { SessionRecord, SessionRepository } from "./SessionRepository.js";
 import { RookDatastore } from "../../infrastructure/datastores/RookDatastore.js";
 
-/** SQLite datastore implementation for the unified public session space. */
+/** SQLite repository for the unified public session space. */
 export class SqliteSessionRepository implements SessionRepository {
   private readonly db: DatabaseSync;
   private readonly ownedDatastore: RookDatastore | null;
