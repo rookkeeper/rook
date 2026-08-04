@@ -32,15 +32,17 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
     const agents = await readOptionalText(path.join(directory, "AGENTS.md"));
     const claude = await readOptionalText(path.join(directory, "CLAUDE.md"));
     const mcp = await readOptionalText(path.join(directory, ".mcp.json"));
-    const agentsMd = [agents && `# Project instructions\n\n${agents}`, claude && `# Claude project instructions\n\n${claude}`].filter(Boolean).join("\n\n") || undefined;
+    // AGENTS.md is the project source when present. CLAUDE.md is a fallback
+    // source only, never a second instruction layer to concatenate.
+    const agentsMd = agents ?? claude;
     const hasContent = skills.length > 0 || Boolean(agentsMd) || Boolean(mcp);
     if (!hasContent) return { environment: environmentRecord(environmentId, directory), bundles: [], errors };
 
     return {
       environment: environmentRecord(environmentId, directory),
       bundles: [{
-        id: `${environmentId}#personal`,
-        bundleId: "personal",
+        id: `${environmentId}#directory`,
+        bundleId: "directory",
         environmentId,
         repository: this.repositoryId,
         bundlePath: directory,

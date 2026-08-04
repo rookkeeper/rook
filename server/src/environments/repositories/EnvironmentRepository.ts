@@ -16,17 +16,17 @@ export abstract class EnvironmentRepository {
   }
 
   /** Optional write API for user-owned database-backed artifacts. */
-  async replaceArtifactFiles(_environmentId: string, _bundleId: string, _kind: "skills" | "mcp-servers" | "apps", _artifactId: string, _files: Record<string, string>): Promise<boolean> {
+  async replaceArtifactFiles(_environmentId: string, _bundleId: string, _kind: "skills" | "mcp-servers" | "apps", _artifactId: string, _files: Record<string, string>, _repositoryId?: string): Promise<boolean> {
     return false;
   }
 
   /** Optional write API for user-owned bundle instructions. */
-  async replaceBundleInstructions(_environmentId: string, _bundleId: string, _content: string): Promise<boolean> {
+  async replaceBundleInstructions(_environmentId: string, _bundleId: string, _content: string, _repositoryId?: string): Promise<boolean> {
     return false;
   }
 
   /** Optional creation API for a newly authored skill. */
-  async createArtifactFiles(_environmentId: string, _bundleId: string, _kind: "skills" | "mcp-servers" | "apps", _artifactId: string, _files: Record<string, string>): Promise<boolean> {
+  async createArtifactFiles(_environmentId: string, _bundleId: string, _kind: "skills" | "mcp-servers" | "apps", _artifactId: string, _files: Record<string, string>, _repositoryId?: string): Promise<boolean> {
     return false;
   }
 

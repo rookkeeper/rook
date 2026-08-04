@@ -47,11 +47,12 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 - [ ] Add a process-owned temporary global workspace root, created when the server starts and removed when the server exits.
 - [ ] Decide the exact root location and ensure it is not treated as durable repository storage.
-- [ ] Add a server-owned mapping/manifest for every global path, recording source identity, mutability, and materialization state.
+- [ ] Add a server-owned mapping/manifest for every global SQLite-materialization path, recording source identity, mutability, and materialization state; direct project links are not global entries.
 - [ ] Use stable paths for personal SQLite capabilities during the lifetime of the process.
 - [ ] Do not add reference counting or garbage collection in this phase.
 - [ ] Add startup reconciliation that can rebuild the global workspace entirely from SQLite and active project sources.
 - [ ] Add shutdown cleanup that tolerates incomplete or already-removed files.
+- [ ] Define a bounded shutdown flush policy: stop accepting watcher work, settle queued changes, retry/fail visibly within the bound, then close databases and remove the temporary workspace.
 
 ### Acceptance gates
 
@@ -116,7 +117,7 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 - [ ] Ensure the agent is instructed to create new skills only inside the appropriate environment slot.
 - [ ] Keep `.agent/skills/` unavailable for arbitrary new entries under normal permissions.
 - [ ] Detect a new skill when `SKILL.md` appears in an editable-skill slot.
-- [ ] Validate the basic skill structure and required standard frontmatter.
+- [ ] Treat a skill as real as soon as `SKILL.md` exists; optionally validate standard frontmatter without blocking ownership or materialization.
 - [ ] For a SQLite-backed environment, create the new personal artifact in SQLite after `SKILL.md` exists.
 - [ ] For a directory environment, create `.agents/skills/` in the project if necessary, copy the new skill there, and replace the temporary source with a direct project link.
 - [ ] After a new skill becomes real, add the corresponding `.agent/skills/<name>` link while keeping the `.agent/editable-skills/<environment>/<name>` link.
@@ -142,7 +143,7 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 - [ ] Keep project changes out of SQLite revision/write-back APIs.
 - [ ] Reconcile project changes into agent-workspace links and the aggregate `AGENTS.md`.
 - [ ] Remove project-directory handling that assumes a SQLite personal bundle exists.
-- [ ] Decide how project `CLAUDE.md` participates in the per-environment instruction source without making the project aggregate ambiguous.
+- [ ] Implement the project instruction rule without ambiguity: use project `AGENTS.md` when it exists; otherwise use project `CLAUDE.md` as the per-environment AGENTS source; do not combine both.
 
 ### Acceptance gates
 
@@ -183,6 +184,7 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 - [ ] Move agent workspace roots to the chosen per-session location under `~/.rook/agent-workspaces/<session-id>/`.
 - [ ] Set the runtime subprocess `cwd` to the agent workspace.
 - [ ] Ensure the workspace exists before runtime session creation/loading.
+- [ ] Define and implement one `cwd` policy for both the subprocess launch plan and ACP `session/new`/`session/load` parameters; preserve the client-requested cwd separately only if it remains meaningful after the workspace becomes runtime cwd.
 - [ ] Remove duplicate explicit skill injection when runtime discovery through the workspace is sufficient.
 - [ ] Keep the project directory out of the agent workspace for this phase.
 - [ ] Preserve the project directory as a future-work item for a later coding-workspace integration.
@@ -253,6 +255,25 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 - [ ] Multiple sessions share writable capability files without independent-copy overwrite behavior.
 - [ ] Immutable external content cannot be accidentally persisted through the writable watcher.
 - [ ] The global workspace can be discarded and rebuilt from durable sources.
+
+## 11. Final review and legacy audit
+
+- [ ] Update `FINAL_REVIEW.md` with the final identifier inventory, including public session IDs, runtime session IDs, environment IDs, bundle identities, revision keys, content hashes, artifact IDs, environment nicknames, and workspace paths.
+- [ ] Document every source of Rook’s identity text, authoring instructions, environment instructions, aggregate `AGENTS.md` template content, and runtime launch prompt content.
+- [ ] Document Rook startup, agent/session startup, environment entry and exit, runtime replacement, session close, server shutdown, and Rook restart behavior.
+- [ ] Document behavior for environments with skills, environments with instructions only, project environments with existing files, and environments with no capabilities.
+- [ ] Add an explicit final source assessment and dirty-file flush to session shutdown and server shutdown, and do not close SQLite until that bounded flush completes or reports its failure.
+- [ ] Audit the current source and tests for removed directory-repository names, importer commands, compatibility fields, old marker write-back, per-session writable-copy synchronization, and duplicate prompt injection.
+- [ ] Remove obsolete code completely instead of leaving compatibility layers for the replaced design.
+- [ ] Confirm that the only remaining directory-backed repository is the intentional project-directory adapter.
+- [ ] Update `FINAL_REVIEW.md`, the Part B FAQ, the as-built architecture, and README documentation after implementation stabilizes.
+
+### Acceptance gates
+
+- [ ] `FINAL_REVIEW.md` describes the implemented code rather than the pre-Part-B plan.
+- [ ] Every lifecycle path has a documented final persistence/reconciliation point.
+- [ ] A source search and test suite show no active legacy compatibility layer remains.
+- [ ] The final review distinguishes temporary global workspace files from durable SQLite/project sources.
 
 ## Future work
 

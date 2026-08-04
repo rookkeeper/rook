@@ -25,16 +25,16 @@ export class EnvironmentRepositoryService {
     return this.repository.searchBundles(query, repositoryId);
   }
 
-  async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
-    return this.repository.replaceArtifactFiles(environmentId, bundleId, kind, artifactId, files);
+  async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>, repositoryId?: string): Promise<boolean> {
+    return this.repository.replaceArtifactFiles(environmentId, bundleId, kind, artifactId, files, repositoryId);
   }
 
-  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string): Promise<boolean> {
-    return this.repository.replaceBundleInstructions(environmentId, bundleId, content);
+  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string, repositoryId?: string): Promise<boolean> {
+    return this.repository.replaceBundleInstructions(environmentId, bundleId, content, repositoryId);
   }
 
-  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
-    return this.repository.createArtifactFiles(environmentId, bundleId, kind, artifactId, files);
+  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>, repositoryId?: string): Promise<boolean> {
+    return this.repository.createArtifactFiles(environmentId, bundleId, kind, artifactId, files, repositoryId);
   }
 
   async ensurePersonalBundle(environmentId: string): Promise<boolean> {

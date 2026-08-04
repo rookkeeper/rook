@@ -14,29 +14,30 @@ export class CompositeEnvironmentRepository extends EnvironmentRepository {
     return { environment, bundles, errors };
   }
 
-  async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
-    const repository = await this.repositoryForBundle(environmentId, bundleId);
-    return repository ? repository.replaceArtifactFiles(environmentId, bundleId, kind, artifactId, files) : false;
+  async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>, repositoryId?: string): Promise<boolean> {
+    const repository = await this.repositoryForBundle(environmentId, bundleId, repositoryId);
+    return repository ? repository.replaceArtifactFiles(environmentId, bundleId, kind, artifactId, files, repositoryId) : false;
   }
 
-  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string): Promise<boolean> {
-    const repository = await this.repositoryForBundle(environmentId, bundleId);
-    return repository ? repository.replaceBundleInstructions(environmentId, bundleId, content) : false;
+  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string, repositoryId?: string): Promise<boolean> {
+    const repository = await this.repositoryForBundle(environmentId, bundleId, repositoryId);
+    return repository ? repository.replaceBundleInstructions(environmentId, bundleId, content, repositoryId) : false;
   }
 
-  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
-    const repository = await this.repositoryForBundle(environmentId, bundleId);
-    return repository ? repository.createArtifactFiles(environmentId, bundleId, kind, artifactId, files) : false;
+  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>, repositoryId?: string): Promise<boolean> {
+    const repository = await this.repositoryForBundle(environmentId, bundleId, repositoryId);
+    return repository ? repository.createArtifactFiles(environmentId, bundleId, kind, artifactId, files, repositoryId) : false;
   }
 
   async ensurePersonalBundle(environmentId: string): Promise<boolean> {
+    if (environmentId.startsWith("dir:")) return false;
     const repository = this.repositories.find((candidate) => candidate.repositoryId === "personal");
     return repository ? repository.ensurePersonalBundle(environmentId) : false;
   }
 
-  private async repositoryForBundle(environmentId: string, bundleId: string): Promise<EnvironmentRepository | null> {
+  private async repositoryForBundle(environmentId: string, bundleId: string, repositoryId?: string): Promise<EnvironmentRepository | null> {
     const result = await this.getBundles(environmentId);
-    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
+    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId && (repositoryId === undefined || candidate.repository === repositoryId));
     return bundle ? this.repositories.find((candidate) => candidate.repositoryId === bundle.repository) ?? null : null;
   }
 

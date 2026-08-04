@@ -384,12 +384,12 @@ export class EnvironmentManager {
         if (!isUserOwnedRepository(bundle.repository) && decision !== "accept" && decision !== "approve") continue;
         result.push({
           environmentName: deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info),
-          bundleName: bundle.bundleId === "default" || bundle.bundleId === "personal" ? "Personal capabilities" : "Environment capabilities",
-          editable: bundle.bundleId === "personal" || bundle.repository === "project-directory",
-          writeBackSkill: (skillId, files) => this.repositoryService.replaceArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files),
-          ...(bundle.bundleId === "personal" ? { writeBackNewSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.createArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files) } : {}),
-          writeBackInstructions: bundle.bundleId === "personal" || bundle.repository === "project-directory"
-            ? (content) => this.repositoryService.replaceBundleInstructions(environmentId, bundle.bundleId, content)
+          bundleName: bundle.repository === "personal" || bundle.repository === "project-directory" ? "Personal capabilities" : "Environment capabilities",
+          editable: bundle.repository === "personal" || bundle.repository === "project-directory",
+          writeBackSkill: (skillId, files) => this.repositoryService.replaceArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files, bundle.repository),
+          ...(bundle.repository === "personal" ? { writeBackNewSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.createArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files, bundle.repository) } : {}),
+          writeBackInstructions: bundle.repository === "personal" || bundle.repository === "project-directory"
+            ? (content) => this.repositoryService.replaceBundleInstructions(environmentId, bundle.bundleId, content, bundle.repository)
             : undefined,
           bundle,
         });
