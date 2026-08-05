@@ -2,13 +2,13 @@
 
 This TODO describes the work needed to replace per-session capability copies with shared writable files and agent-workspace links.
 
-The current implementation still copies capabilities into `.var/rook/agent-workspaces/<session-id>/`. The target implementation uses a temporary process-wide global workspace for writable SQLite content, direct links to project-owned files, and per-session agent-workspace links.
+The current implementation uses `~/.rook/global-workspace/` for shared writable SQLite content, direct links to project-owned files, and per-session agent-workspace links. The global workspace is cleared at startup and retained after shutdown for inspection.
 
 ## Locked direction
 
 - [x] Keep SQLite as the durable source of truth for SQLite-backed canonical and personal content.
 - [x] Keep project directories as the source of truth for `dir:` environments.
-- [x] Use a temporary process-wide global workspace for writable SQLite materializations.
+- [x] Use a process-wide global workspace at `~/.rook/global-workspace/` for writable SQLite materializations; clear its contents at startup and retain it after shutdown.
 - [x] Do not put immutable external content in the global writable workspace; materialize it directly into agent workspaces as read-only content.
 - [x] Use the agent workspace as the runtime process `cwd`.
 - [x] Keep the actual project directory out of the agent workspace for now; record exposing it later as future work.
@@ -20,7 +20,7 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 - [x] Keep non-writable external skills in `.agent/skills/` as read-only materialized files, not global links.
 - [x] Make a new skill real once its directory contains `SKILL.md`.
 - [x] For directory environments, write new skills to `.agents/skills/` in the project directory and new instructions to the project-root `AGENTS.md`.
-- [x] Do not create an SQLite personal bundle automatically for a directory environment.
+- [x] Do not create an SQLite personal bundle during passive registration; explicit entry creates it for non-directory authoring, while directory environments never receive one.
 - [x] Use `directory` rather than `personal` as the project-directory bundle ID.
 - [x] Use a simple collision policy for skills: the first skill keeps its name; later collisions use `_2`, `_3`, and so on for the workspace folder/link only.
 - [x] Accept same-user filesystem permissions as the current safety boundary; defer a separate runtime user or stronger sandboxing.
@@ -28,13 +28,13 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 ## 1. Normalize repository and environment identity
 
-- [ ] Change `ProjectDirectoryEnvironmentRepository` to return `bundleId: "directory"`.
-- [ ] Stop `CompositeEnvironmentRepository.ensurePersonalBundle()` from creating SQLite personal bundles for `dir:` environments.
-- [ ] Make composite write routing distinguish repository identity and bundle identity, even though writable user content currently maps to either SQLite `personal` or project `directory`.
-- [ ] Define the source identity used by the global workspace as a composite of repository, environment, bundle, artifact kind, and artifact ID.
-- [ ] Define a path-safe encoding for source identities; do not use raw environment IDs as filesystem paths without escaping.
-- [ ] Define stable environment nicknames from path-safe display names, with deterministic collision suffixes.
-- [ ] Keep the nickname as an agent-facing path component while retaining the full environment identity in the server-owned mapping.
+- [x] Change `ProjectDirectoryEnvironmentRepository` to return `bundleId: "directory"`.
+- [x] Stop `CompositeEnvironmentRepository.ensurePersonalBundle()` from creating SQLite personal bundles for `dir:` environments.
+- [x] Make composite write routing distinguish repository identity and bundle identity, even though writable user content currently maps to either SQLite `personal` or project `directory`.
+- [x] Define the source identity used by the global workspace as a composite of repository, environment, bundle, artifact kind, and artifact ID.
+- [x] Define a path-safe encoding for source identities; do not use raw environment IDs as filesystem paths without escaping.
+- [x] Define stable environment nicknames from path-safe display names, with deterministic collision suffixes.
+- [x] Keep the nickname as an agent-facing path component while retaining the full environment identity in the server-owned mapping.
 
 ### Acceptance gates
 
@@ -43,16 +43,16 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 - [ ] Two environments with the same display name receive distinct, stable workspace nicknames.
 - [ ] Environment IDs containing `/`, `:`, or other path-significant characters cannot escape the workspace root.
 
-## 2. Define the temporary global workspace
+## 2. Define the global workspace
 
-- [ ] Add a process-owned temporary global workspace root, created when the server starts and removed when the server exits.
-- [ ] Decide the exact root location and ensure it is not treated as durable repository storage.
-- [ ] Add a server-owned mapping/manifest for every global SQLite-materialization path, recording source identity, mutability, and materialization state; direct project links are not global entries.
-- [ ] Use stable paths for personal SQLite capabilities during the lifetime of the process.
-- [ ] Do not add reference counting or garbage collection in this phase.
-- [ ] Add startup reconciliation that can rebuild the global workspace entirely from SQLite and active project sources.
-- [ ] Add shutdown cleanup that tolerates incomplete or already-removed files.
-- [ ] Define a bounded shutdown flush policy: stop accepting watcher work, settle queued changes, retry/fail visibly within the bound, then close databases and remove the temporary workspace.
+- [x] Add a process-owned global workspace root at `~/.rook/global-workspace/`, created and cleared when the server starts and retained when the server exits.
+- [x] Decide the exact root location and ensure it is not treated as durable repository storage.
+- [x] Add a server-owned mapping/manifest for every global SQLite-materialization path, recording source identity, mutability, and materialization state; direct project links are not global entries.
+- [x] Use stable paths for personal SQLite capabilities during the lifetime of the process.
+- [x] Do not add reference counting or garbage collection in this phase; startup clearing bounds retained files.
+- [ ] Add startup reconciliation that can rebuild the global workspace entirely from SQLite and active project sources beyond the initial clear.
+- [x] Retain the global workspace after shutdown for inspection while removing temporary project staging and session projections.
+- [ ] Define a bounded shutdown flush policy: stop accepting watcher work, settle queued changes, retry/fail visibly within the bound, then close databases.
 
 ### Acceptance gates
 
@@ -63,19 +63,19 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 ## 3. Materialize existing writable skills and instruction files
 
-- [ ] Replace per-session copying of writable SQLite skills with one global writable materialization per source identity.
-- [ ] Materialize existing SQLite personal skills into the global workspace.
-- [ ] Create links from `.agent/skills/<skill-name>` to writable global skill directories.
-- [ ] Create matching links from `.agent/editable-skills/<environment-nickname>/<skill-name>` to those same writable skill directories.
+- [x] Replace per-session copying of writable SQLite skills with one global writable materialization per source identity.
+- [x] Materialize existing SQLite personal skills into the global workspace.
+- [x] Create links from `.agent/skills/<skill-name>` to writable global skill directories.
+- [x] Create matching links from `.agent/editable-skills/<environment-nickname>/<skill-name>` to those same writable skill directories.
 - [ ] Keep `.agent/skills/` itself non-writable by ordinary agent operations after links have been created.
-- [ ] Allow the individual writable skill targets to remain writable through both link locations.
-- [ ] Materialize immutable external skills directly into `.agent/skills/` as read-only files/directories, without global links.
-- [ ] Apply the simple `_2`, `_3`, etc. collision policy without changing the skill’s internal `name` metadata.
-- [ ] Preserve the mapping between the displayed folder name and the original artifact ID.
-- [ ] Create one per-environment instruction source at `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md`.
-- [ ] For SQLite-backed writable instructions, create a temporary global source file without creating a database artifact until the user writes content.
-- [ ] For immutable external instructions, use a read-only direct materialization rather than a writable global source.
-- [ ] For existing project instructions, link directly to the project’s actual `AGENTS.md`/`CLAUDE.md` source as appropriate.
+- [x] Allow the individual writable skill targets to remain writable through both link locations.
+- [x] Materialize immutable external skills directly into `.agent/skills/` as read-only files/directories, without global links.
+- [x] Apply the simple `_2`, `_3`, etc. collision policy without changing the skill’s internal `name` metadata.
+- [x] Preserve the mapping between the displayed folder name and the original artifact ID.
+- [x] Create one per-environment instruction source at `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md`.
+- [x] For SQLite-backed writable instructions, create a shared global source file without creating a database artifact until the user writes content.
+- [x] For immutable external instructions, use a read-only direct materialization rather than a writable global source.
+- [x] For existing project instructions, link directly to the project’s actual `AGENTS.md`/`CLAUDE.md` source as appropriate.
 
 ### Acceptance gates
 
@@ -88,18 +88,18 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 ## 4. Generate the aggregate AGENTS.md
 
-- [ ] Replace the current marker-based write-back model with per-environment source files.
-- [ ] Define a template for the aggregate `AGENTS.md`.
-- [ ] Include Rook authoring instructions in that template.
-- [ ] Include concrete relative paths for editing environment instruction files.
-- [ ] Include concrete relative paths for creating new skills under `.agent/editable-skills/<environment-nickname>/`.
-- [ ] Include an entry for every active environment, including an empty placeholder when its writable instruction source has no content.
-- [ ] Include full source text inside each generated environment instruction section.
+- [x] Replace the current marker-based write-back model with per-environment source files.
+- [x] Define a template for the aggregate `AGENTS.md`.
+- [x] Include Rook authoring instructions in that template.
+- [x] Include concrete relative paths for editing environment instruction files.
+- [x] Include concrete relative paths for creating new skills under `.agent/editable-skills/<environment-nickname>/`.
+- [x] Include an entry for every active environment, including an empty placeholder when its writable instruction source has no content.
+- [x] Include full source text inside each generated environment instruction section.
 - [ ] Escape environment names, paths, and source content safely for the chosen generated format.
-- [ ] Make the aggregate file read-only after generation.
-- [ ] Regenerate the aggregate when environment membership changes or a source instruction file changes.
-- [ ] Stop injecting the same environment instructions through both `EnvironmentManager.runtimeInstructionsForSession()` and the materialized aggregate.
-- [ ] Keep the base Rook identity injection separate from the generated environment file.
+- [x] Make the aggregate file read-only after generation.
+- [x] Regenerate the aggregate when environment membership changes or a source instruction file changes.
+- [x] Stop injecting the same environment instructions through both `EnvironmentManager.runtimeInstructionsForSession()` and the materialized aggregate.
+- [x] Keep the base Rook identity injection separate from the generated environment file.
 
 ### Acceptance gates
 
@@ -112,16 +112,16 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 ## 5. Add editable-skill creation slots
 
-- [ ] Create `.agent/editable-skills/<environment-nickname>/` for every writable environment.
-- [ ] Make each creation-slot directory point to a known writable global or project source location.
-- [ ] Ensure the agent is instructed to create new skills only inside the appropriate environment slot.
+- [x] Create `.agent/editable-skills/<environment-nickname>/` for every writable environment.
+- [x] Make each creation-slot directory point to a known writable global or project source location.
+- [x] Ensure the agent is instructed to create new skills only inside the appropriate environment slot.
 - [ ] Keep `.agent/skills/` unavailable for arbitrary new entries under normal permissions.
-- [ ] Detect a new skill when `SKILL.md` appears in an editable-skill slot.
-- [ ] Treat a skill as real as soon as `SKILL.md` exists; optionally validate standard frontmatter without blocking ownership or materialization.
-- [ ] For a SQLite-backed environment, create the new personal artifact in SQLite after `SKILL.md` exists.
-- [ ] For a directory environment, create `.agents/skills/` in the project if necessary, copy the new skill there, and replace the temporary source with a direct project link.
-- [ ] After a new skill becomes real, add the corresponding `.agent/skills/<name>` link while keeping the `.agent/editable-skills/<environment>/<name>` link.
-- [ ] Ensure subsequent edits through either link update the same source.
+- [x] Detect a new skill when `SKILL.md` appears in an editable-skill slot.
+- [x] Treat a skill as real as soon as `SKILL.md` exists; optionally validate standard frontmatter without blocking ownership or materialization.
+- [x] For a SQLite-backed environment, create the new personal artifact in SQLite after `SKILL.md` exists.
+- [x] For a directory environment, create `.agents/skills/` in the project if necessary, copy the new skill there, and replace the temporary source with a direct project link.
+- [x] After a new skill becomes real, add the corresponding `.agent/skills/<name>` link while keeping the `.agent/editable-skills/<environment>/<name>` link.
+- [x] Ensure subsequent edits through either link update the same source.
 - [ ] Do not require environment ownership metadata in `SKILL.md` when the skill is created through an environment-specific slot.
 - [ ] Define the behavior when an agent attempts to create a skill directly under `.agent/skills/`.
 
@@ -135,15 +135,15 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 ## 6. Handle project-directory sources
 
-- [ ] Watch active project source directories directly; do not mirror existing project files into the global SQLite workspace first.
-- [ ] Watch the actual project skill roots and instruction files, not only the agent-workspace symlinks.
-- [ ] Support the existing project skill root conventions while creating new skills specifically under `.agents/skills/`.
-- [ ] Create the project’s `.agents/skills/` directory on first new project-skill write when it does not exist.
-- [ ] Create the project-root `AGENTS.md` on first new instruction write when it does not exist.
-- [ ] Keep project changes out of SQLite revision/write-back APIs.
-- [ ] Reconcile project changes into agent-workspace links and the aggregate `AGENTS.md`.
-- [ ] Remove project-directory handling that assumes a SQLite personal bundle exists.
-- [ ] Implement the project instruction rule without ambiguity: use project `AGENTS.md` when it exists; otherwise use project `CLAUDE.md` as the per-environment AGENTS source; do not combine both.
+- [x] Watch active project source directories directly; do not mirror existing project files into the global SQLite workspace first.
+- [x] Watch the actual project skill roots and instruction files, not only the agent-workspace symlinks.
+- [x] Support the existing project skill root conventions while creating new skills specifically under `.agents/skills/`.
+- [x] Create the project’s `.agents/skills/` directory on first new project-skill write when it does not exist.
+- [x] Create the project-root `AGENTS.md` on first new instruction write when it does not exist.
+- [x] Keep project changes out of SQLite revision/write-back APIs.
+- [x] Reconcile project changes into agent-workspace links and the aggregate `AGENTS.md`.
+- [x] Remove project-directory handling that assumes a SQLite personal bundle exists.
+- [x] Implement the project instruction rule without ambiguity: use project `AGENTS.md` when it exists; otherwise use project `CLAUDE.md` as the per-environment AGENTS source; do not combine both.
 
 ### Acceptance gates
 
@@ -155,18 +155,18 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 ## 7. Implement the watcher and serializer
 
-- [ ] Add one watcher for the temporary global writable workspace rather than one watcher per session.
-- [ ] Add watchers for active project source roots because project files bypass the global workspace.
-- [ ] Debounce filesystem events and wait for file/directory content to settle before serialization.
+- [x] Add one watcher for the shared global writable workspace rather than one watcher per session.
+- [x] Add watchers for active project source roots because project files bypass the global workspace.
+- [x] Debounce filesystem events and wait for file/directory content to settle before serialization.
 - [ ] Handle atomic temporary-file writes and rename-based saves.
 - [ ] Handle additions, edits, renames, and deletions.
-- [ ] Avoid reacting to Rook’s own materialization and link creation as user edits.
+- [x] Avoid reacting to Rook’s own materialization and link creation as user edits.
 - [ ] Validate real paths and reject symlink escapes from approved roots.
-- [ ] Serialize complete changed skill trees, not only the file that generated the event.
-- [ ] Create new SQLite revisions for changed SQLite-backed personal artifacts.
-- [ ] Keep dirty files available to the runtime if SQLite persistence fails.
+- [x] Serialize complete changed skill trees, not only the file that generated the event.
+- [x] Create new SQLite revisions for changed SQLite-backed personal artifacts.
+- [x] Keep dirty files available to the runtime if SQLite persistence fails.
 - [ ] Queue and retry failed SQLite writes.
-- [ ] Add startup reconciliation for events missed while Rook was not running.
+- [x] Add startup reconciliation for events missed while Rook was not running.
 - [ ] Add a simple write serialization policy; defer multi-user locking and conflict merging.
 - [ ] Decide whether revision/hash checks are needed to avoid accidental same-user last-write overwrites.
 
@@ -181,17 +181,17 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 ## 8. Change runtime startup and session lifecycle
 
-- [ ] Move agent workspace roots to the chosen per-session location under `~/.rook/agent-workspaces/<session-id>/`.
-- [ ] Set the runtime subprocess `cwd` to the agent workspace.
-- [ ] Ensure the workspace exists before runtime session creation/loading.
-- [ ] Define and implement one `cwd` policy for both the subprocess launch plan and ACP `session/new`/`session/load` parameters; preserve the client-requested cwd separately only if it remains meaningful after the workspace becomes runtime cwd.
-- [ ] Remove duplicate explicit skill injection when runtime discovery through the workspace is sufficient.
-- [ ] Keep the project directory out of the agent workspace for this phase.
-- [ ] Preserve the project directory as a future-work item for a later coding-workspace integration.
-- [ ] Ensure environment entry/exit updates links without destroying shared global sources used by other sessions.
-- [ ] Ensure session close removes only session links, not shared global writable files.
-- [ ] Ensure runtime reload behavior is not triggered for ordinary shared-file edits.
-- [ ] Rebuild the aggregate `AGENTS.md` when membership changes without requiring a server restart.
+- [x] Move agent workspace roots to the chosen per-session location under `~/.rook/agent-workspaces/<session-id>/`.
+- [x] Set the runtime subprocess `cwd` to the agent workspace.
+- [x] Ensure the workspace exists before runtime session creation/loading.
+- [x] Define and implement one `cwd` policy for both the subprocess launch plan and ACP `session/new`/`session/load` parameters; preserve the client-requested cwd separately only if it remains meaningful after the workspace becomes runtime cwd.
+- [x] Remove duplicate explicit skill injection when runtime discovery through the workspace is sufficient.
+- [x] Keep the project directory out of the agent workspace for this phase.
+- [x] Preserve the project directory as a future-work item for a later coding-workspace integration.
+- [x] Ensure environment entry/exit updates links without destroying shared global sources used by other sessions.
+- [x] Ensure session close removes only session links, not shared global writable files.
+- [x] Ensure runtime reload behavior is not triggered for ordinary shared-file edits.
+- [x] Rebuild the aggregate `AGENTS.md` when membership changes without requiring a server restart.
 - [ ] Validate behavior across Pi, Claude, Cursor, and generic ACP runtimes.
 
 ### Acceptance gates
@@ -205,14 +205,15 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 ## 9. Replace the old materializer lifecycle
 
-- [ ] Split the current materializer responsibilities into global-source materialization and per-session-link materialization without introducing unnecessary repository layers.
-- [ ] Keep repository code responsible for SQLite/project persistence and source reads.
-- [ ] Keep the workspace manager responsible for global paths, links, manifests, and watchers.
-- [ ] Preserve the repository/service/API layering already established.
-- [ ] Remove per-session writable-copy synchronization once shared links are working.
-- [ ] Retain direct read-only materialization for immutable external content.
-- [ ] Remove obsolete `sourcePath` fallback behavior once project links replace copied project skills.
-- [ ] Drop and recreate local databases as needed during this redesign rather than preserving obsolete schema compatibility.
+- [x] Split the current materializer responsibilities into global-source materialization and per-session-link materialization without introducing unnecessary repository layers.
+- [x] Keep repository code responsible for SQLite/project persistence and source reads.
+- [x] Keep the workspace manager responsible for global paths, links, manifests, and watchers.
+- [x] Preserve the repository/service/API layering already established.
+- [x] Remove per-session writable-copy synchronization once shared links are working.
+- [x] Retain direct read-only materialization for immutable external content.
+- [ ] Audit remaining `sourcePath` fields: remove obsolete copy-back fallback logic, but retain authoritative project source paths needed for direct links and location-context sources.
+- [ ] Remove now-unused environment-event `skillPaths` plumbing; retain only explicit runtime-profile skill paths that are still intentionally configured.
+- [x] Drop and recreate local databases as needed during this redesign rather than preserving obsolete schema compatibility.
 
 ### Acceptance gates
 
@@ -258,22 +259,23 @@ The current implementation still copies capabilities into `.var/rook/agent-works
 
 ## 11. Final review and legacy audit
 
-- [ ] Update `FINAL_REVIEW.md` with the final identifier inventory, including public session IDs, runtime session IDs, environment IDs, bundle identities, revision keys, content hashes, artifact IDs, environment nicknames, and workspace paths.
-- [ ] Document every source of Rook’s identity text, authoring instructions, environment instructions, aggregate `AGENTS.md` template content, and runtime launch prompt content.
-- [ ] Document Rook startup, agent/session startup, environment entry and exit, runtime replacement, session close, server shutdown, and Rook restart behavior.
-- [ ] Document behavior for environments with skills, environments with instructions only, project environments with existing files, and environments with no capabilities.
+- [x] Update `FINAL_REVIEW.md` with the final identifier inventory, including public session IDs, runtime session IDs, environment IDs, bundle identities, revision keys, content hashes, artifact IDs, environment nicknames, and workspace paths.
+- [x] Document every source of Rook’s identity text, authoring instructions, environment instructions, aggregate `AGENTS.md` template content, and runtime launch prompt content.
+- [x] Document Rook startup, agent/session startup, environment entry and exit, runtime replacement, session close, server shutdown, and Rook restart behavior.
+- [x] Document behavior for environments with skills, environments with instructions only, project environments with existing files, and environments with no capabilities.
 - [ ] Add an explicit final source assessment and dirty-file flush to session shutdown and server shutdown, and do not close SQLite until that bounded flush completes or reports its failure.
-- [ ] Audit the current source and tests for removed directory-repository names, importer commands, compatibility fields, old marker write-back, per-session writable-copy synchronization, and duplicate prompt injection.
-- [ ] Remove obsolete code completely instead of leaving compatibility layers for the replaced design.
-- [ ] Confirm that the only remaining directory-backed repository is the intentional project-directory adapter.
-- [ ] Update `FINAL_REVIEW.md`, the Part B FAQ, the as-built architecture, and README documentation after implementation stabilizes.
+- [x] Audit the current source and tests for removed directory-repository names, importer commands, compatibility fields, old marker write-back, per-session writable-copy synchronization, and duplicate prompt injection.
+- [ ] Complete the final audit of residual `skillPaths` and `sourcePath` compatibility plumbing.
+- [x] Remove obsolete code completely instead of leaving compatibility layers for the replaced design.
+- [x] Confirm that the only remaining directory-backed repository is the intentional project-directory adapter.
+- [x] Update `FINAL_REVIEW.md`, the Part B FAQ, the as-built architecture, and README documentation after implementation stabilizes.
 
 ### Acceptance gates
 
 - [ ] `FINAL_REVIEW.md` describes the implemented code rather than the pre-Part-B plan.
 - [ ] Every lifecycle path has a documented final persistence/reconciliation point.
 - [ ] A source search and test suite show no active legacy compatibility layer remains.
-- [ ] The final review distinguishes temporary global workspace files from durable SQLite/project sources.
+- [x] The final review distinguishes retained global workspace files from durable SQLite/project sources.
 
 ## Future work
 

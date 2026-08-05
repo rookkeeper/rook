@@ -29,6 +29,7 @@ import { loadAgentRuntimes } from "./infrastructure/config/agentRuntimes.js";
 import { RookDatastore } from "./infrastructure/datastores/RookDatastore.js";
 import { SqliteSessionRepository } from "./sessions/repositories/SqliteSessionRepository.js";
 import { AgentRuntimeManager } from "./runtime/services/AgentRuntimeManager.js";
+import { CapabilityWorkspaceManager } from "./runtime/CapabilityWorkspaceManager.js";
 import { SessionTranscriptRepository } from "./sessions/repositories/SessionTranscriptRepository.js";
 import { startRemoteProxy } from "./infrastructure/remoteProxy.js";
 
@@ -108,7 +109,8 @@ export async function buildServer(options: BuildServerOptions = {}) {
   const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
   const sessionRepository = new SqliteSessionRepository(datastore);
   const transcriptRepository = new SessionTranscriptRepository(datastore);
-  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, environmentManager, transcriptRepository, app.log);
+  const workspaceManager = await CapabilityWorkspaceManager.create();
+  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, workspaceManager, environmentManager, transcriptRepository, app.log);
   await app.register(websocket);
 
   app.addHook("onRequest", async (request, reply) => {
@@ -120,6 +122,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   app.addHook("onClose", async () => {
     environmentManager.close();
     await runtimeManager.close();
+    await workspaceManager.close();
     canonicalEnvironmentRepository.close();
     personalEnvironmentRepository.close();
     datastore.close();

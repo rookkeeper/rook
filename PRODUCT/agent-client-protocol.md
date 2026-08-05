@@ -25,13 +25,13 @@ Every configured runtime receives the base Rook identity prompt, including sessi
 Environment changes are Rook orchestration around ACP:
 
 1. resolve approved/personal bundle revisions
-2. materialize a fresh per-session workspace
-3. compute skill paths and generated instruction text
-4. replace the affected runtime
+2. update shared SQLite sources and per-session links
+3. generate the read-only aggregate `AGENTS.md`
+4. replace the affected runtime with the agent workspace as cwd
 5. load the existing runtime session successfully
 6. retire the old subprocess
 
-The runtime receives files and paths, not repository/database handles. Personal workspace edits are synchronized before rematerialization.
+The runtime receives files and paths, not repository/database handles. Personal source edits are watched and persisted to SQLite; project edits remain direct project-file changes.
 
 ## Rook ACP extensions
 

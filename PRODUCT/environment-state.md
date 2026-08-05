@@ -21,13 +21,13 @@ Durable state lives elsewhere:
 
 ## Current runtime behavior
 
-Environment entry is explicit and literal. When a session enters or leaves an environment, the server resolves the effective bundles, materializes a fresh per-session workspace, regenerates instructions, and reloads the existing ACP session in a replacement runtime. This preserves session identity and transcript history while ensuring files are not stale.
+Environment entry is explicit and literal. When a session enters or leaves an environment, the server resolves effective bundles, updates shared/direct source links, regenerates the read-only aggregate instructions, and reloads the existing ACP session in a replacement runtime. This preserves session identity and transcript history while keeping writable SQLite content shared across sessions.
 
 Environment availability does not automatically enter an environment or inject capabilities. Providers may register candidates, and clients/users decide what to enter and which bundles to accept or approve.
 
 ## State delivered to the agent
 
-The current environment prompt includes human-readable environment names, selected metadata, bundle instructions, authoring guidance, and materialized skill paths. It intentionally avoids exposing machine-oriented repository/bundle identifiers in generated pseudo-markup where readable names are sufficient.
+The generated read-only `AGENTS.md` includes human-readable environment names, selected metadata, bundle instructions, authoring guidance, and concrete relative source paths. Individual `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md` files remain the instruction sources; environment skill paths are discovered from `.agent/skills` rather than injected into the prompt.
 
 Dynamic UI/client environment banners and bundle offers are separate from repository content. The server does not currently stream arbitrary environment state directly into the agent as user messages.
 

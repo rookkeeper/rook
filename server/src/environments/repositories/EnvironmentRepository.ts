@@ -30,7 +30,7 @@ export abstract class EnvironmentRepository {
     return false;
   }
 
-  /** Optional initialization API for an empty personal bundle. */
+  /** Explicit initialization API for a user-owned personal authoring bundle. */
   async ensurePersonalBundle(_environmentId: string): Promise<boolean> {
     return false;
   }

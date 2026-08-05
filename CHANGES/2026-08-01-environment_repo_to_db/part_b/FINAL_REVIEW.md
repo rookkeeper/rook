@@ -2,270 +2,127 @@
 
 ## Status
 
-This is the review baseline for Part B. The shared global workspace, symlink topology, and watcher are not implemented yet. The current server still uses per-session materialized copies. The implementation target is recorded in [`TODO.md`](./TODO.md).
+Part B replaces per-session writable capability copies with shared source files and disposable per-session links. The server test suite passes with this model.
 
-This report intentionally separates what the current code does from what Part B will change.
+```text
+SQLite personal content → temporary shared writable source → session links
+project content         → direct project source           → session links
+immutable external      → read-only session materialization
+```
+
+The global workspace is retained at `~/.rook/global-workspace/` for inspection, but it is not durable. Rook clears it at startup before materializing current sources. SQLite and project files remain the sources of truth.
 
 ## Identifier inventory
 
-### Public sessions
+| Identifier | Construction and scope |
+| --- | --- |
+| Public session ID | `crypto.randomUUID()` in `AgentRuntimeManager.createSession()`. It identifies one Rook session, its session workspace, API routing, and durable session row. |
+| Runtime-local session ID | Returned by ACP `session/new`; unique only within the selected runtime. SQLite stores it with the public ID and runtime ID. |
+| Environment ID | Provider string such as `web:example.com`, `mac:md.obsidian`, `location:office`, or `dir:/absolute/path`. It is never used raw as a workspace path. |
+| Bundle identity | `(repository, environmentId, bundleId)`. SQLite enforces this tuple as unique and derives `bundle_key` from it. Project bundles use `directory`, not `personal`. |
+| Revision identity | `revision_key = bundle_key + content_hash`. The exact content hash is the durable approval key. |
+| Artifact ID | Scoped to a bundle revision and artifact kind. It is not globally unique. |
+| Global source key | SHA-256 base64url digest of repository, environment, bundle, source kind, and optional artifact ID. It names a stable SQLite source path under `~/.rook/global-workspace/` until the next startup clear. `manifest.json` maps it back to those identities. |
+| Environment nickname | Path-safe display-name slug, assigned in sorted environment-ID order and suffixed `_2`, `_3`, etc. on collision. It is only agent-facing. |
+| Visible skill directory | Original skill ID when free; `_2`, `_3`, etc. only for session workspace collisions. Skill frontmatter is unchanged. |
 
-- `AgentRuntimeManager.createSession()` creates the public Rook session ID with `crypto.randomUUID()`.
-- ACP returns a separate runtime-local session ID from `session/new`.
-- The application database stores both IDs with the runtime ID, title, cwd, and timestamps.
-- `SessionRuntime` and the ACP facade use the public ID at the API boundary and the runtime-local ID at the subprocess boundary.
+`dir:` environments infer project ownership from their environment type. Registering one does not create an SQLite personal bundle.
 
-### Environment IDs
+## Where Rook’s text lives
 
-Environment IDs are strings produced by environment providers. Current forms include:
+- **Base identity**: `server/src/environments/support/RookIdentityPrompt.ts`. This is the sole text directly injected through runtime launch configuration.
+- **Environment instructions**: bundle `agentsMd` content in SQLite, or the project’s `AGENTS.md` (falling back to `CLAUDE.md` only when `AGENTS.md` is absent).
+- **Aggregate template**: `renderAggregateAgents()` in `runtime/CapabilityWorkspaceManager.ts`. It creates read-only session-root `AGENTS.md`, names each individual source, gives concrete relative authoring paths, and embeds current source text plus small facts.
+- **Editable instruction source**: `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md`. It is a link to a writable SQLite/project source or a read-only external materialization.
+- **Skill guidance**: the aggregate tells the agent to create skills beneath `.agent/editable-skills/<environment-nickname>/`.
 
-- `web:<host>` and deeper web paths;
-- `mac:<bundle-id>` and Mac application contexts;
-- `location:<slug>`;
-- `dir:/absolute/path` for project directories.
+The removed `EnvironmentPromptTemplate` and `EnvironmentManager.runtimeInstructionsForSession()` no longer create a duplicate environment system prompt. Runtimes discover the aggregate from their workspace cwd.
 
-Environment IDs are unique identifiers for the current machine/runtime context, but they are not all safe to use directly as filesystem names. Part B will retain the full ID in its internal mapping and use a path-safe environment nickname for agent-facing workspace paths.
-
-### Bundle identity
-
-A bundle ID is not globally unique by itself. The effective repository identity is:
-
-```text
-repository + environment ID + bundle ID
-```
-
-SQLite currently derives `bundle_key` from that composite identity. A revision key is derived from the bundle key and the content hash. Durable decisions use the content hash because approval applies to the exact agent-visible content.
-
-The current project-directory implementation incorrectly uses `bundleId: "personal"`. Part B changes that to `directory` and prevents automatic SQLite personal-bundle creation for `dir:` environments.
-
-### Artifact identifiers
-
-Skill, MCP, app, fact, and generated-reference artifact IDs are scoped to their bundle revision. They are not globally unique. The current runtime skill directory is flat, so Part B uses the deliberately simple collision rule:
-
-- first skill keeps its name;
-- later collisions use `_2`, `_3`, and so on for the workspace folder/link;
-- the skill’s internal frontmatter is not changed.
-
-### Session and workspace paths
-
-The current capability workspace uses the public session ID:
-
-```text
-.var/rook/agent-workspaces/<session-id>/
-```
-
-The Part B target moves agent workspaces to the chosen per-session location under `~/.rook/agent-workspaces/<session-id>/` and introduces a separate temporary process-wide global workspace for writable SQLite materializations.
-
-The global workspace will use a server-owned source mapping. That mapping will connect each path to its repository, environment, bundle, artifact, source kind, and mutable/revision identity. The path itself does not need to expose every identifier.
-
-## Where Rook’s agent text lives
-
-Rook’s current agent-facing text comes from several places.
-
-### Base Rook identity
-
-`server/src/environments/support/RookIdentityPrompt.ts` contains the base identity text beginning with:
-
-```text
-## You are Rook
-```
-
-`AgentRuntimeManager.baseRuntimeConfiguration()` injects this as the runtime’s appended system prompt for every configured runtime, including sessions with no entered environment.
-
-### Environment instructions
-
-`EnvironmentManager.runtimeInstructionsForSession()` currently combines:
-
-- the base Rook identity;
-- `EnvironmentPromptTemplate.ts` output;
-- environment metadata and authoring guidance;
-- selected bundle instruction text.
-
-`AgentWorkspaceMaterializer` separately generates a root `AGENTS.md`. During the current environment restart flow, both the template-generated prompt and the materialized `AGENTS.md` content are passed to the runtime. This is a known duplication that Part B removes.
-
-### Target instruction model
-
-Part B will use:
-
-```text
-agent workspace/AGENTS.md                         generated, read-only aggregate
-agent workspace/.agent/AGENTS_FILES/<environment>/AGENTS.md
-                                                     individual writable/read-only source link
-```
-
-The aggregate will be generated from a template. The template will contain Rook’s authoring instructions and will interpolate concrete relative paths for the current session workspace. The individual source file, not the aggregate, will be the editable source.
-
-The aggregate can be regenerated without restarting the server. A currently running runtime may not reload already-injected system instructions immediately; that is accepted for this phase.
-
-### Skill instructions
-
-The runtime currently receives explicit `skillPaths` and provider-specific launch arguments. Part B will instead make the agent workspace the runtime `cwd` so normal runtime discovery finds `.agent/skills` and `AGENTS.md`. Explicit skill injection must be removed where it would duplicate discovery.
-
-## Current lifecycle
+## Lifecycle
 
 ### Server startup
 
-`buildServer()` currently:
+`buildServer()` opens repositories and creates `CapabilityWorkspaceManager`. The manager creates:
 
-1. opens the application SQLite database;
-2. opens canonical and personal environment SQLite repositories;
-3. creates the project-directory and location-context repository adapters;
-4. composes repositories into one logical repository;
-5. constructs `EnvironmentRepositoryService`, `EnvironmentManager`, and `AgentRuntimeManager`;
-6. registers REST and ACP routes.
+- the process-wide `~/.rook/global-workspace/` root for writable SQLite sources, clearing its previous contents first;
+- a separate temporary project-authoring staging root for project files that do not yet exist;
+- `~/.rook/agent-workspaces/` for disposable session projections;
+- no personal SQLite bundle for a passively registered environment; explicit entry creates the writable authoring bundle when needed;
+- a source manifest and debounced watchers for global/staging sources.
 
-No global capability workspace is currently created at server startup.
+The global root can be inspected or deleted while Rook is stopped. Its contents are cleared at the next startup and recreated from durable SQLite/project sources as sessions are created or restored.
 
-### Agent/session startup
+### New agent/session
 
-A new public session currently:
+1. Rook creates the public UUID before ACP `session/new`.
+2. It creates an empty agent workspace at `~/.rook/agent-workspaces/<session-id>/`.
+3. Both subprocess launch cwd and ACP `session/new` cwd use that workspace.
+4. Rook starts the ACP runtime and stores the public/runtime-local session mapping.
 
-1. creates a `SessionRuntime` subprocess;
-2. calls runtime `session/new`;
-3. stores the public/runtime session mapping;
-4. subscribes the session to environment events.
+The base Rook identity is injected once. No environment skill paths or environment prompt text are injected explicitly.
 
-The per-session capability workspace is not materialized until an environment entry event requires it.
+### Reopening a persisted session
 
-### Environment entry with skills
-
-The current flow is:
-
-```text
-client/API enter request
-  → AgentRuntimeManager.applyEnvironmentChange()
-  → EnvironmentManager.enterEnvironment()
-  → environment event listener
-  → AgentRuntimeManager.scheduleEnvironmentRestart()
-  → sync old writable workspace
-  → resolve approved/user-owned bundles
-  → AgentWorkspaceMaterializer.materialize()
-  → create replacement runtime
-  → replacement session/load
-  → retire old runtime
-```
-
-The materializer currently copies skills into the session workspace, generates `AGENTS.md`, creates generated fact/`llms.txt` skills where applicable, and materializes MCP content separately.
-
-### Environment entry without skills
-
-If an entered environment has no resolved skill content, the current materializer still creates the session workspace structure and generated `AGENTS.md`, but there are no skill paths to load.
-
-Current registration also automatically ensures a SQLite personal bundle for environments. Part B removes that behavior for `dir:` environments. A directory environment with no existing files should not create SQLite repository content merely because it was registered.
-
-### Runtime restart after environment changes
-
-Environment membership changes use an ACP-preserving replacement process:
-
-1. synchronize the current workspace;
-2. materialize the new environment set;
-3. start a replacement runtime;
-4. load the existing runtime-local ACP session;
-5. only then close the old runtime.
-
-The public session remains the same.
-
-### Session close
-
-`AgentRuntimeManager.closeSession()` currently calls workspace synchronization before sending `session/close`, closing the runtime, detaching it, and deleting the session record.
-
-Part B changes this to a final global/project source reconciliation and session-link cleanup. Shared global writable files must not be deleted just because one session closes.
-
-### Server shutdown
-
-The current `AgentRuntimeManager.close()` closes active runtime processes and clears in-memory state, but it does not currently perform a final `syncWorkspace()` for every active session first. Part B must add an explicit final reconciliation/flush before closing watchers, deleting the temporary global workspace, or closing databases.
-
-The shutdown sequence should be:
-
-```text
-stop accepting new work
-  → stop/debounce watcher events
-  → final assessment of dirty global/project sources
-  → flush SQLite writes and retries
-  → remove per-session links
-  → close runtime processes
-  → remove temporary global workspace
-  → close repositories/databases
-```
-
-## Target lifecycle
-
-### Rook startup
-
-1. Create a temporary process-wide global writable workspace.
-2. Initialize its source mapping/manifest.
-3. Start watchers for the global writable workspace.
-4. Restore persisted sessions and their environment memberships as sessions are resumed.
-5. Recreate per-session agent workspaces and links from SQLite and active project sources.
-
-### Agent startup
-
-1. Create or recover the session workspace.
-2. Set runtime `cwd` to that workspace.
-3. Link writable SQLite skills into both `.agent/skills` and `.agent/editable-skills/<environment>`.
-4. Link existing project skills directly to project sources.
-5. Materialize immutable external skills directly and read-only.
-6. Create/link individual AGENTS source files.
-7. Generate the read-only aggregate `AGENTS.md` from its template.
-8. Start the runtime without duplicate skill/instruction injection.
+Before creating/reusing a runtime, Rook recreates the empty session workspace if necessary, restores durable environment membership, then projects active sources and performs the normal ACP `session/load` replacement flow. A deleted session workspace is never treated as durable state; the retained global workspace is likewise cleared and rebuilt from current source materializations at startup.
 
 ### Entering an environment
 
-For an environment with skills:
+For an environment with skills, Rook resolves approved/user-owned bundles, materializes or reuses the shared source, creates session links, regenerates aggregate instructions, and replaces only that session runtime after successful ACP load.
 
-1. Resolve the current bundle content.
-2. Create or reuse global writable SQLite files, or direct project links.
-3. Create the session’s editable-skill links.
-4. Create read-only external skill files directly in the session workspace.
-5. Generate the environment’s individual AGENTS source and aggregate entry.
-6. Update the runtime workspace and load/restart only as required by the environment membership change.
+For an environment with no skills, Rook still creates the per-environment AGENTS/authoring structure when writable. Empty SQLite/project instruction placeholders and empty skill directories are not durable artifacts. `SKILL.md` is the promotion boundary.
 
-For an environment without skills:
+### File edits and promotion
 
-1. Still create its authoring/AGENTS placeholder structure if it is writable.
-2. Generate its aggregate instruction entry.
-3. Do not create a SQLite artifact until the user writes content.
-4. Do not create an empty project file until the user writes content.
+- An existing personal skill is editable through both `.agent/skills/<name>` and `.agent/editable-skills/<environment>/<name>`; both resolve to the same global source tree.
+- A global watcher debounces settled source changes, serializes personal skill/instruction edits as SQLite revisions, and leaves dirty sources in place if persistence fails.
+- A new skill in an editable slot is persisted once it contains `SKILL.md`, then receives its normal `.agent/skills` link.
+- Existing project skills and instructions are direct links to project files. Project roots are watched directly and never write SQLite.
+- If a project lacks `.agents/skills` or `AGENTS.md`, Rook uses temporary project staging until the first completed skill/instruction is promoted into the project.
+- Immutable external skills/instructions/MCP files are materialized directly into each session as read-only files, not placed in the writable global root.
 
-### File changes
+### Session close and server shutdown
 
-- Existing writable SQLite files are changed through links into the global workspace; the global watcher serializes settled changes into new SQLite revisions.
-- Existing project files are changed through direct agent-workspace links; project watchers observe the actual project source and do not write SQLite.
-- New SQLite skills are created under `.agent/editable-skills/<environment>`. Once `SKILL.md` exists, the watcher creates the SQLite artifact and the `.agent/skills` link.
-- New project skills are created under the project’s `.agents/skills`, creating that directory if needed.
-- New project instructions are created in the project-root `AGENTS.md`.
+`closeSession()` performs a final workspace assessment before ACP close, removes only that session workspace, and leaves shared sources available to other sessions.
 
-### Shutdown and restart
+`AgentRuntimeManager.close()` assesses shared sources, closes runtimes, and removes session projections. `CapabilityWorkspaceManager.close()` stops watchers, performs the final assessment, retains the global workspace for inspection, and removes only the temporary project-staging root before repositories/databases close.
 
-Session shutdown performs a final source assessment before removing only that session’s links. Rook shutdown flushes watcher queues and dirty files before removing the temporary global workspace.
+## Capability parity
 
-After a Rook restart, SQLite and project sources are used to recreate the global/session links. The temporary global workspace itself is not trusted as durable state.
+The new manager preserves capability-specific projections:
 
-## Legacy code removal audit
+- ordinary skills, including nested files;
+- small facts inline in generated `AGENTS.md`;
+- large facts and `llms.txt` as read-only generated reference skills;
+- MCP configuration/content in read-only `.agent/mcp-servers/`.
 
-The old filesystem repository implementation has been removed from the current server source:
+MCP startup and lifecycle remain deferred.
 
-- `DirectoryEnvironmentRepository` is gone;
-- the directory import command is gone;
-- the checked-in legacy `environment-repository/` tree is gone;
-- legacy source-path database columns are gone;
-- `EnvironmentBinding` and compatibility projection code are gone;
-- normal server wiring uses canonical/personal SQLite repositories, the project-directory adapter, and the synthetic location adapter.
+## Legacy removal audit
 
-`ProjectDirectoryEnvironmentRepository` is not legacy code. It is the intentional direct-file repository for project-owned content.
+The replaced ideas are removed from active server source and tests:
 
-The current `AgentWorkspaceMaterializer` is not a second repository implementation, but its per-session writable-copy behavior is the part Part B replaces. After the shared-link implementation is complete, the old writable-copy synchronization, `sourcePath` fallback, marker-based personal instruction extraction, and duplicate environment-prompt path must be removed rather than retained as compatibility layers.
+- `DirectoryEnvironmentRepository`, importer wiring, checked-in directory tree, compatibility projections, and legacy source-path database fields were removed during Part A;
+- `AgentWorkspaceMaterializer.ts` and its tests are deleted;
+- per-session writable-copy synchronization (`syncWritableChanges`) is deleted;
+- marker-based aggregate instruction write-back is deleted;
+- `EnvironmentPromptTemplate.ts`, its tests, and `runtimeInstructionsForSession()` are deleted;
+- the runtime no longer injects materialized skill paths or environment prompt text alongside workspace discovery.
 
-The final code audit must search both source and tests for old names and old behavior. The only remaining directory-backed repository behavior should be the intentional project-directory adapter.
+The intentional `ProjectDirectoryEnvironmentRepository` remains. It is not a compatibility layer: it is the explicit direct-file source adapter for `dir:` environments.
 
-## Final review requirements
+Repository write routing now carries repository identity in addition to environment and bundle identity, so two repositories cannot be selected merely because they share a bundle name.
 
-Before Part B is considered complete, the final review must show:
+## Validation performed
 
-- every public/session/environment/bundle/revision/artifact/workspace identifier and its scope;
-- every source of Rook’s identity, authoring instructions, environment text, and generated aggregate text;
-- startup, session startup, environment entry, environment exit, runtime replacement, session close, server shutdown, and Rook restart flows;
-- behavior for environments with skills, instructions only, project files, and no capabilities;
-- the final source reconciliation point for each shutdown path;
-- the complete removal of old repository and synchronization code;
-- tests proving no stale compatibility layer remains active.
+- Full server suite: **115 passed, 5 skipped**.
+- Server TypeScript typecheck: passed.
+- Focused tests cover shared links across sessions, source manifest identity, skill collision suffixes, watcher persistence, new-skill promotion, direct project links/watchers, read-only external projections, project bundle identity, and SQLite revision write-back.
+
+## Remaining future work
+
+- bounded/reported retry policy and richer error surfacing for failed watcher writes;
+- stronger concurrency control than same-user last-writer-wins;
+- stronger OS isolation or a separate runtime user;
+- exposing a real project directory inside the agent workspace for coding tasks;
+- richer MCP lifecycle, discovery, authentication, and approvals;
+- validation with configured real Pi, Claude, and Cursor runtimes.

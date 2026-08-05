@@ -52,7 +52,7 @@ The server is organized **primarily by domain**:
 - `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
 - `src/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
   - `SQLiteEnvironmentRepository` and `EnvironmentRepositoryDatastore` are the live database-backed repository path
-- `src/runtime/AgentWorkspaceMaterializer.ts` — per-session workspace projection, read-only policy, and writable personal/project synchronization for resolved bundle content
+- `src/runtime/CapabilityWorkspaceManager.ts` — shared writable sources, per-session links, watchers, read-only projections, and generated aggregate instructions
 - `src/location/` — location identification, POI providers, dwell logic, trace helpers, environment bridge helpers
 
 Within each domain, `routes/`, `services/`, `repositories/`, and `datastores/` appear only where that domain actually needs them.
@@ -122,7 +122,7 @@ On environment change, only the affected session's runtime is restarted — the 
 
 ### Environment system
 
-The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The live server uses canonical and personal SQLite repositories exclusively. `ROOK_ENVIRONMENT_REPOSITORY_DB` and `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB` can override their locations. Environment-driven runtime restarts rebuild per-session capability workspaces, materialize approved/personal skills and capability-specific content, and reinject generated instructions before loading the existing ACP session. The materializer is intentionally a separate seam: it turns resolved bundle content into a session agent working directory without making repository storage paths part of the runtime contract. `/api/environments/register` is treated as candidate registration: the server finalizes candidates asynchronously, can inspect observed path/URL implied environment ids through `EnvironmentRepository`, and only finalized environments participate in offers / approvals / runtime updates. `AgentRuntimeManager` subscribes per-session to `EnvironmentManager`, materializes `.agent/skills`, generated `AGENTS.md`, and read-only MCP content, and applies the resulting skill paths and prompt text to runtime launch configuration. Personal skills and marked personal instructions write back to SQLite at workspace synchronization points. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
+The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The live server uses canonical and personal SQLite repositories plus the intentional direct project-directory adapter. `ROOK_ENVIRONMENT_REPOSITORY_DB` and `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB` can override SQLite locations. `CapabilityWorkspaceManager` clears and reuses one shared materialization at `~/.rook/global-workspace/` for writable SQLite sources, retains it after shutdown for inspection, links those sources into per-session workspaces under `~/.rook/agent-workspaces/`, links project files directly, and materializes immutable external content read-only. Each runtime uses its agent workspace as cwd and discovers generated `AGENTS.md` plus `.agent/skills` there; environment instructions are not duplicated through launch prompt injection. Watchers persist settled personal changes as SQLite revisions and reconcile direct project-source changes. `/api/environments/register` is treated as candidate registration: the server finalizes candidates asynchronously, can inspect observed path/URL implied environment ids through `EnvironmentRepository`, and only finalized environments participate in offers / approvals / runtime updates. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
 
 ### Key source files
 
@@ -136,7 +136,7 @@ The environment system (registration, decision store, repository) continues to w
 - `src/infrastructure/datastores/RookDatastore.ts` — shared SQLite connection
 - `src/sessions/repositories/SqliteSessionRepository.ts` — session persistence
 - `src/infrastructure/config/agentRuntimes.ts` — runtime config loader
-- `src/runtime/AgentWorkspaceMaterializer.ts` — bundle-to-working-directory projection
+- `src/runtime/CapabilityWorkspaceManager.ts` — shared-source, link-projection, watcher, and aggregate-instruction lifecycle
 - `src/environments/repositories/SQLiteEnvironmentRepository.ts` — SQLite repository
 - `src/environments/datastores/EnvironmentRepositoryDatastore.ts` — repository database connection/schema
 - `src/environments/repositories/ProjectDirectoryEnvironmentRepository.ts` — direct project-file capability source

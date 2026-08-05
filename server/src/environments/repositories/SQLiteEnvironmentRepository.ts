@@ -14,7 +14,7 @@ import { EnvironmentRepository } from "./EnvironmentRepository.js";
  * SQLite-backed environment repository.
  *
  * SQLite stores the complete agent-visible content. Runtime workspaces are
- * materialized by AgentWorkspaceMaterializer, never by this repository.
+ * materialized by CapabilityWorkspaceManager, never by this repository.
  */
 export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   private readonly db: DatabaseSync;
@@ -32,6 +32,7 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
       this.ownedDatastore = null;
       this.db = datastore.db;
     }
+    if (this.repositoryId === "personal") this.pruneEmptyPersonalBundles();
   }
 
   async getBundles(environmentId: string): Promise<EnvironmentBundleResult> {
@@ -249,6 +250,20 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
 
   close(): void {
     this.ownedDatastore?.close();
+  }
+
+  private pruneEmptyPersonalBundles(): void {
+    this.db.prepare(`
+      DELETE FROM environment_repository_bundles
+      WHERE repository_id = 'personal'
+        AND coalesce(agents_md, '') = ''
+        AND NOT EXISTS (
+          SELECT 1
+          FROM environment_repository_bundle_revisions r
+          JOIN environment_repository_revision_artifacts a ON a.revision_key = r.revision_key
+          WHERE r.bundle_key = environment_repository_bundles.bundle_key
+        )
+    `).run();
   }
 
   private bundleKey(environmentId: string, bundleId: string): string {

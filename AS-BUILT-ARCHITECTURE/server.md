@@ -25,9 +25,9 @@ The server is a Fastify service on `127.0.0.1:7665` with an optional second remo
   - stores canonical and personal bundle content/revisions in separate SQLite repositories
 - `environments/repositories/ProjectDirectoryEnvironmentRepository`
   - reads project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files in place
-- `runtime/AgentWorkspaceMaterializer`
-  - projects approved bundle content into per-session capability workspaces
-  - keeps canonical/external projections read-only and synchronizes writable personal skills/instruction sections back to SQLite or project sources
+- `runtime/CapabilityWorkspaceManager`
+  - owns the process-wide `~/.rook/global-workspace/` SQLite materialization, source manifest, watchers, and disposable per-session link projections; clears the global root at startup and retains it after shutdown
+  - links writable personal content into every applicable session, links project sources directly, and materializes immutable external content read-only
 - `sessions/repositories/SqliteSessionRepository`
   - persists sessions and session↔environment membership directly in SQLite
 - `environments/repositories/EnvironmentDecisionRepository`
@@ -111,7 +111,7 @@ Current durable persistence is SQLite-backed and split between:
 - the application database: session records, append-only normalized transcript events, session-environment membership, and durable environment decisions
 - the environment repository databases: environments, bundles, immutable content revisions, and capability artifact files for canonical and personal repositories
 
-Canonical and personal environment-repository content is SQLite-only; the legacy directory repository and importer are no longer runtime or migration sources. Project-directory environments remain the intentional direct file-backed exception.
+Canonical and personal environment-repository content is SQLite-only; the legacy directory repository and importer are no longer runtime or migration sources. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
 
 The database details live in [database.md](./database.md).
 
@@ -174,7 +174,7 @@ Related tables:
 5. server returns that public session ID and binds the same websocket to it
 
 ### Prompt execution
-1. every configured runtime starts with the base `## You are Rook` identity prompt; environment-specific additions are appended when environments are entered
+1. every configured runtime starts with the base `## You are Rook` identity prompt and uses its agent workspace as process cwd; environment-specific instructions are discovered through generated `AGENTS.md`
 2. client sends ACP `session/prompt` on a session-bound websocket
 3. ACP facade resolves the public session
 4. `AgentRuntimeManager` rewrites to the runtime-local session ID
@@ -189,13 +189,13 @@ Related tables:
 3. finalized environments resolve matching bundles and hash them
 4. undecided bundles are offered to subscribed sessions when that session enters the finalized environment
 5. client resolves via REST decision or ACP extension resolution
-6. approved/personal bundle content is resolved for runtime materialization; skill paths are attached to the launch configuration and generated instructions are appended to the runtime prompt. The environment prompt template renders bundle `AGENTS.md` text only for approved or user-owned bundles.
+6. approved/personal bundle content is resolved for workspace projection. The generated aggregate `AGENTS.md` exposes only approved/user-owned instruction sources; the runtime no longer receives duplicate environment prompt injection.
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment
-2. `AgentRuntimeManager` resolves approved bundle content, materializes it into a per-session capability workspace, and computes `skillPaths`, `enteredEnvironmentIds`, and appended prompt text with workspace authoring paths
-3. writable personal skills and instruction sections are synchronized back to SQLite before rematerialization; newly created skill directories are persisted when there is exactly one personal bundle target
-4. it creates a replacement `SessionRuntime`
+2. `AgentRuntimeManager` resolves approved bundle content and asks `CapabilityWorkspaceManager` to update that session’s links and generated aggregate
+3. shared SQLite/project sources receive a final assessment before replacement; ordinary file edits do not themselves require runtime restart
+4. it creates a replacement `SessionRuntime` with the workspace as cwd
 5. replacement must successfully `session/load` the exact existing runtime session
 6. only then is the old subprocess retired
 
@@ -212,9 +212,9 @@ Related tables:
 - `session/load` replay is requester-private; it no longer fans out to every watcher of that session
 - the server owns a durable normalized transcript for each session so additional viewers can hydrate without runtime replay
 - environment state is session-specific at runtime launch time
-- approved bundle content is materialized into per-session capability workspaces
+- writable SQLite capability files have one process-wide temporary materialization and are linked into per-session workspaces
 - durable decisions, transcript history, and session membership are SQLite-backed
 - canonical and personal environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
 - facts and `llms.txt` use capability-specific projections; MCP content is reviewable/read-only but not started by the runtime
-- personal authoring uses a writable workspace projection and server-mediated SQLite write-back; filesystem permissions are not a strong sandbox against same-user arbitrary shell access
+- personal authoring uses shared writable sources, watcher-mediated SQLite revision write-back, and explicit environment authoring directories; filesystem permissions are not a strong sandbox against same-user arbitrary shell access
 - location identification is provider-pluggable behind `PoiLookupProvider`

@@ -6,7 +6,7 @@ import type { JsonObject, RuntimeLaunchPlan, RuntimeLaunchPlanner, SessionRuntim
 
 /** Resolves provider-specific startup into a process plan, not a runtime subclass. */
 export const runtimeLaunchPlan: RuntimeLaunchPlanner = (profile, repoRoot, configuration) => {
-  const cwd = profile.cwd ? path.resolve(repoRoot, profile.cwd) : repoRoot;
+  const cwd = configuration.workspaceRoot ?? (profile.cwd ? path.resolve(repoRoot, profile.cwd) : repoRoot);
   if (profile.type === "pi") {
     return {
       command: "node",

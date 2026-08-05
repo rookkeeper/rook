@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -7,6 +7,10 @@ import { buildServer } from "../index.js";
 import { SQLiteEnvironmentRepository } from "../environments/repositories/SQLiteEnvironmentRepository.js";
 
 const PORT = 18999;
+
+function agentWorkspaceRoot(home: string, sessionId: string): string {
+  return path.join(home, ".rook", "agent-workspaces", sessionId);
+}
 
 function connect(path = "/api/ws"): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
@@ -195,12 +199,11 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     }).then((response) => response.json()) as { entered: string[] };
     expect(entered.entered).toContain("web:example.com");
 
-    const workspaceRoot = path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId);
+    const workspaceRoot = agentWorkspaceRoot(tempConfigDir, sessionId);
     const materializedSkill = path.join(workspaceRoot, ".agent", "skills", "testing-fixture", "SKILL.md");
     expect(existsSync(materializedSkill)).toBe(true);
     await request(ws, 3, "session/close", { sessionId });
     ws.close();
-    removeReadOnlyTree(workspaceRoot);
   });
 
   it("writes a personal skill edit back after an agent prompt", async () => {
@@ -219,6 +222,11 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       body: JSON.stringify({ id: "web:example.com", metadata: { displayName: "Example" } }),
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
+    await fetch(`http://127.0.0.1:${PORT}/api/session/environments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, enterEnvironmentIds: ["web:example.com"], leaveEnvironmentIds: [] }),
+    });
     const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ valid: boolean; bundleHash: string; bundleId: string }> };
     const bundle = preview.bundles.find((candidate) => candidate.valid && candidate.bundleId === "personal");
     expect(bundle).toBeDefined();
@@ -227,13 +235,9 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ environmentId: "web:example.com", bundleHash: bundle!.bundleHash, decision: "approve" }),
     });
-    await fetch(`http://127.0.0.1:${PORT}/api/session/environments`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sessionId, enterEnvironmentIds: ["web:example.com"], leaveEnvironmentIds: [] }),
-    });
 
-    const workspaceSkill = path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId, ".agent", "skills", "personal-skill", "SKILL.md");
+    const workspaceRoot = agentWorkspaceRoot(tempConfigDir, sessionId);
+    const workspaceSkill = path.join(workspaceRoot, ".agent", "skills", "personal-skill", "SKILL.md");
     expect(readFileSync(workspaceSkill, "utf8")).toBe("original personal skill");
     await request(ws, 4, "session/prompt", {
       sessionId,
@@ -243,7 +247,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const afterSkill = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; skills: Array<{ id: string; files: Record<string, string> }> }> };
     const personalAfterSkill = afterSkill.bundles.find((candidate) => candidate.bundleId === "personal");
     expect(personalAfterSkill?.skills.find((skill) => skill.id === "personal-skill")?.files["personal-skill/SKILL.md"]).toBe("updated by the mock agent");
-    const workspaceAgents = path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId, "AGENTS.md");
+    const workspaceAgents = path.join(workspaceRoot, ".agent", "AGENTS_FILES", "example", "AGENTS.md");
     await request(ws, 5, "session/prompt", {
       sessionId,
       prompt: [{ type: "text", text: `edit personal instructions write-to:${workspaceAgents}` }],
@@ -252,7 +256,6 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     expect(afterInstructions.bundles.find((candidate) => candidate.bundleId === "personal")?.agentsMd).toBe("updated by the mock agent");
     await request(ws, 6, "session/close", { sessionId });
     ws.close();
-    removeReadOnlyTree(path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId));
   });
 
   it("writes a newly created personal skill to SQLite", async () => {
@@ -272,6 +275,8 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       body: JSON.stringify({ id: environmentId, metadata: { displayName: "New Skill Test" } }),
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
+    const beforeEntry = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=${environmentId}`).then((response) => response.json()) as { bundles: Array<{ bundleId: string }> };
+    expect(beforeEntry.bundles.find((bundle) => bundle.bundleId === "personal")).toBeUndefined();
     const entered = await fetch(`http://127.0.0.1:${PORT}/api/session/environments`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -279,7 +284,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     }).then((response) => response.json()) as { entered: string[] };
     expect(entered.entered).toContain(environmentId);
 
-    const workspaceSkill = path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId, ".agent", "skills", "navigating-xkcd");
+    const workspaceSkill = path.join(agentWorkspaceRoot(tempConfigDir, sessionId), ".agent", "editable-skills", "new-skill-test", "navigating-xkcd");
     mkdirSync(workspaceSkill, { recursive: true });
     writeFileSync(path.join(workspaceSkill, "SKILL.md"), "---\nname: navigating-xkcd\ndescription: Navigate XKCD.\n---\n", "utf8");
     await request(ws, 3, "session/prompt", { sessionId, prompt: [{ type: "text", text: "say hi briefly" }] });
@@ -289,7 +294,6 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     expect(personal?.skills.find((skill) => skill.id === "navigating-xkcd")?.files["navigating-xkcd/SKILL.md"]).toContain("Navigate XKCD.");
     await request(ws, 4, "session/close", { sessionId });
     ws.close();
-    removeReadOnlyTree(path.resolve(process.cwd(), "..", ".var", "rook", "agent-workspaces", sessionId));
   });
 
   it("accepts session/cancel as a JSON-RPC notification and cancels the turn", async () => {
@@ -498,18 +502,3 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     wsB.close();
   });
 });
-
-function removeReadOnlyTree(root: string): void {
-  if (!existsSync(root)) return;
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const child = path.join(root, entry.name);
-    if (entry.isDirectory()) {
-      chmodSync(child, 0o755);
-      removeReadOnlyTree(child);
-    } else {
-      chmodSync(child, 0o644);
-    }
-  }
-  chmodSync(root, 0o755);
-  rmSync(root, { recursive: true, force: true });
-}

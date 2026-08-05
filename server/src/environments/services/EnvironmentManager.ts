@@ -7,7 +7,6 @@ import {
   NoopEnvironmentRegistrationCaptureSink,
   type EnvironmentRegistrationCaptureSink,
 } from "./environmentMetadataCapture.js";
-import { renderEnvironmentPrompt } from "../support/EnvironmentPromptTemplate.js";
 import { renderRookIdentityPrompt } from "../support/RookIdentityPrompt.js";
 import { SessionDecisionRegistry } from "./SessionDecisionRegistry.js";
 import type {
@@ -241,13 +240,17 @@ export class EnvironmentManager {
     return [...ids];
   }
 
-  private async rememberAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo): Promise<void> {
+  private async rememberAvailableEnvironment(
+    env: EnvironmentRecord,
+    info: EnvironmentOfferInfo,
+    options: { ensurePersonalBundle?: boolean } = {},
+  ): Promise<void> {
     const now = this.now();
     const nowIso = new Date(now).toISOString();
     const existing = this.remembered.get(env.id);
     const registeredAt = existing?.status === "active" ? (existing.registeredAt ?? nowIso) : nowIso;
     const activeUntil = new Date(now + this.activeEnvironmentWindowMs).toISOString();
-    await this.repositoryService.ensurePersonalBundle(env.id);
+    if (options.ensurePersonalBundle) await this.repositoryService.ensurePersonalBundle(env.id);
     const resolvedBundles = await this.repositoryService.getResolvedBundles(env.id);
     const bundles = resolvedBundles.map(({ bundle, bundleHash }) => ({
       repository: bundle.repository,
@@ -387,7 +390,7 @@ export class EnvironmentManager {
           bundleName: bundle.repository === "personal" || bundle.repository === "project-directory" ? "Personal capabilities" : "Environment capabilities",
           editable: bundle.repository === "personal" || bundle.repository === "project-directory",
           writeBackSkill: (skillId, files) => this.repositoryService.replaceArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files, bundle.repository),
-          ...(bundle.repository === "personal" ? { writeBackNewSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.createArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files, bundle.repository) } : {}),
+          ...(bundle.repository === "personal" || bundle.repository === "project-directory" ? { writeBackNewSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.createArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files, bundle.repository) } : {}),
           writeBackInstructions: bundle.repository === "personal" || bundle.repository === "project-directory"
             ? (content) => this.repositoryService.replaceBundleInstructions(environmentId, bundle.bundleId, content, bundle.repository)
             : undefined,
@@ -411,44 +414,18 @@ export class EnvironmentManager {
     return renderRookIdentityPrompt();
   }
 
-  runtimeInstructionsForSession(sessionId: string, authoringRoot?: string): string | undefined {
-    const entries = this.enteredEnvironments(sessionId)
-      .map((environmentId) => {
-        const remembered = this.remembered.get(environmentId);
-
-        const agentsMdBundles = (remembered?.bundles ?? [])
-          .filter((b) => b.agentsMd)
-          .filter((b) => {
-            const decision = this.sessionDecisions.effective(b.bundleHash, sessionId);
-            return isUserOwnedRepository(b.repository) || decision === "accept" || decision === "approve";
-          })
-          .map((b) => ({ bundleId: b.bundleId, content: b.agentsMd! }));
-
-        return {
-          environmentId,
-          displayName: remembered ? deriveEnvironmentDisplayName(environmentId, remembered.record.metadata, remembered.info) : undefined,
-          metadata: (remembered?.record.metadata ?? {}) as Record<string, unknown>,
-          bindingDir: authoringRoot ?? "the session workspace",
-          skillsDir: authoringRoot ? path.join(authoringRoot, ".agent", "skills") : "the session workspace/.agent/skills",
-          existingSkills: (remembered?.bundles ?? [])
-            .filter((bundle) => isUserOwnedRepository(bundle.repository))
-            .flatMap((bundle) => bundle.skills),
-          agentsMdBundles,
-        };
-      })
-      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-
-    const envPrompt = renderEnvironmentPrompt(entries);
-    return [renderRookIdentityPrompt(), envPrompt].filter(Boolean).join("\n\n");
-  }
-
-  enterEnvironment(sessionId: string, environmentId: string): string[] {
+  async enterEnvironment(sessionId: string, environmentId: string): Promise<string[]> {
     this.pruneMemory();
     const listener = this.listeners.get(sessionId);
     if (!listener) return [];
 
     const entry = this.remembered.get(environmentId);
     if (!entry) return [];
+
+    // Passive registration must not create an empty personal bundle for every
+    // observed environment. Entering is the explicit point at which the user
+    // opts into a writable personal authoring bundle.
+    await this.rememberAvailableEnvironment(entry.record, entry.info, { ensurePersonalBundle: true });
 
     if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
     this.explicitlyEntered.get(sessionId)!.add(environmentId);

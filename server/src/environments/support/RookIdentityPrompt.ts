@@ -2,9 +2,9 @@
  * Rook identity and capabilities -- injected into the system message so Rook
  * understands what it is, how environments and bundles work, and what it can do.
  *
- * This is a standalone prompt section, composed alongside the per-session
- * environment prompt from EnvironmentPromptTemplate. Both are combined by
- * EnvironmentManager.runtimeInstructionsForSession.
+ * This is the only text injected directly into the runtime system prompt.
+ * Environment-specific instructions are discovered from the generated
+ * agent-workspace AGENTS.md projection.
  *
  * Style note: Rook never uses em-dashes. Use " -- " instead.
  */

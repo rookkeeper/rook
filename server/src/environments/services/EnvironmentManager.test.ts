@@ -83,12 +83,18 @@ describe("EnvironmentManager", () => {
     });
   }
 
-  it("keeps a registered environment active in memory", async () => {
-    const manager = newManager();
+  it("keeps a registered environment active in memory without creating a personal bundle", async () => {
+    const repositoryService = mockRepositoryService();
+    const manager = newManager(repositoryService);
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
 
     await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { displayName: "Example" });
 
     expect(manager.isAvailable("web:example.com")).toBe(true);
+    expect(manager.environmentList("s1")[0]?.bundleCount).toBe(0);
+    expect(manager.environmentList("s1")[0]?.approvedBundleCount).toBe(0);
+    expect(repositoryService.ensurePersonalBundle).not.toHaveBeenCalled();
   });
 
   it("captures registration metadata as jsonl", async () => {
@@ -213,7 +219,7 @@ describe("EnvironmentManager", () => {
     await manager.registerAvailableEnvironment({ id: "mac:md.obsidian", metadata: { displayName: "Obsidian" } }, { displayName: "Obsidian" });
     await manager.registerAvailableEnvironment({ id: "mac:md.obsidian/Rooknanigans", metadata: { displayName: "Rooknanigans" } }, { displayName: "Rooknanigans" });
 
-    const entered = manager.enterEnvironment("s1", "mac:md.obsidian/Rooknanigans");
+    const entered = await manager.enterEnvironment("s1", "mac:md.obsidian/Rooknanigans");
 
     expect(entered).toEqual(["mac:md.obsidian/Rooknanigans"]);
     expect(manager.enteredEnvironments("s1")).toEqual(["mac:md.obsidian/Rooknanigans"]);
@@ -244,7 +250,7 @@ describe("EnvironmentManager", () => {
     const manager = newManager(repositoryService);
     manager.subscribe("s1", mockListener());
     await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: { displayName: "Gmail" } });
-    manager.enterEnvironment("s1", "web:example.com");
+    await manager.enterEnvironment("s1", "web:example.com");
     manager.decideEnvironment("web:example.com", "approve", "hash-mail", "s1");
 
     await expect(manager.runtimeBundlesForSession("s1")).resolves.toMatchObject([{
@@ -254,39 +260,8 @@ describe("EnvironmentManager", () => {
       bundle: { bundleId: "mail", agentsMd: "Confirm before sending." },
     }]);
 
-    const prompt = manager.runtimeInstructionsForSession("s1", "/tmp/session-workspace");
-    expect(prompt).toContain('<bundle name="Environment capabilities">');
-    expect(prompt).toContain("Confirm before sending.");
   });
 
-  it("does not render unapproved canonical bundle instructions", async () => {
-    const repositoryService = mockRepositoryService();
-    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([{
-      bundle: {
-        id: "web:example.com#mail",
-        bundleId: "mail",
-        environmentId: "web:example.com",
-        repository: "canonical",
-        skills: [],
-        mcpServers: [],
-        apps: [],
-        agentsMd: "Do not show this until approved.",
-        valid: true,
-        errors: [],
-      },
-      bundleHash: "hash-mail",
-    }] as any);
-    const manager = newManager(repositoryService);
-    manager.subscribe("s1", mockListener());
-    await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: { displayName: "Gmail" } });
-    manager.enterEnvironment("s1", "web:example.com");
-
-    expect(manager.runtimeInstructionsForSession("s1", "/tmp/session-workspace")).not.toContain("Do not show this until approved.");
-
-    manager.decideEnvironment("web:example.com", "approve", "hash-mail", "s1");
-
-    expect(manager.runtimeInstructionsForSession("s1", "/tmp/session-workspace")).toContain("Do not show this until approved.");
-  });
 
   it("provides the Rook identity for plain sessions", () => {
     expect(newManager().runtimeIdentityInstructions()).toContain("## You are Rook");
@@ -306,7 +281,7 @@ describe("EnvironmentManager", () => {
       id: "web:example.com",
       metadata: { displayName: "Example" },
     });
-    manager.enterEnvironment("s1", "web:example.com");
+    await manager.enterEnvironment("s1", "web:example.com");
 
     expect(listener.onEnvironmentOffered).toHaveBeenCalledWith({
       environmentId: "web:example.com",

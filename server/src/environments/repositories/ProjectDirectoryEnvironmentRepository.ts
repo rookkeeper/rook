@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { BundleArtifact, EnvironmentBundleResult, EnvironmentRecord, RepositoryReadError } from "../../shared/environmentRepository.js";
@@ -13,13 +13,22 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
   async replaceBundleInstructions(environmentId: string, _bundleId: string, content: string): Promise<boolean> {
     const directory = projectPath(environmentId);
     if (!directory) return false;
-    const projectMarker = "# Project instructions";
-    const claudeMarker = "# Claude project instructions";
-    const claudeIndex = content.indexOf(claudeMarker);
-    const projectContent = content.slice(projectMarker.length, claudeIndex === -1 ? content.length : claudeIndex).trim();
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(path.join(directory, "AGENTS.md"), projectContent ? `${projectContent}\n` : "", "utf8");
-    if (claudeIndex !== -1) await writeFile(path.join(directory, "CLAUDE.md"), `${content.slice(claudeIndex + claudeMarker.length).trim()}\n`, "utf8");
+    await writeFile(path.join(directory, "AGENTS.md"), content, "utf8");
+    return true;
+  }
+
+  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
+    const directory = projectPath(environmentId);
+    if (!directory || bundleId !== "directory" || kind !== "skills" || !(`${artifactId}/SKILL.md` in files)) return false;
+    const targetRoot = path.join(directory, ".agents", "skills", artifactId);
+    if (existsSync(targetRoot)) return false;
+    for (const [rawPath, content] of Object.entries(files)) {
+      const relative = projectArtifactPath(rawPath, artifactId);
+      if (!relative) return false;
+      const target = path.join(targetRoot, ...relative.split("/"));
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, content, "utf8");
+    }
     return true;
   }
 
@@ -99,6 +108,14 @@ function environmentRecord(environmentId: string, directory: string): Environmen
 async function readOptionalText(filePath: string): Promise<string | undefined> {
   if (!existsSync(filePath)) return undefined;
   return readFile(filePath, "utf8");
+}
+
+function projectArtifactPath(rawPath: string, artifactId: string): string | undefined {
+  const normalized = rawPath.replaceAll("\\", "/");
+  const relative = normalized.startsWith(`${artifactId}/`) ? normalized.slice(artifactId.length + 1) : normalized;
+  if (!relative || path.posix.isAbsolute(relative)) return undefined;
+  const safe = path.posix.normalize(relative);
+  return safe === ".." || safe.startsWith("../") || safe.includes("\0") ? undefined : safe;
 }
 
 async function collectFiles(directory: string, prefix: string, files: Record<string, string>): Promise<void> {

@@ -2,13 +2,13 @@
 
 ## What is the global workspace?
 
-It is a temporary shared on-disk materialization of writable SQLite-backed capabilities. Agent workspaces symlink to it so multiple sessions see and edit the same files.
+It is a shared on-disk materialization of writable SQLite-backed capabilities at `~/.rook/global-workspace/`. Agent workspaces symlink to it so multiple sessions see and edit the same files.
 
-SQLite remains the durable source of truth. The global workspace can be discarded and rebuilt.
+Rook clears its contents when the server starts and retains the directory after shutdown for inspection. Passive registration does not create an empty personal bundle; explicit entry creates the personal authoring bundle when needed. SQLite remains the durable source of truth.
 
 ## What is the source of truth for project-directory capabilities?
 
-The project directory itself. Project skills and instruction files are not copied into SQLite. Global workspace entries should point to the actual project files, and edits through agent-workspace links should modify those project files.
+The project directory itself. Project skills and instruction files are not copied into SQLite or placed in the writable global workspace. Agent workspaces link directly to actual project files, so edits modify the project files.
 
 ## Why use symlinks?
 
@@ -22,17 +22,17 @@ External/community content does not need to enter the writable global workspace.
 
 ## Does the global workspace need reference counting?
 
-Not initially. The workspace can retain small capability files for the lifetime of the Rook process and be discarded/rebuilt later. Garbage collection can be added if storage becomes significant.
+Not initially. The workspace is one process-wide shared tree, retained after shutdown for inspection and cleared at the next startup. Garbage collection is unnecessary under this lifecycle.
 
 ## How are AGENTS files handled?
 
-The aggregate `AGENTS.md` is generated from a template and read-only. Each writable environment receives an individual source file under `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md`, including an empty placeholder when appropriate.
+The aggregate `AGENTS.md` is generated from a template and read-only. Each writable environment receives an individual source file under `.agent/AGENTS_FILESls/<environment-nickname>/AGENTS.md`, including an empty placeholder when appropriate.
 
 The individual file is linked to its global or project source. The aggregate includes the full text, a human-readable environment name, and the relative source path the agent should edit.
 
 ## Do instruction edits require a restart?
 
-No server restart is required. The individual source and aggregate files can update immediately. A runtime that already loaded the aggregate into its system prompt may not incorporate the new instructions until a later reload, but that is acceptable for now.
+No. Watchers update the source and regenerate the aggregate file. The runtime discovers workspace instructions rather than receiving a duplicate environment prompt, although runtime-specific instruction caching can still affect immediate behavior.
 
 ## How are new skills assigned to environments?
 
@@ -66,7 +66,7 @@ No. Same-user filesystem permissions can be bypassed by an agent with arbitrary 
 
 ## What is the runtime working directory?
 
-The intended design uses the agent workspace as the runtime `cwd`, allowing ordinary runtime discovery of `AGENTS.md` and `.agent/skills`. The actual project directory is not represented inside the agent workspace in this phase; exposing it for coding tasks is future work.
+The agent workspace is the runtime subprocess and ACP-session `cwd`, allowing ordinary discovery of `AGENTS.md` and `.agent/skills`. The actual project directory is not represented inside the workspace in this phase; exposing it for coding tasks is future work.
 
 ## What project-directory rules apply?
 

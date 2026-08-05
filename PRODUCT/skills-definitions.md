@@ -4,7 +4,7 @@ Rook uses [Agent Skills](https://agentskills.io/home) for skill-shaped capabilit
 
 ## Repository representation
 
-In SQLite, a skill revision retains the complete nested file map. The content hash includes the agent-visible files and paths, not the storage location. Directory import preserves source paths for compatibility, but runtime loading uses the per-session workspace.
+In SQLite, a skill revision retains the complete nested file map. The content hash includes the agent-visible files and paths, not the storage location. Directory import preserves source paths for migration, but runtime loading uses the per-session agent workspace and direct project links.
 
 ## Runtime representation
 
@@ -14,7 +14,7 @@ Resolved skills are materialized under:
 <session-workspace>/.agent/skills/<skill-name>/
 ```
 
-Skills from personal bundles are writable and synchronize back to SQLite. Canonical and external skills are projected read-only. Duplicate skill names in one runtime workspace are rejected rather than silently merged.
+Skills from personal bundles are writable through shared links and synchronize back to SQLite. Canonical and external skills are projected read-only. Duplicate skill names use naive `_2`, `_3`, etc. workspace names without changing skill frontmatter.
 
 ## Other capability types
 

@@ -41,6 +41,7 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - agent-profile config: [docs/configuration.md](docs/configuration.md)
 - as-built architecture index: [AS-BUILT-ARCHITECTURE/](AS-BUILT-ARCHITECTURE/)
 - server package details: [server/README.md](server/README.md)
+- shared environment workspace design/review: [CHANGES/2026-08-01-environment_repo_to_db/part_b/](CHANGES/2026-08-01-environment_repo_to_db/part_b/)
 - iPhone client details: [clients/iphone/README.md](clients/iphone/README.md)
 - macOS client details: [clients/mac/README.md](clients/mac/README.md)
 - Android client details: [clients/android/README.md](clients/android/README.md)

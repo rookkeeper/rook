@@ -75,25 +75,25 @@ The first implementations are:
 - `ProjectDirectoryEnvironmentRepository` — direct project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` content.
 - `CompositeEnvironmentRepository` — one logical view over those sources.
 
-A directory import can bootstrap SQLite, but the runtime does not require repository paths. `AgentWorkspaceMaterializer` converts resolved content into the ordinary files expected by the selected ACP runtime.
+The runtime does not require SQLite repository paths. `CapabilityWorkspaceManager` projects resolved content into ordinary agent files while preserving SQLite and project directories as the durable sources.
 
 ## Runtime projection
 
-Each session gets a separate workspace under:
+Each runtime uses its per-session agent workspace as its process working directory:
 
 ```text
-.var/rook/agent-workspaces/<session-id>/
+~/.rook/agent-workspaces/<session-id>/
+├── AGENTS.md
+└── .agent/
+    ├── skills/
+    ├── editable-skills/<environment-nickname>/
+    ├── AGENTS_FILES/<environment-nickname>/AGENTS.md
+    └── mcp-servers/
 ```
 
-The workspace contains:
+The process-wide global workspace at `~/.rook/global-workspace/` provides one writable file tree for each SQLite-backed personal source. Rook clears it at startup and retains it after shutdown for inspection. Session workspaces symlink to those trees. Project-owned skills and instructions are linked directly to project files; immutable external content is materialized directly and read-only into each session instead of entering the writable global workspace.
 
-- `.agent/skills/` — materialized skill directories
-- `AGENTS.md` — generated readable environment/bundle instructions
-- `.agent/mcp-servers/` — read-only MCP configuration/content
-
-Canonical and external materializations are read-only by filesystem policy. Personal skills and marked personal instruction sections are writable. Skills synchronize to the personal SQLite bundle; instruction edits synchronize to that bundle's instruction field. Project-owned skills/instructions map back to project files. The generated aggregate `AGENTS.md` remains a projection, not a database source file.
-
-Changing entered environments or restoring a session rematerializes the workspace and restarts only the affected runtime after the existing ACP session has been successfully loaded.
+`AGENTS.md` is a generated read-only aggregate. Individual linked `AGENTS_FILES` are the editable instruction sources. Filesystem watchers serialize settled personal changes as new SQLite revisions and reconcile project-source changes without writing SQLite. Changing entered environments restarts only the affected runtime after the existing ACP session has been successfully loaded.
 
 ## Decisions and approval
 
@@ -120,7 +120,7 @@ Previews expose bundle identity, repository, validity/errors, canonical hash, re
 
 ## Storage boundary
 
-Canonical and personal capability content exists in SQLite only. Runtimes receive per-session workspace projections, not repository storage paths. Project-directory environments remain the explicit exception because their project files are themselves the source of truth.
+Canonical and personal capability content exists durably in SQLite only. The global workspace and session workspaces are projections, not repository storage; the global workspace is deliberately retained between shutdown and the next startup but is never authoritative. Passive environment registration does not create empty personal bundles. Project-directory environments remain the explicit direct-file source; their bundle ID is `directory` and they never receive an SQLite personal bundle.
 
 ## Deferred product work
 

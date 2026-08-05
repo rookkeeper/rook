@@ -1,69 +1,49 @@
 # Environment-local authoring
 
-Rook can learn environment-specific skills and instructions from the user. Personal content is writable and is stored in the personal environment-repository SQLite database.
+Rook can learn environment-specific skills and instructions from the user. SQLite is the durable source for personal content; a project directory is the durable source for a `dir:` environment.
 
-## Personal bundle
+## Ownership
 
-Each environment has one user-owned `personal` bundle in the personal repository. It is created or imported as needed. Personal content bypasses approval while it remains user-owned; it is still revisioned and hashed when stored.
+Non-directory environments may receive one user-owned `personal` bundle in the personal SQLite repository. Passive environment registration does not create it; explicit entry creates the empty authoring bundle when needed. It is revisioned and hashed but bypasses approval.
 
-The old directory-shaped personal repository can be imported for migration. It is not the live source of truth after SQLite cutover.
+A `dir:` environment does **not** receive an SQLite personal bundle. Its project bundle is named `directory`; project-owned skills live under `.agents/skills/` and project instructions live in the project-root `AGENTS.md`.
 
-## Session authoring workspace
+## Workspace topology
 
-When a session enters an environment, Rook materializes capabilities into:
+At server startup Rook clears and recreates the process-wide workspace at `~/.rook/global-workspace/` for writable SQLite materializations. It is rebuildable from SQLite and retained after shutdown for inspection; the next startup clears it again.
+
+Each runtime uses a separate agent workspace as its process and ACP working directory:
 
 ```text
-.var/rook/agent-workspaces/<session-id>/
-├── AGENTS.md
+~/.rook/agent-workspaces/<session-id>/
+├── AGENTS.md                                      generated, read-only aggregate
 └── .agent/
-    ├── skills/
-    └── mcp-servers/
+    ├── skills/<skill-name>                         normal skill link or read-only external materialization
+    ├── editable-skills/<environment-nickname>/     explicit authoring location
+    ├── AGENTS_FILES/<environment-nickname>/AGENTS.md
+    └── mcp-servers/                                read-only review projection
 ```
 
-The runtime prompt receives the actual session workspace paths. A personal skill is edited at:
+Existing writable SQLite skills are linked into both `skills/` and their environment-specific `editable-skills/` directory, pointing to one shared global file tree under `~/.rook/global-workspace/`. Existing project skills and instructions are linked directly to their project files. Immutable external content is materialized directly and read-only into each agent workspace; it does not enter the writable global workspace.
+
+The aggregate `AGENTS.md` is generated and read-only. It contains each environment’s source text and concrete relative paths to the linked instruction file and authoring directory. The individual file is the source to edit, never the aggregate.
+
+## Authoring and persistence
+
+A new skill is created in:
 
 ```text
-<workspace>/.agent/skills/<skill-name>/SKILL.md
+.agent/editable-skills/<environment-nickname>/<skill-name>/SKILL.md
 ```
 
-The generated `<workspace>/AGENTS.md` contains readable environment and bundle sections. The personal section is marked so its contents can be written back to the personal bundle. The aggregate file itself is derived output and is recreated on materialization.
+Its parent identifies ownership. `SKILL.md` makes the skill real. A completed personal skill is persisted to SQLite and linked into `.agent/skills/`. A completed project skill is written to `.agents/skills/` in the project and then linked directly from the workspace. Empty skill directories and empty instruction placeholders do not create durable content.
 
-MCP content is exposed for review in the read-only `.agent/mcp-servers/` area. MCP execution and authentication are deliberately deferred.
+Rook watches shared SQLite files and active project source roots. It debounces writes, serializes changed personal files as new SQLite revisions, regenerates affected aggregate instructions, and retries at the next assessment if persistence fails. Project edits remain project edits and never enter SQLite.
 
-## Write-back behavior
+The server performs a final source assessment before closing a session or shutting down. Closing a session removes only its disposable links; it does not remove shared global sources needed by other sessions.
 
-At an environment restart or other workspace synchronization point:
+## Current safety boundary
 
-1. writable skill files are read from the session workspace
-2. the matching personal bundle artifact is updated in SQLite and gets a new revision/hash
-3. the marked personal instruction section is written to the bundle instruction field
-4. the next materialization sees the updated content
+Canonical/external projections are read-only by filesystem policy. Same-user filesystem permissions are not a strong defense against an agent with arbitrary shell access; stronger sandboxing is future work.
 
-Project-directory environments are a separate direct-source case. Their existing `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files remain the source of truth, and writable mappings update those files where supported.
-
-Canonical and external content is projected read-only. The current permission boundary is not a strong defense against an agent that can execute arbitrary commands as the same OS user; stronger sandboxing is future work.
-
-## Agent guidance
-
-The environment prompt tells Rook:
-
-- which environment it is in
-- where personal skills can be written
-- where the editable personal instruction section lives
-- which skills already exist
-- where read-only external/MCP content can be reviewed
-
-Because several environments can be entered, Rook should clarify the intended environment before creating or changing a personal capability.
-
-## Authoring lifecycle
-
-A typical cycle is:
-
-1. enter an environment
-2. use the environment's existing capabilities
-3. ask Rook to remember a repeatable procedure or preference
-4. Rook edits a personal skill or instruction section
-5. the server writes the change back to SQLite
-6. the next session entry loads the new revision
-
-Concurrent-session conflict merging, publishing personal capabilities, and sharing are not part of the current implementation.
+Concurrent editing remains simple shared-file/last-write-wins behavior. Publishing, sharing, conflict merging, MCP execution, and stronger isolation are deferred.

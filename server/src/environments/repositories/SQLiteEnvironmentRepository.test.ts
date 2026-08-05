@@ -7,7 +7,7 @@ import { EnvironmentRepositoryDatastore } from "../datastores/EnvironmentReposit
 import { hashEnvironmentBundle } from "../../shared/environmentBundleHash.js";
 import { CompositeEnvironmentRepository } from "./CompositeEnvironmentRepository.js";
 import { SQLiteEnvironmentRepository } from "./SQLiteEnvironmentRepository.js";
-import { AgentWorkspaceMaterializer } from "../../runtime/AgentWorkspaceMaterializer.js";
+import { CapabilityWorkspaceManager } from "../../runtime/CapabilityWorkspaceManager.js";
 
 function result() {
   return {
@@ -51,6 +51,19 @@ describe("SQLiteEnvironmentRepository", () => {
     expect(loaded.bundles[0]?.skills[0]?.files["mail-search/SKILL.md"]).toBe("Search mail.");
   });
 
+  it("prunes empty personal bundles left by passive registration", async () => {
+    const datastore = new EnvironmentRepositoryDatastore(":memory:");
+    datastores.push(datastore);
+    datastore.db.exec(`
+      INSERT INTO environment_repository_environments (environment_id, display_name, description) VALUES ('web:empty.example', 'Empty', 'Empty');
+      INSERT INTO environment_repository_bundles (bundle_key, repository_id, environment_id, bundle_id, valid) VALUES ('personal\nweb:empty.example\npersonal', 'personal', 'web:empty.example', 'personal', 1);
+    `);
+
+    const repository = new SQLiteEnvironmentRepository(datastore, "personal");
+
+    expect((await repository.getBundles("web:empty.example")).bundles).toEqual([]);
+  });
+
   it("writes a changed artifact as a new bundle revision", async () => {
     const datastore = new EnvironmentRepositoryDatastore(":memory:");
     datastores.push(datastore);
@@ -68,24 +81,26 @@ describe("SQLiteEnvironmentRepository", () => {
     datastores.push(datastore);
     const repository = new SQLiteEnvironmentRepository(datastore, "personal");
     repository.saveResult(result());
-    const workspace = await mkdtemp(path.join(os.tmpdir(), "rook-db-workspace-"));
-    tempDirs.push(workspace);
+    const globalRoot = await mkdtemp(path.join(os.tmpdir(), "rook-db-global-"));
+    const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "rook-db-sessions-"));
+    tempDirs.push(globalRoot, sessionRoot);
     const loaded = (await repository.getBundles("web:example.com")).bundles[0]!;
-    const materializer = new AgentWorkspaceMaterializer();
-    const materialized = await materializer.materialize(workspace, [{
+    const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: globalRoot, sessionRoot });
+    const materialized = await manager.materialize("session", [{
       environmentName: "Example",
       bundleName: "Personal capabilities",
       editable: true,
       bundle: loaded,
       writeBackSkill: (skillId, files) => repository.replaceArtifactFiles("web:example.com", "mail", "skills", skillId, files),
     }]);
-    await writeFile(path.join(workspace, ".agent", "skills", "mail-search", "SKILL.md"), "Edited in the agent workspace.", "utf8");
-    await materializer.syncWritableChanges(materialized);
+    await writeFile(path.join(materialized.skillsRoot, "mail-search", "SKILL.md"), "Edited in the agent workspace.", "utf8");
+    await manager.assessAndFlush();
+    await manager.close();
     const updated = (await repository.getBundles("web:example.com")).bundles[0]!;
     expect(updated.skills[0]?.files["mail-search/SKILL.md"]).toBe("Edited in the agent workspace.");
   });
 
-  it("creates an empty personal bundle and accepts a newly authored skill", async () => {
+  it("explicitly creates a personal bundle and accepts a newly authored skill", async () => {
     const datastore = new EnvironmentRepositoryDatastore(":memory:");
     datastores.push(datastore);
     const repository = new SQLiteEnvironmentRepository(datastore, "personal");

@@ -11,6 +11,8 @@ export interface SessionRuntimeConfiguration {
   enteredEnvironmentIds: string[];
   skillPaths: string[];
   extensionPaths: string[];
+  /** Disposable agent workspace used as the runtime process working directory. */
+  workspaceRoot?: string;
   appendSystemPrompt?: string;
 }
 

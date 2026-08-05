@@ -224,9 +224,9 @@ Main methods:
 
 ## Repository write-back and projections
 
-`SQLiteEnvironmentRepository` writes changed personal skill or instruction content by creating/updating the current revision and recalculating the content hash. Existing personal skills are synchronized by artifact mapping; newly authored skill directories containing `SKILL.md` are created as personal artifacts when the runtime has exactly one personal bundle target. The runtime never writes directly to the repository database; `AgentWorkspaceMaterializer` performs server-mediated synchronization after prompts and before workspace close or rematerialization.
+`SQLiteEnvironmentRepository` writes changed personal skill or instruction content by creating/updating the current revision and recalculating the content hash. `CapabilityWorkspaceManager` owns the server-mediated persistence boundary: it watches one process-wide writable SQLite materialization at `~/.rook/global-workspace/`, serializes settled source changes, and performs a final assessment before session/server shutdown. The directory is cleared at startup and retained after shutdown for inspection. New skills become artifacts when `SKILL.md` appears in an explicit environment authoring directory.
 
-Canonical and personal repository content is SQLite-only. Project-directory sources are intentionally direct file-backed exceptions. Canonical/external projections are read-only by filesystem policy, while personal and project-owned projections have explicit write-back mappings. The filesystem permissions are an accidental-write boundary, not a strong security sandbox against an agent with arbitrary same-user shell access.
+Canonical and personal repository content is SQLite-only. Passive environment registration does not create empty personal bundles; explicit entry creates the personal authoring bundle when needed. Project-directory sources are intentional direct file-backed exceptions: they use bundle ID `directory`, are watched at their actual paths, and never receive personal SQLite bundles. Immutable canonical/external content is materialized read-only directly into session workspaces. The filesystem permissions are an accidental-write boundary, not a strong security sandbox against an agent with arbitrary same-user shell access.
 
 ## What is not yet in the database
 
