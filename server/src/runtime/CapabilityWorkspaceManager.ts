@@ -28,6 +28,18 @@ export interface CapabilityWorkspaceResult {
 
 type SourceKind = "skill" | "instructions" | "authoring-slot";
 
+const DEFAULT_EMPTY_INSTRUCTIONS = "No user-authored instructions have been added for this environment yet. You may edit this file upon the user's request to save simple instructions or reminders. Complex instructions and processes belong in the skill files for this environment.";
+
+type AggregateSource = { nickname: string; sourcePath: string; writable: boolean };
+type AggregateFact = { nickname: string; environmentName: string; bundleName: string; name: string; content: string };
+
+interface SessionAggregateData {
+  root: string;
+  sources: AggregateSource[];
+  facts: AggregateFact[];
+  skillNamesByEnvironment: Map<string, Set<string>>;
+}
+
 interface WorkspaceSource {
   key: string;
   kind: SourceKind;
@@ -56,6 +68,7 @@ export class CapabilityWorkspaceManager {
   private readonly projectStagingRoot: string;
   private readonly sessionRoot: string;
   private readonly sessionBundles = new Map<string, CapabilityWorkspaceBundle[]>();
+  private readonly sessionAggregateData = new Map<string, SessionAggregateData>();
   private readonly projectWatchers = new Map<string, FSWatcher>();
   private globalWatcher: FSWatcher | undefined;
   private projectStagingWatcher: FSWatcher | undefined;
@@ -116,13 +129,16 @@ export class CapabilityWorkspaceManager {
     const nicknames = environmentNicknames(bundles);
     const usedSkillNames = new Set<string>();
     const skillPaths: string[] = [];
-    const inlineFacts: Array<{ environmentName: string; bundleName: string; name: string; content: string }> = [];
-    const agentInstructionSources: Array<{ nickname: string; environmentName: string; sourcePath: string; writable: boolean }> = [];
+    const inlineFacts: AggregateFact[] = [];
+    const agentInstructionSources: AggregateSource[] = [];
+    const skillNamesByEnvironment = new Map<string, Set<string>>();
 
     for (const entry of bundles) {
       if (entry.bundle.repository === "project-directory") this.watchProject(projectDirectory(entry.bundle.environmentId));
       const environmentId = entry.bundle.environmentId;
       const nickname = nicknames.get(environmentId)!;
+      const skillNames = skillNamesByEnvironment.get(nickname) ?? new Set<string>();
+      skillNamesByEnvironment.set(nickname, skillNames);
       const authoringRoot = await this.ensureAuthoringRoot(entry);
       await replaceWithSymlink(path.join(editableSkillsRoot, nickname), authoringRoot);
 
@@ -136,19 +152,24 @@ export class CapabilityWorkspaceManager {
           const target = await this.skillSource(entry, skill);
           await replaceWithSymlink(workspacePath, target);
         }
+        skillNames.add(skill.id);
         skillPaths.push(workspacePath);
       }
 
       for (const fact of entry.bundle.facts ?? []) {
         const content = artifactText(fact);
         if (content.length <= 4000) {
-          inlineFacts.push({ environmentName: entry.environmentName, bundleName: entry.bundleName, name: fact.id, content });
+          inlineFacts.push({ nickname, environmentName: entry.environmentName, bundleName: entry.bundleName, name: fact.id, content });
         } else {
-          await materializeDerivedSkill(skillsRoot, generatedReferenceSkill(`fact-${safeName(fact.id)}`, fact.id, content), usedSkillNames, skillPaths);
+          const derived = generatedReferenceSkill(`fact-${safeName(fact.id)}`, fact.id, content);
+          skillNames.add(derived.id);
+          await materializeDerivedSkill(skillsRoot, derived, usedSkillNames, skillPaths);
         }
       }
       if (entry.bundle.llmsTxt !== undefined) {
-        await materializeDerivedSkill(skillsRoot, generatedReferenceSkill(`llms-${safeName(entry.bundleName)}`, "llms.txt", entry.bundle.llmsTxt), usedSkillNames, skillPaths);
+        const derived = generatedReferenceSkill(`llms-${safeName(entry.bundleName)}`, "llms.txt", entry.bundle.llmsTxt);
+        skillNames.add(derived.id);
+        await materializeDerivedSkill(skillsRoot, derived, usedSkillNames, skillPaths);
       }
       for (const server of entry.bundle.mcpServers) {
         const target = path.join(mcpRoot, safeName(server.id));
@@ -160,15 +181,21 @@ export class CapabilityWorkspaceManager {
       await mkdir(path.dirname(agentsSourcePath), { recursive: true });
       if (!entry.editable && entry.bundle.repository !== "project-directory") {
         await materializeReadOnlyFile(agentsSourcePath, entry.bundle.agentsMd ?? "");
-        agentInstructionSources.push({ nickname, environmentName: entry.environmentName, sourcePath: path.relative(root, agentsSourcePath), writable: false });
+        agentInstructionSources.push({ nickname, sourcePath: path.relative(root, agentsSourcePath), writable: false });
       } else {
         const instructionSource = await this.instructionSource(entry);
         await replaceWithSymlink(agentsSourcePath, instructionSource.path);
-        agentInstructionSources.push({ nickname, environmentName: entry.environmentName, sourcePath: path.relative(root, agentsSourcePath), writable: true });
+        agentInstructionSources.push({ nickname, sourcePath: path.relative(root, agentsSourcePath), writable: true });
       }
     }
 
-    await writeFile(agentsPath, await renderAggregateAgents(root, agentInstructionSources, inlineFacts), "utf8");
+    this.sessionAggregateData.set(sessionId, {
+      root,
+      sources: agentInstructionSources,
+      facts: inlineFacts,
+      skillNamesByEnvironment,
+    });
+    await writeFile(agentsPath, await renderAggregateAgents(root, agentInstructionSources, inlineFacts, skillNamesByEnvironment), "utf8");
     await chmod(agentsPath, 0o444);
     await this.writeManifest();
     return { root, agentsPath, skillsRoot, editableSkillsRoot, instructionSourcesRoot, mcpRoot, skillPaths };
@@ -177,6 +204,7 @@ export class CapabilityWorkspaceManager {
   /** Removes only a session projection. Shared global sources remain live. */
   async removeSession(sessionId: string): Promise<void> {
     this.sessionBundles.delete(sessionId);
+    this.sessionAggregateData.delete(sessionId);
     await removeTree(this.agentWorkspaceRoot(sessionId));
   }
 
@@ -292,12 +320,12 @@ export class CapabilityWorkspaceManager {
       if (await pathExists(claudePath)) return { path: claudePath, writable: true };
       // A project AGENTS.md is created only when its empty temporary source is
       // first promoted by the project watcher. Until then this is disposable.
-      const temporary = await this.ensureProjectStagingSource(entry, "instructions", async (target) => writeFile(target, "", "utf8"));
+      const temporary = await this.ensureProjectStagingSource(entry, "instructions", async (target) => writeFile(target, DEFAULT_EMPTY_INSTRUCTIONS, "utf8"));
       return { path: temporary.path, writable: true };
     }
 
     if (entry.editable) {
-      const source = await this.ensureWritableSource(entry, "instructions", undefined, async (target) => writeFile(target, entry.bundle.agentsMd ?? "", "utf8"));
+      const source = await this.ensureWritableSource(entry, "instructions", undefined, async (target) => writeFile(target, writableInstructionsContent(entry.bundle.agentsMd), "utf8"));
       return { path: source.path, writable: true };
     }
 
@@ -431,6 +459,20 @@ export class CapabilityWorkspaceManager {
       const skillsRoot = path.join(root, ".agent", "skills");
       const visibleName = await nextVisibleSkillName(skillsRoot, skillId);
       await replaceWithSymlink(path.join(skillsRoot, visibleName), sourcePath);
+      const aggregate = this.sessionAggregateData.get(sessionId);
+      if (aggregate) {
+        const skillNames = aggregate.skillNamesByEnvironment.get(nickname) ?? new Set<string>();
+        skillNames.add(skillId);
+        aggregate.skillNamesByEnvironment.set(nickname, skillNames);
+        const aggregatePath = path.join(root, "AGENTS.md");
+        await chmod(aggregatePath, 0o644);
+        await writeFile(
+          aggregatePath,
+          await renderAggregateAgents(aggregate.root, aggregate.sources, aggregate.facts, aggregate.skillNamesByEnvironment),
+          "utf8",
+        );
+        await chmod(aggregatePath, 0o444);
+      }
     }
   }
 
@@ -503,17 +545,79 @@ function uniqueSkillName(skillId: string, used: Set<string>): string {
 
 async function renderAggregateAgents(
   root: string,
-  sources: Array<{ nickname: string; environmentName: string; sourcePath: string; writable: boolean }>,
-  inlineFacts: Array<{ environmentName: string; bundleName: string; name: string; content: string }>,
+  sources: AggregateSource[],
+  inlineFacts: AggregateFact[],
+  skillNamesByEnvironment: Map<string, Set<string>>,
 ): Promise<string> {
   const blocks = await Promise.all(sources.map(async (source) => {
     const absoluteSource = path.join(root, source.sourcePath);
     const content = await readFile(absoluteSource, "utf8");
-    const state = source.writable ? "editable" : "read-only";
-    return `## ${source.environmentName}\n\nEdit this environment's instructions at \`${source.sourcePath}\` (${state}).\nCreate skills at \`.agent/editable-skills/${source.nickname}/<skill-name>/SKILL.md\`.\n\n${content.trim()}`.trim();
+    const editable = source.writable ? "true" : "false";
+    const pathAttribute = source.writable ? ` path="${escapeAttribute(source.sourcePath)}"` : "";
+    return `<environment_instruction environment="${escapeAttribute(source.nickname)}" editable="${editable}"${pathAttribute}>\n${content.trim()}\n</environment_instruction>`;
   }));
-  const factBlocks = inlineFacts.map((fact) => `## ${fact.environmentName}: ${fact.name}\n\n${fact.content.trim()}`.trim());
-  return `# Rook environment context\n\nThis file is generated and read-only. Edit the linked per-environment instruction file named below, not this aggregate.\n\n${[...blocks, ...factBlocks].join("\n\n---\n\n")}\n`;
+  const factBlocks = inlineFacts.map((fact) => `<environment_instruction environment="${escapeAttribute(fact.nickname)}" editable="false">\n${fact.name}: ${fact.content.trim()}\n</environment_instruction>`);
+  const environmentNames = [...new Set([
+    ...sources.map((source) => source.nickname),
+    ...skillNamesByEnvironment.keys(),
+  ])].sort((a, b) => a.localeCompare(b));
+  const locations = environmentNames.length > 0
+    ? environmentNames.map((nickname) => `- For the \`${nickname}\` environment, create new skills in \`.agent/editable-skills/${nickname}/<skill-name>/SKILL.md\``).join("\n")
+    : "No environments are currently entered, so there are no environment-specific skill authoring locations.";
+  const exampleNickname = environmentNames.includes("example-com") ? "example-com" : environmentNames[0];
+  const example = exampleNickname ? `\nUse the normal Agent Skills format. For example, to create a very simple skill for ${exampleNickname}:\n\n\`\`\`sh\nmkdir -p .agent/editable-skills/${exampleNickname}/say-hello\ncat > .agent/editable-skills/${exampleNickname}/say-hello/SKILL.md <<'EOF'\n---\nname: say-hello\ndescription: Say hello when the user asks for a greeting.\n---\n\nWhen asked for a greeting, say hello.\nEOF\n\`\`\`\n\nThe presence of \`SKILL.md\` makes the new skill eligible for preservation. Rook will associate it with ${exampleNickname} and make it available through \`.agent/skills/\`.` : "";
+  const skillInventory = environmentNames.map((nickname) => {
+    const names = [...(skillNamesByEnvironment.get(nickname) ?? [])].sort((a, b) => a.localeCompare(b));
+    return `- \`${nickname}\`: ${names.length > 0 ? names.map((name) => `\`${formatInlineCode(name)}\``).join(", ") : "none"}`;
+  }).join("\n");
+  return `# Rook environment instructions
+
+This file is generated by Rook and is read-only. Do not edit it directly.
+
+This file contains two kinds of guidance:
+
+- instructions associated with the environments currently entered in this session;
+- guidance for editing existing skills and creating new environment-associated skills.
+
+## Environment instructions
+
+Each environment's instructions appear inside an \`<environment_instruction>\` tag. Use the instruction text as context.
+
+The tag attributes mean:
+
+- \`environment\` is the path-safe environment nickname.
+- \`editable=\"false\"\` marks instructions that come from a read-only source.
+- \`editable=\"true\"\` marks instructions that the user may edit.
+- \`path\` identifies the source file to edit for writable instructions. Paths are relative.
+
+When an editable block has a \`path\`, edit that source file rather than this generated aggregate. If an editable block contains only the default message, no user-authored instructions exist for that environment yet.
+
+${[...blocks, ...factBlocks].join("\n\n")}
+
+## Skill editing
+
+Skills are discovered from \`.agent/skills/\`. Some discovered skills may be writable and some may come from external or read-only sources.
+
+If a skill's files are writable, you may edit them and those changes can be preserved. If a skill's files are not writable, do not edit them: changes will not be persisted. Do not change file permissions, replace links, copy over the files, or otherwise modify file access in an attempt to make a non-writable skill editable.
+
+Do not create new skills directly under \`.agent/skills/\`. When using Rook, every new skill must be associated with a particular environment and created in that environment's authoring directory:
+
+${locations}${example}
+
+## Environment skills
+
+The following list shows the skills currently known for each environment.
+
+${skillInventory || "- none"}
+`;
+}
+
+function escapeAttribute(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function formatInlineCode(value: string): string {
+  return value.replaceAll("`", "\\`");
 }
 
 async function materializeDerivedSkill(skillsRoot: string, artifact: BundleArtifact, usedSkillNames: Set<string>, skillPaths: string[]): Promise<void> {
@@ -522,6 +626,10 @@ async function materializeDerivedSkill(skillsRoot: string, artifact: BundleArtif
   await writeArtifact(target, artifact);
   await makeReadOnly(target);
   skillPaths.push(target);
+}
+
+function writableInstructionsContent(content: string | undefined): string {
+  return content?.trim() ? content : DEFAULT_EMPTY_INSTRUCTIONS;
 }
 
 function artifactText(artifact: BundleArtifact): string {

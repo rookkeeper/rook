@@ -32,7 +32,7 @@ The global workspace is retained at `~/.rook/global-workspace/` for inspection, 
 
 - **Base identity**: `server/src/environments/support/RookIdentityPrompt.ts`. This is the sole text directly injected through runtime launch configuration.
 - **Environment instructions**: bundle `agentsMd` content in SQLite, or the project’s `AGENTS.md` (falling back to `CLAUDE.md` only when `AGENTS.md` is absent).
-- **Aggregate template**: `renderAggregateAgents()` in `runtime/CapabilityWorkspaceManager.ts`. It creates read-only session-root `AGENTS.md`, names each individual source, gives concrete relative authoring paths, and embeds current source text plus small facts.
+- **Aggregate template**: `renderAggregateAgents()` in `runtime/CapabilityWorkspaceManager.ts`. It creates read-only session-root `AGENTS.md`, emits environment-tagged instruction sources, gives concrete relative authoring paths, explains skill editing and creation, inventories known skill names by environment, and embeds small facts.
 - **Editable instruction source**: `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md`. It is a link to a writable SQLite/project source or a read-only external materialization.
 - **Skill guidance**: the aggregate tells the agent to create skills beneath `.agent/editable-skills/<environment-nickname>/`.
 
@@ -69,7 +69,7 @@ Before creating/reusing a runtime, Rook recreates the empty session workspace if
 
 For an environment with skills, Rook resolves approved/user-owned bundles, materializes or reuses the shared source, creates session links, regenerates aggregate instructions, and replaces only that session runtime after successful ACP load.
 
-For an environment with no skills, Rook still creates the per-environment AGENTS/authoring structure when writable. Empty SQLite/project instruction placeholders and empty skill directories are not durable artifacts. `SKILL.md` is the promotion boundary.
+For an environment with no skills, Rook still creates the per-environment AGENTS/authoring structure when writable. A writable instruction source starts with a generated default message, but that baseline is not persisted to SQLite/project storage until changed. Empty skill directories are not durable artifacts. `SKILL.md` is the promotion boundary.
 
 ### File edits and promotion
 

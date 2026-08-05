@@ -89,11 +89,11 @@ The current implementation uses `~/.rook/global-workspace/` for shared writable 
 ## 4. Generate the aggregate AGENTS.md
 
 - [x] Replace the current marker-based write-back model with per-environment source files.
-- [x] Define a template for the aggregate `AGENTS.md`.
+- [x] Define and implement the aggregate `AGENTS.md` template, including environment-tagged instructions, skill-editing guidance, environment-specific authoring paths, and per-environment skill inventories.
 - [x] Include Rook authoring instructions in that template.
 - [x] Include concrete relative paths for editing environment instruction files.
 - [x] Include concrete relative paths for creating new skills under `.agent/editable-skills/<environment-nickname>/`.
-- [x] Include an entry for every active environment, including an empty placeholder when its writable instruction source has no content.
+- [x] Include an entry for every active environment, including a generated default placeholder when its writable instruction source has no content; establish that baseline without persisting it.
 - [x] Include full source text inside each generated environment instruction section.
 - [ ] Escape environment names, paths, and source content safely for the chosen generated format.
 - [x] Make the aggregate file read-only after generation.

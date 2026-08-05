@@ -189,7 +189,7 @@ Related tables:
 3. finalized environments resolve matching bundles and hash them
 4. undecided bundles are offered to subscribed sessions when that session enters the finalized environment
 5. client resolves via REST decision or ACP extension resolution
-6. approved/personal bundle content is resolved for workspace projection. The generated aggregate `AGENTS.md` exposes only approved/user-owned instruction sources; the runtime no longer receives duplicate environment prompt injection.
+6. approved/personal bundle content is resolved for workspace projection. The generated aggregate `AGENTS.md` exposes approved/user-owned instruction sources in environment-tagged blocks, gives authoring guidance, inventories known skill names by environment, and the runtime no longer receives duplicate environment prompt injection.
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment

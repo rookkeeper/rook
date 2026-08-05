@@ -26,7 +26,7 @@ Each runtime uses a separate agent workspace as its process and ACP working dire
 
 Existing writable SQLite skills are linked into both `skills/` and their environment-specific `editable-skills/` directory, pointing to one shared global file tree under `~/.rook/global-workspace/`. Existing project skills and instructions are linked directly to their project files. Immutable external content is materialized directly and read-only into each agent workspace; it does not enter the writable global workspace.
 
-The aggregate `AGENTS.md` is generated and read-only. It contains each environment’s source text and concrete relative paths to the linked instruction file and authoring directory. The individual file is the source to edit, never the aggregate.
+The aggregate `AGENTS.md` is generated and read-only. It contains environment-tagged source text, concrete relative paths to linked instruction files and skill authoring directories, skill-editing guidance, and a per-environment inventory of known skill names. The individual files are the sources to edit, never the aggregate.
 
 ## Authoring and persistence
 
@@ -36,7 +36,7 @@ A new skill is created in:
 .agent/editable-skills/<environment-nickname>/<skill-name>/SKILL.md
 ```
 
-Its parent identifies ownership. `SKILL.md` makes the skill real. A completed personal skill is persisted to SQLite and linked into `.agent/skills/`. A completed project skill is written to `.agents/skills/` in the project and then linked directly from the workspace. Empty skill directories and empty instruction placeholders do not create durable content.
+Its parent identifies ownership. `SKILL.md` makes the skill real. A completed personal skill is persisted to SQLite and linked into `.agent/skills/`. A completed project skill is written to `.agents/skills/` in the project and then linked directly from the workspace. Empty skill directories and default-text instruction placeholders do not create durable content until the user changes them.
 
 Rook watches shared SQLite files and active project source roots. It debounces writes, serializes changed personal files as new SQLite revisions, regenerates affected aggregate instructions, and retries at the next assessment if persistence fails. Project edits remain project edits and never enter SQLite.
 

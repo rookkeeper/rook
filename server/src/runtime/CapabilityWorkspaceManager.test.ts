@@ -35,6 +35,15 @@ describe("CapabilityWorkspaceManager", () => {
     const firstSkill = path.join(first.skillsRoot, "remember", "SKILL.md");
     const secondSkill = path.join(second.skillsRoot, "remember", "SKILL.md");
     const authoringSkill = path.join(first.editableSkillsRoot, "mail", "remember", "SKILL.md");
+    const aggregate = await readFile(first.agentsPath, "utf8");
+
+    expect(aggregate).toContain("# Rook environment instructions");
+    expect(aggregate).toContain("## Environment instructions");
+    expect(aggregate).toContain("<environment_instruction environment=\"mail\" editable=\"true\" path=\".agent/AGENTS_FILES/mail/AGENTS.md\">");
+    expect(aggregate).toContain("## Skill editing");
+    expect(aggregate).toContain("- For the `mail` environment, create new skills in `.agent/editable-skills/mail/<skill-name>/SKILL.md`");
+    expect(aggregate).toContain("## Environment skills");
+    expect(aggregate).toContain("- `mail`: `remember`");
 
     expect((await lstat(path.join(first.skillsRoot, "remember"))).isSymbolicLink()).toBe(true);
     expect(await realpath(firstSkill)).toBe(await realpath(secondSkill));
@@ -46,6 +55,23 @@ describe("CapabilityWorkspaceManager", () => {
       expect.objectContaining({ repository: "personal", environmentId: "web:mail.example", bundleId: "personal", artifactId: "remember" }),
     ]));
 
+    await manager.close();
+  });
+
+  it("uses default writable instructions without persisting them automatically", async () => {
+    const persisted: string[] = [];
+    const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
+    const bundle = personalBundle();
+    bundle.writeBackInstructions = async (content) => {
+      persisted.push(content);
+      return true;
+    };
+
+    const workspace = await manager.materialize("session", [bundle]);
+    expect(await readFile(path.join(workspace.instructionSourcesRoot, "mail", "AGENTS.md"), "utf8")).toContain("No user-authored instructions have been added for this environment yet.");
+    await manager.assessAndFlush();
+
+    expect(persisted).toEqual([]);
     await manager.close();
   });
 
@@ -75,6 +101,7 @@ describe("CapabilityWorkspaceManager", () => {
     expect(await realpath(path.join(workspace.skillsRoot, "new-skill", "SKILL.md"))).toBe(
       await realpath(path.join(workspace.editableSkillsRoot, "mail", "new-skill", "SKILL.md")),
     );
+    expect(await readFile(workspace.agentsPath, "utf8")).toContain("- `mail`: `existing`, `new-skill`");
     await manager.close();
   });
 

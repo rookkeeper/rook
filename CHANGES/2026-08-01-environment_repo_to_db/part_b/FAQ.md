@@ -26,9 +26,9 @@ Not initially. The workspace is one process-wide shared tree, retained after shu
 
 ## How are AGENTS files handled?
 
-The aggregate `AGENTS.md` is generated from a template and read-only. Each writable environment receives an individual source file under `.agent/AGENTS_FILESls/<environment-nickname>/AGENTS.md`, including an empty placeholder when appropriate.
+The aggregate `AGENTS.md` is generated from a template and read-only. Each writable environment receives an individual source file under `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md`, including a generated default message when appropriate.
 
-The individual file is linked to its global or project source. The aggregate includes the full text, a human-readable environment name, and the relative source path the agent should edit.
+The individual file is linked to its global or project source. The default message establishes the baseline and is not persisted until the user changes the file. The aggregate includes the full text, a human-readable environment name, and the relative source path the agent should edit.
 
 ## Do instruction edits require a restart?
 
