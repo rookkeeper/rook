@@ -12,12 +12,12 @@ A `dir:` environment does **not** receive an SQLite personal bundle. Its project
 
 At server startup Rook clears and recreates the process-wide workspace at `~/.rook/global-workspace/` for writable SQLite materializations. It is rebuildable from SQLite and retained after shutdown for inspection; the next startup clears it again.
 
-Each runtime uses a separate agent workspace as its process and ACP working directory:
+Each runtime uses a separate agent workspace as its process and ACP working directory. Rook places skills under the standard `.agents/skills/` discovery directory and starts Pi with project approval so non-interactive ACP sessions load that generated workspace:
 
 ```text
 ~/.rook/agent-workspaces/<session-id>/
 ├── AGENTS.md                                      generated, read-only aggregate
-└── .agent/
+└── .agents/
     ├── skills/<skill-name>                         normal skill link or read-only external materialization
     ├── editable-skills/<environment-nickname>/     explicit authoring location
     ├── AGENTS_FILES/<environment-nickname>/AGENTS.md
@@ -33,10 +33,10 @@ The aggregate `AGENTS.md` is generated and read-only. It contains environment-ta
 A new skill is created in:
 
 ```text
-.agent/editable-skills/<environment-nickname>/<skill-name>/SKILL.md
+.agents/editable-skills/<environment-nickname>/<skill-name>/SKILL.md
 ```
 
-Its parent identifies ownership. `SKILL.md` makes the skill real. A completed personal skill is persisted to SQLite and linked into `.agent/skills/`. A completed project skill is written to `.agents/skills/` in the project and then linked directly from the workspace. Empty skill directories and default-text instruction placeholders do not create durable content until the user changes them.
+Its parent identifies ownership. `SKILL.md` makes the skill real. A completed personal skill is persisted to SQLite and linked into `.agents/skills/`. A completed project skill is written to `.agents/skills/` in the project and then linked directly from the workspace. Empty skill directories and default-text instruction placeholders do not create durable content until the user changes them.
 
 Rook watches shared SQLite files and active project source roots. It debounces writes, serializes changed personal files as new SQLite revisions, regenerates affected aggregate instructions, and retries at the next assessment if persistence fails. Project edits remain project edits and never enter SQLite.
 

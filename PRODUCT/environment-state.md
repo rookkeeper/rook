@@ -27,9 +27,9 @@ Environment availability does not automatically enter an environment or inject c
 
 ## State delivered to the agent
 
-The generated read-only `AGENTS.md` includes environment-tagged instruction sources, authoring guidance, concrete relative source paths, and a per-environment inventory of known skill names. Individual `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md` files remain the instruction sources; environment skill paths are discovered from `.agent/skills` rather than injected into the prompt.
+The generated read-only `AGENTS.md` includes environment-tagged instruction sources, authoring guidance, concrete relative source paths, and a per-environment inventory of known skill names. Individual `.agents/AGENTS_FILES/<environment-nickname>/AGENTS.md` files remain the instruction sources; environment skill paths are discovered from `.agents/skills` rather than injected into the prompt.
 
-Dynamic UI/client environment banners and bundle offers are separate from repository content. The server does not currently stream arbitrary environment state directly into the agent as user messages.
+Dynamic UI/client environment banners and bundle offers are separate from repository content. The server does not currently stream arbitrary environment state directly into the agent as user messages. Pi receives one-run approval for the generated session workspace so its non-interactive ACP process loads `.agents/skills`; this runtime trust is distinct from accepting or approving environment bundles.
 
 ## Safety and noise boundaries
 

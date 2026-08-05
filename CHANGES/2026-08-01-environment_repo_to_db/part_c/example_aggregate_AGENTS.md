@@ -24,30 +24,30 @@ When an editable block has a `path`, edit that source file rather than this gene
 Treat Gmail content as private user data. Before sending, deleting, or making other consequential changes to email, explain the intended action and obtain confirmation when the request is ambiguous. Prefer drafts and read-only actions when they satisfy the user's request.
 </environment_instruction>
 
-<environment_instruction environment="gmail" editable="true" path=".agent/AGENTS_FILES/gmail/AGENTS.md">
+<environment_instruction environment="gmail" editable="true" path=".agents/AGENTS_FILES/gmail/AGENTS.md">
 No user-authored instructions have been added for this environment yet.
 </environment_instruction>
 
-<environment_instruction environment="example-com" editable="true" path=".agent/AGENTS_FILES/example-com/AGENTS.md">
+<environment_instruction environment="example-com" editable="true" path=".agents/AGENTS_FILES/example-com/AGENTS.md">
 When working with example.com, keep requests narrowly scoped to the user's stated task. Summarize important changes briefly and ask before performing an action that could modify user-visible data.
 </environment_instruction>
 
 ## Skill editing
 
-Skills are discovered from `.agent/skills/`. Some discovered skills may be writable and some may come from external or read-only sources.
+Skills are discovered from `.agents/skills/`. Some discovered skills may be writable and some may come from external or read-only sources.
 
 If a skill's files are writable, you may edit them and those changes can be preserved. If a skill's files are not writable, do not edit them: changes will not be persisted. Do not change file permissions, replace links, copy over the files, or otherwise modify file access in an attempt to make a non-writable skill editable.
 
-Do not create new skills directly under `.agent/skills/`. When using Rook, every new skill must be associated with a particular environment and created in that environment's authoring directory:
+Do not create new skills directly under `.agents/skills/`. When using Rook, every new skill must be associated with a particular environment and created in that environment's authoring directory:
 
-- For the `gmail` environment, create new skills in `.agent/editable-skills/gmail/<skill-name>/SKILL.md`
-- For the `example-com` environment, create new skills in `.agent/editable-skills/example-com/<skill-name>/SKILL.md`
+- For the `gmail` environment, create new skills in `.agents/editable-skills/gmail/<skill-name>/SKILL.md`
+- For the `example-com` environment, create new skills in `.agents/editable-skills/example-com/<skill-name>/SKILL.md`
 
 Use the normal Agent Skills format. For example, to create a very simple skill for example-com:
 
 ```sh
-mkdir -p .agent/editable-skills/example-com/say-hello
-cat > .agent/editable-skills/example-com/say-hello/SKILL.md <<'EOF'
+mkdir -p .agents/editable-skills/example-com/say-hello
+cat > .agents/editable-skills/example-com/say-hello/SKILL.md <<'EOF'
 ---
 name: say-hello
 description: Say hello when the user asks for a greeting.
@@ -57,7 +57,7 @@ When asked for a greeting, say hello.
 EOF
 ```
 
-The presence of `SKILL.md` makes the new skill eligible for preservation. Rook will associate it with `example-com` and make it available through `.agent/skills/`.
+The presence of `SKILL.md` makes the new skill eligible for preservation. Rook will associate it with `example-com` and make it available through `.agents/skills/`.
 
 ## Environment skills
 

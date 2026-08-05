@@ -26,6 +26,7 @@ describe("runtimeLaunchPlan", () => {
     const plan = runtimeLaunchPlan(profile, repoRoot, configuration);
     const launcher = plan.env?.PI_ACP_PI_COMMAND;
     expect(launcher).toBeDefined();
+    expect(readFileSync(launcher!, "utf8")).toContain("--approve");
     expect(readFileSync(launcher!, "utf8")).toContain("--append-system-prompt");
     expect(readFileSync(launcher!, "utf8")).toContain("## You are Rook");
   });

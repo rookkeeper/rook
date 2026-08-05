@@ -19,9 +19,8 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - [clients/mac](clients/mac/) — native macOS menu bar client
 - [clients/iphone](clients/iphone/) — native iPhone client
 - [clients/android](clients/android/) — native Android client
-- [clients/cli](clients/cli/) — minimal ACP-first command-line client
 - [clients/RookKit](clients/RookKit/) — shared Swift package for the native clients
-- [skills/](skills/) — repo-local Pi skills that Rook injects into Pi sessions (currently includes `create-skills`)
+- [.agents/skills/](.agents/skills/) — repo-local agent skills for coding-agent work; Rook runtime workspaces materialize their own standard `.agents/skills/` projection
 - [dev-tools/](dev-tools/) — repo-local Pi development/debug extensions (currently includes provider-payload trace logging to `/tmp/pi/provider-payload.jsonl`)
 
 ## Common entry points

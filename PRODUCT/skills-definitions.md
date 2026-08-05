@@ -11,10 +11,10 @@ In SQLite, a skill revision retains the complete nested file map. The content ha
 Resolved skills are materialized under:
 
 ```text
-<session-workspace>/.agent/skills/<skill-name>/
+<session-workspace>/.agents/skills/<skill-name>/
 ```
 
-Skills from personal bundles are writable through shared links and synchronize back to SQLite. Canonical and external skills are projected read-only. Duplicate skill names use naive `_2`, `_3`, etc. workspace names without changing skill frontmatter.
+The `.agents/skills/` directory follows the standard Agent Skills discovery convention, so Pi and other compatible runtimes discover it from the workspace cwd. Rook launches Pi with project approval for this generated workspace because non-interactive ACP sessions cannot answer Pi's trust prompt. Skills from personal bundles are writable through shared links and synchronize back to SQLite. Canonical and external skills are projected read-only. Duplicate skill names use naive `_2`, `_3`, etc. workspace names without changing skill frontmatter.
 
 ## Other capability types
 

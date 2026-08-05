@@ -200,7 +200,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     expect(entered.entered).toContain("web:example.com");
 
     const workspaceRoot = agentWorkspaceRoot(tempConfigDir, sessionId);
-    const materializedSkill = path.join(workspaceRoot, ".agent", "skills", "testing-fixture", "SKILL.md");
+    const materializedSkill = path.join(workspaceRoot, ".agents", "skills", "testing-fixture", "SKILL.md");
     expect(existsSync(materializedSkill)).toBe(true);
     await request(ws, 3, "session/close", { sessionId });
     ws.close();
@@ -237,7 +237,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     });
 
     const workspaceRoot = agentWorkspaceRoot(tempConfigDir, sessionId);
-    const workspaceSkill = path.join(workspaceRoot, ".agent", "skills", "personal-skill", "SKILL.md");
+    const workspaceSkill = path.join(workspaceRoot, ".agents", "skills", "personal-skill", "SKILL.md");
     expect(readFileSync(workspaceSkill, "utf8")).toBe("original personal skill");
     await request(ws, 4, "session/prompt", {
       sessionId,
@@ -247,7 +247,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const afterSkill = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; skills: Array<{ id: string; files: Record<string, string> }> }> };
     const personalAfterSkill = afterSkill.bundles.find((candidate) => candidate.bundleId === "personal");
     expect(personalAfterSkill?.skills.find((skill) => skill.id === "personal-skill")?.files["personal-skill/SKILL.md"]).toBe("updated by the mock agent");
-    const workspaceAgents = path.join(workspaceRoot, ".agent", "AGENTS_FILES", "example", "AGENTS.md");
+    const workspaceAgents = path.join(workspaceRoot, ".agents", "AGENTS_FILES", "example", "AGENTS.md");
     await request(ws, 5, "session/prompt", {
       sessionId,
       prompt: [{ type: "text", text: `edit personal instructions write-to:${workspaceAgents}` }],
@@ -284,7 +284,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     }).then((response) => response.json()) as { entered: string[] };
     expect(entered.entered).toContain(environmentId);
 
-    const workspaceSkill = path.join(agentWorkspaceRoot(tempConfigDir, sessionId), ".agent", "editable-skills", "new-skill-test", "navigating-xkcd");
+    const workspaceSkill = path.join(agentWorkspaceRoot(tempConfigDir, sessionId), ".agents", "editable-skills", "new-skill-test", "navigating-xkcd");
     mkdirSync(workspaceSkill, { recursive: true });
     writeFileSync(path.join(workspaceSkill, "SKILL.md"), "---\nname: navigating-xkcd\ndescription: Navigate XKCD.\n---\n", "utf8");
     await request(ws, 3, "session/prompt", { sessionId, prompt: [{ type: "text", text: "say hi briefly" }] });

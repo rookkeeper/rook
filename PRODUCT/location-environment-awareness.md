@@ -6,7 +6,7 @@ Status: implemented. This feature turns a settled physical arrival into availabl
 
 When the iPhone or Android client detects a settled arrival, it sends location context to the server. A pluggable provider ranks nearby businesses, and the server registers the best candidate plus relevant neighbors. The client shows a business/environment banner and can enter the environment after the normal preview and decision flow.
 
-Location environments use the same repository/bundle model as web, app, and project environments. Their resolved content is materialized into the session workspace; skills load from `.agent/skills`, instructions enter generated `AGENTS.md`, and other capability families follow their current projection rules.
+Location environments use the same repository/bundle model as web, app, and project environments. Their resolved content is materialized into the session workspace; skills load from `.agents/skills`, instructions enter generated `AGENTS.md`, and other capability families follow their current projection rules.
 
 ## Current assumptions and limits
 

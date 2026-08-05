@@ -105,10 +105,10 @@ export class CapabilityWorkspaceManager {
   /** Rebuilds one disposable session projection without replacing shared sources. */
   async materialize(sessionId: string, bundles: CapabilityWorkspaceBundle[]): Promise<CapabilityWorkspaceResult> {
     const root = this.agentWorkspaceRoot(sessionId);
-    const skillsRoot = path.join(root, ".agent", "skills");
-    const editableSkillsRoot = path.join(root, ".agent", "editable-skills");
-    const instructionSourcesRoot = path.join(root, ".agent", "AGENTS_FILES");
-    const mcpRoot = path.join(root, ".agent", "mcp-servers");
+    const skillsRoot = path.join(root, ".agents", "skills");
+    const editableSkillsRoot = path.join(root, ".agents", "editable-skills");
+    const instructionSourcesRoot = path.join(root, ".agents", "AGENTS_FILES");
+    const mcpRoot = path.join(root, ".agents", "mcp-servers");
     const agentsPath = path.join(root, "AGENTS.md");
     await mkdir(root, { recursive: true });
     await Promise.all([
@@ -454,9 +454,9 @@ export class CapabilityWorkspaceManager {
       const root = this.agentWorkspaceRoot(sessionId);
       const nickname = environmentNicknames(bundles).get(source.environmentId)!;
       if (source.repository === "project-directory") {
-        await replaceWithSymlink(path.join(root, ".agent", "editable-skills", nickname), path.dirname(sourcePath));
+        await replaceWithSymlink(path.join(root, ".agents", "editable-skills", nickname), path.dirname(sourcePath));
       }
-      const skillsRoot = path.join(root, ".agent", "skills");
+      const skillsRoot = path.join(root, ".agents", "skills");
       const visibleName = await nextVisibleSkillName(skillsRoot, skillId);
       await replaceWithSymlink(path.join(skillsRoot, visibleName), sourcePath);
       const aggregate = this.sessionAggregateData.get(sessionId);
@@ -562,10 +562,10 @@ async function renderAggregateAgents(
     ...skillNamesByEnvironment.keys(),
   ])].sort((a, b) => a.localeCompare(b));
   const locations = environmentNames.length > 0
-    ? environmentNames.map((nickname) => `- For the \`${nickname}\` environment, create new skills in \`.agent/editable-skills/${nickname}/<skill-name>/SKILL.md\``).join("\n")
+    ? environmentNames.map((nickname) => `- For the \`${nickname}\` environment, create new skills in \`.agents/editable-skills/${nickname}/<skill-name>/SKILL.md\``).join("\n")
     : "No environments are currently entered, so there are no environment-specific skill authoring locations.";
   const exampleNickname = environmentNames.includes("example-com") ? "example-com" : environmentNames[0];
-  const example = exampleNickname ? `\nUse the normal Agent Skills format. For example, to create a very simple skill for ${exampleNickname}:\n\n\`\`\`sh\nmkdir -p .agent/editable-skills/${exampleNickname}/say-hello\ncat > .agent/editable-skills/${exampleNickname}/say-hello/SKILL.md <<'EOF'\n---\nname: say-hello\ndescription: Say hello when the user asks for a greeting.\n---\n\nWhen asked for a greeting, say hello.\nEOF\n\`\`\`\n\nThe presence of \`SKILL.md\` makes the new skill eligible for preservation. Rook will associate it with ${exampleNickname} and make it available through \`.agent/skills/\`.` : "";
+  const example = exampleNickname ? `\nUse the normal Agent Skills format. For example, to create a very simple skill for ${exampleNickname}:\n\n\`\`\`sh\nmkdir -p .agents/editable-skills/${exampleNickname}/say-hello\ncat > .agents/editable-skills/${exampleNickname}/say-hello/SKILL.md <<'EOF'\n---\nname: say-hello\ndescription: Say hello when the user asks for a greeting.\n---\n\nWhen asked for a greeting, say hello.\nEOF\n\`\`\`\n\nThe presence of \`SKILL.md\` makes the new skill eligible for preservation. Rook will associate it with ${exampleNickname} and make it available through \`.agents/skills/\`.` : "";
   const skillInventory = environmentNames.map((nickname) => {
     const names = [...(skillNamesByEnvironment.get(nickname) ?? [])].sort((a, b) => a.localeCompare(b));
     return `- \`${nickname}\`: ${names.length > 0 ? names.map((name) => `\`${formatInlineCode(name)}\``).join(", ") : "none"}`;
@@ -596,11 +596,11 @@ ${[...blocks, ...factBlocks].join("\n\n")}
 
 ## Skill editing
 
-Skills are discovered from \`.agent/skills/\`. Some discovered skills may be writable and some may come from external or read-only sources.
+Skills are discovered from \`.agents/skills/\`. Some discovered skills may be writable and some may come from external or read-only sources.
 
 If a skill's files are writable, you may edit them and those changes can be preserved. If a skill's files are not writable, do not edit them: changes will not be persisted. Do not change file permissions, replace links, copy over the files, or otherwise modify file access in an attempt to make a non-writable skill editable.
 
-Do not create new skills directly under \`.agent/skills/\`. When using Rook, every new skill must be associated with a particular environment and created in that environment's authoring directory:
+Do not create new skills directly under \`.agents/skills/\`. When using Rook, every new skill must be associated with a particular environment and created in that environment's authoring directory:
 
 ${locations}${example}
 

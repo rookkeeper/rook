@@ -23,6 +23,8 @@
 # todos
 - [ ] Whenever I open the Zed window, I can see an environment pop into Rook for the Zed application, but I would expect to see an environment pop into Rook for the actual project directory because it does have things that obviously make it look like a project. So that's a code degradation. 
   - [ ] Similarly, when I open the finder to a specific directory within a project, It uses that directory as the environment rather than the place in the hierarchy that actually has some project files. 
+  - [ ] Make environment recognition faster for web and paths
+  - [ ] When opening and agent, make sure to join the same environments again.
 - [ ] I'm not sure why the global workspace needs a manifest. Why can't we just use the naming convention and stick everything in ~/.rook/global-workspace/<environment_identifier>/*  (including AGENTS.md and skills there or .agents/skills so that it looks like a project directory)
 - [ ] Make sure that when there is not sub AGENTS.md files that the aggregate AGENTS.md makes sense
 

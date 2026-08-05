@@ -39,9 +39,9 @@ describe("CapabilityWorkspaceManager", () => {
 
     expect(aggregate).toContain("# Rook environment instructions");
     expect(aggregate).toContain("## Environment instructions");
-    expect(aggregate).toContain("<environment_instruction environment=\"mail\" editable=\"true\" path=\".agent/AGENTS_FILES/mail/AGENTS.md\">");
+    expect(aggregate).toContain("<environment_instruction environment=\"mail\" editable=\"true\" path=\".agents/AGENTS_FILES/mail/AGENTS.md\">");
     expect(aggregate).toContain("## Skill editing");
-    expect(aggregate).toContain("- For the `mail` environment, create new skills in `.agent/editable-skills/mail/<skill-name>/SKILL.md`");
+    expect(aggregate).toContain("- For the `mail` environment, create new skills in `.agents/editable-skills/mail/<skill-name>/SKILL.md`");
     expect(aggregate).toContain("## Environment skills");
     expect(aggregate).toContain("- `mail`: `remember`");
 

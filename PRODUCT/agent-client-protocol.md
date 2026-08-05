@@ -31,7 +31,7 @@ Environment changes are Rook orchestration around ACP:
 5. load the existing runtime session successfully
 6. retire the old subprocess
 
-The runtime receives files and paths, not repository/database handles. Personal source edits are watched and persisted to SQLite; project edits remain direct project-file changes.
+The runtime receives files and paths, not repository/database handles. Personal source edits are watched and persisted to SQLite; project edits remain direct project-file changes. For Pi, Rook starts the generated workspace with one-run project approval so non-interactive ACP startup loads the standard `.agents/skills` project resources; this is separate from Rook's bundle approval decisions.
 
 ## Rook ACP extensions
 

@@ -22,7 +22,7 @@ A changed agent-visible bundle content hash is a new reviewable revision, even i
 3. The session explicitly enters an environment.
 4. Offers are presented for undecided non-personal bundles.
 5. Accepted/approved or personal bundles are linked/materialized into the session workspace.
-6. The runtime is restarted with the agent workspace as cwd when environment membership changes.
+6. The runtime is restarted with the agent workspace as cwd when environment membership changes. Pi receives one-run project approval for that generated workspace so non-interactive ACP startup discovers `.agents/skills`; this is separate from the bundle decision flow.
 
 The session does not implicitly enter parent environments, and availability does not itself load capabilities.
 

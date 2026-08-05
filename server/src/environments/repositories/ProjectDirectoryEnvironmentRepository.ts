@@ -67,7 +67,7 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
   }
 
   private async readSkills(directory: string, errors: RepositoryReadError[], environmentId: string): Promise<BundleArtifact[]> {
-    const roots = [".agents/skills", ".agent/skills", ".claude/skills", ".codex/skills", ".cursor/skills", ".github/skills"]
+    const roots = [".agents/skills", ".claude/skills", ".codex/skills", ".cursor/skills", ".github/skills"]
       .map((relative) => path.join(directory, relative))
       .filter((candidate) => existsSync(candidate));
     const artifacts: BundleArtifact[] = [];

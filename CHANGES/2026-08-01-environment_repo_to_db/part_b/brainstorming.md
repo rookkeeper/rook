@@ -94,12 +94,12 @@ We also need to decide whether registering a project environment should create a
 The agent workspace should contain links such as:
 
 ```text
-.agent/skills/<skill>       → global capability file/tree
+.agents/skills/<skill>       → global capability file/tree
 .agents/AGENTS/<source>.md  → global or project instruction source
 AGENTS.md                   generated read-only aggregate
 ```
 
-The runtime should use the agent workspace as its current working directory. This allows ordinary runtime discovery of `AGENTS.md` and `.agent/skills`. Project files will need to remain available from that workspace for coding tasks, either through links or an explicitly defined project-root arrangement.
+The runtime should use the agent workspace as its current working directory. This allows ordinary runtime discovery of `AGENTS.md` and `.agents/skills`. Project files will need to remain available from that workspace for coding tasks, either through links or an explicitly defined project-root arrangement.
 
 This must be validated across Pi, Claude, Cursor, and generic ACP runtimes. The current launch path passes skill paths and prompt text explicitly and does not yet use the proposed shared workspace as the runtime cwd.
 
@@ -288,12 +288,12 @@ A path-safe human-readable slug may make the workspace easier to inspect, but th
 
 ## Next design pass: capability ownership metadata and naming
 
-The AGENTS case has a clear ownership path: the aggregate names a specific source file, and the agent edits that linked source file. A newly created skill is harder because a file under `.agent/skills/` does not inherently say which environment or bundle owns it.
+The AGENTS case has a clear ownership path: the aggregate names a specific source file, and the agent edits that linked source file. A newly created skill is harder because a file under `.agents/skills/` does not inherently say which environment or bundle owns it.
 
 The central problem is:
 
 ```text
-agent creates .agent/skills/my-new-skill/SKILL.md
+agent creates .agents/skills/my-new-skill/SKILL.md
                                       ↓
                          which environment/bundle owns it?
 ```
@@ -353,12 +353,12 @@ The source key could be derived from the repository/environment/bundle identity.
 A compromise would preserve the readable name when it is unique and add the source prefix only when two active skills collide.
 
 #### 3. An authoring directory or creation slot
-N: I find this idea to be attractive in several ways. It does get rid of the metadata, which is kind of nice, although I'm not as worried about that as you seem to be but also we can make I think we can make it tell me if I'm wrong, but I think we can make it so that the .agent/skills directory is not writable in that you can't create new files but the the individual skills within that file would be completely writable. I think we can do that right? And then we could also set up directories such as .agent/new-skills/<environment_nickname> for each of the environments that IS writable. This would guide the agent to place the the skill in the appropriate location. For instance the agent could make a skill like .agent/new-skills/Gmail/summarizing_emails (in the web:mail.google.com environment).The only thing weird is what to do when we symlink the skill to where it's supposed to be. Maybe just symlink the dir to both .agent/new-skills/Gmail/summarizing_emails and .agent/skills/summarizing_emails. This approach also means that we don't have to notify the agent when they've screwed up because the agent can't create a new skill Unless they go through this route They'll just be blocked and that's probably better because we can put instructions into their preamble of their system message or whatever that explains how to do this appropriately. And I think they'll follow the instructions. 
+N: I find this idea to be attractive in several ways. It does get rid of the metadata, which is kind of nice, although I'm not as worried about that as you seem to be but also we can make I think we can make it tell me if I'm wrong, but I think we can make it so that the .agents/skills directory is not writable in that you can't create new files but the the individual skills within that file would be completely writable. I think we can do that right? And then we could also set up directories such as .agents/new-skills/<environment_nickname> for each of the environments that IS writable. This would guide the agent to place the the skill in the appropriate location. For instance the agent could make a skill like .agents/new-skills/Gmail/summarizing_emails (in the web:mail.google.com environment).The only thing weird is what to do when we symlink the skill to where it's supposed to be. Maybe just symlink the dir to both .agents/new-skills/Gmail/summarizing_emails and .agents/skills/summarizing_emails. This approach also means that we don't have to notify the agent when they've screwed up because the agent can't create a new skill Unless they go through this route They'll just be blocked and that's probably better because we can put instructions into their preamble of their system message or whatever that explains how to do this appropriately. And I think they'll follow the instructions.
 
 The workspace could expose source-specific authoring locations such as:
 
 ```text
-.agent/authoring/<source-key>/skills/
+.agents/authoring/<source-key>/skills/
 ```
 
 The agent would create new skills there, and the watcher would know their destination from the directory. This avoids metadata in `SKILL.md`, but it requires the agent to understand a nonstandard authoring path.

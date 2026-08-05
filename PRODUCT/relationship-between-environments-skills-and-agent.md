@@ -25,13 +25,13 @@ The canonical approval boundary is the exact agent-visible content hash. Persona
 
 For an entered environment, approved or personal bundle content is projected into the session workspace:
 
-- skills become `.agent/skills/<name>/`
+- skills become `.agents/skills/<name>/`
 - instructions become generated `AGENTS.md` sections
 - small facts become inline facts; large facts become pseudo-skills
 - `llms.txt` becomes a generated reference skill
 - MCP content becomes a separate read-only area
 
-The runtime is restarted for environment changes only after the existing ACP session has been loaded into the replacement process. The workspace is rebuilt instead of trusting stale files.
+The runtime is restarted for environment changes only after the existing ACP session has been loaded into the replacement process. The workspace is rebuilt instead of trusting stale files. Pi receives one-run project approval for the generated workspace so non-interactive ACP startup discovers `.agents/skills`; this is separate from Rook's bundle approval boundary.
 
 ## EnvironmentManager
 

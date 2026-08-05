@@ -20,7 +20,7 @@ The exception is an environment that intentionally points at an existing project
 
 ## How can user-created skills remain editable?
 
-The agent receives a writable per-session projection under `.var/rook/agent-workspaces/<session-id>/.agent/skills`. At workspace synchronization points, the materializer sends changed files through the repository service, which writes a new personal SQLite revision. Personal instruction edits use marked sections in the generated `AGENTS.md` and write back to the bundle instruction field.
+The agent receives a writable per-session projection under `.var/rook/agent-workspaces/<session-id>/.agents/skills`. At workspace synchronization points, the materializer sends changed files through the repository service, which writes a new personal SQLite revision. Personal instruction edits use marked sections in the generated `AGENTS.md` and write back to the bundle instruction field.
 
 This is covered by the ACP end-to-end authoring test. Concurrent conflict merging remains deferred.
 

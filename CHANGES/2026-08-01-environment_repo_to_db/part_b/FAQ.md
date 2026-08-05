@@ -26,7 +26,7 @@ Not initially. The workspace is one process-wide shared tree, retained after shu
 
 ## How are AGENTS files handled?
 
-The aggregate `AGENTS.md` is generated from a template and read-only. Each writable environment receives an individual source file under `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md`, including a generated default message when appropriate.
+The aggregate `AGENTS.md` is generated from a template and read-only. Each writable environment receives an individual source file under `.agents/AGENTS_FILES/<environment-nickname>/AGENTS.md`, including a generated default message when appropriate.
 
 The individual file is linked to its global or project source. The default message establishes the baseline and is not persisted until the user changes the file. The aggregate includes the full text, a human-readable environment name, and the relative source path the agent should edit.
 
@@ -39,10 +39,10 @@ No. Watchers update the source and regenerate the aggregate file. The runtime di
 The agent creates new skills under the explicit source directory:
 
 ```text
-.agent/editable-skills/<environment-nickname>/<skill-name>/
+.agents/editable-skills/<environment-nickname>/<skill-name>/
 ```
 
-The parent directory identifies the destination, so skill frontmatter does not need to carry ownership metadata. Existing writable skills are linked into both this directory and `.agent/skills/`; a newly created skill is linked into `.agent/skills/` once `SKILL.md` exists.
+The parent directory identifies the destination, so skill frontmatter does not need to carry ownership metadata. Existing writable skills are linked into both this directory and `.agents/skills/`; a newly created skill is linked into `.agents/skills/` once `SKILL.md` exists.
 
 An empty placeholder does not become a real skill or SQLite artifact until `SKILL.md` is written.
 
@@ -66,7 +66,7 @@ No. Same-user filesystem permissions can be bypassed by an agent with arbitrary 
 
 ## What is the runtime working directory?
 
-The agent workspace is the runtime subprocess and ACP-session `cwd`, allowing ordinary discovery of `AGENTS.md` and `.agent/skills`. The actual project directory is not represented inside the workspace in this phase; exposing it for coding tasks is future work.
+The agent workspace is the runtime subprocess and ACP-session `cwd`, allowing ordinary discovery of `AGENTS.md` and `.agents/skills`. The actual project directory is not represented inside the workspace in this phase; exposing it for coding tasks is future work.
 
 ## What project-directory rules apply?
 

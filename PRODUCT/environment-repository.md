@@ -84,7 +84,7 @@ Each runtime uses its per-session agent workspace as its process working directo
 ```text
 ~/.rook/agent-workspaces/<session-id>/
 ├── AGENTS.md
-└── .agent/
+└── .agents/
     ├── skills/
     ├── editable-skills/<environment-nickname>/
     ├── AGENTS_FILES/<environment-nickname>/AGENTS.md
@@ -93,7 +93,7 @@ Each runtime uses its per-session agent workspace as its process working directo
 
 The process-wide global workspace at `~/.rook/global-workspace/` provides one writable file tree for each SQLite-backed personal source. Rook clears it at startup and retains it after shutdown for inspection. Session workspaces symlink to those trees. Project-owned skills and instructions are linked directly to project files; immutable external content is materialized directly and read-only into each session instead of entering the writable global workspace.
 
-`AGENTS.md` is a generated read-only aggregate. Individual linked `AGENTS_FILES` are the editable instruction sources. Filesystem watchers serialize settled personal changes as new SQLite revisions and reconcile project-source changes without writing SQLite. Changing entered environments restarts only the affected runtime after the existing ACP session has been successfully loaded.
+`AGENTS.md` is a generated read-only aggregate. Individual linked `AGENTS_FILES` are the editable instruction sources. Filesystem watchers serialize settled personal changes as new SQLite revisions and reconcile project-source changes without writing SQLite. Changing entered environments restarts only the affected runtime after the existing ACP session has been successfully loaded. Pi starts with one-run approval for the generated workspace so non-interactive ACP startup discovers `.agents/skills`; this does not replace bundle-level content approval.
 
 ## Decisions and approval
 

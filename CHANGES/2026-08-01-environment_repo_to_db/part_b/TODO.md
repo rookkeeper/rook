@@ -12,12 +12,12 @@ The current implementation uses `~/.rook/global-workspace/` for shared writable 
 - [x] Do not put immutable external content in the global writable workspace; materialize it directly into agent workspaces as read-only content.
 - [x] Use the agent workspace as the runtime process `cwd`.
 - [x] Keep the actual project directory out of the agent workspace for now; record exposing it later as future work.
-- [x] Use `.agent` consistently for Rook-managed agent workspace content.
+- [x] Use `.agents` consistently for Rook-managed agent workspace content.
 - [x] Make the aggregate agent-workspace `AGENTS.md` read-only and generate it from a template containing concrete relative paths and authoring instructions.
-- [x] Use `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md` for per-environment instruction sources.
-- [x] Use `.agent/editable-skills/<environment-nickname>/` as the creation/editing area for writable skills.
-- [x] Link existing writable skills into both `.agent/editable-skills/<environment-nickname>/` and `.agent/skills/`.
-- [x] Keep non-writable external skills in `.agent/skills/` as read-only materialized files, not global links.
+- [x] Use `.agents/AGENTS_FILES/<environment-nickname>/AGENTS.md` for per-environment instruction sources.
+- [x] Use `.agents/editable-skills/<environment-nickname>/` as the creation/editing area for writable skills.
+- [x] Link existing writable skills into both `.agents/editable-skills/<environment-nickname>/` and `.agents/skills/`.
+- [x] Keep non-writable external skills in `.agents/skills/` as read-only materialized files, not global links.
 - [x] Make a new skill real once its directory contains `SKILL.md`.
 - [x] For directory environments, write new skills to `.agents/skills/` in the project directory and new instructions to the project-root `AGENTS.md`.
 - [x] Do not create an SQLite personal bundle during passive registration; explicit entry creates it for non-directory authoring, while directory environments never receive one.
@@ -65,21 +65,21 @@ The current implementation uses `~/.rook/global-workspace/` for shared writable 
 
 - [x] Replace per-session copying of writable SQLite skills with one global writable materialization per source identity.
 - [x] Materialize existing SQLite personal skills into the global workspace.
-- [x] Create links from `.agent/skills/<skill-name>` to writable global skill directories.
-- [x] Create matching links from `.agent/editable-skills/<environment-nickname>/<skill-name>` to those same writable skill directories.
-- [ ] Keep `.agent/skills/` itself non-writable by ordinary agent operations after links have been created.
+- [x] Create links from `.agents/skills/<skill-name>` to writable global skill directories.
+- [x] Create matching links from `.agents/editable-skills/<environment-nickname>/<skill-name>` to those same writable skill directories.
+- [ ] Keep `.agents/skills/` itself non-writable by ordinary agent operations after links have been created.
 - [x] Allow the individual writable skill targets to remain writable through both link locations.
-- [x] Materialize immutable external skills directly into `.agent/skills/` as read-only files/directories, without global links.
+- [x] Materialize immutable external skills directly into `.agents/skills/` as read-only files/directories, without global links.
 - [x] Apply the simple `_2`, `_3`, etc. collision policy without changing the skill’s internal `name` metadata.
 - [x] Preserve the mapping between the displayed folder name and the original artifact ID.
-- [x] Create one per-environment instruction source at `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md`.
+- [x] Create one per-environment instruction source at `.agents/AGENTS_FILES/<environment-nickname>/AGENTS.md`.
 - [x] For SQLite-backed writable instructions, create a shared global source file without creating a database artifact until the user writes content.
 - [x] For immutable external instructions, use a read-only direct materialization rather than a writable global source.
 - [x] For existing project instructions, link directly to the project’s actual `AGENTS.md`/`CLAUDE.md` source as appropriate.
 
 ### Acceptance gates
 
-- [ ] An existing personal skill is editable through both `.agent/skills/<name>` and `.agent/editable-skills/<environment>/<name>`.
+- [ ] An existing personal skill is editable through both `.agents/skills/<name>` and `.agents/editable-skills/<environment>/<name>`.
 - [ ] Both links resolve to the same underlying file tree.
 - [ ] An external skill is readable but is not linked to the writable global workspace.
 - [ ] An existing project skill is linked directly to its project source.
@@ -92,7 +92,7 @@ The current implementation uses `~/.rook/global-workspace/` for shared writable 
 - [x] Define and implement the aggregate `AGENTS.md` template, including environment-tagged instructions, skill-editing guidance, environment-specific authoring paths, and per-environment skill inventories.
 - [x] Include Rook authoring instructions in that template.
 - [x] Include concrete relative paths for editing environment instruction files.
-- [x] Include concrete relative paths for creating new skills under `.agent/editable-skills/<environment-nickname>/`.
+- [x] Include concrete relative paths for creating new skills under `.agents/editable-skills/<environment-nickname>/`.
 - [x] Include an entry for every active environment, including a generated default placeholder when its writable instruction source has no content; establish that baseline without persisting it.
 - [x] Include full source text inside each generated environment instruction section.
 - [ ] Escape environment names, paths, and source content safely for the chosen generated format.
@@ -112,18 +112,18 @@ The current implementation uses `~/.rook/global-workspace/` for shared writable 
 
 ## 5. Add editable-skill creation slots
 
-- [x] Create `.agent/editable-skills/<environment-nickname>/` for every writable environment.
+- [x] Create `.agents/editable-skills/<environment-nickname>/` for every writable environment.
 - [x] Make each creation-slot directory point to a known writable global or project source location.
 - [x] Ensure the agent is instructed to create new skills only inside the appropriate environment slot.
-- [ ] Keep `.agent/skills/` unavailable for arbitrary new entries under normal permissions.
+- [ ] Keep `.agents/skills/` unavailable for arbitrary new entries under normal permissions.
 - [x] Detect a new skill when `SKILL.md` appears in an editable-skill slot.
 - [x] Treat a skill as real as soon as `SKILL.md` exists; optionally validate standard frontmatter without blocking ownership or materialization.
 - [x] For a SQLite-backed environment, create the new personal artifact in SQLite after `SKILL.md` exists.
 - [x] For a directory environment, create `.agents/skills/` in the project if necessary, copy the new skill there, and replace the temporary source with a direct project link.
-- [x] After a new skill becomes real, add the corresponding `.agent/skills/<name>` link while keeping the `.agent/editable-skills/<environment>/<name>` link.
+- [x] After a new skill becomes real, add the corresponding `.agents/skills/<name>` link while keeping the `.agents/editable-skills/<environment>/<name>` link.
 - [x] Ensure subsequent edits through either link update the same source.
 - [ ] Do not require environment ownership metadata in `SKILL.md` when the skill is created through an environment-specific slot.
-- [ ] Define the behavior when an agent attempts to create a skill directly under `.agent/skills/`.
+- [ ] Define the behavior when an agent attempts to create a skill directly under `.agents/skills/`.
 
 ### Acceptance gates
 
@@ -131,7 +131,7 @@ The current implementation uses `~/.rook/global-workspace/` for shared writable 
 - [ ] A new project skill creates `.agents/skills/` and the named skill directory in the project, then receives direct project links.
 - [ ] A new skill does not become real merely because an empty directory exists.
 - [ ] A skill created through the wrong or unknown location is not silently assigned to an environment.
-- [ ] A skill remains editable from its normal `.agent/skills/<name>` location after promotion.
+- [ ] A skill remains editable from its normal `.agents/skills/<name>` location after promotion.
 
 ## 6. Handle project-directory sources
 
@@ -197,7 +197,7 @@ The current implementation uses `~/.rook/global-workspace/` for shared writable 
 ### Acceptance gates
 
 - [ ] A runtime starts with the agent workspace as `cwd`.
-- [ ] The runtime discovers the generated `AGENTS.md` and `.agent/skills` without duplicate prompt/skill injection.
+- [ ] The runtime discovers the generated `AGENTS.md` and `.agents/skills` without duplicate prompt/skill injection.
 - [ ] Closing one session does not remove files still used by another session.
 - [ ] Entering or leaving an environment updates only that session’s links.
 - [ ] Shared personal edits do not force other active sessions to restart.
@@ -230,7 +230,7 @@ The current implementation uses `~/.rook/global-workspace/` for shared writable 
 - [ ] Add tests for bundle identity collisions and the `directory` project bundle.
 - [ ] Add tests that SQLite personal bundles are not created for `dir:` environments.
 - [ ] Add tests for empty writable AGENTS placeholders.
-- [ ] Add tests for editable skill links in both `.agent/skills` and `.agent/editable-skills`.
+- [ ] Add tests for editable skill links in both `.agents/skills` and `.agents/editable-skills`.
 - [ ] Add tests for non-writable external skill materialization.
 - [ ] Add tests for skill-name collision suffixes without changing skill frontmatter.
 - [ ] Add tests for new SQLite skills created from editable slots.
@@ -249,8 +249,8 @@ The current implementation uses `~/.rook/global-workspace/` for shared writable 
 
 ### Final acceptance gates
 
-- [ ] A user can edit an existing personal skill naturally through `.agent/skills/<name>`.
-- [ ] A user can create a new personal skill through `.agent/editable-skills/<environment>/` and then use it through `.agent/skills/<name>`.
+- [ ] A user can edit an existing personal skill naturally through `.agents/skills/<name>`.
+- [ ] A user can create a new personal skill through `.agents/editable-skills/<environment>/` and then use it through `.agents/skills/<name>`.
 - [ ] A user can edit/create project skills and instructions without SQLite persistence.
 - [ ] The aggregate `AGENTS.md` accurately explains all authoring paths and remains read-only.
 - [ ] Multiple sessions share writable capability files without independent-copy overwrite behavior.

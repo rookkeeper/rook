@@ -33,8 +33,8 @@ The global workspace is retained at `~/.rook/global-workspace/` for inspection, 
 - **Base identity**: `server/src/environments/support/RookIdentityPrompt.ts`. This is the sole text directly injected through runtime launch configuration.
 - **Environment instructions**: bundle `agentsMd` content in SQLite, or the project’s `AGENTS.md` (falling back to `CLAUDE.md` only when `AGENTS.md` is absent).
 - **Aggregate template**: `renderAggregateAgents()` in `runtime/CapabilityWorkspaceManager.ts`. It creates read-only session-root `AGENTS.md`, emits environment-tagged instruction sources, gives concrete relative authoring paths, explains skill editing and creation, inventories known skill names by environment, and embeds small facts.
-- **Editable instruction source**: `.agent/AGENTS_FILES/<environment-nickname>/AGENTS.md`. It is a link to a writable SQLite/project source or a read-only external materialization.
-- **Skill guidance**: the aggregate tells the agent to create skills beneath `.agent/editable-skills/<environment-nickname>/`.
+- **Editable instruction source**: `.agents/AGENTS_FILES/<environment-nickname>/AGENTS.md`. It is a link to a writable SQLite/project source or a read-only external materialization.
+- **Skill guidance**: the aggregate tells the agent to create skills beneath `.agents/editable-skills/<environment-nickname>/`.
 
 The removed `EnvironmentPromptTemplate` and `EnvironmentManager.runtimeInstructionsForSession()` no longer create a duplicate environment system prompt. Runtimes discover the aggregate from their workspace cwd.
 
@@ -59,7 +59,7 @@ The global root can be inspected or deleted while Rook is stopped. Its contents 
 3. Both subprocess launch cwd and ACP `session/new` cwd use that workspace.
 4. Rook starts the ACP runtime and stores the public/runtime-local session mapping.
 
-The base Rook identity is injected once. No environment skill paths or environment prompt text are injected explicitly.
+The base Rook identity is injected once. No environment skill paths or environment prompt text are injected explicitly. Pi discovers the standard `.agents/skills` workspace directory after Rook grants one-run project approval to the generated workspace for non-interactive ACP startup.
 
 ### Reopening a persisted session
 
@@ -73,9 +73,9 @@ For an environment with no skills, Rook still creates the per-environment AGENTS
 
 ### File edits and promotion
 
-- An existing personal skill is editable through both `.agent/skills/<name>` and `.agent/editable-skills/<environment>/<name>`; both resolve to the same global source tree.
+- An existing personal skill is editable through both `.agents/skills/<name>` and `.agents/editable-skills/<environment>/<name>`; both resolve to the same global source tree.
 - A global watcher debounces settled source changes, serializes personal skill/instruction edits as SQLite revisions, and leaves dirty sources in place if persistence fails.
-- A new skill in an editable slot is persisted once it contains `SKILL.md`, then receives its normal `.agent/skills` link.
+- A new skill in an editable slot is persisted once it contains `SKILL.md`, then receives its normal `.agents/skills` link.
 - Existing project skills and instructions are direct links to project files. Project roots are watched directly and never write SQLite.
 - If a project lacks `.agents/skills` or `AGENTS.md`, Rook uses temporary project staging until the first completed skill/instruction is promoted into the project.
 - Immutable external skills/instructions/MCP files are materialized directly into each session as read-only files, not placed in the writable global root.
@@ -93,7 +93,7 @@ The new manager preserves capability-specific projections:
 - ordinary skills, including nested files;
 - small facts inline in generated `AGENTS.md`;
 - large facts and `llms.txt` as read-only generated reference skills;
-- MCP configuration/content in read-only `.agent/mcp-servers/`.
+- MCP configuration/content in read-only `.agents/mcp-servers/`.
 
 MCP startup and lifecycle remain deferred.
 

@@ -47,11 +47,11 @@ The compatibility `EnvironmentBundle` read shape was retained while adding the d
 
 It materializes:
 
-- nested skills under `.agent/skills/`
+- nested skills under `.agents/skills/`
 - generated readable `AGENTS.md` instructions
 - facts inline when small and as generated reference skills when large
 - `llms.txt` as a generated reference skill
-- MCP content under a separate read-only `.agent/mcp-servers/` area
+- MCP content under a separate read-only `.agents/mcp-servers/` area
 
 `AgentRuntimeManager` rebuilds the workspace when environment membership changes and on restored/restarted sessions. It gives the runtime the materialized skill paths and generated prompt text, while preserving the session `cwd` and existing ACP session identity.
 
@@ -113,7 +113,7 @@ The as-built architecture docs now describe:
 |---|---|---|
 | Move environment-repository storage to SQLite | **Met** | SQLite is the default for canonical and personal repositories; the canonical database is checked in. |
 | Preserve bundles as the atomic unit | **Met** | Bundle identity, revision, preview, approval, and runtime loading remain intact. |
-| Preserve file-based runtime behavior | **Met** | Runtimes still receive `.agent/skills`, `AGENTS.md`, and workspace files. |
+| Preserve file-based runtime behavior | **Met** | Runtimes still receive `.agents/skills`, `AGENTS.md`, and workspace files. |
 | Keep user content writable | **Met for personal/project paths** | Personal skills/instructions write back to SQLite; project files map back to project sources. |
 | Keep external content immutable/read-only | **Met as the current policy** | Read-only permissions and separate projections are implemented; this is not a strong same-user OS sandbox. |
 | Approve exact agent-visible content | **Met** | Canonical content hashes include the relevant nested/filesystem content and are used for durable decisions. |
@@ -232,9 +232,9 @@ Run the ACP integration test with a debugger or add a temporary pause after envi
 
 ```text
 .var/rook/agent-workspaces/<session-id>/
-.var/rook/agent-workspaces/<session-id>/.agent/skills/
+.var/rook/agent-workspaces/<session-id>/.agents/skills/
 .var/rook/agent-workspaces/<session-id>/AGENTS.md
-.var/rook/agent-workspaces/<session-id>/.agent/mcp-servers/
+.var/rook/agent-workspaces/<session-id>/.agents/mcp-servers/
 ```
 
 Look for readable environment/bundle names in `AGENTS.md`, not repository ids or storage paths. External files should have read-only permissions. Personal skill files should be writable.
@@ -259,7 +259,7 @@ cd server
 npm test -- src/runtime/acpFacade.test.ts -t 'materializes approved environment skills'
 ```
 
-The test enters an environment after a session exists and checks the session-specific `.agent/skills` path. To test the failure mode yourself, edit or remove a generated workspace file, trigger an environment restart, and verify that the workspace is rebuilt from repository content rather than trusted as-is.
+The test enters an environment after a session exists and checks the session-specific `.agents/skills` path. To test the failure mode yourself, edit or remove a generated workspace file, trigger an environment restart, and verify that the workspace is rebuilt from repository content rather than trusted as-is.
 
 ### 10. Verify project-directory environments
 
