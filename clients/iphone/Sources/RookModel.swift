@@ -674,7 +674,7 @@ final class RookModel: ObservableObject {
     // MARK: - Chat
 
     func send(_ text: String) {
-        currentHandle?.send(text)
+        currentHandle?.send([.text(text)])
         updateLiveActivity()
     }
 
