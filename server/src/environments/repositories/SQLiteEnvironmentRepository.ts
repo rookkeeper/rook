@@ -222,11 +222,15 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   }
 
   private upsertEnvironment(environment: EnvironmentRecord): void {
+    const metadataJson = JSON.stringify(environment.metadata ?? {});
     this.db.prepare(`
-      INSERT INTO environments (environment_id, display_name, description)
-      VALUES (?, ?, ?)
-      ON CONFLICT(environment_id) DO UPDATE SET display_name = excluded.display_name, description = excluded.description
-    `).run(environment.id, environment.displayName, environment.description);
+      INSERT INTO environments (environment_id, display_name, description, metadata_json)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(environment_id) DO UPDATE SET
+        display_name = excluded.display_name,
+        description = excluded.description,
+        metadata_json = excluded.metadata_json
+    `).run(environment.id, environment.displayName, environment.description, metadataJson);
   }
 
   private ensureEnvironment(environmentId: string): void {
@@ -265,7 +269,18 @@ function environmentFromRow(row: unknown): EnvironmentRecord {
     id: String(value.environment_id),
     displayName: String(value.display_name),
     description: String(value.description),
+    metadata: parseMetadata(value.metadata_json),
   };
+}
+
+function parseMetadata(value: unknown): Record<string, unknown> {
+  if (typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
 }
 
 function parseFiles(value: unknown): Record<string, string> {

@@ -24,6 +24,20 @@ describe("CapabilityWorkspaceManager", () => {
     await expect(access(path.join(root, "manifest.json"))).resolves.toBeUndefined();
   });
 
+  it("regenerates a deleted aggregate without changing writable sources", async () => {
+    let writes = 0;
+    const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
+    const bundle = personalBundle({ skills: [skill("remember")], agentsMd: "Remember this." });
+    bundle.writeBackInstructions = async () => { writes += 1; return true; };
+    const workspace = await manager.materialize("session", [bundle]);
+    await rm(workspace.agentsPath, { force: true });
+    await manager.materialize("session", [bundle]);
+
+    expect(await readFile(workspace.agentsPath, "utf8")).toContain("Remember this.");
+    expect(writes).toBe(0);
+    await manager.close();
+  });
+
   it("links one SQLite-backed writable skill into every session and authoring slot", async () => {
     const root = await temporaryDirectory();
     const sessionRoot = await temporaryDirectory();
@@ -107,12 +121,14 @@ describe("CapabilityWorkspaceManager", () => {
     await manager.close();
   });
 
-  it("soft-deletes skill and instruction sources removed through the shared authoring links", async () => {
+  it("soft-deletes and recreates skill and instruction sources through shared authoring links", async () => {
     const deletedSkills: string[] = [];
     let deletedInstructions = 0;
+    let recreatedSkills: string[] = [];
     const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
     const bundle = personalBundle({ skills: [skill("remember")], agentsMd: "Remember this." });
     bundle.writeBackDeleteSkill = async (id) => { deletedSkills.push(id); return true; };
+    bundle.writeBackNewSkill = async (id) => { recreatedSkills = [...recreatedSkills, id]; return true; };
     bundle.writeBackDeleteInstructions = async () => { deletedInstructions += 1; return true; };
     const first = await manager.materialize("session-one", [bundle]);
     const second = await manager.materialize("session-two", [bundle]);
@@ -127,6 +143,31 @@ describe("CapabilityWorkspaceManager", () => {
     const aggregate = await readFile(first.agentsPath, "utf8");
     expect(aggregate).not.toContain("Remember this.");
     expect(aggregate).toContain("- `mail`: none");
+    expect(await readFile(second.agentsPath, "utf8")).not.toContain("Remember this.");
+
+    await mkdir(path.join(first.editableSkillsRoot, "mail", "remember"), { recursive: true });
+    await writeFile(path.join(first.editableSkillsRoot, "mail", "remember", "SKILL.md"), "Remember again.", "utf8");
+    await writeFile(path.join(first.instructionSourcesRoot, "mail", "AGENTS.md"), "Remember again.", "utf8");
+    await manager.assessAndFlush();
+
+    expect(recreatedSkills).toContain("remember");
+    expect(await readFile(second.skillsRoot + "/remember/SKILL.md", "utf8")).toBe("Remember again.");
+    expect(await readFile(second.agentsPath, "utf8")).toContain("Remember again.");
+    await manager.close();
+  });
+
+  it("does not infer deletion while rebuilding a session projection", async () => {
+    let deleted = 0;
+    const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
+    const bundle = personalBundle({ skills: [skill("remember")], agentsMd: "Remember this." });
+    bundle.writeBackDeleteSkill = async () => { deleted += 1; return true; };
+    bundle.writeBackDeleteInstructions = async () => { deleted += 1; return true; };
+
+    await manager.materialize("session", [bundle]);
+    await manager.materialize("session", [bundle]);
+    await manager.assessAndFlush();
+
+    expect(deleted).toBe(0);
     await manager.close();
   });
 

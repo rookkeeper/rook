@@ -12,7 +12,7 @@ const BUNDLE_ID = "11111111-1111-4111-8111-111111111111";
 
 function result(repository = "canonical") {
   return {
-    environment: { id: "web:example.com", displayName: "Example", description: "Example website" },
+    environment: { id: "web:example.com", displayName: "Example", description: "Example website", metadata: { source: "fixture" } },
     bundles: [{
       id: `web:example.com#${BUNDLE_ID}`,
       bundleId: BUNDLE_ID,
@@ -58,6 +58,7 @@ describe("SQLiteEnvironmentRepository", () => {
 
     expect(datastore.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((row) => (row as { name: string }).name)).toEqual(["bundles", "capabilities", "environments"]);
     const loaded = await repository.getBundles("web:example.com");
+    expect(loaded.environment).toMatchObject({ id: "web:example.com", metadata: { source: "fixture" } });
     expect(loaded.bundles[0]).toMatchObject({ bundleId: BUNDLE_ID, repository: "canonical", agentsMd: "Confirm before sending.", llmsTxt: "Reference material." });
     expect(loaded.bundles[0]?.skills[0]?.files["mail-search/SKILL.md"]).toBe("Search mail.");
     expect(loaded.bundles[0]?.facts?.[0]?.files["facts.json"]).toBe("{}");
@@ -82,6 +83,20 @@ describe("SQLiteEnvironmentRepository", () => {
     const loaded = (await repository.getBundles("web:example.com")).bundles[0]!;
     expect(loaded.skills[0]?.files["mail-search/SKILL.md"]).toBe("Changed search.");
     expect(datastore.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%revision%'").all()).toEqual([]);
+  });
+
+  it("reactivates a deleted membership when the same capability is recreated", async () => {
+    const datastore = new EnvironmentRepositoryDatastore(":memory:");
+    datastores.push(datastore);
+    const repository = new SQLiteEnvironmentRepository(datastore, "personal");
+    repository.saveResult(result("personal"));
+
+    expect(await repository.deleteCapability("web:example.com", BUNDLE_ID, "skill", "mail-search")).toBe(true);
+    expect(await repository.createCapabilityFiles("web:example.com", BUNDLE_ID, "skill", "mail-search", { "mail-search/SKILL.md": "Recreated search." })).toBe(true);
+
+    const loaded = (await repository.getBundles("web:example.com")).bundles[0]!;
+    expect(loaded.skills[0]?.files["mail-search/SKILL.md"]).toBe("Recreated search.");
+    expect(datastore.db.prepare("SELECT deleted_at FROM bundles WHERE bundle_id = ?").get(BUNDLE_ID)).toMatchObject({ deleted_at: null });
   });
 
   it("soft-deletes and restores one bundle membership while retaining capability content", async () => {

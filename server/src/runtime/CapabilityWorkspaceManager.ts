@@ -478,6 +478,16 @@ export class CapabilityWorkspaceManager {
   }
 
   private async removeDeletedSkillSessions(source: WorkspaceSource, skillId: string): Promise<void> {
+    for (const authoringSource of this.sources.values()) {
+      if (
+        authoringSource.kind === "authoring-slot"
+        && authoringSource.repository === source.repository
+        && authoringSource.environmentId === source.environmentId
+        && authoringSource.bundleId === source.bundleId
+      ) {
+        authoringSource.knownSkillIds?.delete(skillId);
+      }
+    }
     for (const [sessionId, bundles] of this.sessionBundles) {
       if (!bundles.some((entry) => sameSource(entry, source))) continue;
       const root = this.agentWorkspaceRoot(sessionId);
