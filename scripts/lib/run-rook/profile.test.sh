@@ -91,7 +91,6 @@ assert_eq "$ROOK_SERVER_HOST" "127.0.0.1"
 assert_empty "${ROOK_AGENT_RUNTIMES_PATH:-}"
 initialize_development_home
 assert_file "$ROOK_HOME/config/agent-runtimes.json"
-assert_file "$ROOK_HOME/.run-rook-profile"
 printf 'worktree-only\n' >"$ROOK_HOME/worktree-only.txt"
 printf 'source-only\n' >"$HOME/.rook/source-only.txt"
 initialize_development_home

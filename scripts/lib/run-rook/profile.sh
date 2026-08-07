@@ -108,7 +108,6 @@ configure_run_profile() {
   CURRENT_SERVER_PIDFILE="$RUN_ROOT/server.pid"
   CURRENT_MAC_PIDFILE="$RUN_ROOT/mac.pid"
   ROOK_HOME="${ROOK_HOME:-$RUN_ROOK_HOME_DEFAULT}"
-  RUN_ROOK_PROFILE_HOME_MARKER="$ROOK_HOME/.run-rook-profile"
   ROOK_DEV_ALLOW_REMOTE="${ROOK_DEV_ALLOW_REMOTE:-0}"
   SERVER_DATABASE_PATH="${ROOK_DATABASE_PATH:-$ROOK_HOME/rook.sqlite}"
 
@@ -122,7 +121,6 @@ configure_run_profile() {
   export RUN_ROOK_APP_BUNDLE_ID RUN_ROOK_APP_DISPLAY_NAME
   export RUN_ROOK_DEFAULT_PORT RUN_ROOK_HOME_DEFAULT RUN_ROOK_ALLOW_REMOTE_DEFAULT
   export SERVER_PORT RUN_ROOT BUILD_ROOT CURRENT_SERVER_LOG CURRENT_SERVER_PIDFILE CURRENT_MAC_PIDFILE
-  export RUN_ROOK_PROFILE_HOME_MARKER
   export SERVER_DATABASE_PATH ROOK_DATABASE_PATH="$SERVER_DATABASE_PATH" ROOK_HOME
 
   # The server reads PORT, not ROOK_SERVER_PORT. Set it after loading .env so a
@@ -142,40 +140,16 @@ configure_run_profile() {
 
 initialize_development_home() {
   [[ "$RUN_ROOK_PROFILE" == "development" ]] || return 0
-  [[ -f "$RUN_ROOK_PROFILE_HOME_MARKER" ]] && return 0
+  [[ -d "$ROOK_HOME" ]] && return 0
 
   local source_home="$HOME/.rook"
   mkdir -p "$ROOK_HOME"
   if [[ -d "$source_home" && "$source_home" != "$ROOK_HOME" ]]; then
-    python3 - <<'PY' "$source_home" "$ROOK_HOME"
-import os, shutil, sys
-
-source, target = sys.argv[1:]
-
-def copy_missing(source_dir, target_dir):
-    os.makedirs(target_dir, exist_ok=True)
-    for entry in os.scandir(source_dir):
-        destination = os.path.join(target_dir, entry.name)
-        if entry.is_symlink():
-            if not os.path.lexists(destination):
-                os.symlink(os.readlink(entry.path), destination)
-        elif entry.is_dir():
-            if not os.path.exists(destination):
-                shutil.copytree(entry.path, destination, symlinks=True)
-            elif os.path.isdir(destination):
-                copy_missing(entry.path, destination)
-        elif not os.path.exists(destination):
-            shutil.copy2(entry.path, destination)
-
-copy_missing(source, target)
-PY
+    cp -a "$source_home/." "$ROOK_HOME/"
+    log "initialized development Rook home by copying $source_home"
+  else
+    log "initialized empty development Rook home at $ROOK_HOME"
   fi
-
-  cat >"$RUN_ROOK_PROFILE_HOME_MARKER" <<EOF
-profile=$RUN_ROOK_PROFILE_SLUG
-source=$source_home
-EOF
-  log "initialized development Rook home from $source_home"
 }
 
 log_run_profile() {
