@@ -260,10 +260,10 @@ Fast path from the repo root:
 
 ```zsh
 ./scripts/run-rook.sh mac
-./scripts/run-rook.sh stop   # shut down server + launched app(s)
+./scripts/run-rook.sh stop   # stop this checkout's server + launched app(s)
 ```
 
-`run-rook.sh mac` starts the server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, and launches the fresh app build. On macOS the helper now starts the server in Terminal.app by default so Pi retains Terminal's Downloads/Desktop/Documents permissions instead of losing them in a detached background process.
+`run-rook.sh mac` selects the production-like profile from the main checkout or an isolated development profile from a Git worktree. It starts the selected server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, and launches the fresh app build. Worktree builds use a deterministic alternate port, isolated `ROOK_HOME`/SQLite state, and a distinct `Rook Dev (<worktree-name>)` app identity so they can run beside production.
 
 Manual steps:
 
@@ -271,7 +271,7 @@ Manual steps:
 # 1. Start the Rook server (skip if it's already running)
 cd <path-to-rookery>   # the repo root
 npm run dev
-# verify: curl http://127.0.0.1:3000/api/health  ->  {"ok":true,...}
+# verify: curl http://127.0.0.1:7665/api/health  ->  {"ok":true,...}
 
 # 2. Generate the Xcode project and build the app
 cd clients/mac
@@ -305,7 +305,7 @@ package's source location; override it with:
 defaults write com.rookery.Rook RookeryRepoRoot /path/to/rookery
 ```
 
-Shared Rook config now lives in `~/.rook/config/`.
+Shared Rook config lives in `ROOK_HOME/config/` (`~/.rook/config/` for production and `~/.rook-<worktree-name>/config/` for a worktree).
 
 ## Troubleshooting: the icon isn't in the menu bar
 

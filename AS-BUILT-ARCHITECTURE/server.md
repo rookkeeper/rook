@@ -2,7 +2,7 @@
 
 ## Summary
 
-The server is a Fastify service on `127.0.0.1:7665` with an optional second remote/VPN listener. It exposes a session-bound ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes, sessions, transcripts, and environments, and an internal runtime broker that launches one ACP subprocess per public session.
+The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with an optional second remote/VPN listener. A Git worktree launched through `scripts/run-rook.sh` receives an isolated development profile with a deterministic alternate port and profile-specific local state. The server exposes a session-bound ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes, sessions, transcripts, and environments, and an internal runtime broker that launches one ACP subprocess per public session.
 
 ## Main components
 
@@ -94,6 +94,10 @@ See also: [database.md](./database.md)
 
 ### Runtime boundary
 `SessionRuntime` speaks newline-delimited ACP JSON-RPC over stdio to subprocesses launched from runtime profiles. Supported runtime types are configured, not implicit: `pi`, `claude`, `cursor`, and generic `acp`.
+
+## Local profile configuration
+
+The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-name>` for a development worktree. The canonical environment repository remains the `environment-repository/` directory belonging to the checkout that launched the server.
 
 ## Persistence shape
 

@@ -412,6 +412,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook;
 				PRODUCT_NAME = Rook;
+				ROOK_APP_DISPLAY_NAME = Rook;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -572,6 +573,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook;
 				PRODUCT_NAME = Rook;
+				ROOK_APP_DISPLAY_NAME = Rook;
 				SDKROOT = macosx;
 			};
 			name = Release;

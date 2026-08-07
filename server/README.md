@@ -17,7 +17,13 @@ Or from the repo root:
 ./scripts/run-rook.sh server
 ```
 
-That starts the backend on `http://127.0.0.1:7665`.
+That starts the backend on `http://127.0.0.1:7665` from the main checkout. When run from a Git worktree, `run-rook.sh` selects an isolated development profile with a deterministic alternate port and separate local state.
+
+## Local profiles and state
+
+The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH` for the selected profile. The main checkout keeps the existing defaults (`~/.rook/` for user-local state and `.var/rook/rook.sqlite` for the application database). A worktree defaults to `~/.rook-<worktree-name>/rook.sqlite` and uses the worktree's canonical `environment-repository/` directory.
+
+The server's user-local repository and environment-authoring bindings honor `ROOK_HOME`. The environment-repository API and bundle layout are unchanged.
 
 ## Network binding and auth
 

@@ -10,21 +10,25 @@ if [[ -f "$REPO_ROOT/.env" ]]; then
   set +a
 fi
 
-RUN_ROOT="$REPO_ROOT/.var/run-rook"
-BUILD_ROOT="$RUN_ROOT/build"
-CURRENT_SERVER_LOG="$RUN_ROOT/server.log"
-CURRENT_SERVER_PIDFILE="$RUN_ROOT/server.pid"
-SERVER_PORT="${ROOK_SERVER_PORT:-7665}"
 SERVER_BIND_HOST="127.0.0.1"
 SERVER_AUTH_TOKEN="${ROOK_AUTH_TOKEN:-}"
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/run-rook/common.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/run-rook/profile.sh"
+
+configure_run_profile
+
+SERVER_AUTH_TOKEN="${ROOK_AUTH_TOKEN:-}"
+log_run_profile
+
 DEFAULT_IOS_APP_BUNDLE_ID="com.rookkeeper.Rook"
 DEFAULT_IOS_WIDGET_BUNDLE_ID="${DEFAULT_IOS_APP_BUNDLE_ID}.RookWidgets"
 DEFAULT_IOS_TEST_BUNDLE_ID="com.rookkeeper.RookTests"
 
 mkdir -p "$RUN_ROOT" "$BUILD_ROOT"
 
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/lib/run-rook/common.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/run-rook/mac.sh"
 # shellcheck disable=SC1091
@@ -41,12 +45,13 @@ Usage:
   ./scripts/run-rook.sh sim [--device NAME_OR_UDID] [--server-url URL] [--reset-permissions] [--simulate-arrival "LAT,LON"]
   ./scripts/run-rook.sh android
   ./scripts/run-rook.sh server mac iphone
-  ./scripts/run-rook.sh stop
+  ./scripts/run-rook.sh stop [--all]
 
 What it does:
   - starts the selected Rook server if needed
   - rebuilds / launches the selected target(s)
-  - keeps the server target behavior the same as before
+  - selects a production profile from the main checkout and an isolated development profile from a worktree
+  - keeps the selected server, data, logs, and Mac app instance isolated from other profiles
 
 Notes:
   - you can pass multiple targets; they run in the order given
@@ -56,7 +61,9 @@ Notes:
   - sim uses localhost by default; pass --server-url to override
   - android is currently a placeholder target
   - the server always binds localhost; ROOK_BIND_IP adds a second remote listener
-  - the server runs as a detached background process and logs to .var/run-rook/server.log
+  - the server runs as a detached background process and logs to the selected profile's run directory
+  - `stop` stops the current profile; `stop --all` is the explicit broad cleanup command
+  - development worktrees use a deterministic port and `~/.rook-<worktree-name>` by default
   - iphone signing now follows the Xcode project’s configured DEVELOPMENT_TEAM and bundle identifiers
   - stop shuts down the server, mac app(s), iphone app(s), and android app if present
 EOF
@@ -67,6 +74,7 @@ DEVICE_FILTER=""
 RESET_PERMISSIONS=0
 SERVER_URL=""
 SIMULATE_ARRIVAL=""
+STOP_ALL=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -89,6 +97,10 @@ while [[ $# -gt 0 ]]; do
     --simulate-arrival)
       SIMULATE_ARRIVAL="${2:-}"
       shift 2
+      ;;
+    --all)
+      STOP_ALL=1
+      shift
       ;;
     -h|--help)
       usage
@@ -119,11 +131,15 @@ for target in "${TARGETS[@]}"; do
   esac
 done
 
-SERVER_KIND="current"
+SERVER_KIND="$RUN_ROOK_PROFILE"
 SERVER_PACKAGE_DIR="$REPO_ROOT/server"
 SERVER_LOG="$CURRENT_SERVER_LOG"
 SERVER_PIDFILE="$CURRENT_SERVER_PIDFILE"
 SERVER_HEALTH_URL="http://${SERVER_BIND_HOST}:${SERVER_PORT}/api/health"
+
+if (( STOP_ALL )) && [[ "${TARGETS[0]:-}" != "stop" ]]; then
+  die "--all can only be used with stop"
+fi
 
 if (( ${#TARGETS[@]} > 1 )); then
   for target in "${TARGETS[@]}"; do
@@ -138,7 +154,11 @@ need_cmd python3
 need_cmd lsof
 
 if [[ "${TARGETS[0]}" == "stop" ]]; then
-  stop_everything
+  if (( STOP_ALL )); then
+    stop_everything_all
+  else
+    stop_everything
+  fi
   exit 0
 fi
 

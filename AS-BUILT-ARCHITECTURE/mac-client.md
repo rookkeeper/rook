@@ -32,6 +32,7 @@ The macOS client is a native SwiftUI menu bar app with a regular app window. It 
   - loopback HTTP bridge for agent perception and control
 - `ServerController`
   - starts/stops a local dev server process and tails logs
+  - inherits the launcher-selected server profile when launched from the Mac client
 - voice/control services
   - `VoiceController`, `HotKey`, `InputSynthesizer`, `ScreenCapturer`, `ScreenOCR`
 
@@ -141,8 +142,11 @@ Via `RookKit`:
 
 ### Server supervision
 1. health polling marks server online/offline/starting
-2. if offline, the app can launch `npm run dev` via `ServerController`
+2. if offline, the app can launch `npm run dev` via `ServerController`, inheriting the selected `ROOK_HOME`, database path, port, and profile
 3. termination resets status and triggers a new health check
+
+### Worktree development profile
+When launched from a Git worktree through `scripts/run-rook.sh`, the Mac app is built with a distinct development bundle identity and display name. It connects to the worktree's deterministic development port and can run beside the production-like app from the main checkout without sharing app preferences or server state.
 
 ## Notable architectural characteristics
 

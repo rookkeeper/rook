@@ -66,14 +66,26 @@ ensure_server_deps() {
   (cd "$server_dir" && npm install --no-audit --no-fund)
 }
 
+kill_process_tree() {
+  local pid="$1"
+  [[ -n "$pid" ]] || return 0
+  local children
+  children="$(pgrep -P "$pid" 2>/dev/null || true)"
+  while IFS= read -r child; do
+    [[ -n "$child" ]] || continue
+    kill_process_tree "$child"
+  done <<< "$children"
+  kill "$pid" 2>/dev/null || true
+}
+
 kill_server_pidfile() {
   local pidfile="$1"
   [[ -f "$pidfile" ]] || return 0
   local pid
   pid="$(cat "$pidfile" 2>/dev/null || true)"
   if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
-    log "stopping server pid $pid"
-    kill "$pid" || true
+    log "stopping server process tree rooted at pid $pid"
+    kill_process_tree "$pid"
     sleep 1
   fi
   rm -f "$pidfile"
@@ -113,11 +125,28 @@ start_server() {
   fi
 }
 
+mac_app_executable() {
+  printf '%s\n' "$BUILD_ROOT/Rook/Build/Products/Debug/Rook.app/Contents/MacOS/Rook"
+}
+
+mac_app_pids() {
+  local executable
+  executable="$(mac_app_executable)"
+  ps -axo pid=,command= | awk -v executable="$executable" '$2 == executable { print $1 }'
+}
+
 stop_mac_app() {
-  # Kill any running Rook processes — both the run-rook build and any stale
-  # Xcode DerivedData copies that share the same bundle ID.
+  local pids
+  pids="$(mac_app_pids || true)"
+  [[ -n "$pids" ]] || return 0
+  log "stopping Rook mac app for profile $RUN_ROOK_PROFILE_SLUG: $(echo "$pids" | tr '\n' ' ')"
+  kill $pids || true
+  sleep 1
+}
+
+stop_all_mac_apps() {
   if pgrep -f '/Rook.app/Contents/MacOS/Rook' >/dev/null 2>&1; then
-    log "stopping existing Rook mac app(s)"
+    log "stopping all Rook mac apps"
     pkill -f '/Rook.app/Contents/MacOS/Rook' || true
     sleep 1
   fi
@@ -136,17 +165,12 @@ stop_android_app() {
 }
 
 stop_everything() {
-  log "stopping managed Rook resources"
+  log "stopping managed Rook resources for profile $RUN_ROOK_PROFILE_SLUG"
 
+  stop_mac_app
+  stop_android_app
   kill_server_pidfile "$CURRENT_SERVER_PIDFILE"
-
-  local pids
-  pids="$(lsof -tiTCP:"$SERVER_PORT" -sTCP:LISTEN 2>/dev/null || true)"
-  if [[ -n "$pids" ]]; then
-    kill $pids || true
-  fi
-
-  pkill -f Rook 2>/dev/null || true
+  kill_server_on_port
 
   local tmp udid
   tmp="$(mktemp)"
@@ -177,7 +201,22 @@ PY
     done <<< "$serials"
   fi
 
-  log "stopped server, mac app(s), iphone app(s), and android app if present"
+  log "stopped server, Mac app, iPhone app, and Android app for profile $RUN_ROOK_PROFILE_SLUG where applicable"
+}
+
+stop_everything_all() {
+  log "stopping all managed Rook resources"
+
+  local worktree_root
+  while IFS= read -r worktree_root; do
+    [[ -n "$worktree_root" ]] || continue
+    kill_server_pidfile "$worktree_root/.var/run-rook/server.pid"
+  done < <(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | awk '/^worktree / { print substr($0, 10) }')
+
+  stop_all_mac_apps
+  pkill -f Rook 2>/dev/null || true
+  stop_android_app
+  log "stopped all managed worktree servers and client processes found by the launcher"
 }
 
 stop_requested_targets() {
@@ -330,7 +369,14 @@ build_mac_app_bundle() {
   ensure_xcode_project "$app_dir" "$proj"
   stop_mac_app
   log "building Rook"
-  xcodebuild -project "$proj" -scheme Rook -configuration Debug -derivedDataPath "$derived" build >/dev/null
+  xcodebuild \
+    -project "$proj" \
+    -scheme Rook \
+    -configuration Debug \
+    -derivedDataPath "$derived" \
+    "PRODUCT_BUNDLE_IDENTIFIER=$RUN_ROOK_APP_BUNDLE_ID" \
+    "ROOK_APP_DISPLAY_NAME=$RUN_ROOK_APP_DISPLAY_NAME" \
+    build >/dev/null
   RUN_ROOK_LAST_MAC_APP_PATH="$derived/Build/Products/Debug/Rook.app"
   [[ -d "$RUN_ROOK_LAST_MAC_APP_PATH" ]] || die "missing built app: $RUN_ROOK_LAST_MAC_APP_PATH"
 }
@@ -351,9 +397,17 @@ open_mac_app_bundle() {
     launchctl setenv ROOK_AUTH_TOKEN "$SERVER_AUTH_TOKEN"
   fi
   launchctl setenv ROOK_SERVER_BASE_URL "http://127.0.0.1:${SERVER_PORT}"
+  launchctl setenv ROOK_RUN_MODE "$RUN_ROOK_PROFILE"
+  launchctl setenv ROOK_HOME "$ROOK_HOME"
+  launchctl setenv ROOK_DATABASE_PATH "$SERVER_DATABASE_PATH"
+  launchctl setenv PORT "$SERVER_PORT"
   open -n "$app_path"
   sleep 1
   launchctl unsetenv ROOK_SERVER_BASE_URL
+  launchctl unsetenv ROOK_RUN_MODE
+  launchctl unsetenv ROOK_HOME
+  launchctl unsetenv ROOK_DATABASE_PATH
+  launchctl unsetenv PORT
   if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
     launchctl unsetenv ROOK_AUTH_TOKEN
   fi
