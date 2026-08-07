@@ -1,7 +1,6 @@
 import dotenv from "dotenv";
 import fastify from "fastify";
 import websocket from "@fastify/websocket";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { EnvironmentDecisionStore } from "./environments/datastores/EnvironmentDecisionStore.js";
@@ -25,6 +24,7 @@ import { registerSessionRoutes } from "./sessions/routes/sessionRoutes.js";
 import { registerAcpFacadeRoute } from "./runtime/routes/acpFacadeRoute.js";
 import { ServerAuth } from "./infrastructure/auth.js";
 import { loadAgentRuntimes } from "./infrastructure/config/agentRuntimes.js";
+import { getRookHomeDir } from "./infrastructure/config/configPaths.js";
 import { RookDatastore } from "./infrastructure/datastores/RookDatastore.js";
 import { SqliteSessionRepository } from "./sessions/datastores/SqliteSessionRepository.js";
 import { AgentRuntimeManager } from "./runtime/services/AgentRuntimeManager.js";
@@ -73,7 +73,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   const locationContextRepository = new LocationContextRepository();
   const environmentRepository = new CompositeEnvironmentRepository([
     new DirectoryEnvironmentRepository(path.join(REPO_ROOT, "environment-repository")),
-    new DirectoryEnvironmentRepository(path.join(os.homedir(), ".rook", "environment-repository")),
+    new DirectoryEnvironmentRepository(path.join(getRookHomeDir(), "environment-repository")),
     locationContextRepository,
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);

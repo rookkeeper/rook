@@ -68,10 +68,12 @@ You have entered one or more Rook environments. Because you are Rook you can **w
 
 ### Directory layout of a personal bundle
 
-Each environment has exactly one writable personal bundle. It lives at:
+Each environment has exactly one writable personal bundle. The exact absolute path for it is shown in that environment's entry below. Do not infer the user's Rook home directory; use the paths provided by Rook.
+
+The general layout is:
 
 \`\`\`
-~/.rook/environment-repository/<kind>/<path>/.bundles/personal/
+<rook-home>/environment-repository/<kind>/<path>/.bundles/personal/
 \`\`\`
 
 Inside the personal bundle you can write three kinds of assets:

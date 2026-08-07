@@ -7,7 +7,7 @@ Rook's durable server-side state currently lives in one SQLite database, created
 - `.var/rook/rook.sqlite` in normal local development
 - `:memory:` in tests when explicitly configured
 
-This database is intentionally small. Today it stores session persistence and durable environment decisions. Other environment state, runtime process state, subscriptions, and active/recent caches are still in memory.
+This database is intentionally small. Today it stores session persistence and durable environment decisions. Other environment state, runtime process state, subscriptions, and active/recent caches are still in memory. The main checkout keeps the database under `.var/rook/rook.sqlite`; worktree profiles select an isolated SQLite path through `ROOK_DATABASE_PATH`.
 
 ## Ownership and layering
 
