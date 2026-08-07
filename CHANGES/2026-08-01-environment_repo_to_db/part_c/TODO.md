@@ -110,7 +110,7 @@ This mirrors the project-directory layout, keeps instructions and skills in one 
 - [x] Update `PRODUCT/` documentation for unified capabilities, membership tombstones, restoration, and lazy personal bundles.
 - [x] Update `AS-BUILT-ARCHITECTURE/` documentation for the three-table schema, repository/API projection, and workspace topology.
 - [x] Update README and migration documentation to describe the final model.
-- [ ] Manually validate deletion and restoration through Pi, the Mac client, and multiple simultaneous sessions before considering the feature complete.
+- [ ] Manual deletion/restoration interaction through Pi and the Mac client remains pending; Pi session entry and concurrent-session validation completed, with automated Mac build/tests passing.
 - [x] Reevaluate the entire refactor and remove all compatibility code, shims, and intermediate-design paths; retain only the final three-table and unified-workspace behavior.
 
 ## Final simplified schema and lazy personal authoring
