@@ -22,6 +22,7 @@ Read [`references/pr-workflow.md`](./references/pr-workflow.md) when deciding wh
 - If the developer says to use a branch / PR flow, then do not push directly to `main` / `master`.
 - **Read every file under `PRODUCT/`** before writing the PR. (You should ignore PRODUCT_CHANGES, as it is for work in progress scratch documentation, todos, and status.) Treat drafts and placeholders as current intent until superseded.
 - **Update `PRODUCT/` in the same PR** when the change introduces, modifies, or removes a product or architecture idea - but don't be overly nit-picky because we don't want too much documentation churn. Most of product documents are quite high-level, so we don't need low-level product changes. See [AGENTS.md](../../../AGENTS.md).
+- **Mark compatibility code before creating the PR.** Inspect the changed code for legacy shims, fallback paths, migration bridges, or other behavior retained for compatibility. Mark each compatibility block with a language-appropriate comment whose first line is exactly `THIS IS COMPATIBILITY CODE`, followed by an explanation of what it is compatible with and why it remains. If no compatibility code is present, record that in the PR review notes rather than adding a marker.
 - **Do not ship** until product/architecture alignment sections are complete and doc updates are included (or explicitly marked N/A with reason).
 - If the **why this matters** section of the PR is missing or weak, **stop and ask the developer** before opening the PR.
 - Prefer short, casual, scannable PR prose over exhaustive writeups. Use plain language, short bullets, and only enough context for a reviewer to orient quickly.
@@ -36,11 +37,12 @@ Copy and track:
 - [ ] 0. Ask whether to use branch/PR flow or push directly to main/master
 - [ ] 1. Read all PRODUCT/ docs
 - [ ] 2. Analyze branch diff (product + architecture lens)
-- [ ] 3. Classify product & architecture alignment
-- [ ] 4. Update PRODUCT/ (and READMEs if structural)
-- [ ] 5. Draft PR title + body (template below)
-- [ ] 6. Validate required sections; ask developer if gaps
-- [ ] 7. If using branch/PR flow, push branch and open PR with gh
+- [ ] 3. Inspect and mark compatibility code
+- [ ] 4. Classify product & architecture alignment
+- [ ] 5. Update PRODUCT/ (and READMEs if structural)
+- [ ] 6. Draft PR title + body (template below)
+- [ ] 7. Validate required sections; ask developer if gaps
+- [ ] 8. If using branch/PR flow, push branch and open PR with gh
 ```
 
 ### 1. Read all PRODUCT/ docs
@@ -64,7 +66,17 @@ Compare the branch to the default branch (`git diff`, commit history, chat conte
 
 Skip exhaustive file lists, implementation narration, and ADR-style ceremony unless the change genuinely needs it.
 
-### 3. Classify alignment
+### 3. Mark compatibility code
+
+Before creating the PR, inspect the changed code for legacy shims, fallback paths, migration bridges, and other compatibility behavior. Add a language-appropriate comment to each compatibility block. The first line of the comment must be exactly:
+
+```
+THIS IS COMPATIBILITY CODE
+```
+
+Follow it with an explanation of what compatibility is being preserved and why the code remains. If the change contains no compatibility code, note that explicitly in the PR review notes.
+
+### 4. Classify alignment
 
 For **product** and **architecture** separately, pick one primary classification:
 
@@ -80,7 +92,7 @@ Architecture alignment uses the same table. Primary sources: `PRODUCT/docs/` (e.
 
 If classification differs between product and architecture, say so explicitly in each section.
 
-### 4. Update documentation
+### 5. Update documentation
 
 Before opening the PR:
 
@@ -90,7 +102,7 @@ Before opening the PR:
 
 Include doc changes in the **same branch** as the code.
 
-### 5. PR title
+### 6. PR title
 
 Use a scannable, plain-English title focused on the outcome.
 
@@ -103,13 +115,13 @@ Examples:
 - Session events flow through EnvironmentManager callbacks
 - Dynamic skill availability tied to environment state
 
-### 6. PR body
+### 7. PR body
 
 Use the template in [pr-template.md](pr-template.md). And update it as indicated in the template. Keep it short, casual, and easy to scan. Point to paths or types for detail; do not duplicate the diff.
 
 When tests change, include the template's **New tests** section. Summarize only the main behaviors or boundaries covered in a few bullets; do not turn it into an exhaustive test inventory.
 
-### 7. Ship the PR
+### 8. Ship the PR
 
 Follow repo git safety rules (no force-push to main, no `--no-verify` unless asked).
 

@@ -269,11 +269,24 @@ public final class SessionHandle {
             guard let toolCallId = event["toolCallId"]?.stringValue else { return }
             updateTool(toolCallId) { tool in
                 if let toolName = event["toolName"]?.stringValue, tool.title.isEmpty { tool.title = toolName }
+                if event["rawInput"] != nil {
+                    tool.arguments = stringifyTranscriptJSON(event["rawInput"])
+                }
+                let outputDelta = event["outputDelta"]?.stringValue
                 switch event["status"]?.stringValue {
                 case "pending": advanceToolStatus(&tool, to: .pending)
-                case "in_progress": advanceToolStatus(&tool, to: .running); tool.output = stringifyTranscriptJSON(event["rawOutput"])
-                case "completed": advanceToolStatus(&tool, to: .completed); tool.output = stringifyTranscriptJSON(event["rawOutput"])
-                case "failed": advanceToolStatus(&tool, to: .failed); tool.output = stringifyTranscriptJSON(event["rawOutput"])
+                case "in_progress":
+                    advanceToolStatus(&tool, to: .running)
+                    if let outputDelta { tool.output += outputDelta }
+                    else if event["rawOutput"] != nil { tool.output = stringifyTranscriptJSON(event["rawOutput"]) }
+                case "completed":
+                    advanceToolStatus(&tool, to: .completed)
+                    if let outputDelta { tool.output += outputDelta }
+                    else if event["rawOutput"] != nil { tool.output = stringifyTranscriptJSON(event["rawOutput"]) }
+                case "failed":
+                    advanceToolStatus(&tool, to: .failed)
+                    if let outputDelta { tool.output += outputDelta }
+                    else if event["rawOutput"] != nil { tool.output = stringifyTranscriptJSON(event["rawOutput"]) }
                 case "cancelled": advanceToolStatus(&tool, to: .cancelled)
                 default: break
                 }
