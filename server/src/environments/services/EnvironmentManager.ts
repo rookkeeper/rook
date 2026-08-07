@@ -233,8 +233,15 @@ export class EnvironmentManager {
 
     for (const environmentId of implied) {
       if (ids.has(environmentId)) continue;
-      const bundles = await this.repositoryService.getResolvedBundles(environmentId);
-      if (bundles.length > 0) ids.add(environmentId);
+      try {
+        const bundles = await this.repositoryService.getResolvedBundles(environmentId);
+        if (bundles.length > 0) ids.add(environmentId);
+      } catch (error) {
+        // An unreadable ancestor (for example, a dangling skill symlink in
+        // the user's home directory) must not prevent the observed candidate
+        // itself from being registered.
+        this.logger.info({ environmentId, error }, "failed to inspect implied environment");
+      }
     }
 
     return [...ids];

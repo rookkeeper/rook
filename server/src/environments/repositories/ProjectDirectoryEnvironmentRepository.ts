@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { BundleArtifact, EnvironmentBundleResult, EnvironmentRecord, RepositoryReadError } from "../../shared/environmentRepository.js";
@@ -82,8 +82,22 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
       for (const entry of entries) {
         if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
         const skillPath = path.join(root, entry.name);
+        if (entry.isSymbolicLink()) {
+          // Skill directories are commonly linked from tool-specific roots.
+          // A stale link must not make discovery of the whole project fail.
+          try {
+            if (!(await stat(skillPath)).isDirectory()) continue;
+          } catch {
+            continue;
+          }
+        }
         const files: Record<string, string> = {};
-        await collectFiles(skillPath, entry.name, files);
+        try {
+          await collectFiles(skillPath, entry.name, files);
+        } catch (error) {
+          errors.push({ code: "unreadable_path", message: String(error), repository: this.repositoryId, environmentId, path: skillPath });
+          continue;
+        }
         if (!(`${entry.name}/SKILL.md` in files)) {
           errors.push({ code: "invalid_bundle_contents", message: `Skill ${entry.name} is missing SKILL.md`, repository: this.repositoryId, environmentId, path: skillPath });
           continue;

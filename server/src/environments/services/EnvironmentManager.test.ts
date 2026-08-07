@@ -165,6 +165,23 @@ describe("EnvironmentManager", () => {
     expect(manager.isAvailable("dir:/Users/john/project")).toBe(true);
   });
 
+  it("keeps the exact candidate when an implied ancestor cannot be inspected", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {
+      if (environmentId === "dir:/Users") throw new Error("dangling skill symlink");
+      if (environmentId === "dir:/Users/john/project/src") return resolvedBundle(environmentId);
+      return [];
+    });
+    const manager = newManager(repositoryService);
+
+    await expect(manager.registerCandidateEnvironment({
+      id: "dir:/Users/john/project/src",
+      metadata: { displayName: "src", observedPaths: ["/Users/john/project/src/file.ts"] },
+    })).resolves.toBeUndefined();
+
+    expect(manager.isAvailable("dir:/Users/john/project/src")).toBe(true);
+  });
+
   it("moves an active environment to recent after the active window", async () => {
     const manager = newManager(mockRepositoryService(), 1_000, 10_000);
     await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });

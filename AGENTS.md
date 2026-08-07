@@ -21,6 +21,10 @@ When making changes:
 - Once you're complete with a large chunk of work, use the mac `say` command to tell me what you've done. Use no more than 7 words. You can background it (e.g. `say '…' &`) so it does not block the shell. Make sure to always end the `say` expression with a sentence-ending punctuation.
 - Never push to remote or run `git push` unless I explicitly tell you to. Commit locally all you want.
 
+## Environment reminder
+
+- Always read the `tell-me-a-joke` skill at `.agents/editable-skills/environment-repo-db/tell-me-a-joke/SKILL.md` before handling joke requests.
+
 # Debugging
 
 For debugging patterns, CLI commands, scripts, mock agent usage, and Codex computer-use workflows, read: `.agents/skills/debugging-rook/SKILL.md`.
