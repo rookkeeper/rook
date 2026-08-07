@@ -38,7 +38,6 @@ const remoteBindIp = process.env.ROOK_BIND_IP ?? process.env.ROOK_TAILSCALE_IP;
 const port = Number(process.env.PORT ?? 7665);
 
 export interface BuildServerOptions {
-  enableClient?: boolean; // legacy no-op; the server no longer hosts a web client
   logger?: Parameters<typeof fastify>[0]["logger"];
   roomIdleTimeoutMs?: number;
   /** SQLite location for persistent environment decisions; ":memory:" in tests. */

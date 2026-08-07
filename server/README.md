@@ -55,7 +55,7 @@ The server is organized **primarily by domain**:
 
 - `src/infrastructure/` — auth, config loading, path helpers, remote proxy, shared datastore bootstrap
 - `src/sessions/` — session routes, repository contract, SQLite session persistence, transcript storage/helpers
-- `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
+- `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, subscriber/replay routing
 - `src/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
 - `src/location/` — location identification, POI providers, dwell logic, trace helpers, environment bridge helpers
 
@@ -99,9 +99,8 @@ The facade at `/api/ws` is the primary live-session interface. The intended shap
 It implements:
 
 - `initialize` — returns runtime catalog, default runtime, env-offer extension capability
-- `session/list` — legacy/unbound-only session list (REST is preferred)
 - `session/new` — creates session for a chosen runtime via `_meta.runtimeId` and `_meta.title` on an unbound websocket; on success that same websocket becomes bound to the new public session
-- `session/load`, `session/resume` — loads an existing session; replay is requester-private, not broadcast to all watchers
+- `session/load` — loads an inactive existing session; replay is requester-private, not broadcast to all watchers
 - `session/prompt`, `session/cancel` — standard prompt flow; image-capable runtimes accept standard ACP image content blocks with per-session capability reporting and bounded base64 validation
 - `session/set_mode`, `session/set_config_option` — ACP controls
 - `session/close` — closes a session

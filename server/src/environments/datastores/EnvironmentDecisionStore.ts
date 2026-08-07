@@ -32,11 +32,34 @@ export class EnvironmentDecisionStore {
       CREATE TABLE IF NOT EXISTS environment_decisions (
         bundle_hash TEXT PRIMARY KEY,
         environment_id TEXT NOT NULL,
-        bundle_id TEXT,
+        bundle_id TEXT NOT NULL,
         decision TEXT NOT NULL CHECK (decision IN ('approve', 'reject')),
         updated_at TEXT NOT NULL
       )
     `);
+    // THIS IS COMPATIBILITY CODE
+    // Preserves existing SQLite databases created before durable decisions required bundle_id.
+    const columns = this.db.prepare("PRAGMA table_info(environment_decisions)").all() as Array<{ name: string; notnull: number }>;
+    const bundleColumn = columns.find((column) => column.name === "bundle_id");
+    if (bundleColumn && bundleColumn.notnull === 0) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE environment_decisions_v2 (
+          bundle_hash TEXT PRIMARY KEY,
+          environment_id TEXT NOT NULL,
+          bundle_id TEXT NOT NULL,
+          decision TEXT NOT NULL CHECK (decision IN ('approve', 'reject')),
+          updated_at TEXT NOT NULL
+        );
+        INSERT INTO environment_decisions_v2 (bundle_hash, environment_id, bundle_id, decision, updated_at)
+          SELECT bundle_hash, environment_id, bundle_id, decision, updated_at
+          FROM environment_decisions
+          WHERE bundle_id IS NOT NULL;
+        DROP TABLE environment_decisions;
+        ALTER TABLE environment_decisions_v2 RENAME TO environment_decisions;
+        COMMIT;
+      `);
+    }
   }
 
   getDecision(bundleHash: string): PermanentDecision | null {
@@ -46,7 +69,7 @@ export class EnvironmentDecisionStore {
     return row?.decision ?? null;
   }
 
-  setDecision(bundleHash: string, environmentId: string, bundleId: string | null, decision: PermanentDecision): void {
+  setDecision(bundleHash: string, environmentId: string, bundleId: string, decision: PermanentDecision): void {
     this.db
       .prepare(`
         INSERT INTO environment_decisions (bundle_hash, environment_id, bundle_id, decision, updated_at)

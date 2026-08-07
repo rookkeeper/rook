@@ -116,8 +116,6 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const sessionId = created.sessionId as string;
     expect(typeof sessionId).toBe("string");
 
-    await expect(request(ws, 3, "session/list", {})).rejects.toThrow("session/list is not available on a session-bound websocket");
-
     const promptResult = await request(ws, 4, "session/prompt", {
       sessionId,
       prompt: [{ type: "text", text: "tell me a joke" }],

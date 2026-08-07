@@ -35,7 +35,7 @@ final class RookModel: ObservableObject {
     // user on the agent list with a "Resume chat" affordance, like the Mac.
     @Published var chatVisible = false
     @Published var blocks: [ChatBlock] = []
-    @Published var queuedMessages: [String] = []
+    @Published var queuedMessages: [QueuedChatMessage] = []
     @Published var isRunning = false
     @Published var statusLine = ""
     @Published var socketConnected = false
@@ -107,13 +107,11 @@ final class RookModel: ObservableObject {
             urlString = "http://127.0.0.1:7665"
         }
         let envToken = ProcessInfo.processInfo.environment["ROOK_AUTH_TOKEN"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let legacyStoredToken = UserDefaults.standard.string(forKey: "RookAuthToken")?.trimmingCharacters(in: .whitespacesAndNewlines)
         let keychainToken = KeychainStore.string(for: "RookAuthToken")?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let storedToken = (keychainToken?.isEmpty == false ? keychainToken : legacyStoredToken)
+        let storedToken = keychainToken?.isEmpty == false ? keychainToken : nil
         let authToken = (envToken?.isEmpty == false ? envToken : storedToken) ?? ""
         if let tokenToPersist = (envToken?.isEmpty == false ? envToken : storedToken), !tokenToPersist.isEmpty {
             KeychainStore.setString(tokenToPersist, for: "RookAuthToken")
-            UserDefaults.standard.removeObject(forKey: "RookAuthToken")
         }
         let finalURL = URL(string: urlString) ?? URL(string: "http://127.0.0.1:7665")!
         baseURLString = urlString
@@ -385,7 +383,6 @@ final class RookModel: ObservableObject {
         baseURLString = trimmed
         authTokenString = trimmedToken
         UserDefaults.standard.set(trimmed, forKey: "RookServerBaseURL")
-        UserDefaults.standard.removeObject(forKey: "RookAuthToken")
         if trimmedToken.isEmpty {
             KeychainStore.removeString(for: "RookAuthToken")
         } else {
@@ -469,10 +466,6 @@ final class RookModel: ObservableObject {
         for root in roots { append(root, depth: 0) }
         for agent in agents where !result.contains(where: { $0.0.id == agent.id }) { result.append((agent, 0)) }
         return result
-    }
-
-    private func ensureSocketConnected() async throws {
-        // No longer needed — SessionHandle manages its own socket.
     }
 
     private func autoResumeRecentSessionIfNeeded() async {
@@ -624,6 +617,7 @@ final class RookModel: ObservableObject {
     private func syncChatState() {
         guard let handle = currentHandle else { return }
         blocks = handle.blocks
+        queuedMessages = handle.queuedMessages
         isRunning = handle.isRunning
         statusLine = handle.statusLine
         socketConnected = handle.socketConnected
@@ -638,44 +632,16 @@ final class RookModel: ObservableObject {
 
     // MARK: - App lifecycle (scenePhase)
 
-    private var pendingSocketResume = false  // handled by SessionHandle reconnection
-
-    /// iOS suspends the websocket when the app backgrounds. Tear it down
-    /// intentionally (silent — no phantom "connection lost") and stop any
-    /// in-flight run spinner cleanly; reconnect on return. The place
-    /// environment is deliberately NOT released here: region monitoring keeps
-    /// running in the background, so you're still "at" the place, and the
-    /// server will age old registrations out if they stop being refreshed.
-    func handleEnteredBackground() {
-        guard currentSession != nil else { return }
-        pendingSocketResume = true
-        // SessionHandle manages its own socket lifecycle.
-    }
-
     func handleBecameActive() {
         reannouncePlaceEnvironment()
         updateLiveActivity()
-        if pendingSocketResume, let session = currentSession {
-            pendingSocketResume = false
-            Task {
-                let handle = getOrCreateHandle(for: session)
-                wireHandle(handle)
-                if handle.isLoaded {
-                    try? await handle.load()
-                } else if session.running, let events = try? await api.sessionTranscript(sessionId: session.id) {
-                    try? await handle.attach(transcript: events)
-                } else {
-                    try? await handle.load()
-                }
-            }
-        }
         Task { await refreshHealth() }
     }
 
     // MARK: - Chat
 
     func send(_ text: String) {
-        currentHandle?.send(text)
+        currentHandle?.send([.text(text)])
         updateLiveActivity()
     }
 
@@ -697,7 +663,7 @@ final class RookModel: ObservableObject {
 
     /// Banner label for an entered location: the business name when one match is clearly
     /// best, "Surrounding businesses" when ambiguous, or nil (generic) when unknown.
-    /// Mirrors the server's confidence heuristic (`isConfidentMatch`).
+    /// Applies the client confidence heuristic for the location banner.
     func locationBannerLabel(entered: EnvironmentCandidate?, candidates: [EnvironmentCandidate]) -> String? {
         guard let top = candidates.first else { return entered?.displayName }
         let ambiguous = top.confidence < 0.7 || (candidates.count >= 2 && top.confidence - candidates[1].confidence < 0.15)
@@ -744,7 +710,7 @@ final class RookModel: ObservableObject {
 
 
     func decideEnvironment(_ decision: String) {
-        guard let offer = pendingOffer, let session = currentSession else {
+        guard let offer = pendingOffer, currentSession != nil else {
             return
         }
         Task {

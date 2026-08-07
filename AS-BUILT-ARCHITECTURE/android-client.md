@@ -76,11 +76,12 @@ Android defines Kotlin equivalents of the Swift shared models:
 4. `viewModel.start()` wires socket collectors, location callbacks, and periodic health refresh
 
 ### Chat flow
-1. `RookViewModel` ensures the ACP socket is connected
-2. session creation/resume uses ACP
-3. `AcpSocket` reduces WebSocket frames into `AcpClientEvent`
-4. `RookViewModel` turns those events into `ChatBlock` lists and run state
-5. reconnect logic reloads the current session and flushes queued prompts
+1. `RookViewModel` opens an unbound ACP socket only for `session/new`, then the server binds it to the created session
+2. resuming an existing session opens `/api/ws?sessionId=...` and selects that session
+3. running sessions hydrate from `GET /api/sessions/:id/transcript`; inactive sessions use ACP `session/load`
+4. `AcpSocket` reduces standard WebSocket ACP frames into `AcpClientEvent`
+5. `RookViewModel` turns those events into `ChatBlock` lists and run state
+6. reconnect logic reopens the session-bound socket, rehydrates running sessions, reloads inactive sessions, and flushes queued prompts
 
 ### Place registration flow
 1. region-like place state comes from `MovementService` checking current location against saved places
@@ -108,4 +109,5 @@ Android defines Kotlin equivalents of the Swift shared models:
 - Android uses a service-based movement classifier instead of iOS region monitoring
 - the location controller is intentionally process-wide so UI and services share one source of truth when the process is alive
 - the client is structurally close to the iPhone client, but the sensor/process model is much more Android-native
-- some implementation details still lag the server contract in places, but the main as-built architecture is ACP + REST + service-driven location context
+- Android's session transport now follows the same session-bound ACP + REST transcript contract as the Apple clients
+- standard ACP notifications are the canonical event protocol; removed `_rookery_*` compatibility events are not part of the client

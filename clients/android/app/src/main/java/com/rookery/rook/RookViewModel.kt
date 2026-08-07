@@ -44,6 +44,12 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
@@ -196,6 +202,7 @@ class RookViewModel(
     // server as a normal RunCompleted with zero content instead of a RunFailed — this
     // catches that case client-side so the failure is still visible in the chat.
     private var turnHasContent = false
+    private var connectedSocketSessionId: String? = null
     private var started = false
 
     fun start() {
@@ -230,8 +237,15 @@ class RookViewModel(
         }
     }
 
-    private suspend fun ensureSocketConnected() {
-        socket.connect(api.webSocketUrl)
+    private suspend fun ensureSocketConnected(sessionId: String? = null) {
+        if (socket.isConnected.value && connectedSocketSessionId == sessionId) {
+            if (sessionId != null) socket.selectSession(sessionId)
+            return
+        }
+        if (socket.isConnected.value) socket.disconnect()
+        socket.connect(api.webSocketUrl(sessionId))
+        connectedSocketSessionId = sessionId
+        if (sessionId != null) socket.selectSession(sessionId)
     }
 
     fun refreshHealth() {
@@ -295,6 +309,7 @@ class RookViewModel(
                 ensureSocketConnected()
                 val title = trimmedName.ifEmpty { "session" }
                 val sessionId = socket.createSession(agentId, title, System.getProperty("user.dir") ?: ".")
+                connectedSocketSessionId = sessionId
                 val session = AgentSessionSummary(
                     raw = buildJsonObject {
                         put("sessionId", sessionId)
@@ -322,9 +337,13 @@ class RookViewModel(
         scope.launch {
             _startingSession.value = true
             try {
-                ensureSocketConnected()
-                socket.loadSession(session.id)
-                enterChat(session, resumed = true)
+                ensureSocketConnected(session.id)
+                enterChat(session, resumed = !session.running)
+                if (session.running) {
+                    restoreTranscript(api.sessionTranscript(session.id))
+                } else {
+                    socket.loadSession(session.id)
+                }
             } catch (e: Exception) {
                 _sessionsError.value = e.message ?: "Failed to resume session"
             } finally {
@@ -354,8 +373,59 @@ class RookViewModel(
         socket.selectSession(session.id)
     }
 
+    private fun restoreTranscript(events: List<JsonObject>) {
+        for (event in events) {
+            when (event["kind"].textValue()) {
+                "user_message_chunk" -> event["text"].textValue()?.let { handleSocketEvent(AcpClientEvent.UserMessageChunk(it)) }
+                "agent_message_chunk" -> event["text"].textValue()?.let { handleSocketEvent(AcpClientEvent.AgentMessageChunk(it)) }
+                "agent_thought_chunk" -> event["text"].textValue()?.let { handleSocketEvent(AcpClientEvent.AgentThoughtChunk(it)) }
+                "tool_call" -> {
+                    val id = event["toolCallId"].textValue() ?: continue
+                    handleSocketEvent(
+                        AcpClientEvent.ToolCallStarted(
+                            toolCallId = id,
+                            title = event["title"].textValue() ?: "Tool",
+                            kind = event["toolKind"].textValue() ?: "",
+                            status = event["status"].textValue() ?: "pending",
+                            rawInput = event["rawInput"].payloadValue()
+                        )
+                    )
+                }
+                "tool_call_update" -> {
+                    val id = event["toolCallId"].textValue() ?: continue
+                    handleSocketEvent(
+                        AcpClientEvent.ToolCallUpdate(
+                            toolCallId = id,
+                            status = event["status"].textValue() ?: "",
+                            toolName = event["toolName"].textValue(),
+                            output = event["rawOutput"].payloadValue()
+                        )
+                    )
+                }
+                "plan_update" -> {
+                    val entries = (event["entries"] as? JsonArray).orEmpty().mapIndexed { index, raw ->
+                        val item = raw as? JsonObject
+                        PlanEntry(
+                            id = index,
+                            content = item?.get("content").textValue() ?: item?.get("text").textValue() ?: "",
+                            priority = item?.get("priority").textValue() ?: "medium",
+                            status = item?.get("status").textValue() ?: "pending"
+                        )
+                    }
+                    handleSocketEvent(AcpClientEvent.PlanUpdate(entries))
+                }
+                "usage_update" -> {
+                    val used = event["used"].intValue() ?: continue
+                    val size = event["size"].intValue() ?: continue
+                    handleSocketEvent(AcpClientEvent.UsageUpdate(used, size, null))
+                }
+            }
+        }
+    }
+
     fun leaveChat() {
         socket.disconnect()
+        connectedSocketSessionId = null
         reconnectJob?.cancel()
         reconnectJob = null
         _currentSession.value = null
@@ -420,8 +490,12 @@ class RookViewModel(
             if (_currentSession.value == null) return@launch
             if (api.health()) {
                 try {
-                    ensureSocketConnected()
-                    socket.loadSession(session.id)
+                    ensureSocketConnected(session.id)
+                    if (session.running) {
+                        restoreTranscript(api.sessionTranscript(session.id))
+                    } else {
+                        socket.loadSession(session.id)
+                    }
                     _reconnecting.value = false
                     deliverNextQueuedIfIdle()
                 } catch (_: Exception) {
@@ -432,6 +506,18 @@ class RookViewModel(
             }
         }
     }
+
+    private fun JsonElement?.textValue(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+    private fun JsonElement?.payloadValue(): String? = when (this) {
+        null -> null
+        is JsonPrimitive -> contentOrNull
+        is JsonObject -> if (isEmpty()) null else toString()
+        is JsonArray -> toString()
+        else -> null
+    }
+
+    private fun JsonElement?.intValue(): Int? = (this as? JsonPrimitive)?.intOrNull
 
     private fun handleSocketConnectionChange(connected: Boolean) {
         _socketConnected.value = connected
@@ -507,20 +593,8 @@ class RookViewModel(
                 tool.copy(status = ToolBlockStatus.INPUT_STREAMING, arguments = event.text)
             }
 
-            is AcpClientEvent.ToolInputDelta -> updateTool(event.toolCallId) { tool ->
-                tool.copy(status = ToolBlockStatus.INPUT_STREAMING, arguments = tool.arguments + event.delta)
-            }
-
-            is AcpClientEvent.ToolCallReady -> updateTool(event.toolCallId) { tool ->
-                tool.copy(status = ToolBlockStatus.READY)
-            }
-
             is AcpClientEvent.ToolOutputSnapshot -> updateTool(event.toolCallId) { tool ->
                 tool.copy(status = ToolBlockStatus.RUNNING, output = event.text)
-            }
-
-            is AcpClientEvent.ToolOutputDelta -> updateTool(event.toolCallId) { tool ->
-                tool.copy(status = ToolBlockStatus.RUNNING, output = tool.output + event.delta)
             }
 
             is AcpClientEvent.PermissionRequest -> {}
@@ -560,7 +634,6 @@ class RookViewModel(
                 deliverNextQueuedIfIdle()
             }
 
-            is AcpClientEvent.ProtocolError -> appendErrorBlock("protocol", event.message)
             is AcpClientEvent.ConnectionError -> {
                 appendErrorBlock("connection", event.message)
                 // Agent process died server-side — force a session restart by

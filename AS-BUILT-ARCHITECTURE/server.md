@@ -42,7 +42,7 @@ Top-level layout:
 - `server/src/sessions/`
   - session routes, repository contract, SQLite session repository, transcript persistence/helpers
 - `server/src/runtime/`
-  - ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers, runtime-only extension code
+  - ACP facade, runtime REST routes, subprocess transport, runtime orchestration, subscriber/replay routing, runtime-only extension code
 - `server/src/environments/`
   - environment routes, services, repositories, datastores, prompt/binding/type support
 - `server/src/location/`
@@ -65,10 +65,8 @@ See also: [database.md](./database.md)
 - once bound, the websocket is restricted to that session only
 - client methods handled directly:
   - `initialize`
-  - `session/list` (unbound websocket only; REST preferred)
   - `session/new` (unbound websocket only; success binds that websocket to the new public session)
   - `session/load`
-  - `session/resume`
   - `session/prompt` (including standard ACP image blocks when the selected runtime supports them)
   - `session/cancel`
   - `session/set_mode`
@@ -82,7 +80,7 @@ See also: [database.md](./database.md)
 ### REST control plane
 - `GET /api/health`
 - `GET /api/agent_runtimes`
-- `GET /api/sessions` — session listing over REST (replaces WebSocket `session/list`)
+- `GET /api/sessions` — session listing over REST
 - `GET /api/sessions/:sessionId/transcript` — server-owned normalized transcript for hydrators / second viewers
 - `POST /api/environments/register`
 - `POST /api/environments/decision`
@@ -201,6 +199,7 @@ Related tables:
 - one public session = one runtime subprocess
 - websocket connections are session-bound, not general multi-session ACP pipes
 - `session/load` replay is requester-private; it no longer fans out to every watcher of that session
+- session discovery has one canonical REST path; the removed WebSocket `session/list` compatibility method is not part of the facade
 - the server owns a durable normalized transcript for each session so additional viewers can hydrate without runtime replay
 - environment state is session-specific at runtime launch time
 - durable decisions, transcript history, and session membership are SQLite-backed

@@ -68,19 +68,6 @@ public final class AcpSocket {
         currentSessionId = sessionId
     }
 
-    public func sessionList() async throws -> [AgentSessionSummary] {
-        let result = try await request(method: "session/list", params: [:])
-        let sessions = (result["sessions"] as? [Any]) ?? []
-        return sessions.compactMap { item in
-            guard let raw = item as? [String: Any],
-                  let data = try? JSONSerialization.data(withJSONObject: raw),
-                  let json = try? JSONDecoder().decode(JSONValue.self, from: data) else {
-                return nil
-            }
-            return AgentSessionSummary(raw: json)
-        }
-    }
-
     public func createSession(runtimeId: String, title: String, cwd: String) async throws -> String {
         let result = try await request(method: "session/new", params: [
             "cwd": cwd,

@@ -345,15 +345,13 @@ defaults write com.rookery.Rook ShowPanelWindow -bool false  # off
 
 - The websocket carries pure ACP JSON-RPC frames; the app sends only
   `session/prompt` and treats the JSON-RPC response as end-of-turn.
-- Duplicated server-synthesized updates (`user_message_chunk` echoes,
-  `_rookery_run_*`, `_rookery_status_changed`) are intentionally ignored,
-  mirroring the React client's dedupe strategy.
-- The server replays no message history; resuming a session starts with an
-  empty thread (the app notes this inline).
-- Rooms idle-stop ~15 s after their last client disconnects. The app keeps its
-  socket open while a session is current - including while the panel is
-  closed - and transparently reloads the session (ACP `session/load`)
-  when reconnecting.
+- `SessionHandle` reduces standard ACP updates and suppresses only the local
+  user-message echo that it already rendered.
+- Running sessions hydrate from the server-owned normalized transcript; inactive
+  sessions use requester-private ACP `session/load` replay.
+- There is one session-bound socket per session. The app keeps each handle alive
+  while a session is current - including while the panel is closed - and
+  reconnects that handle after genuine transport failures.
 - Intentional socket teardowns (switching sessions) are silent; only genuine
   transport failures trigger the reconnect path, and a successful connection
   cancels any armed reconnect.

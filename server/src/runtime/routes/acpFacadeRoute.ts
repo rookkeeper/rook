@@ -87,7 +87,7 @@ async function handleMessage(
         send(success(requestId!, {
           protocolVersion: 1,
           agentInfo: { name: "rook", title: "Rook", version: "0.1.0" },
-          agentCapabilities: { loadSession: true, sessionCapabilities: { list: {}, resume: {}, close: {} }, promptCapabilities: { image: runtimes.runtimeIds().some((runtimeId) => runtimes.supportsImagePrompts(runtimeId)), audio: false, embeddedContext: false } },
+          agentCapabilities: { loadSession: true, sessionCapabilities: { close: {} }, promptCapabilities: { image: runtimes.runtimeIds().some((runtimeId) => runtimes.supportsImagePrompts(runtimeId)), audio: false, embeddedContext: false } },
           authMethods: [],
           _meta: { runtimeIds: runtimes.runtimeIds(), defaultRuntimeId: runtimes.defaultRuntimeId(), "com.rookkeeper": { environmentOffers: { offerNotification: true, resolveRequest: true } } },
         }));
@@ -104,10 +104,6 @@ async function handleMessage(
         send(success(requestId!, { ok: true }));
         return;
       }
-      case "session/list":
-        if (binding.boundSessionId()) throw new Error("session/list is not available on a session-bound websocket; use GET /api/sessions instead.");
-        send(success(requestId!, { sessions: (await runtimes.listSessions()).map((record) => ({ sessionId: record.sessionId, cwd: record.cwd, title: record.title, updatedAt: record.updatedAt, _meta: { runtimeId: record.runtimeId, startedAt: record.startedAt } })) }));
-        return;
       case "session/new": {
         if (binding.boundSessionId()) throw new Error("session/new is not available on a session-bound websocket.");
         const params = object(message.params) ?? {};
@@ -124,7 +120,6 @@ async function handleMessage(
         return;
       }
       case "session/load":
-      case "session/resume":
       case "session/prompt":
       case "session/set_mode":
       case "session/set_config_option": {
@@ -137,10 +132,10 @@ async function handleMessage(
           if (!capabilities.image) throw new Error("The selected runtime does not support image prompts.");
         }
         let result = await runtimes.requestForSession(sessionId, message.method, withoutSessionId(params), {
-          ...(message.method === "session/load" || message.method === "session/resume" ? { privateReplayListener: send } : {}),
+          ...(message.method === "session/load" ? { privateReplayListener: send } : {}),
         });
         const resultObject = object(result);
-        if ((message.method === "session/load" || message.method === "session/resume") && resultObject) {
+        if (message.method === "session/load" && resultObject) {
           result = { ...resultObject, promptCapabilities: await runtimes.sessionPromptCapabilities(sessionId) };
         }
         send(success(requestId!, result));

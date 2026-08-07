@@ -21,10 +21,7 @@ sealed class AcpClientEvent {
         val output: String?
     ) : AcpClientEvent()
     data class ToolInputSnapshot(val toolCallId: String, val toolName: String?, val text: String) : AcpClientEvent()
-    data class ToolInputDelta(val toolCallId: String, val toolName: String?, val delta: String) : AcpClientEvent()
-    data class ToolCallReady(val toolCallId: String, val toolName: String?) : AcpClientEvent()
     data class ToolOutputSnapshot(val toolCallId: String, val toolName: String?, val text: String) : AcpClientEvent()
-    data class ToolOutputDelta(val toolCallId: String, val toolName: String?, val delta: String) : AcpClientEvent()
     data class PermissionRequest(
         val requestId: String,
         val toolCall: AcpPermissionToolCall,
@@ -37,7 +34,6 @@ sealed class AcpClientEvent {
     data class ConfigOptionUpdate(val configOptions: List<AcpConfigOption>) : AcpClientEvent()
     data class RunCompleted(val stopReason: String) : AcpClientEvent()
     data class RunFailed(val message: String) : AcpClientEvent()
-    data class ProtocolError(val message: String) : AcpClientEvent()
     data class ConnectionError(val message: String) : AcpClientEvent()
     data class EnvironmentOffered(val offer: EnvironmentOffer) : AcpClientEvent()
     data class EnvironmentOfferResolved(val environmentId: String, val bundleHash: String) : AcpClientEvent()

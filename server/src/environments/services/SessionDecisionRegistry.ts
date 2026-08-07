@@ -29,7 +29,7 @@ export class SessionDecisionRegistry {
   }
 
   /** Store a permanent decision (clears any session-level override for this hash). */
-  setPermanent(bundleHash: string, environmentId: string, bundleId: string | null, decision: PermanentDecision): void {
+  setPermanent(bundleHash: string, environmentId: string, bundleId: string, decision: PermanentDecision): void {
     this.permanentStore.setDecision(bundleHash, environmentId, bundleId, decision);
     this.clearAllForBundle(bundleHash);
   }

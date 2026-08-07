@@ -19,11 +19,12 @@ neighbors) available to the agent — so the agent gains the place's skills and 
 you are. In chat you see a banner: the **business name** (or **"Surrounding businesses"**
 when it's ambiguous) with a row of business favicons.
 
-The agent receives a place two ways: its **skills** load on demand, and a concise
-**best-guess + nearby** summary is pushed into the agent's context so it can answer "where
-am I?" directly. The geo provider is **swappable** (ptiles today; a Google Places /
-Foursquare `PoiLookupProvider` would be a single class) — the `location:` scheme and
-registration are provider-agnostic.
+The agent receives a place through a synthesized location-context **skill bundle** loaded by
+the normal environment/repository path. The skill contains the best guess and nearby
+business metadata, which the agent can use when answering "where am I?". The current
+runtime does not inject a separate direct prompt summary. The geo provider is **swappable**
+(ptiles today; a Google Places / Foursquare `PoiLookupProvider` would be a single class) —
+the `location:` scheme and registration are provider-agnostic.
 
 ## Assumptions
 
@@ -31,7 +32,7 @@ registration are provider-agnostic.
   files); the `.ptiles` data is static and self-hostable (`PTILES_BASE_URL`), so the
   external host is a soft dependency.
 - **Single active user / one server process** — environment availability is global
-  in-memory state shared by all SessionRooms.
+  in-memory state in the server and is observed by subscribed sessions.
 - **Domain ≈ operator identity**; most businesses have a street address, which (with state
   + zip) is the stable, address-based id base. A home or any personal place can be injected
   with the same `location:` scheme (e.g. `location:home`).
@@ -39,13 +40,16 @@ registration are provider-agnostic.
 ## Limitations (as-built)
 
 - **Not persisted, not per-user.** The registered location lives in memory, global to the
-  process; lost on restart, and on a multi-user server every room would see it.
+  process; lost on restart, and on a multi-user server every subscribed session would see it.
 - **Entering interrupts an in-flight reply.** Entering an environment rebuilds the agent
   runtime (`interruptActiveRun`); the transcript is preserved but a mid-reply arrival cuts
   that reply short (~a couple seconds). Pre-existing for all environment changes; location
   auto-enter just triggers it more often.
 - **No authored `location:` skills yet** — only the synthesized location-context bundle and a
   mocked skill suggester (placeholder for #22).
+- The current implementation does not use a separate direct prompt injection for location
+  summaries; that can be reconsidered as a future product feature if skill-only context is
+  insufficient.
 - **Geo-fallback id collisions.** Addressless businesses sharing a building centroid can map
   to the same `location:<domain>/<lat,lng>` id (rare; geo only applies with no address).
 
@@ -55,8 +59,8 @@ Registration is gated on a real dwell, not a drive-by. Validated against real OS
 traces (`server/scripts/location/`): ~95% of vehicle detections are <20 s pass-throughs,
 while real visits are minutes-long at ~0 m/s. The gate (`isDwellArrival` —
 `MIN_DWELL_SECONDS = 30`, `STATIONARY_SPEED_MPS = 1.5`) registers only on a
-stationary/dwelled/slow arrival; clearly-moving requests register nothing. No motion signal
-⇒ permissive.
+stationary/dwelled/slow arrival; clearly-moving requests register nothing. Missing motion
+signals fail closed and do not register a location.
 
 On the phone, `CLLocation.speed` plus a CoreMotion automotive check (`arrivalContext`) also
 gate the on-device trigger. Motion is a **separate opt-in button in Settings** (never
@@ -71,6 +75,9 @@ requested on first launch); without it the speed + server dwell gate still apply
 - **Split-endpoint UX.** A read-only `/api/environments/identify` exists alongside the
   committing `/api/environments/register-location`; a user-confirmed "which of these is
   real?" picker could use the read-only path instead of auto-entering the best guess.
+- **Direct context summary.** If a concise pushed location summary is desired in addition
+  to the skill bundle, define it as a current ACP/runtime feature with prompt-injection and
+  noise safeguards; do not restore the removed direct-renderer seam.
 - **Proactive location-triggered agent.** Have a location change auto-generate a prompt
   ("you're near X — any pending intents apply?"), backed by an intents store and **APNs**
   push, with cost/consent guards ("remind me to buy milk at the next grocery store").

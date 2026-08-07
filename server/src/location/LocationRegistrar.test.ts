@@ -28,7 +28,7 @@ describe("LocationRegistrar", () => {
     await reg.sync([
       cand("location:cicis.com/a", { website: "https://cicis.com/x" }),
       cand("location:gamestop.com/b"),
-    ]);
+    ], { isStationary: true });
 
     expect(s.registerCandidateEnvironment).toHaveBeenCalledTimes(2);
     expect(cs.setContextBundle).toHaveBeenCalledWith("location:cicis.com/a", "/tmp/ctx");
@@ -58,7 +58,7 @@ describe("LocationRegistrar", () => {
     const cs = contextStore();
     const reg = new LocationRegistrar(s, cs, writeStub);
     const set = [cand("location:a/1"), cand("location:b/2")];
-    await reg.sync(set);
+    await reg.sync(set, { isStationary: true });
     s.registerCandidateEnvironment.mockClear();
     await reg.sync([cand("location:a/1"), cand("location:b/2")]);
     expect(s.registerCandidateEnvironment).not.toHaveBeenCalled();
@@ -68,9 +68,9 @@ describe("LocationRegistrar", () => {
     const s = sink();
     const cs = contextStore();
     const reg = new LocationRegistrar(s, cs, writeStub);
-    await reg.sync([cand("location:a/1"), cand("location:b/2")]);
+    await reg.sync([cand("location:a/1"), cand("location:b/2")], { isStationary: true });
     s.registerCandidateEnvironment.mockClear();
-    await reg.sync([cand("location:c/3")]);
+    await reg.sync([cand("location:c/3")], { isStationary: true });
     expect(s.registerCandidateEnvironment).toHaveBeenCalledTimes(1);
     expect(s.registerCandidateEnvironment).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -118,8 +118,8 @@ describe("isDwellArrival", () => {
     expect(isDwellArrival({ isStationary: false, speedMetersPerSecond: 20, dwellSeconds: 2 })).toBe(false);
     expect(isDwellArrival({ isStationary: false })).toBe(false);
   });
-  it("is permissive with no usable motion signal (back-compat)", () => {
-    expect(isDwellArrival(undefined)).toBe(true);
-    expect(isDwellArrival({})).toBe(true);
+  it("rejects missing or empty motion signals", () => {
+    expect(isDwellArrival(undefined)).toBe(false);
+    expect(isDwellArrival({})).toBe(false);
   });
 });

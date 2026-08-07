@@ -85,7 +85,7 @@ describe("EnvironmentManager", () => {
   it("keeps a registered environment active in memory", async () => {
     const manager = newManager();
 
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { displayName: "Example" });
+    await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: { displayName: "Example" } });
 
     expect(manager.isAvailable("web:example.com")).toBe(true);
   });
@@ -93,10 +93,10 @@ describe("EnvironmentManager", () => {
   it("captures registration metadata as jsonl", async () => {
     const manager = newManager();
 
-    await manager.registerAvailableEnvironment(
-      { id: "web:example.com/docs", metadata: { displayName: "Docs", observedUrls: ["https://example.com/docs"] } },
-      { displayName: "Docs" },
-    );
+    await manager.registerCandidateEnvironment({
+      id: "web:example.com/docs",
+      metadata: { displayName: "Docs", observedUrls: ["https://example.com/docs"] },
+    });
 
     const filePath = path.join(captureDir, "web-example.com--docs.jsonl");
     expect(existsSync(filePath)).toBe(true);
@@ -160,7 +160,7 @@ describe("EnvironmentManager", () => {
 
   it("moves an active environment to recent after the active window", async () => {
     const manager = newManager(mockRepositoryService(), 1_000, 10_000);
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: {} });
 
     nowMs += 1_001;
 
@@ -169,7 +169,7 @@ describe("EnvironmentManager", () => {
 
   it("forgets recent environments after the recent retention window", async () => {
     const manager = newManager(mockRepositoryService(), 1_000, 2_000);
-    await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
+    await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: {} });
 
     nowMs += 1_001;
     expect(manager.isAvailable("web:example.com")).toBe(false);
@@ -197,7 +197,7 @@ describe("EnvironmentManager", () => {
     const manager = newManager();
     manager.subscribe("s1", mockListener());
 
-    await manager.registerAvailableEnvironment({ id: "web:example.com/docs", metadata: {} });
+    await manager.registerCandidateEnvironment({ id: "web:example.com/docs", metadata: {} });
 
     expect(manager.environmentList("s1")[0]).toMatchObject({
       displayName: "docs",
@@ -209,8 +209,8 @@ describe("EnvironmentManager", () => {
     const listener = mockListener();
     manager.subscribe("s1", listener);
 
-    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian", metadata: { displayName: "Obsidian" } }, { displayName: "Obsidian" });
-    await manager.registerAvailableEnvironment({ id: "mac:md.obsidian/Rooknanigans", metadata: { displayName: "Rooknanigans" } }, { displayName: "Rooknanigans" });
+    await manager.registerCandidateEnvironment({ id: "mac:md.obsidian", metadata: { displayName: "Obsidian" } });
+    await manager.registerCandidateEnvironment({ id: "mac:md.obsidian/Rooknanigans", metadata: { displayName: "Rooknanigans" } });
 
     const entered = manager.enterEnvironment("s1", "mac:md.obsidian/Rooknanigans");
 

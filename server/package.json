@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Rook web service with Fastify, Vite, and React.",
+  "description": "Rook Fastify service and ACP runtime broker",
   "scripts": {
     "dev": "node ./node_modules/tsx/dist/cli.mjs src/index.ts",
     "build": "node ./node_modules/typescript/bin/tsc --noEmit && node ./node_modules/typescript/bin/tsc -p tsconfig.server.json",
@@ -13,8 +13,6 @@
     "test:watch": "node ./node_modules/vitest/vitest.mjs",
     "test:coverage": "node ./node_modules/vitest/vitest.mjs run --coverage",
     "test:fixtures": "GPX_FIXTURES=1 node ./node_modules/vitest/vitest.mjs run src/location/gpx.test.ts",
-    "dev:dummy": "node ../dummy-client/server.mjs",
-    "interact": "bash ../scripts/interact-with-remote-agent.sh",
     "replay:gpx": "node ./node_modules/tsx/dist/cli.mjs scripts/location/replay-gpx.ts",
     "trace:map": "node ./node_modules/tsx/dist/cli.mjs scripts/location/trace-map.ts",
     "dwell:analysis": "node ./node_modules/tsx/dist/cli.mjs scripts/location/dwell-analysis.ts",

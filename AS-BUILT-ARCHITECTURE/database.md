@@ -54,7 +54,7 @@ Constraints and indexes:
 Used by:
 - `SqliteSessionRepository`
 - `AgentRuntimeManager`
-- ACP `session/list`, `session/new`, `session/load`, `session/close`
+- ACP `session/new`, `session/load`, `session/close`; session discovery is REST
 
 ### `session_environments`
 
@@ -105,12 +105,14 @@ Purpose:
 Columns:
 - `bundle_hash TEXT PRIMARY KEY`
 - `environment_id TEXT NOT NULL`
-- `bundle_id TEXT`
+- `bundle_id TEXT NOT NULL`
 - `decision TEXT NOT NULL CHECK (decision IN ('approve', 'reject'))`
 - `updated_at TEXT NOT NULL`
 
 Important note:
 - only `approve` and `reject` are stored here
+- `bundle_id` is required for every durable decision
+- legacy nullable rows are discarded by the datastore schema migration
 - `accept` and `ignore` are intentionally in-memory session-scoped decisions managed by `EnvironmentManager`
 
 Used by:

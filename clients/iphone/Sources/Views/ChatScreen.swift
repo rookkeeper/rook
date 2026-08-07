@@ -28,7 +28,7 @@ struct ChatScreen: View {
                             Image(systemName: "clock")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(PanelPalette.textMuted)
-                            Text(message)
+                            Text(message.text)
                                 .font(.caption)
                                 .foregroundStyle(PanelPalette.textNormal)
                                 .lineLimit(1)
