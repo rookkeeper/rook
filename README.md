@@ -36,6 +36,10 @@ The launcher uses the main checkout as the production-like local profile. Runnin
 - `./scripts/tail-pi-traces.sh` — inspect provider-payload traces in `.var/pi-traces.jsonl` (follows by default; use `--once` for one-shot output)
 - `./scripts/run-tests.sh` — run the known server, Swift package, iPhone, and macOS test/build checks
 
+## CI checks
+
+Pull requests include a guard against adding compatibility markers to executable or configuration files. Configure the workflow's status check as required in GitHub branch protection to block merges when it fails.
+
 ## High-level docs map
 
 - setup, `.env`, binding, and remote-access notes: [docs/setup.md](docs/setup.md)

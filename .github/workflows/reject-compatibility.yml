@@ -1,0 +1,49 @@
+name: Reject compatibility markers
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  reject-compatibility-markers:
+    name: Reject compatibility markers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Reject newly added compatibility markers
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Keep the forbidden marker assembled so this workflow does not match itself.
+          forbidden="$(printf 'COM')$(printf 'PATIBILITY')"
+          added_lines="$({
+            git diff --no-ext-diff --no-color --unified=0 "$BASE_SHA" "$HEAD_SHA" -- \
+              . \
+              ':(exclude).agents/**' \
+              ':(exclude).github/**' \
+              ':(exclude)PRODUCT/**' \
+              ':(exclude)CHANGES/**' \
+              ':(exclude)**/*.md' \
+              ':(exclude)**/*.markdown'
+          } | awk '/^\+\+\+ / { next } /^\+/ { print substr($0, 2) }')"
+
+          matches="$(printf '%s\n' "$added_lines" | grep -nE "(^|[^[:alnum:]_])${forbidden}([^[:alnum:]_]|$)" || true)"
+          if [[ -n "$matches" ]]; then
+            echo '::error::Newly added code contains the forbidden compatibility marker.'
+            printf '%s\n' "$matches"
+            exit 1
+          fi
+
+          echo 'No newly added compatibility markers found.'
