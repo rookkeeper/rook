@@ -107,6 +107,8 @@ Examples:
 
 Use the template in [pr-template.md](pr-template.md). And update it as indicated in the template. Keep it short, casual, and easy to scan. Point to paths or types for detail; do not duplicate the diff.
 
+When tests change, include the template's **New tests** section. Summarize only the main behaviors or boundaries covered in a few bullets; do not turn it into an exhaustive test inventory.
+
 ### 7. Ship the PR
 
 Follow repo git safety rules (no force-push to main, no `--no-verify` unless asked).
