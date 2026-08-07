@@ -137,6 +137,44 @@ describe("SQLiteEnvironmentRepository", () => {
     expect(updated.skills[0]?.files["mail-search/SKILL.md"]).toBe("Edited in the agent workspace.");
   });
 
+  it("soft-deletes personal AGENTS.md and skills removed from shared authoring links", async () => {
+    const datastore = new EnvironmentRepositoryDatastore(":memory:");
+    datastores.push(datastore);
+    const repository = new SQLiteEnvironmentRepository(datastore, "personal");
+    repository.saveResult({
+      ...result("personal"),
+      bundles: [{
+        ...result("personal").bundles[0]!,
+        skills: [{ id: "mail-search", files: { "mail-search/SKILL.md": "Search mail." } }],
+        agentsMd: "Personal instructions.",
+      }],
+    });
+    const globalRoot = await mkdtemp(path.join(os.tmpdir(), "rook-db-delete-global-"));
+    const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "rook-db-delete-sessions-"));
+    tempDirs.push(globalRoot, sessionRoot);
+    const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: globalRoot, sessionRoot });
+    const loaded = (await repository.getBundles("web:example.com")).bundles[0]!;
+    const workspace = await manager.materialize("session", [{
+      environmentName: "Example",
+      bundleName: "Personal capabilities",
+      editable: true,
+      bundle: loaded,
+      writeBackSkill: (skillId, files) => repository.replaceCapabilityFiles("web:example.com", BUNDLE_ID, "skill", skillId, files),
+      writeBackDeleteSkill: (skillId) => repository.deleteCapability("web:example.com", BUNDLE_ID, "skill", skillId),
+      writeBackInstructions: (content) => repository.replaceCapabilityFiles("web:example.com", BUNDLE_ID, "instructions", "AGENTS.md", { "AGENTS.md": content }),
+      writeBackDeleteInstructions: () => repository.deleteCapability("web:example.com", BUNDLE_ID, "instructions", "AGENTS.md"),
+    }]);
+
+    await rm(path.join(workspace.editableSkillsRoot, "example", "mail-search"), { recursive: true, force: true });
+    await rm(path.join(workspace.instructionSourcesRoot, "example", "AGENTS.md"), { recursive: true, force: true });
+    await manager.assessAndFlush();
+
+    expect((await repository.getBundles("web:example.com")).bundles).toEqual([]);
+    expect(datastore.db.prepare("SELECT count(*) AS count FROM bundles WHERE deleted_at IS NOT NULL").get()).toMatchObject({ count: 2 });
+    expect(datastore.db.prepare("SELECT count(*) AS count FROM capabilities").get()).toMatchObject({ count: 2 });
+    await manager.close();
+  });
+
   it("creates the first personal capability without an empty bundle", async () => {
     const datastore = new EnvironmentRepositoryDatastore(":memory:");
     datastores.push(datastore);
