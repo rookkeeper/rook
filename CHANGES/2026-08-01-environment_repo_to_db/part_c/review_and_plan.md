@@ -35,3 +35,15 @@
 - [ ] See if I should change the structure of the agent workspaces to more closely follow how the global workspace has been rewired, e.g. so that editable AGENTS.md and skills are in the same linked directory
 - [ ] Make sure all of the above are represented in tests.
 - [ ] See if I should shrink server/src/runtime/CapabilityWorkspaceManager.ts (or maybe we just need to remove all the acrued compatibility code)
+- [ ] Need to add instructions about deleting skills and AGENTS.md b/c the agent just tried to do it and got confused - if we could make linkes look like files that would be great too
+- [ ] Make sure the environment repository boundary isn't leaky b/c I might want to rip out everything and do it differently at some point
+- [ ] Put the explanation into Rook instructions
+- [ ] Create a new issue for future work here
+  - [ ] Get rid of the database again?
+  - [ ] Instead create a permanent global workspace that has a single folder that contains `.agents/skills`, `AGENTS.md`; have a manifest file with descriptions of the bundle that points to their global workspace stuff; have manifest of all the environments (includes an environment description)
+  - [ ] Make agent workspace just symlink to appropriate global workspace folders
+  - [ ] Ideal situation: no database; no file watchers - not sure if this is possible.
+  - [ ] Problems to resolve before I start - 
+    - [ ] How do I deal with local MCP servers that need to be installed somewhere permanently in a place that is hidden from the agents so he can't see keys and stuff
+    - [ ] How do I deal with llms.txt which have to be wrapped in a skill most likely.
+- [ ] Make new issue for mobing the rook db 
