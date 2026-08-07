@@ -111,6 +111,16 @@ configure_run_profile() {
   ROOK_DEV_ALLOW_REMOTE="${ROOK_DEV_ALLOW_REMOTE:-0}"
   SERVER_DATABASE_PATH="${ROOK_DATABASE_PATH:-$ROOK_HOME/rook.sqlite}"
 
+  if [[ "$RUN_ROOK_PROFILE" == "development" && -z "${ROOK_AGENT_RUNTIMES_PATH:-}" ]]; then
+    local shared_agent_runtimes_path="$HOME/.rook/config/agent-runtimes.json"
+    if [[ -f "$shared_agent_runtimes_path" ]]; then
+      # Runtime definitions are user configuration, not server/session state.
+      # Keep them shared so a development profile can actually start a chat
+      # while leaving its durable state isolated under ROOK_HOME.
+      ROOK_AGENT_RUNTIMES_PATH="$shared_agent_runtimes_path"
+    fi
+  fi
+
   if [[ "$RUN_ROOK_PROFILE" == "production" ]]; then
     # Preserve the existing production database location unless explicitly
     # overridden. Development instances default to their isolated Rook home.
@@ -122,6 +132,9 @@ configure_run_profile() {
   export RUN_ROOK_DEFAULT_PORT RUN_ROOK_HOME_DEFAULT RUN_ROOK_ALLOW_REMOTE_DEFAULT
   export SERVER_PORT RUN_ROOT BUILD_ROOT CURRENT_SERVER_LOG CURRENT_SERVER_PIDFILE CURRENT_MAC_PIDFILE
   export SERVER_DATABASE_PATH ROOK_DATABASE_PATH="$SERVER_DATABASE_PATH" ROOK_HOME
+  if [[ -n "${ROOK_AGENT_RUNTIMES_PATH:-}" ]]; then
+    export ROOK_AGENT_RUNTIMES_PATH
+  fi
 
   # The server reads PORT, not ROOK_SERVER_PORT. Set it after loading .env so a
   # worktree cannot silently inherit production's PORT=7665.
@@ -144,4 +157,7 @@ log_run_profile() {
   log "server: http://${SERVER_BIND_HOST}:${SERVER_PORT}"
   log "ROOK_HOME: $ROOK_HOME"
   log "database: $SERVER_DATABASE_PATH"
+  if [[ -n "${ROOK_AGENT_RUNTIMES_PATH:-}" ]]; then
+    log "agent runtimes: $ROOK_AGENT_RUNTIMES_PATH"
+  fi
 }

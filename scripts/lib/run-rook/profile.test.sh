@@ -35,7 +35,8 @@ assert_match() {
 
 REPOSITORY="$TEST_ROOT/repository"
 HOME="$TEST_ROOT/home"
-mkdir -p "$HOME" "$REPOSITORY"
+mkdir -p "$HOME/.rook/config" "$REPOSITORY"
+printf '{"profiles": []}\n' >"$HOME/.rook/config/agent-runtimes.json"
 git -C "$REPOSITORY" init -q -b main
 git -C "$REPOSITORY" config user.email test@example.com
 git -C "$REPOSITORY" config user.name "Rook test"
@@ -49,7 +50,7 @@ git -C "$REPOSITORY" worktree add -q "$TEST_ROOT/two/shared-name" -b feature-two
 
 reset_environment() {
   unset ROOK_RUN_MODE ROOK_PRODUCTION_ROOT ROOK_SERVER_PORT ROOK_HOME
-  unset ROOK_DATABASE_PATH ROOK_RUN_ROOT RUN_ROOK_BUILD_ROOT PORT
+  unset ROOK_DATABASE_PATH ROOK_AGENT_RUNTIMES_PATH ROOK_RUN_ROOT RUN_ROOK_BUILD_ROOT PORT
   unset ROOK_BIND_IP ROOK_TAILSCALE_IP ROOK_REMOTE_HOSTNAME ROOK_SERVER_HOST
   unset ROOK_DEV_ALLOW_REMOTE
   SERVER_BIND_HOST="127.0.0.1"
@@ -83,6 +84,7 @@ assert_empty "${ROOK_BIND_IP:-}"
 assert_empty "${ROOK_TAILSCALE_IP:-}"
 assert_empty "${ROOK_REMOTE_HOSTNAME:-}"
 assert_eq "$ROOK_SERVER_HOST" "127.0.0.1"
+assert_eq "$ROOK_AGENT_RUNTIMES_PATH" "$HOME/.rook/config/agent-runtimes.json"
 
 configure_for "$TEST_ROOT/two/shared-name"
 second_slug="$RUN_ROOK_PROFILE_SLUG"
@@ -95,8 +97,10 @@ ROOK_SERVER_PORT="8123"
 PORT="7665"
 ROOK_BIND_IP="10.0.0.2"
 ROOK_REMOTE_HOSTNAME="worktree.example"
+ROOK_AGENT_RUNTIMES_PATH="$TEST_ROOT/custom-runtimes.json"
 configure_run_profile
 assert_eq "$SERVER_PORT" "8123"
+assert_eq "$ROOK_AGENT_RUNTIMES_PATH" "$TEST_ROOT/custom-runtimes.json"
 assert_eq "$PORT" "8123"
 assert_empty "$ROOK_BIND_IP"
 assert_empty "$ROOK_REMOTE_HOSTNAME"

@@ -416,6 +416,9 @@ open_mac_app_bundle() {
   launchctl setenv ROOK_RUN_MODE "$RUN_ROOK_PROFILE"
   launchctl setenv ROOK_HOME "$ROOK_HOME"
   launchctl setenv ROOK_DATABASE_PATH "$SERVER_DATABASE_PATH"
+  if [[ -n "${ROOK_AGENT_RUNTIMES_PATH:-}" ]]; then
+    launchctl setenv ROOK_AGENT_RUNTIMES_PATH "$ROOK_AGENT_RUNTIMES_PATH"
+  fi
   launchctl setenv PORT "$SERVER_PORT"
   open -n "$app_path"
   sleep 1
@@ -423,6 +426,9 @@ open_mac_app_bundle() {
   launchctl unsetenv ROOK_RUN_MODE
   launchctl unsetenv ROOK_HOME
   launchctl unsetenv ROOK_DATABASE_PATH
+  if [[ -n "${ROOK_AGENT_RUNTIMES_PATH:-}" ]]; then
+    launchctl unsetenv ROOK_AGENT_RUNTIMES_PATH
+  fi
   launchctl unsetenv PORT
   if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
     launchctl unsetenv ROOK_AUTH_TOKEN
