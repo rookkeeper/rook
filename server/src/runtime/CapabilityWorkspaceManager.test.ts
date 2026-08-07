@@ -35,6 +35,7 @@ describe("CapabilityWorkspaceManager", () => {
     const firstSkill = path.join(first.skillsRoot, "remember", "SKILL.md");
     const secondSkill = path.join(second.skillsRoot, "remember", "SKILL.md");
     const authoringSkill = path.join(first.editableSkillsRoot, "mail", "remember", "SKILL.md");
+    const instructionSourceRoot = path.join(first.instructionSourcesRoot, "mail");
     const aggregate = await readFile(first.agentsPath, "utf8");
 
     expect(aggregate).toContain("# Rook environment instructions");
@@ -46,6 +47,7 @@ describe("CapabilityWorkspaceManager", () => {
     expect(aggregate).toContain("- `mail`: `remember`");
 
     expect((await lstat(path.join(first.skillsRoot, "remember"))).isSymbolicLink()).toBe(true);
+    expect((await lstat(instructionSourceRoot)).isSymbolicLink()).toBe(true);
     expect(await realpath(firstSkill)).toBe(await realpath(secondSkill));
     expect(await realpath(firstSkill)).toBe(await realpath(authoringSkill));
 
@@ -102,6 +104,29 @@ describe("CapabilityWorkspaceManager", () => {
       await realpath(path.join(workspace.editableSkillsRoot, "mail", "new-skill", "SKILL.md")),
     );
     expect(await readFile(workspace.agentsPath, "utf8")).toContain("- `mail`: `existing`, `new-skill`");
+    await manager.close();
+  });
+
+  it("soft-deletes skill and instruction sources removed through the shared authoring links", async () => {
+    const deletedSkills: string[] = [];
+    let deletedInstructions = 0;
+    const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
+    const bundle = personalBundle({ skills: [skill("remember")], agentsMd: "Remember this." });
+    bundle.writeBackDeleteSkill = async (id) => { deletedSkills.push(id); return true; };
+    bundle.writeBackDeleteInstructions = async () => { deletedInstructions += 1; return true; };
+    const first = await manager.materialize("session-one", [bundle]);
+    const second = await manager.materialize("session-two", [bundle]);
+
+    await rm(path.join(first.editableSkillsRoot, "mail", "remember"), { recursive: true, force: true });
+    await rm(path.join(first.instructionSourcesRoot, "mail", "AGENTS.md"), { recursive: true, force: true });
+    await manager.assessAndFlush();
+
+    expect(deletedSkills).toContain("remember");
+    expect(deletedInstructions).toBeGreaterThan(0);
+    await expect(access(path.join(second.skillsRoot, "remember"))).rejects.toThrow();
+    const aggregate = await readFile(first.agentsPath, "utf8");
+    expect(aggregate).not.toContain("Remember this.");
+    expect(aggregate).toContain("- `mail`: none");
     await manager.close();
   });
 

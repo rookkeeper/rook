@@ -1,4 +1,4 @@
-import type { EnvironmentBundleResult, EnvironmentBundle } from "../../shared/environmentRepository.js";
+import type { EnvironmentBundleResult, EnvironmentBundle, CapabilityType } from "../../shared/environmentRepository.js";
 import type { EnvironmentPreview } from "../../shared/environment.js";
 import { EnvironmentRepository } from "../repositories/EnvironmentRepository.js";
 import { hashEnvironmentBundle } from "../../shared/environmentBundleHash.js";
@@ -25,30 +25,27 @@ export class EnvironmentRepositoryService {
     return this.repository.searchBundles(query, repositoryId);
   }
 
-  async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>, repositoryId?: string): Promise<boolean> {
-    return this.repository.replaceArtifactFiles(environmentId, bundleId, kind, artifactId, files, repositoryId);
+  async replaceCapabilityFiles(environmentId: string, bundleId: string, type: CapabilityType, capabilityName: string, files: Record<string, string>, repositoryId?: string): Promise<boolean> {
+    return this.repository.replaceCapabilityFiles(environmentId, bundleId, type, capabilityName, files, repositoryId);
   }
 
-  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string, repositoryId?: string): Promise<boolean> {
-    return this.repository.replaceBundleInstructions(environmentId, bundleId, content, repositoryId);
+  async createCapabilityFiles(environmentId: string, bundleId: string, type: CapabilityType, capabilityName: string, files: Record<string, string>, repositoryId?: string): Promise<boolean> {
+    return this.repository.createCapabilityFiles(environmentId, bundleId, type, capabilityName, files, repositoryId);
   }
 
-  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>, repositoryId?: string): Promise<boolean> {
-    return this.repository.createArtifactFiles(environmentId, bundleId, kind, artifactId, files, repositoryId);
+  async deleteCapability(environmentId: string, bundleId: string, type: CapabilityType, capabilityName: string, repositoryId?: string): Promise<boolean> {
+    return this.repository.deleteCapability(environmentId, bundleId, type, capabilityName, repositoryId);
   }
 
-  async ensurePersonalBundle(environmentId: string): Promise<boolean> {
-    return this.repository.ensurePersonalBundle(environmentId);
+  async restoreCapability(environmentId: string, bundleId: string, type: CapabilityType, capabilityName: string, repositoryId?: string): Promise<boolean> {
+    return this.repository.restoreCapability(environmentId, bundleId, type, capabilityName, repositoryId);
   }
 
   async getResolvedBundles(environmentId: string): Promise<ResolvedEnvironmentBundle[]> {
     const result = await this.repository.getBundles(environmentId);
-    const valid = result.bundles.filter((bundle) => bundle.valid);
-    const resolved: ResolvedEnvironmentBundle[] = [];
-    for (const bundle of valid) {
-      resolved.push({ bundle, bundleHash: hashEnvironmentBundle(bundle) });
-    }
-    return resolved;
+    return result.bundles
+      .filter((bundle) => bundle.valid)
+      .map((bundle) => ({ bundle, bundleHash: hashEnvironmentBundle(bundle) }));
   }
 
   async getValidBundles(environmentId: string): Promise<EnvironmentBundle[]> {
@@ -61,14 +58,13 @@ export class EnvironmentRepositoryService {
 
   async getEnvironmentPreview(environmentId: string): Promise<EnvironmentPreview> {
     const result = await this.repository.getBundles(environmentId);
-    const bundles = [];
-    for (const bundle of result.bundles) {
-      bundles.push({
+    return {
+      environmentId,
+      bundles: result.bundles.map((bundle) => ({
         id: bundle.id,
         bundleId: bundle.bundleId,
         environmentId: bundle.environmentId,
         repository: bundle.repository,
-        revision: bundle.revision,
         valid: bundle.valid,
         bundleHash: hashEnvironmentBundle(bundle),
         skills: bundle.skills,
@@ -78,13 +74,11 @@ export class EnvironmentRepositoryService {
         llmsTxt: bundle.llmsTxt,
         agentsMd: bundle.agentsMd,
         errors: bundle.errors,
-      });
-    }
-    return { environmentId, bundles };
+      })),
+    };
   }
 
   async getBundleInspection(environmentId: string): Promise<EnvironmentBundle[]> {
-    const result = await this.repository.getBundles(environmentId);
-    return result.bundles;
+    return (await this.repository.getBundles(environmentId)).bundles;
   }
 }

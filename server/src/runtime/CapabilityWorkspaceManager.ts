@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readlink, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { EnvironmentBundle, BundleArtifact } from "../shared/environmentRepository.js";
@@ -13,7 +13,9 @@ export interface CapabilityWorkspaceBundle {
   bundle: EnvironmentBundle;
   writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
   writeBackNewSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
+  writeBackDeleteSkill?: (skillId: string) => Promise<boolean>;
   writeBackInstructions?: (content: string) => Promise<boolean>;
+  writeBackDeleteInstructions?: () => Promise<boolean>;
 }
 
 export interface CapabilityWorkspaceResult {
@@ -53,7 +55,9 @@ interface WorkspaceSource {
   knownSkillIds?: Set<string>;
   writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
   writeBackNewSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
+  writeBackDeleteSkill?: (skillId: string) => Promise<boolean>;
   writeBackInstructions?: (content: string) => Promise<boolean>;
+  writeBackDeleteInstructions?: () => Promise<boolean>;
 }
 
 /**
@@ -184,7 +188,12 @@ export class CapabilityWorkspaceManager {
         agentInstructionSources.push({ nickname, sourcePath: path.relative(root, agentsSourcePath), writable: false });
       } else {
         const instructionSource = await this.instructionSource(entry);
-        await replaceWithSymlink(agentsSourcePath, instructionSource.path);
+        if (entry.bundle.repository === "personal") {
+          await removeTree(path.dirname(agentsSourcePath));
+          await replaceWithSymlink(path.dirname(agentsSourcePath), path.dirname(instructionSource.path));
+        } else {
+          await replaceWithSymlink(agentsSourcePath, instructionSource.path);
+        }
         agentInstructionSources.push({ nickname, sourcePath: path.relative(root, agentsSourcePath), writable: true });
       }
     }
@@ -304,7 +313,9 @@ export class CapabilityWorkspaceManager {
 
     const source = await this.ensureWritableSource(entry, "skill", skill.id, async (target) => writeArtifact(target, skill));
     const authoringRoot = await this.ensureAuthoringRoot(entry);
-    await replaceWithSymlink(path.join(authoringRoot, skill.id), source.path);
+    if (entry.bundle.repository !== "personal") {
+      await replaceWithSymlink(path.join(authoringRoot, skill.id), source.path);
+    }
     const authoringSource = this.sources.get(sourceDigest(sourceDescriptor(entry, "authoring-slot")));
     authoringSource?.knownSkillIds?.add(skill.id);
     return source.path;
@@ -387,10 +398,11 @@ export class CapabilityWorkspaceManager {
     const key = sourceDigest(descriptor);
     const existing = this.sources.get(key);
     if (existing) return existing;
-    const leaf = kind === "skill" ? "skill" : kind === "instructions" ? "AGENTS.md" : "skills";
-    const target = safeChild(this.workspaceRoot, "writable", key, leaf);
+    const target = entry.bundle.repository === "personal"
+      ? personalSourcePath(this.workspaceRoot, entry, kind, artifactId)
+      : safeChild(this.workspaceRoot, "writable", key, kind === "skill" ? "skill" : kind === "instructions" ? "AGENTS.md" : "skills");
     await mkdir(path.dirname(target), { recursive: true });
-    await initialize(target);
+    if (!(await pathExists(target))) await initialize(target);
     const source: WorkspaceSource = {
       key,
       kind,
@@ -404,7 +416,9 @@ export class CapabilityWorkspaceManager {
       ...(kind === "authoring-slot" ? { knownSkillIds: new Set<string>() } : {}),
       ...(entry.writeBackSkill ? { writeBackSkill: entry.writeBackSkill } : {}),
       ...(entry.writeBackNewSkill ? { writeBackNewSkill: entry.writeBackNewSkill } : {}),
+      ...(entry.writeBackDeleteSkill ? { writeBackDeleteSkill: entry.writeBackDeleteSkill } : {}),
       ...(entry.writeBackInstructions ? { writeBackInstructions: entry.writeBackInstructions } : {}),
+      ...(entry.writeBackDeleteInstructions ? { writeBackDeleteInstructions: entry.writeBackDeleteInstructions } : {}),
     };
     source.lastFingerprint = await sourceFingerprint(source);
     this.sources.set(key, source);
@@ -413,20 +427,46 @@ export class CapabilityWorkspaceManager {
 
   private async persistSource(source: WorkspaceSource): Promise<void> {
     if (source.kind === "skill") {
-      if (!source.artifactId || !source.writeBackSkill) throw new Error(`No skill write-back is configured for ${source.key}.`);
+      if (!source.artifactId) throw new Error(`No skill id is configured for ${source.key}.`);
+      if (!(await pathExists(source.path))) {
+        if (!source.writeBackDeleteSkill) throw new Error(`No skill delete write-back is configured for ${source.key}.`);
+        const handled = await source.writeBackDeleteSkill(source.artifactId);
+        if (!handled) throw new Error(`Skill deletion write-back declined for ${source.key}.`);
+        source.lastFingerprint = "missing";
+        await this.removeDeletedSkillSessions(source, source.artifactId);
+        return;
+      }
+      if (!source.writeBackSkill) throw new Error(`No skill write-back is configured for ${source.key}.`);
       const handled = await source.writeBackSkill(source.artifactId, await readSkillFiles(source.path, source.artifactId));
       if (!handled) throw new Error(`Skill write-back declined for ${source.key}.`);
       return;
     }
     if (source.kind === "instructions") {
+      if (!(await pathExists(source.path))) {
+        if (!source.writeBackDeleteInstructions) throw new Error(`No instruction delete write-back is configured for ${source.key}.`);
+        const handled = await source.writeBackDeleteInstructions();
+        if (!handled) throw new Error(`Instruction deletion write-back declined for ${source.key}.`);
+        source.lastFingerprint = "missing";
+        await this.removeDeletedInstructionSessions(source);
+        return;
+      }
       if (!source.writeBackInstructions) throw new Error(`No instruction write-back is configured for ${source.key}.`);
       const handled = await source.writeBackInstructions(await readFile(source.path, "utf8"));
       if (!handled) throw new Error(`Instruction write-back declined for ${source.key}.`);
       await this.refreshInstructionSessions(source);
       return;
     }
-    if (!source.writeBackNewSkill) return;
-    for (const skillId of await skillDirectories(source.path)) {
+    if (!source.writeBackNewSkill || !(await pathExists(source.path))) return;
+    const currentSkillIds = new Set(await skillDirectories(source.path));
+    for (const skillId of source.knownSkillIds ?? []) {
+      if (currentSkillIds.has(skillId)) continue;
+      if (!source.writeBackDeleteSkill) continue;
+      const handled = await source.writeBackDeleteSkill(skillId);
+      if (!handled) throw new Error(`Skill deletion write-back declined for ${source.key}/${skillId}.`);
+      source.knownSkillIds.delete(skillId);
+      await this.removeDeletedSkillSessions(source, skillId);
+    }
+    for (const skillId of currentSkillIds) {
       if (source.knownSkillIds?.has(skillId)) continue;
       const files = await readSkillFiles(path.join(source.path, skillId), skillId);
       if (!(`${skillId}/SKILL.md` in files)) continue;
@@ -435,6 +475,47 @@ export class CapabilityWorkspaceManager {
       source.knownSkillIds?.add(skillId);
       await this.linkPromotedSkill(source, skillId);
     }
+  }
+
+  private async removeDeletedSkillSessions(source: WorkspaceSource, skillId: string): Promise<void> {
+    for (const [sessionId, bundles] of this.sessionBundles) {
+      if (!bundles.some((entry) => sameSource(entry, source))) continue;
+      const root = this.agentWorkspaceRoot(sessionId);
+      const skillsRoot = path.join(root, ".agents", "skills");
+      for (const entry of await readdir(skillsRoot, { withFileTypes: true })) {
+        if (!entry.isSymbolicLink()) continue;
+        const linkPath = path.join(skillsRoot, entry.name);
+        const rawTarget = await readlink(linkPath, "utf8").catch(() => undefined);
+        if (!rawTarget) continue;
+        const target = path.resolve(path.dirname(linkPath), rawTarget);
+        if (target === source.path && (entry.name === skillId || entry.name.startsWith(`${skillId}_`))) {
+          await removeTree(linkPath);
+        }
+      }
+      const aggregate = this.sessionAggregateData.get(sessionId);
+      if (!aggregate) continue;
+      const nickname = environmentNicknames(bundles).get(source.environmentId);
+      if (nickname) aggregate.skillNamesByEnvironment.get(nickname)?.delete(skillId);
+      await this.writeSessionAggregate(aggregate, sessionId);
+    }
+  }
+
+  private async removeDeletedInstructionSessions(source: WorkspaceSource): Promise<void> {
+    for (const [sessionId, bundles] of this.sessionBundles) {
+      if (!bundles.some((entry) => sameSource(entry, source))) continue;
+      const aggregate = this.sessionAggregateData.get(sessionId);
+      if (!aggregate) continue;
+      const nickname = environmentNicknames(bundles).get(source.environmentId);
+      if (nickname) aggregate.sources = aggregate.sources.filter((entry) => entry.nickname !== nickname);
+      await this.writeSessionAggregate(aggregate, sessionId);
+    }
+  }
+
+  private async writeSessionAggregate(aggregate: SessionAggregateData, sessionId: string): Promise<void> {
+    const aggregatePath = path.join(this.agentWorkspaceRoot(sessionId), "AGENTS.md");
+    await chmod(aggregatePath, 0o644).catch(() => undefined);
+    await writeFile(aggregatePath, await renderAggregateAgents(aggregate.root, aggregate.sources, aggregate.facts, aggregate.skillNamesByEnvironment), "utf8");
+    await chmod(aggregatePath, 0o444);
   }
 
   private async refreshInstructionSessions(source: WorkspaceSource): Promise<void> {
@@ -521,6 +602,20 @@ function sourceDigest(descriptor: Record<string, string | undefined>): string {
   return createHash("sha256").update(JSON.stringify(descriptor)).digest("base64url");
 }
 
+function personalSourcePath(workspaceRoot: string, entry: CapabilityWorkspaceBundle, kind: SourceKind, artifactId?: string): string {
+  const environmentKey = sourceDigest({
+    repository: entry.bundle.repository,
+    environmentId: entry.bundle.environmentId,
+    bundleId: entry.bundle.bundleId,
+    kind: "personal-environment",
+  });
+  const root = safeChild(workspaceRoot, "writable", environmentKey);
+  if (kind === "instructions") return path.join(root, "AGENTS.md");
+  if (kind === "authoring-slot") return path.join(root, ".agents", "skills");
+  if (!artifactId) throw new Error("Personal skill source requires an artifact id.");
+  return path.join(root, ".agents", "skills", artifactId);
+}
+
 function environmentNicknames(bundles: CapabilityWorkspaceBundle[]): Map<string, string> {
   const byId = new Map<string, string>();
   const names = [...new Map(bundles.map((entry) => [entry.bundle.environmentId, entry.environmentName])).entries()]
@@ -549,13 +644,14 @@ async function renderAggregateAgents(
   inlineFacts: AggregateFact[],
   skillNamesByEnvironment: Map<string, Set<string>>,
 ): Promise<string> {
-  const blocks = await Promise.all(sources.map(async (source) => {
+  const blocks = (await Promise.all(sources.map(async (source) => {
     const absoluteSource = path.join(root, source.sourcePath);
+    if (!(await pathExists(absoluteSource))) return undefined;
     const content = await readFile(absoluteSource, "utf8");
     const editable = source.writable ? "true" : "false";
     const pathAttribute = source.writable ? ` path="${escapeAttribute(source.sourcePath)}"` : "";
     return `<environment_instruction environment="${escapeAttribute(source.nickname)}" editable="${editable}"${pathAttribute}>\n${content.trim()}\n</environment_instruction>`;
-  }));
+  }))).filter((block): block is string => block !== undefined);
   const factBlocks = inlineFacts.map((fact) => `<environment_instruction environment="${escapeAttribute(fact.nickname)}" editable="false">\n${fact.name}: ${fact.content.trim()}\n</environment_instruction>`);
   const environmentNames = [...new Set([
     ...sources.map((source) => source.nickname),
@@ -646,6 +742,7 @@ function generatedReferenceSkill(id: string, sourceName: string, content: string
 }
 
 async function sourceFingerprint(source: WorkspaceSource): Promise<string> {
+  if (!(await pathExists(source.path))) return "missing";
   if (source.kind === "instructions") return fingerprint(await readFile(source.path, "utf8"));
   if (source.kind === "skill") return fingerprint(await readSkillFiles(source.path, source.artifactId ?? "skill"));
   const files: Record<string, string> = {};

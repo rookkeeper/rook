@@ -24,8 +24,8 @@ Every configured runtime receives the base Rook identity prompt, including sessi
 
 Environment changes are Rook orchestration around ACP:
 
-1. resolve approved/personal bundle revisions
-2. update shared SQLite sources and per-session links
+1. resolve approved/personal bundles from active capability memberships
+2. update shared writable environment sources and per-session links
 3. generate the read-only aggregate `AGENTS.md`
 4. replace the affected runtime with the agent workspace as cwd
 5. load the existing runtime session successfully

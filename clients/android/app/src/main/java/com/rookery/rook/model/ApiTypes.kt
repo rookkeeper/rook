@@ -111,15 +111,6 @@ data class RepositoryReadError(
 }
 
 @Serializable
-data class EnvironmentRevisionPreview(
-    val contentHash: String,
-    val publisherVersion: String? = null,
-    val fetchedAt: String? = null,
-    val sourceLocator: String? = null,
-    val provenance: JsonObject = JsonObject(emptyMap())
-)
-
-@Serializable
 data class EnvironmentBundlePreview(
     val id: String,
     val bundleId: String,
@@ -127,7 +118,6 @@ data class EnvironmentBundlePreview(
     val repository: String,
     val valid: Boolean,
     val bundleHash: String = "",
-    val revision: EnvironmentRevisionPreview? = null,
     val skills: List<EnvironmentArtifactPreview>,
     val mcpServers: List<EnvironmentArtifactPreview>,
     val apps: List<EnvironmentArtifactPreview>,

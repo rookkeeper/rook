@@ -29,4 +29,9 @@
   - [ ] When opening and agent, make sure to join the same environments again.
 - [ ] I'm not sure why the global workspace needs a manifest. Why can't we just use the naming convention and stick everything in ~/.rook/global-workspace/<environment_identifier>/*  (including AGENTS.md and skills there or .agents/skills so that it looks like a project directory)
 - [ ] Make sure that when there is not sub AGENTS.md files that the aggregate AGENTS.md makes sense
-- [ ] It should be possible to delete skills and AGENTS.md (probably soft delete so they can be restored if we really need them to be)
+- [x] It should be possible to delete skills and AGENTS.md (probably soft delete so they can be restored if we really need them to be)
+- [ ] Maybe the .agents/editable/ directories need to be combined somehow
+- [ ] Review RookIdentityPrompts
+- [ ] See if I should change the structure of the agent workspaces to more closely follow how the global workspace has been rewired, e.g. so that editable AGENTS.md and skills are in the same linked directory
+- [ ] Make sure all of the above are represented in tests.
+- [ ] See if I should shrink server/src/runtime/CapabilityWorkspaceManager.ts (or maybe we just need to remove all the acrued compatibility code)

@@ -7,6 +7,9 @@ import { buildServer } from "../index.js";
 import { SQLiteEnvironmentRepository } from "../environments/repositories/SQLiteEnvironmentRepository.js";
 
 const PORT = 18999;
+const CANONICAL_OBSIDIAN_BUNDLE_ID = "22222222-2222-4222-8222-222222222222";
+const CANONICAL_EXAMPLE_BUNDLE_ID = "33333333-3333-4333-8333-333333333333";
+const PERSONAL_EXAMPLE_BUNDLE_ID = "44444444-4444-4444-8444-444444444444";
 
 function agentWorkspaceRoot(home: string, sessionId: string): string {
   return path.join(home, ".rook", "agent-workspaces", sessionId);
@@ -83,12 +86,45 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     }));
     process.env.ROOK_AGENT_RUNTIMES_PATH = runtimesPath;
     process.env.HOME = tempConfigDir;
+    const canonicalRepository = new SQLiteEnvironmentRepository(path.join(tempConfigDir, "canonical.db"), "canonical");
+    canonicalRepository.saveResult({
+      environment: { id: "mac:md.obsidian", displayName: "md.obsidian", description: "Obsidian vault" },
+      bundles: [{
+        id: `mac:md.obsidian#${CANONICAL_OBSIDIAN_BUNDLE_ID}`,
+        bundleId: CANONICAL_OBSIDIAN_BUNDLE_ID,
+        environmentId: "mac:md.obsidian",
+        repository: "canonical",
+        skills: ["content-production", "how-to-use-peeps-obsidian", "how-to-use-reads-obsidian", "intro-email", "video-editor"].map((id) => ({ id, files: { [`${id}/SKILL.md`]: id } })),
+        mcpServers: [],
+        apps: [],
+        agentsMd: "Obsidian instructions.",
+        valid: true,
+        errors: [],
+      }],
+      errors: [],
+    });
+    canonicalRepository.saveResult({
+      environment: { id: "web:example.com", displayName: "Example", description: "Example website" },
+      bundles: [{
+        id: `web:example.com#${CANONICAL_EXAMPLE_BUNDLE_ID}`,
+        bundleId: CANONICAL_EXAMPLE_BUNDLE_ID,
+        environmentId: "web:example.com",
+        repository: "canonical",
+        skills: [{ id: "testing-fixture", files: { "testing-fixture/SKILL.md": "Testing fixture" } }],
+        mcpServers: [],
+        apps: [],
+        valid: true,
+        errors: [],
+      }],
+      errors: [],
+    });
+    canonicalRepository.close();
     const personalRepository = new SQLiteEnvironmentRepository(path.join(tempConfigDir, ".rook", "environment-repository.db"), "personal");
     personalRepository.saveResult({
       environment: { id: "web:example.com", displayName: "Example", description: "Example website" },
       bundles: [{
-        id: "web:example.com#personal",
-        bundleId: "personal",
+        id: `web:example.com#${PERSONAL_EXAMPLE_BUNDLE_ID}`,
+        bundleId: PERSONAL_EXAMPLE_BUNDLE_ID,
         environmentId: "web:example.com",
         repository: "personal",
         skills: [{ id: "personal-skill", files: { "personal-skill/SKILL.md": "original personal skill" } }],
@@ -101,7 +137,12 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       errors: [],
     });
     personalRepository.close();
-    app = await buildServer({ environmentDecisionStoreLocation: ":memory:", authToken: "" });
+    app = await buildServer({
+      environmentRepositoryDatabase: path.join(tempConfigDir, "canonical.db"),
+      personalEnvironmentRepositoryDatabase: path.join(tempConfigDir, ".rook", "environment-repository.db"),
+      environmentDecisionStoreLocation: ":memory:",
+      authToken: "",
+    });
     await app.listen({ host: "127.0.0.1", port: PORT });
   });
 
@@ -127,7 +168,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     expect(existsSync(path.resolve(process.cwd(), "..", "environment-repository"))).toBe(false);
     const response = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=mac:md.obsidian`);
     const preview = await response.json() as { bundles: Array<{ bundleId: string; skills: Array<{ id: string }>; agentsMd?: string }> };
-    const bundle = preview.bundles.find((candidate) => candidate.bundleId === "default");
+    const bundle = preview.bundles.find((candidate) => candidate.bundleId === CANONICAL_OBSIDIAN_BUNDLE_ID);
     expect(bundle).toBeDefined();
     expect(bundle?.agentsMd).toBeTruthy();
     expect(bundle?.skills.map((skill) => skill.id)).toEqual([
@@ -184,7 +225,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
     const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ valid: boolean; bundleHash: string; bundleId: string }> };
-    const bundle = preview.bundles.find((candidate) => candidate.valid && candidate.bundleId === "testing-fixture");
+    const bundle = preview.bundles.find((candidate) => candidate.valid && candidate.bundleId === CANONICAL_EXAMPLE_BUNDLE_ID);
     expect(bundle).toBeDefined();
     await fetch(`http://127.0.0.1:${PORT}/api/environments/decision`, {
       method: "POST",
@@ -227,8 +268,8 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sessionId, enterEnvironmentIds: ["web:example.com"], leaveEnvironmentIds: [] }),
     });
-    const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ valid: boolean; bundleHash: string; bundleId: string }> };
-    const bundle = preview.bundles.find((candidate) => candidate.valid && candidate.bundleId === "personal");
+    const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ valid: boolean; bundleHash: string; bundleId: string; repository: string }> };
+    const bundle = preview.bundles.find((candidate) => candidate.valid && candidate.repository === "personal");
     expect(bundle).toBeDefined();
     await fetch(`http://127.0.0.1:${PORT}/api/environments/decision`, {
       method: "POST",
@@ -244,16 +285,16 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       prompt: [{ type: "text", text: `edit personal skill write-to:${workspaceSkill}` }],
     });
 
-    const afterSkill = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; skills: Array<{ id: string; files: Record<string, string> }> }> };
-    const personalAfterSkill = afterSkill.bundles.find((candidate) => candidate.bundleId === "personal");
+    const afterSkill = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ repository: string; skills: Array<{ id: string; files: Record<string, string> }> }> };
+    const personalAfterSkill = afterSkill.bundles.find((candidate) => candidate.repository === "personal");
     expect(personalAfterSkill?.skills.find((skill) => skill.id === "personal-skill")?.files["personal-skill/SKILL.md"]).toBe("updated by the mock agent");
     const workspaceAgents = path.join(workspaceRoot, ".agents", "AGENTS_FILES", "example", "AGENTS.md");
     await request(ws, 5, "session/prompt", {
       sessionId,
       prompt: [{ type: "text", text: `edit personal instructions write-to:${workspaceAgents}` }],
     });
-    const afterInstructions = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; agentsMd?: string }> };
-    expect(afterInstructions.bundles.find((candidate) => candidate.bundleId === "personal")?.agentsMd).toBe("updated by the mock agent");
+    const afterInstructions = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ repository: string; agentsMd?: string }> };
+    expect(afterInstructions.bundles.find((candidate) => candidate.repository === "personal")?.agentsMd).toBe("updated by the mock agent");
     await request(ws, 6, "session/close", { sessionId });
     ws.close();
   });
@@ -275,8 +316,8 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       body: JSON.stringify({ id: environmentId, metadata: { displayName: "New Skill Test" } }),
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const beforeEntry = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=${environmentId}`).then((response) => response.json()) as { bundles: Array<{ bundleId: string }> };
-    expect(beforeEntry.bundles.find((bundle) => bundle.bundleId === "personal")).toBeUndefined();
+    const beforeEntry = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=${environmentId}`).then((response) => response.json()) as { bundles: Array<{ repository: string }> };
+    expect(beforeEntry.bundles.find((bundle) => bundle.repository === "personal")).toBeUndefined();
     const entered = await fetch(`http://127.0.0.1:${PORT}/api/session/environments`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -289,9 +330,43 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     writeFileSync(path.join(workspaceSkill, "SKILL.md"), "---\nname: navigating-xkcd\ndescription: Navigate XKCD.\n---\n", "utf8");
     await request(ws, 3, "session/prompt", { sessionId, prompt: [{ type: "text", text: "say hi briefly" }] });
 
-    const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=${environmentId}`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; skills: Array<{ id: string; files: Record<string, string> }> }> };
-    const personal = preview.bundles.find((bundle) => bundle.bundleId === "personal");
+    const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=${environmentId}`).then((response) => response.json()) as { bundles: Array<{ repository: string; skills: Array<{ id: string; files: Record<string, string> }> }> };
+    const personal = preview.bundles.find((bundle) => bundle.repository === "personal");
     expect(personal?.skills.find((skill) => skill.id === "navigating-xkcd")?.files["navigating-xkcd/SKILL.md"]).toContain("Navigate XKCD.");
+    await request(ws, 4, "session/close", { sessionId });
+    ws.close();
+  });
+
+  it("soft-deletes personal skills and instructions removed through authoring paths", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "delete-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "delete-test" },
+    });
+    const sessionId = created.sessionId as string;
+    await fetch(`http://127.0.0.1:${PORT}/api/environments/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "web:example.com", metadata: { displayName: "Example" } }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await fetch(`http://127.0.0.1:${PORT}/api/session/environments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, enterEnvironmentIds: ["web:example.com"], leaveEnvironmentIds: [] }),
+    });
+
+    const workspaceRoot = agentWorkspaceRoot(tempConfigDir, sessionId);
+    rmSync(path.join(workspaceRoot, ".agents", "editable-skills", "example", "personal-skill"), { recursive: true, force: true });
+    rmSync(path.join(workspaceRoot, ".agents", "AGENTS_FILES", "example", "AGENTS.md"), { recursive: true, force: true });
+    await request(ws, 3, "session/prompt", { sessionId, prompt: [{ type: "text", text: "say hi briefly" }] });
+
+    const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ repository: string; skills: Array<{ id: string }>; agentsMd?: string }> };
+    const personal = preview.bundles.find((bundle) => bundle.repository === "personal");
+    expect(personal?.skills.some((skill) => skill.id === "personal-skill")).not.toBe(true);
+    expect(personal?.agentsMd).toBeUndefined();
     await request(ws, 4, "session/close", { sessionId });
     ws.close();
   });

@@ -1,49 +1,70 @@
 # Environment-local authoring
 
-Rook can learn environment-specific skills and instructions from the user. SQLite is the durable source for personal content; a project directory is the durable source for a `dir:` environment.
+Rook can learn environment-specific skills and instructions from the user. Personal SQLite content is the durable source for non-directory environments. A project directory is the durable source for a `dir:` environment.
 
 ## Ownership
 
-Non-directory environments may receive one user-owned `personal` bundle in the personal SQLite repository. Passive environment registration does not create it; explicit entry creates the empty authoring bundle when needed. It is revisioned and hashed but bypasses approval.
+Canonical capabilities are immutable and read-only. Personal capabilities are writable and do not require approval. Project-directory capabilities are direct project files and never become personal SQLite rows.
 
-A `dir:` environment does **not** receive an SQLite personal bundle. Its project bundle is named `directory`; project-owned skills live under `.agents/skills/` and project instructions live in the project-root `AGENTS.md`.
+A capability may be shared by multiple bundle memberships. Soft deletion is membership-scoped: deleting a personal skill or instruction from one environment sets `bundles.deleted_at`, while the capability files remain available for restoration or other memberships.
+
+Entering an environment with no personal content does not create an empty bundle. Rook creates temporary session authoring state; the first real authored instruction or capability creates the durable rows.
+
+## Uniform capability content
+
+All capability kinds use the same nested file-map representation in SQLite:
+
+```text
+skill:        <skill-name>/SKILL.md, scripts/, references/, ...
+instructions: AGENTS.md
+llms-txt:     llms.txt
+facts:        one or more fact files
+mcp/app:      configuration and supporting files
+```
+
+Each capability has a UUID `TEXT` id, a human-readable name, a type, the complete file map, and a content hash. There is no revision history.
 
 ## Workspace topology
 
-At server startup Rook clears and recreates the process-wide workspace at `~/.rook/global-workspace/` for writable SQLite materializations. It is rebuildable from SQLite and retained after shutdown for inspection; the next startup clears it again.
-
-Each runtime uses a separate agent workspace as its process and ACP working directory. Rook places skills under the standard `.agents/skills/` discovery directory and starts Pi with project approval so non-interactive ACP sessions load that generated workspace:
+Rook keeps one shared writable source per personal environment:
 
 ```text
-~/.rook/agent-workspaces/<session-id>/
-├── AGENTS.md                                      generated, read-only aggregate
-└── .agents/
-    ├── skills/<skill-name>                         normal skill link or read-only external materialization
-    ├── editable-skills/<environment-nickname>/     explicit authoring location
-    ├── AGENTS_FILES/<environment-nickname>/AGENTS.md
-    └── mcp-servers/                                read-only review projection
+~/.rook/global-workspace/writable/<environment-key>/
+├── AGENTS.md
+└── .agents/skills/<skill-name>/
 ```
 
-Existing writable SQLite skills are linked into both `skills/` and their environment-specific `editable-skills/` directory, pointing to one shared global file tree under `~/.rook/global-workspace/`. Existing project skills and instructions are linked directly to their project files. Immutable external content is materialized directly and read-only into each agent workspace; it does not enter the writable global workspace.
-
-The aggregate `AGENTS.md` is generated and read-only. It contains environment-tagged source text, concrete relative paths to linked instruction files and skill authoring directories, skill-editing guidance, and a per-environment inventory of known skill names. The individual files are the sources to edit, never the aggregate.
-
-## Authoring and persistence
-
-A new skill is created in:
+Each session links into that source:
 
 ```text
-.agents/editable-skills/<environment-nickname>/<skill-name>/SKILL.md
+~/.rook/agent-workspaces/<session-id>/.agents/
+├── AGENTS_FILES/<environment>        -> shared environment directory
+├── editable-skills/<environment>     -> shared environment/.agents/skills
+└── skills/<visible-name>             -> shared skill source
 ```
 
-Its parent identifies ownership. `SKILL.md` makes the skill real. A completed personal skill is persisted to SQLite and linked into `.agents/skills/`. A completed project skill is written to `.agents/skills/` in the project and then linked directly from the workspace. Empty skill directories and default-text instruction placeholders do not create durable content until the user changes them.
+The root workspace `AGENTS.md` is a generated read-only aggregate. The editable instruction source is `.agents/AGENTS_FILES/<environment>/AGENTS.md`. New skills must be created at `.agents/editable-skills/<environment>/<skill-name>/SKILL.md`; `SKILL.md` makes a new skill eligible for persistence.
 
-Rook watches shared SQLite files and active project source roots. It debounces writes, serializes changed personal files as new SQLite revisions, regenerates affected aggregate instructions, and retries at the next assessment if persistence fails. Project edits remain project edits and never enter SQLite.
+The shared global watcher observes the writable environment directories. It debounces content changes, persists settled current file maps, detects missing writable instruction or skill entries as membership deletion, and updates all active session projections. Workspace rebuild and shutdown cleanup are not treated as user deletion.
 
-The server performs a final source assessment before closing a session or shutting down. Closing a session removes only its disposable links; it does not remove shared global sources needed by other sessions.
+## Project-directory authoring
 
-## Current safety boundary
+A project environment keeps ownership in the project:
 
-Canonical/external projections are read-only by filesystem policy. Same-user filesystem permissions are not a strong defense against an agent with arbitrary shell access; stronger sandboxing is future work.
+```text
+<project>/
+├── AGENTS.md
+└── .agents/skills/<skill-name>/
+```
 
-Concurrent editing remains simple shared-file/last-write-wins behavior. Publishing, sharing, conflict merging, MCP execution, and stronger isolation are deferred.
+Session links point directly to these files. Project edits remain project edits. Deleting a project file is not a personal SQLite soft delete.
+
+## Safety boundaries
+
+- [ ] Canonical and external projections remain read-only.
+- [ ] Non-writable skills must not be changed or made writable.
+- [ ] The generated aggregate must not be edited directly.
+- [ ] Deleting a writable authoring source affects only that bundle membership.
+- [ ] A deleted membership can be restored without losing its capability file map.
+
+Filesystem permissions are not a strong security boundary against an agent with arbitrary same-user shell access. Stronger OS-level isolation remains future work.

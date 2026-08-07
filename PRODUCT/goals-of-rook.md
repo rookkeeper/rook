@@ -9,11 +9,11 @@ Rook is intended to be a personal assistant that can accompany the user across d
 - **Rook goes everywhere.** Mac, iPhone, Android, and future clients share the server/session contract while supplying platform-specific environment signals.
 - **Rook understands context.** Websites, apps, directories, projects, locations, and other contexts can become explicit environments with discoverable capabilities.
 - **Rook is capable in context.** Environment bundles can provide skills, instructions, facts, references, app metadata, and eventually controlled tools.
-- **Rook is transparent and safe.** Users review external bundle content, approve exact revisions, retain writable personal content, and receive file-backed runtime projections that can be inspected.
+- **Rook is transparent and safe.** Users review external bundle content, approve exact content hashes, retain writable personal content, and receive file-backed runtime projections that can be inspected.
 
 ## Current implementation boundary
 
-The environment repository migration makes SQLite the source of truth for canonical and personal bundle content while preserving file-backed ACP runtimes. Each session gets a fresh workspace. Personal content can be edited and written back; canonical/external projections are read-only by current filesystem policy.
+The environment repository uses three-table SQLite storage for canonical and personal environments, reusable capabilities, and bundle memberships while preserving file-backed ACP runtimes. Each session gets a fresh workspace. Personal content can be edited and written back; canonical/external projections are read-only by current filesystem policy.
 
 The current system does not yet provide strong OS sandboxing, repository prompt-injection validation, signed publishers, capability-level approval, or complete MCP lifecycle management. Those are explicit future goals rather than hidden assumptions.
 

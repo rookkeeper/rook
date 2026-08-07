@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 import type { EnvironmentDecisionRepository } from "../repositories/EnvironmentDecisionRepository.js";
 import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../shared/environment.js";
 import type { EnvironmentBundle } from "../../shared/environmentRepository.js";
-import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
+import { hashEnvironmentBundle, type EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import {
   NoopEnvironmentRegistrationCaptureSink,
   type EnvironmentRegistrationCaptureSink,
@@ -110,6 +111,22 @@ function deriveEnvironmentDisplayName(environmentId: string, metadata: Record<st
 
 function isUserOwnedRepository(repository: string): boolean {
   return repository === "personal" || repository === "project-directory";
+}
+
+function ephemeralPersonalBundle(environmentId: string): EnvironmentBundle {
+  const hex = createHash("sha256").update(`rook-personal-bundle:${environmentId}`).digest("hex");
+  const bundleId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  return {
+    id: `${environmentId}#${bundleId}`,
+    bundleId,
+    environmentId,
+    repository: "personal",
+    skills: [],
+    mcpServers: [],
+    apps: [],
+    valid: true,
+    errors: [],
+  };
 }
 
 function metadataWithoutDisplayName(metadata: CandidateEnvironmentMetadata): CandidateEnvironmentMetadata {
@@ -250,14 +267,12 @@ export class EnvironmentManager {
   private async rememberAvailableEnvironment(
     env: EnvironmentRecord,
     info: EnvironmentOfferInfo,
-    options: { ensurePersonalBundle?: boolean } = {},
   ): Promise<void> {
     const now = this.now();
     const nowIso = new Date(now).toISOString();
     const existing = this.remembered.get(env.id);
     const registeredAt = existing?.status === "active" ? (existing.registeredAt ?? nowIso) : nowIso;
     const activeUntil = new Date(now + this.activeEnvironmentWindowMs).toISOString();
-    if (options.ensurePersonalBundle) await this.repositoryService.ensurePersonalBundle(env.id);
     const resolvedBundles = await this.repositoryService.getResolvedBundles(env.id);
     const bundles = resolvedBundles.map(({ bundle, bundleHash }) => ({
       repository: bundle.repository,
@@ -389,17 +404,28 @@ export class EnvironmentManager {
       const entry = this.remembered.get(environmentId);
       if (!entry || entry.status !== "active") continue;
       const resolved = await this.repositoryService.getResolvedBundles(environmentId);
-      for (const { bundle, bundleHash } of resolved) {
+      const runtimeResolved = [...resolved];
+      if (!resolved.some(({ bundle }) => bundle.repository === "personal") && !environmentId.startsWith("dir:")) {
+        const bundle = ephemeralPersonalBundle(environmentId);
+        runtimeResolved.push({ bundle, bundleHash: hashEnvironmentBundle(bundle) });
+      }
+      for (const { bundle, bundleHash } of runtimeResolved) {
         const decision = this.sessionDecisions.effective(bundleHash, sessionId);
         if (!isUserOwnedRepository(bundle.repository) && decision !== "accept" && decision !== "approve") continue;
         result.push({
           environmentName: deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info),
           bundleName: bundle.repository === "personal" || bundle.repository === "project-directory" ? "Personal capabilities" : "Environment capabilities",
           editable: bundle.repository === "personal" || bundle.repository === "project-directory",
-          writeBackSkill: (skillId, files) => this.repositoryService.replaceArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files, bundle.repository),
-          ...(bundle.repository === "personal" || bundle.repository === "project-directory" ? { writeBackNewSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.createArtifactFiles(environmentId, bundle.bundleId, "skills", skillId, files, bundle.repository) } : {}),
+          ...(bundle.repository === "personal" ? {
+            writeBackSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.replaceCapabilityFiles(environmentId, bundle.bundleId, "skill", skillId, files, bundle.repository),
+            writeBackDeleteSkill: (skillId: string) => this.repositoryService.deleteCapability(environmentId, bundle.bundleId, "skill", skillId, bundle.repository),
+          } : {}),
+          ...(bundle.repository === "personal" || bundle.repository === "project-directory" ? { writeBackNewSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.createCapabilityFiles(environmentId, bundle.bundleId, "skill", skillId, files, bundle.repository) } : {}),
           writeBackInstructions: bundle.repository === "personal" || bundle.repository === "project-directory"
-            ? (content) => this.repositoryService.replaceBundleInstructions(environmentId, bundle.bundleId, content, bundle.repository)
+            ? (content) => this.repositoryService.replaceCapabilityFiles(environmentId, bundle.bundleId, "instructions", "AGENTS.md", { "AGENTS.md": content }, bundle.repository)
+            : undefined,
+          writeBackDeleteInstructions: bundle.repository === "personal"
+            ? () => this.repositoryService.deleteCapability(environmentId, bundle.bundleId, "instructions", "AGENTS.md", bundle.repository)
             : undefined,
           bundle,
         });
@@ -429,10 +455,7 @@ export class EnvironmentManager {
     const entry = this.remembered.get(environmentId);
     if (!entry) return [];
 
-    // Passive registration must not create an empty personal bundle for every
-    // observed environment. Entering is the explicit point at which the user
-    // opts into a writable personal authoring bundle.
-    await this.rememberAvailableEnvironment(entry.record, entry.info, { ensurePersonalBundle: true });
+    await this.rememberAvailableEnvironment(entry.record, entry.info);
 
     if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
     this.explicitlyEntered.get(sessionId)!.add(environmentId);

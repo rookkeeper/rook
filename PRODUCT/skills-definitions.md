@@ -4,7 +4,7 @@ Rook uses [Agent Skills](https://agentskills.io/home) for skill-shaped capabilit
 
 ## Repository representation
 
-In SQLite, a skill revision retains the complete nested file map. The content hash includes the agent-visible files and paths, not the storage location. Directory import preserves source paths for migration, but runtime loading uses the per-session agent workspace and direct project links.
+In SQLite, a skill capability retains the complete nested file map. The content hash includes the agent-visible files and paths, not the storage location. Skills use the same capability file-map representation as instructions, facts, `llms.txt`, MCP, and app content.
 
 ## Runtime representation
 

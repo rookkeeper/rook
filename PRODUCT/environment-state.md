@@ -17,7 +17,7 @@ Durable state lives elsewhere:
 
 - session membership is stored with the session
 - durable `approve`/`reject` decisions are keyed by bundle content hash
-- repository content and revisions live in canonical/personal SQLite databases
+- environment, capability, and bundle-membership content lives in canonical/personal SQLite databases; membership deletion uses nullable timestamps
 
 ## Current runtime behavior
 

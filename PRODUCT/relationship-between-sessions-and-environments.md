@@ -8,12 +8,12 @@ The user decides on bundles, not individual capabilities. Decisions are keyed by
 
 - **Accept** — allow this bundle for the current session/visit.
 - **Ignore** — skip it for the current session/visit.
-- **Approve** — persist approval for this exact revision across future sessions.
-- **Reject** — persist rejection for this exact revision across future sessions.
+- **Approve** — persist approval for this exact bundle content hash across future sessions.
+- **Reject** — persist rejection for this exact bundle content hash across future sessions.
 
 Only `approve` and `reject` are stored durably in the application database. `accept` and `ignore` are session-scoped in memory. Personal bundles are trusted user content and bypass the offer flow.
 
-A changed agent-visible bundle content hash is a new reviewable revision, even if its publisher version or bundle name is unchanged.
+A changed agent-visible bundle content hash is a new reviewable bundle, even if its publisher or bundle id is unchanged.
 
 ## How a session consumes environments
 

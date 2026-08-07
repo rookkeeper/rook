@@ -12,7 +12,6 @@ import type { EnvironmentEventListener } from "../support/types.js";
 function mockRepositoryService(): EnvironmentRepositoryService {
   return {
     getResolvedBundles: vi.fn(async () => []),
-    ensurePersonalBundle: vi.fn(async () => true),
     getValidBundles: vi.fn(async () => []),
     hasKnownEnvironment: vi.fn(async () => false),
     getEnvironmentPreview: vi.fn().mockResolvedValue({ environmentId: "web:example.com", bundles: [] }),
@@ -94,7 +93,6 @@ describe("EnvironmentManager", () => {
     expect(manager.isAvailable("web:example.com")).toBe(true);
     expect(manager.environmentList("s1")[0]?.bundleCount).toBe(0);
     expect(manager.environmentList("s1")[0]?.approvedBundleCount).toBe(0);
-    expect(repositoryService.ensurePersonalBundle).not.toHaveBeenCalled();
   });
 
   it("captures registration metadata as jsonl", async () => {
@@ -270,12 +268,20 @@ describe("EnvironmentManager", () => {
     await manager.enterEnvironment("s1", "web:example.com");
     manager.decideEnvironment("web:example.com", "approve", "hash-mail", "s1");
 
-    await expect(manager.runtimeBundlesForSession("s1")).resolves.toMatchObject([{
-      environmentName: "Gmail",
-      bundleName: "Environment capabilities",
-      editable: false,
-      bundle: { bundleId: "mail", agentsMd: "Confirm before sending." },
-    }]);
+    await expect(manager.runtimeBundlesForSession("s1")).resolves.toMatchObject([
+      {
+        environmentName: "Gmail",
+        bundleName: "Environment capabilities",
+        editable: false,
+        bundle: { bundleId: "mail", agentsMd: "Confirm before sending." },
+      },
+      {
+        environmentName: "Gmail",
+        bundleName: "Personal capabilities",
+        editable: true,
+        bundle: { repository: "personal", skills: [] },
+      },
+    ]);
 
   });
 

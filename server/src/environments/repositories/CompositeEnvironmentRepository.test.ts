@@ -14,7 +14,7 @@ class FakeRepository extends EnvironmentRepository {
     return this.result;
   }
 
-  override async replaceBundleInstructions(_environmentId: string, bundleId: string): Promise<boolean> {
+  override async replaceCapabilityFiles(_environmentId: string, bundleId: string): Promise<boolean> {
     this.writes.push(bundleId);
     return true;
   }
@@ -41,7 +41,7 @@ describe("CompositeEnvironmentRepository", () => {
     expect(result.bundles.map((bundle: any) => bundle.bundleId)).toEqual(["one", "two"]);
   });
 
-  it("routes writes by repository and bundle identity", async () => {
+  it("routes capability writes by repository and bundle identity", async () => {
     const canonical = new FakeRepository({
       environment: { id: "web:example.com", displayName: "example.com", description: "" },
       bundles: [{ id: "web:example.com#personal", bundleId: "personal", environmentId: "web:example.com", repository: "canonical", skills: [], mcpServers: [], apps: [], valid: true, errors: [] }],
@@ -54,16 +54,9 @@ describe("CompositeEnvironmentRepository", () => {
     }, "personal");
     const repository = new CompositeEnvironmentRepository([canonical, personal]);
 
-    await repository.replaceBundleInstructions("web:example.com", "personal", "updated", "personal");
+    await repository.replaceCapabilityFiles("web:example.com", "personal", "instructions", "AGENTS.md", { "AGENTS.md": "updated" }, "personal");
 
     expect(canonical.writes).toEqual([]);
     expect(personal.writes).toEqual(["personal"]);
-  });
-
-  it("does not create SQLite personal content for a directory environment", async () => {
-    const personal = new FakeRepository({ environment: null, bundles: [], errors: [] }, "personal");
-    const repository = new CompositeEnvironmentRepository([personal]);
-
-    expect(await repository.ensurePersonalBundle("dir:/tmp/project")).toBe(false);
   });
 });

@@ -15,7 +15,7 @@ An environment has metadata and can have one or more capability bundles. Registr
 
 ## Environment repositories
 
-An environment repository is a searchable catalog of environment metadata and bundle revisions. The live logical view combines canonical SQLite content, personal SQLite content, direct project-directory content, and synthetic sources such as location context.
+An environment repository is a searchable catalog of environment metadata, reusable capabilities, and atomic bundle memberships. The live logical view combines canonical SQLite content, personal SQLite content, direct project-directory content, and synthetic sources such as location context.
 
 A bundle remains the unit of publication, review, approval, and runtime loading. It may contain skills, nested skill files, instructions, facts, `llms.txt`, app metadata, and MCP configuration/content.
 

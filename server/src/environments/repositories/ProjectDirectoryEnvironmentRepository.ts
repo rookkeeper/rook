@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import type { BundleArtifact, EnvironmentBundleResult, EnvironmentRecord, RepositoryReadError } from "../../shared/environmentRepository.js";
+import type { BundleArtifact, CapabilityType, EnvironmentBundleResult, EnvironmentRecord, RepositoryReadError } from "../../shared/environmentRepository.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
 /** Reads capabilities already owned by a coding project, without copying ownership into Rook. */
@@ -10,20 +10,30 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
     super();
   }
 
-  async replaceBundleInstructions(environmentId: string, _bundleId: string, content: string): Promise<boolean> {
+  async replaceCapabilityFiles(environmentId: string, _bundleId: string, type: CapabilityType, _capabilityName: string, files: Record<string, string>): Promise<boolean> {
     const directory = projectPath(environmentId);
     if (!directory) return false;
-    await writeFile(path.join(directory, "AGENTS.md"), content, "utf8");
-    return true;
+    if (type === "instructions") {
+      await writeFile(path.join(directory, "AGENTS.md"), files["AGENTS.md"] ?? Object.values(files)[0] ?? "", "utf8");
+      return true;
+    }
+    // Existing project skills are already direct links to project files. The
+    // workspace watcher observes those edits; no repository write-back is needed.
+    return false;
   }
 
-  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
+  async createCapabilityFiles(environmentId: string, bundleId: string, type: CapabilityType, capabilityName: string, files: Record<string, string>): Promise<boolean> {
     const directory = projectPath(environmentId);
-    if (!directory || bundleId !== "directory" || kind !== "skills" || !(`${artifactId}/SKILL.md` in files)) return false;
-    const targetRoot = path.join(directory, ".agents", "skills", artifactId);
+    if (!directory || bundleId !== "directory") return false;
+    if (type === "instructions") {
+      await writeFile(path.join(directory, "AGENTS.md"), files["AGENTS.md"] ?? Object.values(files)[0] ?? "", "utf8");
+      return true;
+    }
+    if (type !== "skill" || !( `${capabilityName}/SKILL.md` in files)) return false;
+    const targetRoot = path.join(directory, ".agents", "skills", capabilityName);
     if (existsSync(targetRoot)) return false;
     for (const [rawPath, content] of Object.entries(files)) {
-      const relative = projectArtifactPath(rawPath, artifactId);
+      const relative = projectArtifactPath(rawPath, capabilityName);
       if (!relative) return false;
       const target = path.join(targetRoot, ...relative.split("/"));
       await mkdir(path.dirname(target), { recursive: true });

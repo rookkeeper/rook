@@ -1,21 +1,17 @@
+import { createHash, randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type {
   BundleArtifact,
+  CapabilityType,
   EnvironmentBundle,
   EnvironmentBundleResult,
   EnvironmentRecord,
   RepositoryReadError,
 } from "../../shared/environmentRepository.js";
 import { EnvironmentRepositoryDatastore } from "../datastores/EnvironmentRepositoryDatastore.js";
-import { hashEnvironmentBundle } from "../../shared/environmentBundleHash.js";
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
-/**
- * SQLite-backed environment repository.
- *
- * SQLite stores the complete agent-visible content. Runtime workspaces are
- * materialized by CapabilityWorkspaceManager, never by this repository.
- */
+/** SQLite-backed repository using current capability content and bundle memberships. */
 export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   private readonly db: DatabaseSync;
   private readonly ownedDatastore: EnvironmentRepositoryDatastore | null;
@@ -32,7 +28,6 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
       this.ownedDatastore = null;
       this.db = datastore.db;
     }
-    if (this.repositoryId === "personal") this.pruneEmptyPersonalBundles();
   }
 
   async getBundles(environmentId: string): Promise<EnvironmentBundleResult> {
@@ -51,103 +46,91 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
 
     const environmentRow = this.db.prepare(`
       SELECT environment_id, display_name, description, metadata_json
-      FROM environment_repository_environments WHERE environment_id = ?
+      FROM environments WHERE environment_id = ?
     `).get(environmentId);
     const environment = environmentRow ? environmentFromRow(environmentRow) : defaultEnvironmentRecord(environmentId);
-    const bundleRows = this.db.prepare(`
-      SELECT b.bundle_key, b.bundle_id, b.environment_id, b.repository_id, b.valid, b.agents_md, b.errors_json,
-             b.current_revision_key, r.content_hash, r.publisher_version, r.fetched_at, r.source_locator, r.provenance_json
-      FROM environment_repository_bundles b
-      LEFT JOIN environment_repository_bundle_revisions r ON r.revision_key = b.current_revision_key
-      WHERE b.repository_id = ? AND b.environment_id = ?
-      ORDER BY bundle_id
-    `).all(this.repositoryId, environmentId);
+    const rows = this.db.prepare(`
+      SELECT b.bundle_id, b.environment_id, b.publisher,
+             c.capability_id, c.type, c.name, c.files_json, c.content_hash
+      FROM bundles b
+      JOIN capabilities c ON c.capability_id = b.capability_id
+      WHERE b.environment_id = ? AND b.deleted_at IS NULL
+      ORDER BY b.bundle_id, c.type, c.name
+    `).all(environmentId) as Array<Record<string, unknown>>;
 
-    const bundles: EnvironmentBundle[] = [];
-    const errors: RepositoryReadError[] = [];
-    for (const row of bundleRows) {
-      const value = row as Record<string, unknown>;
-      const bundleKey = String(value.bundle_key);
-      const revisionKey = typeof value.current_revision_key === "string" ? value.current_revision_key : undefined;
-      const artifacts = revisionKey ? this.db.prepare(`
-        SELECT artifact_kind, artifact_id, files_json
-        FROM environment_repository_revision_artifacts WHERE revision_key = ?
-        ORDER BY artifact_kind, artifact_id
-      `).all(revisionKey) : [];
-      const grouped = groupArtifacts(artifacts);
-      const bundleErrors = parseJson<RepositoryReadError[]>(value.errors_json, []);
-      const bundle: EnvironmentBundle = {
-        id: `${environmentId}#${String(value.bundle_id)}`,
-        bundleId: String(value.bundle_id),
-        environmentId,
-        repository: String(value.repository_id),
-        ...(typeof value.content_hash === "string" ? {
-          revision: {
-            contentHash: value.content_hash,
-            ...(typeof value.publisher_version === "string" ? { publisherVersion: value.publisher_version } : {}),
-            ...(typeof value.fetched_at === "string" ? { fetchedAt: value.fetched_at } : {}),
-            ...(typeof value.source_locator === "string" ? { sourceLocator: value.source_locator } : {}),
-            provenance: parseJson<Record<string, unknown>>(value.provenance_json, {}),
-          },
-        } : {}),
-        skills: grouped.skills,
-        mcpServers: grouped["mcp-servers"],
-        apps: grouped.apps,
-        ...(grouped.facts.length > 0 ? { facts: grouped.facts } : {}),
-        ...(grouped["llms-txt"][0] ? { llmsTxt: firstArtifactText(grouped["llms-txt"][0]) } : {}),
-        ...(typeof value.agents_md === "string" ? { agentsMd: value.agents_md } : {}),
-        valid: Number(value.valid) === 1,
-        errors: bundleErrors,
-      };
-      bundles.push(bundle);
-      errors.push(...bundleErrors);
+    const byBundle = new Map<string, EnvironmentBundle>();
+    for (const row of rows) {
+      const bundleId = String(row.bundle_id);
+      let bundle = byBundle.get(bundleId);
+      if (!bundle) {
+        bundle = {
+          id: `${environmentId}#${bundleId}`,
+          bundleId,
+          environmentId,
+          repository: this.repositoryId,
+          skills: [],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        };
+        byBundle.set(bundleId, bundle);
+      }
+      const type = String(row.type) as CapabilityType;
+      const name = String(row.name);
+      const files = parseFiles(row.files_json);
+      if (type === "instructions") bundle.agentsMd = files["AGENTS.md"] ?? firstFile(files);
+      else if (type === "llms-txt") bundle.llmsTxt = files["llms.txt"] ?? firstFile(files);
+      else if (type === "facts") bundle.facts = [...(bundle.facts ?? []), { id: name, files }];
+      else if (type === "skill") bundle.skills.push({ id: name, files });
+      else if (type === "mcp") bundle.mcpServers.push({ id: name, files });
+      else if (type === "app") bundle.apps.push({ id: name, files });
     }
 
-    return { environment, bundles, errors };
+    return { environment, bundles: [...byBundle.values()], errors: [] };
   }
 
   async listEnvironments(): Promise<EnvironmentRecord[]> {
     return this.db.prepare(`
       SELECT environment_id, display_name, description, metadata_json
-      FROM environment_repository_environments ORDER BY environment_id
+      FROM environments ORDER BY environment_id
     `).all().map(environmentFromRow);
   }
 
   async searchBundles(query: string, repositoryId?: string): Promise<EnvironmentBundle[]> {
     if (repositoryId && repositoryId !== this.repositoryId) return [];
-    const term = `%${query.trim().toLowerCase()}%`;
-    const rows = this.db.prepare(`
-      SELECT DISTINCT b.environment_id
-      FROM environment_repository_bundles b
-      LEFT JOIN environment_repository_bundle_revisions r ON r.revision_key = b.current_revision_key
-      LEFT JOIN environment_repository_revision_artifacts a ON a.revision_key = r.revision_key
-      WHERE b.repository_id = ?
-        AND (lower(b.bundle_id) LIKE ? OR lower(coalesce(b.agents_md, '')) LIKE ? OR lower(a.artifact_id) LIKE ?)
-      ORDER BY b.environment_id
-    `).all(this.repositoryId, term, term, term);
-    const bundles: EnvironmentBundle[] = [];
-    for (const row of rows) {
-      const result = await this.getBundles(String((row as Record<string, unknown>).environment_id));
-      bundles.push(...result.bundles.filter((bundle) => bundle.bundleId.toLowerCase().includes(query.toLowerCase()) || bundle.skills.some((skill) => skill.id.toLowerCase().includes(query.toLowerCase())) || bundle.mcpServers.some((server) => server.id.toLowerCase().includes(query.toLowerCase())) || bundle.apps.some((app) => app.id.toLowerCase().includes(query.toLowerCase())) || bundle.facts?.some((fact) => fact.id.toLowerCase().includes(query.toLowerCase())) || bundle.llmsTxt?.toLowerCase().includes(query.toLowerCase()) || bundle.agentsMd?.toLowerCase().includes(query.toLowerCase())));
+    const normalized = query.trim().toLowerCase();
+    const results: EnvironmentBundle[] = [];
+    for (const environment of await this.listEnvironments()) {
+      const bundles = (await this.getBundles(environment.id)).bundles;
+      for (const bundle of bundles) {
+        const searchable = [
+          bundle.bundleId,
+          bundle.agentsMd ?? "",
+          bundle.llmsTxt ?? "",
+          ...bundle.skills.flatMap((artifact) => [artifact.id, ...Object.values(artifact.files)]),
+          ...bundle.mcpServers.flatMap((artifact) => [artifact.id, ...Object.values(artifact.files)]),
+          ...bundle.apps.flatMap((artifact) => [artifact.id, ...Object.values(artifact.files)]),
+          ...(bundle.facts ?? []).flatMap((artifact) => [artifact.id, ...Object.values(artifact.files)]),
+        ];
+        if (!normalized || searchable.some((value) => value.toLowerCase().includes(normalized))) results.push(bundle);
+      }
     }
-    return bundles;
+    return results;
   }
 
-  /** Replaces all stored content for one environment from a parsed repository result. */
+  /** Replaces the current repository content for one environment. */
   saveResult(result: EnvironmentBundleResult): void {
     if (!result.environment) return;
     const environment = result.environment;
-    this.db.prepare(`
-      INSERT INTO environment_repository_environments (environment_id, display_name, description, metadata_json)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(environment_id) DO UPDATE SET display_name = excluded.display_name, description = excluded.description, metadata_json = excluded.metadata_json
-    `).run(environment.id, environment.displayName, environment.description, JSON.stringify({}));
-
     this.db.exec("BEGIN");
     try {
-      const oldBundles = this.db.prepare(`SELECT bundle_key FROM environment_repository_bundles WHERE repository_id = ? AND environment_id = ?`).all(this.repositoryId, environment.id);
-      for (const row of oldBundles) this.db.prepare("DELETE FROM environment_repository_bundles WHERE bundle_key = ?").run(String((row as Record<string, unknown>).bundle_key));
-      for (const bundle of result.bundles) this.saveBundle(bundle);
+      this.upsertEnvironment(environment);
+      this.db.prepare("DELETE FROM bundles WHERE environment_id = ?").run(environment.id);
+      for (const bundle of result.bundles.filter((candidate) => candidate.valid)) {
+        this.writeBundle(bundle, normalizedBundleId(bundle.bundleId));
+      }
+      this.deleteOrphanedCapabilities();
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.exec("ROLLBACK");
@@ -156,95 +139,58 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   }
 
   saveBundle(bundle: EnvironmentBundle): void {
-    const bundleKey = this.bundleKey(bundle.environmentId, bundle.bundleId);
-    const contentHash = hashEnvironmentBundle(bundle);
-    const revisionKey = `${bundleKey}\n${contentHash}`;
-    this.db.prepare(`
-      INSERT INTO environment_repository_bundles (bundle_key, repository_id, environment_id, bundle_id, valid, agents_md, errors_json, current_revision_key)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(bundle_key) DO UPDATE SET valid = excluded.valid, agents_md = excluded.agents_md, errors_json = excluded.errors_json, current_revision_key = excluded.current_revision_key
-    `).run(bundleKey, this.repositoryId, bundle.environmentId, bundle.bundleId, bundle.valid ? 1 : 0, bundle.agentsMd ?? null, JSON.stringify(bundle.errors), revisionKey);
-    this.db.prepare(`
-      INSERT INTO environment_repository_bundle_revisions (revision_key, bundle_key, content_hash, publisher_version, fetched_at, source_locator, provenance_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(revision_key) DO UPDATE SET fetched_at = excluded.fetched_at, source_locator = excluded.source_locator, provenance_json = excluded.provenance_json
-    `).run(revisionKey, bundleKey, contentHash, bundle.revision?.publisherVersion ?? null, bundle.revision?.fetchedAt ?? new Date().toISOString(), bundle.revision?.sourceLocator ?? null, JSON.stringify(bundle.revision?.provenance ?? {}));
-    this.db.prepare("DELETE FROM environment_repository_revision_artifacts WHERE revision_key = ?").run(revisionKey);
-    const insert = this.db.prepare(`
-      INSERT INTO environment_repository_revision_artifacts (revision_key, artifact_kind, artifact_id, files_json)
-      VALUES (?, ?, ?, ?)
-    `);
-    for (const [kind, artifacts] of [["skills", bundle.skills], ["mcp-servers", bundle.mcpServers], ["apps", bundle.apps], ["facts", bundle.facts ?? []]] as const) {
-      for (const artifact of artifacts) insert.run(revisionKey, kind, artifact.id, JSON.stringify(artifact.files));
-    }
-    if (bundle.llmsTxt !== undefined) {
-      insert.run(revisionKey, "llms-txt", "llms.txt", JSON.stringify({ "llms.txt": bundle.llmsTxt }), null);
+    this.db.exec("BEGIN");
+    try {
+      this.upsertEnvironment({ id: bundle.environmentId, displayName: bundle.environmentId, description: `Environment ${bundle.environmentId}` });
+      this.writeBundle(bundle, normalizedBundleId(bundle.bundleId));
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
     }
   }
 
-  async replaceBundleInstructions(environmentId: string, bundleId: string, content: string): Promise<boolean> {
-    const result = await this.getBundles(environmentId);
-    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
-    if (!bundle) throw new Error(`Unknown bundle ${environmentId}#${bundleId}`);
-    bundle.agentsMd = content;
-    this.saveBundle(bundle);
-    return true;
-  }
-
-  async replaceArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
-    const result = await this.getBundles(environmentId);
-    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
-    if (!bundle) throw new Error(`Unknown ${kind} artifact ${environmentId}#${bundleId}/${artifactId}`);
-    const artifacts = kind === "skills" ? bundle.skills : kind === "mcp-servers" ? bundle.mcpServers : bundle.apps;
-    const artifact = artifacts.find((candidate) => candidate.id === artifactId);
-    if (!artifact) throw new Error(`Unknown ${kind} artifact ${environmentId}#${bundleId}/${artifactId}`);
-    artifact.files = files;
-    this.saveBundle(bundle);
-    return true;
-  }
-
-  async createArtifactFiles(environmentId: string, bundleId: string, kind: "skills" | "mcp-servers" | "apps", artifactId: string, files: Record<string, string>): Promise<boolean> {
-    if (this.repositoryId !== "personal" || kind !== "skills") return false;
-    const result = await this.getBundles(environmentId);
-    const bundle = result.bundles.find((candidate) => candidate.bundleId === bundleId);
-    if (!bundle) throw new Error(`Unknown bundle ${environmentId}#${bundleId}`);
-    const artifacts = kind === "skills" ? bundle.skills : kind === "mcp-servers" ? bundle.mcpServers : bundle.apps;
-    if (artifacts.some((artifact) => artifact.id === artifactId)) return false;
-    artifacts.push({ id: artifactId, files });
-    bundle.valid = true;
-    bundle.errors = [];
-    this.saveBundle(bundle);
-    return true;
-  }
-
-  async ensurePersonalBundle(environmentId: string): Promise<boolean> {
+  async replaceCapabilityFiles(environmentId: string, bundleId: string, type: CapabilityType, capabilityName: string, files: Record<string, string>): Promise<boolean> {
     if (this.repositoryId !== "personal") return false;
-    const result = await this.getBundles(environmentId);
-    const existing = result.bundles.find((bundle) => bundle.bundleId === "personal");
-    if (existing) {
-      if (!existing.valid) {
-        existing.valid = true;
-        existing.errors = [];
-        this.saveBundle(existing);
-      }
-      return true;
-    }
-    if (!result.environment) return false;
-    this.saveResult({
-      environment: result.environment,
-      bundles: [{
-        id: `${environmentId}#personal`,
-        bundleId: "personal",
-        environmentId,
-        repository: "personal",
-        skills: [],
-        mcpServers: [],
-        apps: [],
-        valid: true,
-        errors: [],
-      }],
-      errors: [],
-    });
+    this.ensureEnvironment(environmentId);
+    const membership = this.findMembership(environmentId, bundleId, type, capabilityName);
+    const capabilityId = membership?.capabilityId ?? randomUUID();
+    const filesJson = JSON.stringify(files);
+    this.db.prepare(`
+      INSERT INTO capabilities (capability_id, type, name, files_json, content_hash)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(capability_id) DO UPDATE SET type = excluded.type, name = excluded.name, files_json = excluded.files_json, content_hash = excluded.content_hash
+    `).run(capabilityId, type, capabilityName, filesJson, hashFiles(files));
+    this.db.prepare(`
+      INSERT INTO bundles (bundle_id, environment_id, capability_id, publisher, deleted_at)
+      VALUES (?, ?, ?, 'default', NULL)
+      ON CONFLICT(bundle_id, capability_id) DO UPDATE SET environment_id = excluded.environment_id, deleted_at = NULL
+    `).run(bundleId, environmentId, capabilityId);
+    return true;
+  }
+
+  async createCapabilityFiles(environmentId: string, bundleId: string, type: CapabilityType, capabilityName: string, files: Record<string, string>): Promise<boolean> {
+    if (this.repositoryId !== "personal") return false;
+    const existing = this.findMembership(environmentId, bundleId, type, capabilityName);
+    if (existing && !existing.deletedAt) return false;
+    return this.replaceCapabilityFiles(environmentId, bundleId, type, capabilityName, files);
+  }
+
+  async deleteCapability(environmentId: string, bundleId: string, type: CapabilityType, capabilityName: string): Promise<boolean> {
+    if (this.repositoryId !== "personal") return false;
+    const membership = this.findMembership(environmentId, bundleId, type, capabilityName);
+    if (!membership) return false;
+    this.db.prepare("UPDATE bundles SET deleted_at = ? WHERE bundle_id = ? AND environment_id = ? AND capability_id = ?")
+      .run(new Date().toISOString(), bundleId, environmentId, membership.capabilityId);
+    return true;
+  }
+
+  async restoreCapability(environmentId: string, bundleId: string, type: CapabilityType, capabilityName: string): Promise<boolean> {
+    if (this.repositoryId !== "personal") return false;
+    const membership = this.findMembership(environmentId, bundleId, type, capabilityName);
+    if (!membership) return false;
+    this.db.prepare("UPDATE bundles SET deleted_at = NULL WHERE bundle_id = ? AND environment_id = ? AND capability_id = ?")
+      .run(bundleId, environmentId, membership.capabilityId);
     return true;
   }
 
@@ -252,24 +198,54 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     this.ownedDatastore?.close();
   }
 
-  private pruneEmptyPersonalBundles(): void {
+  private writeBundle(bundle: EnvironmentBundle, bundleId: string): void {
+    this.db.prepare("DELETE FROM bundles WHERE bundle_id = ? AND environment_id = ?").run(bundleId, bundle.environmentId);
+    const capabilities: Array<{ type: CapabilityType; name: string; files: Record<string, string> }> = [];
+    if (bundle.agentsMd?.trim()) capabilities.push({ type: "instructions", name: "AGENTS.md", files: { "AGENTS.md": bundle.agentsMd } });
+    if (bundle.llmsTxt !== undefined) capabilities.push({ type: "llms-txt", name: "llms.txt", files: { "llms.txt": bundle.llmsTxt } });
+    capabilities.push(...bundle.skills.map((artifact) => ({ type: "skill" as const, name: artifact.id, files: artifact.files })));
+    capabilities.push(...bundle.mcpServers.map((artifact) => ({ type: "mcp" as const, name: artifact.id, files: artifact.files })));
+    capabilities.push(...bundle.apps.map((artifact) => ({ type: "app" as const, name: artifact.id, files: artifact.files })));
+    capabilities.push(...(bundle.facts ?? []).map((artifact) => ({ type: "facts" as const, name: artifact.id, files: artifact.files })));
+    for (const capability of capabilities) {
+      const capabilityId = randomUUID();
+      const filesJson = JSON.stringify(capability.files);
+      this.db.prepare(`
+        INSERT INTO capabilities (capability_id, type, name, files_json, content_hash)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(capabilityId, capability.type, capability.name, filesJson, hashFiles(capability.files));
+      this.db.prepare(`
+        INSERT INTO bundles (bundle_id, environment_id, capability_id, publisher)
+        VALUES (?, ?, ?, 'default')
+      `).run(bundleId, bundle.environmentId, capabilityId);
+    }
+  }
+
+  private upsertEnvironment(environment: EnvironmentRecord): void {
     this.db.prepare(`
-      DELETE FROM environment_repository_bundles
-      WHERE repository_id = 'personal'
-        AND coalesce(agents_md, '') = ''
-        AND NOT EXISTS (
-          SELECT 1
-          FROM environment_repository_bundle_revisions r
-          JOIN environment_repository_revision_artifacts a ON a.revision_key = r.revision_key
-          WHERE r.bundle_key = environment_repository_bundles.bundle_key
-        )
-    `).run();
+      INSERT INTO environments (environment_id, display_name, description)
+      VALUES (?, ?, ?)
+      ON CONFLICT(environment_id) DO UPDATE SET display_name = excluded.display_name, description = excluded.description
+    `).run(environment.id, environment.displayName, environment.description);
   }
 
-  private bundleKey(environmentId: string, bundleId: string): string {
-    return `${this.repositoryId}\n${environmentId}\n${bundleId}`;
+  private ensureEnvironment(environmentId: string): void {
+    this.upsertEnvironment(defaultEnvironmentRecord(environmentId));
   }
 
+  private findMembership(environmentId: string, bundleId: string, type: CapabilityType, name: string): { capabilityId: string; deletedAt: string | null } | undefined {
+    const row = this.db.prepare(`
+      SELECT c.capability_id, b.deleted_at
+      FROM bundles b JOIN capabilities c ON c.capability_id = b.capability_id
+      WHERE b.environment_id = ? AND b.bundle_id = ? AND c.type = ? AND c.name = ?
+      LIMIT 1
+    `).get(environmentId, bundleId, type, name) as { capability_id?: string; deleted_at?: string | null } | undefined;
+    return row?.capability_id ? { capabilityId: row.capability_id, deletedAt: row.deleted_at ?? null } : undefined;
+  }
+
+  private deleteOrphanedCapabilities(): void {
+    this.db.exec("DELETE FROM capabilities WHERE capability_id NOT IN (SELECT capability_id FROM bundles)");
+  }
 }
 
 function validEnvironmentId(environmentId: string): boolean {
@@ -292,29 +268,34 @@ function environmentFromRow(row: unknown): EnvironmentRecord {
   };
 }
 
-function groupArtifacts(rows: unknown[]): Record<"skills" | "mcp-servers" | "apps" | "facts" | "llms-txt", BundleArtifact[]> {
-  const grouped: Record<"skills" | "mcp-servers" | "apps" | "facts" | "llms-txt", BundleArtifact[]> = { skills: [], "mcp-servers": [], apps: [], facts: [], "llms-txt": [] };
-  for (const row of rows) {
-    const value = row as Record<string, unknown>;
-    const kind = String(value.artifact_kind) as keyof typeof grouped;
-    if (!(kind in grouped)) continue;
-    grouped[kind].push({
-      id: String(value.artifact_id),
-      files: parseJson<Record<string, string>>(value.files_json, {}),
-    });
-  }
-  return grouped;
-}
-
-function firstArtifactText(artifact: BundleArtifact): string {
-  return Object.values(artifact.files)[0] ?? "";
-}
-
-function parseJson<T>(value: unknown, fallback: T): T {
-  if (typeof value !== "string") return fallback;
+function parseFiles(value: unknown): Record<string, string> {
+  if (typeof value !== "string") return {};
   try {
-    return JSON.parse(value) as T;
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? Object.fromEntries(Object.entries(parsed).filter(([, content]) => typeof content === "string"))
+      : {};
   } catch {
-    return fallback;
+    return {};
   }
+}
+
+function firstFile(files: Record<string, string>): string | undefined {
+  return Object.values(files)[0];
+}
+
+function hashFiles(files: Record<string, string>): string {
+  const hash = createHash("sha256");
+  for (const filePath of Object.keys(files).sort()) hash.update(`${filePath}\u0000${files[filePath]}\u0000`);
+  return hash.digest("hex");
+}
+
+function normalizedBundleId(value: string): string {
+  if (isUuid(value)) return value;
+  const hex = createHash("sha256").update(`rook-bundle:${value}`).digest("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

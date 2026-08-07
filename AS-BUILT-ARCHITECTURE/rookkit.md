@@ -54,7 +54,7 @@
 - `sessionTranscript(sessionId:)` — normalized transcript hydration for second viewers / running sessions
 - `environmentPreview(environmentId:)`
 - `registerEnvironment(candidate)`
-- bundle/environment preview payloads preserve repository identity and revision metadata for review and revalidation UI
+- bundle/environment preview payloads preserve repository identity and derived bundle hashes for review and revalidation UI
 - `identifyEnvironments(_:)`
 - `registerLocation(_:)`
 - `decideEnvironment(...)`
@@ -72,8 +72,7 @@
 
 ### Environment/location models
 - `EnvironmentArtifactPreview`
-- `EnvironmentRevisionPreview` — content hash plus optional publisher/fetch/source/provenance metadata
-- `EnvironmentBundlePreview` — skills, MCP/apps, facts, `llms.txt`, instructions, errors, and revision metadata
+- `EnvironmentBundlePreview` — skills, MCP/apps, facts, `llms.txt`, instructions, errors, and derived bundle hash
 - `EnvironmentPreview`
 - `EnvironmentOffer`
 - `EnvironmentListItem`

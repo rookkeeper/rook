@@ -22,7 +22,7 @@ The server is a Fastify service on `127.0.0.1:7665` with an optional second remo
 - `environments/services/EnvironmentRepositoryService`
   - resolves environment bundles from repo-backed repositories and canonical content hashes
 - `environments/repositories/SQLiteEnvironmentRepository`
-  - stores canonical and personal bundle content/revisions in separate SQLite repositories
+  - stores canonical and personal capability content and bundle memberships in separate SQLite repositories
 - `environments/repositories/ProjectDirectoryEnvironmentRepository`
   - reads project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files in place
 - `runtime/CapabilityWorkspaceManager`
@@ -109,7 +109,7 @@ See also: [database.md](./database.md)
 Current durable persistence is SQLite-backed and split between:
 
 - the application database: session records, append-only normalized transcript events, session-environment membership, and durable environment decisions
-- the environment repository databases: environments, bundles, immutable content revisions, and capability artifact files for canonical and personal repositories
+- the environment repository databases: environments, reusable capabilities, and bundle memberships for canonical and personal repositories
 
 Canonical and personal environment-repository content is SQLite-only; the legacy directory repository and importer are no longer runtime or migration sources. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
 
@@ -146,7 +146,7 @@ Related tables:
   - `bundles[]`
 - `EnvironmentBundlePreview`
   - `id`, `bundleId`, `environmentId`, `repository`, `valid`, `bundleHash`
-  - optional revision metadata: `contentHash`, publisher version, fetched time, source locator, provenance
+  - bundle content hash derived from active capability memberships
   - `skills[]`, `mcpServers[]`, `apps[]`, `facts[]`, optional `llmsTxt`, `agentsMd`, `errors[]`
 - bundle search supports filtering by repository id (`canonical`, `personal`, or source-specific ids)
 - `EnvironmentBundleOffer`
@@ -216,5 +216,5 @@ Related tables:
 - durable decisions, transcript history, and session membership are SQLite-backed
 - canonical and personal environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
 - facts and `llms.txt` use capability-specific projections; MCP content is reviewable/read-only but not started by the runtime
-- personal authoring uses shared writable sources, watcher-mediated SQLite revision write-back, and explicit environment authoring directories; filesystem permissions are not a strong sandbox against same-user arbitrary shell access
+- personal authoring uses one shared writable source per environment, watcher-mediated current-content write-back and membership soft deletion, and explicit environment authoring directories; filesystem permissions are not a strong sandbox against same-user arbitrary shell access
 - location identification is provider-pluggable behind `PoiLookupProvider`
