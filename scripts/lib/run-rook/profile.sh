@@ -43,9 +43,25 @@ print(8000 + (zlib.crc32(sys.argv[1].encode()) % 1000))
 PY
 }
 
+worktree_profile_slug() {
+  local root
+  root="$(canonical_path "$1")"
+  local name
+  name="$(sanitize_profile_slug "$(basename "$root")")"
+  local path_hash
+  path_hash="$(python3 - <<'PY' "$root"
+import os, sys, zlib
+print(f"{zlib.crc32(os.path.realpath(sys.argv[1]).encode()) & 0xffffffff:08x}")
+PY
+)"
+  printf '%s-%s\n' "$name" "$path_hash"
+}
+
 configure_run_profile() {
   local production_root
   production_root="$(resolve_production_root)"
+  local checkout_root
+  checkout_root="$(canonical_path "$REPO_ROOT")"
 
   local requested_mode="${ROOK_RUN_MODE:-}"
   if [[ -n "$requested_mode" && "$requested_mode" != "production" && "$requested_mode" != "development" ]]; then
@@ -54,13 +70,13 @@ configure_run_profile() {
 
   if [[ -n "$requested_mode" ]]; then
     RUN_ROOK_PROFILE="$requested_mode"
-  elif [[ "$REPO_ROOT" == "$production_root" ]]; then
+  elif [[ "$checkout_root" == "$production_root" ]]; then
     RUN_ROOK_PROFILE="production"
   else
     RUN_ROOK_PROFILE="development"
   fi
 
-  if [[ "$RUN_ROOK_PROFILE" == "production" && "$REPO_ROOT" != "$production_root" && "${ROOK_ALLOW_NON_PRODUCTION_ROOT:-0}" != "1" ]]; then
+  if [[ "$RUN_ROOK_PROFILE" == "production" && "$checkout_root" != "$production_root" && "${ROOK_ALLOW_NON_PRODUCTION_ROOT:-0}" != "1" ]]; then
     die "production profile requested outside the configured production checkout: $REPO_ROOT"
   fi
 
@@ -73,7 +89,7 @@ configure_run_profile() {
   RUN_ROOK_ALLOW_REMOTE_DEFAULT=1
 
   if [[ "$RUN_ROOK_PROFILE" == "development" ]]; then
-    RUN_ROOK_PROFILE_SLUG="$(sanitize_profile_slug "$(basename "$REPO_ROOT")")"
+    RUN_ROOK_PROFILE_SLUG="$(worktree_profile_slug "$REPO_ROOT")"
     RUN_ROOK_APP_BUNDLE_ID="com.rookery.Rook.Dev.${RUN_ROOK_PROFILE_SLUG//-/.}"
     RUN_ROOK_APP_DISPLAY_NAME="Rook Dev (${RUN_ROOK_PROFILE_SLUG})"
     RUN_ROOK_DEFAULT_PORT="$(deterministic_dev_port "$RUN_ROOK_PROFILE_SLUG")"

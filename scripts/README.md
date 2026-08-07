@@ -23,7 +23,11 @@ The primary development entry point. Starts the server (if needed) and builds + 
 
 Flags: `--device NAME_OR_UDID`, `--server-url URL`, `--reset-permissions`, `--simulate-arrival "LAT,LON"`, and `--all` for `stop`.
 
-`run-rook.sh` selects a production profile when run from the main checkout and an isolated development profile when run from a Git worktree. Development profiles use a deterministic port, `~/.rook-<worktree-name>` for user-local state, an isolated SQLite database, and a distinct Mac app identity. Set `ROOK_RUN_MODE=production|development` to override detection, or `ROOK_PRODUCTION_ROOT` to identify the main checkout explicitly. Development servers are loopback-only unless `ROOK_DEV_ALLOW_REMOTE=1` is set.
+`run-rook.sh` selects a production profile when run from the main checkout and an isolated development profile when run from a Git worktree. Development profiles use a deterministic port, `~/.rook-<worktree-slug>` for user-local state, an isolated SQLite database, and a distinct Mac app identity. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain distinct. Set `ROOK_RUN_MODE=production|development` to override detection, or `ROOK_PRODUCTION_ROOT` to identify the main checkout explicitly. Development servers are loopback-only unless `ROOK_DEV_ALLOW_REMOTE=1` is set.
+
+### `npm run test:launcher` — test launcher profiles and lifecycle
+
+Runs hermetic Bash tests from `lib/run-rook/` using temporary Git worktrees, fake processes, and fake listeners. The tests cover profile selection, path/port configuration, same-basename worktrees, profile-scoped stopping, `stop --all` discovery, and refusal to adopt another profile's healthy server.
 
 ### `run-tests.sh` — run all test suites
 

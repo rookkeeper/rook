@@ -91,8 +91,23 @@ kill_server_pidfile() {
   rm -f "$pidfile"
 }
 
-kill_server_if_owned() {
+server_pidfile_is_alive() {
+  [[ -f "$SERVER_PIDFILE" ]] || return 1
+  local pid
+  pid="$(cat "$SERVER_PIDFILE" 2>/dev/null || true)"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
+stop_server_for_profile() {
+  local owned=0
+  if server_pidfile_is_alive; then
+    owned=1
+  fi
   kill_server_pidfile "$SERVER_PIDFILE"
+  if (( owned )); then
+    kill_server_on_port
+  fi
 }
 
 kill_server_on_port() {
@@ -106,6 +121,9 @@ kill_server_on_port() {
 
 start_server() {
   if health_ok; then
+    if ! server_pidfile_is_alive; then
+      die "port ${SERVER_PORT} has a healthy server, but it is not owned by the current profile; stop that server or choose another port"
+    fi
     log "${SERVER_KIND} server already healthy at ${SERVER_HEALTH_URL}"
   else
     if lsof -nP -iTCP:"$SERVER_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -169,8 +187,7 @@ stop_everything() {
 
   stop_mac_app
   stop_android_app
-  kill_server_pidfile "$CURRENT_SERVER_PIDFILE"
-  kill_server_on_port
+  stop_server_for_profile
 
   local tmp udid
   tmp="$(mktemp)"
@@ -223,8 +240,7 @@ stop_requested_targets() {
   (( HAS_MAC_TARGET )) && stop_mac_app
   (( HAS_ANDROID_TARGET )) && stop_android_app
   if (( HAS_SERVER_TARGET || HAS_SERVER_NEXT_TARGET )); then
-    kill_server_if_owned
-    kill_server_on_port
+    stop_server_for_profile
   fi
 }
 

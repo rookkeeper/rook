@@ -21,9 +21,9 @@ That starts the backend on `http://127.0.0.1:7665` from the main checkout. When 
 
 ## Local profiles and state
 
-The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH` for the selected profile. The main checkout keeps the existing defaults (`~/.rook/` for user-local state and `.var/rook/rook.sqlite` for the application database). A worktree defaults to `~/.rook-<worktree-name>/rook.sqlite` and uses the worktree's canonical `environment-repository/` directory.
+The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH` for the selected profile. The main checkout keeps the existing defaults (`~/.rook/` for user-local state and `.var/rook/rook.sqlite` for the application database). A worktree defaults to `~/.rook-<worktree-slug>/rook.sqlite` and uses the worktree's canonical `environment-repository/` directory. The slug includes a short hash of the canonical worktree path.
 
-The server's user-local repository and environment-authoring bindings honor `ROOK_HOME`. The environment-repository API and bundle layout are unchanged.
+The server's user-local repository and environment-authoring bindings honor `ROOK_HOME`. Worktree slugs include a short path hash, so same-named worktrees receive separate homes. The environment-repository API and bundle layout are unchanged.
 
 ## Network binding and auth
 

@@ -263,7 +263,7 @@ Fast path from the repo root:
 ./scripts/run-rook.sh stop   # stop this checkout's server + launched app(s)
 ```
 
-`run-rook.sh mac` selects the production-like profile from the main checkout or an isolated development profile from a Git worktree. It starts the selected server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, and launches the fresh app build. Worktree builds use a deterministic alternate port, isolated `ROOK_HOME`/SQLite state, and a distinct `Rook Dev (<worktree-name>)` app identity so they can run beside production.
+`run-rook.sh mac` selects the production-like profile from the main checkout or an isolated development profile from a Git worktree. It starts the selected server if needed, regenerates the Xcode project from `project.yml`, rebuilds incrementally, and launches the fresh app build. Worktree builds use a deterministic alternate port, isolated `ROOK_HOME`/SQLite state, and a distinct `Rook Dev (<worktree-slug>)` app identity so they can run beside production. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain separate.
 
 Manual steps:
 
@@ -305,7 +305,7 @@ package's source location; override it with:
 defaults write com.rookery.Rook RookeryRepoRoot /path/to/rookery
 ```
 
-Shared Rook config lives in `ROOK_HOME/config/` (`~/.rook/config/` for production and `~/.rook-<worktree-name>/config/` for a worktree).
+Shared Rook config lives in `ROOK_HOME/config/` (`~/.rook/config/` for production and `~/.rook-<worktree-slug>/config/` for a worktree).
 
 ## Troubleshooting: the icon isn't in the menu bar
 

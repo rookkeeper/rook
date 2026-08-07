@@ -30,7 +30,8 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - `./scripts/run-rook.sh android`
 - `./scripts/run-rook.sh stop`
 
-The launcher uses the main checkout as the production-like local profile. Running the same command from a Git worktree starts an isolated development profile with its own port, SQLite database, `~/.rook-<worktree-name>` state directory, logs, and Mac app identity. Use `ROOK_RUN_MODE` or `ROOK_PRODUCTION_ROOT` for explicit profile selection.
+The launcher uses the main checkout as the production-like local profile. Running the same command from a Git worktree starts an isolated development profile with its own port, SQLite database, `~/.rook-<worktree-slug>` state directory, logs, and Mac app identity. The slug includes a short hash of the canonical worktree path so same-named worktrees remain distinct. Use `ROOK_RUN_MODE` or `ROOK_PRODUCTION_ROOT` for explicit profile selection.
+- `npm run test:launcher` — run hermetic worktree-profile and launcher-lifecycle tests
 - `./scripts/print-environments.sh` — dump active/recent environment diagnostics from the server
 - `./scripts/tail-pi-traces.sh` — inspect provider-payload traces in `.var/pi-traces.jsonl` (follows by default; use `--once` for one-shot output)
 - `./scripts/run-tests.sh` — run the known server, Swift package, iPhone, and macOS test/build checks

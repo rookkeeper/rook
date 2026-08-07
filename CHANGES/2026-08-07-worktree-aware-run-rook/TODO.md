@@ -116,9 +116,9 @@ The launcher should support explicit overrides for unusual setups, but the defau
 
 ## Tests and verification
 
-- [ ] Add shell-level tests or testable helper functions for production/worktree detection.
-- [x] Test slug sanitization for the current worktree name.
-- [x] Test deterministic port allocation for the current worktree.
+- [x] Add shell-level tests for production/worktree detection and launcher lifecycle behavior.
+- [x] Test slug sanitization, including same-basename worktrees in different paths.
+- [x] Test deterministic port allocation and explicit port overrides.
 - [x] Test that production and development resolve different Rook homes, databases, run roots, and ports.
 - [x] Test that inherited `.env` values cannot silently force a development server back onto port `7665` or re-enable its remote listener.
 - [x] Add server tests for `ROOK_HOME`-based personal repository paths.
@@ -132,6 +132,7 @@ The launcher should support explicit overrides for unusual setups, but the defau
 - [x] Verify stopping the development profile leaves production running.
 - [ ] Verify stopping production leaves the development profile running.
 - [x] Run the server typecheck, build, and test suite.
+- [x] Run the hermetic launcher profile and lifecycle test suite.
 - [x] Run the relevant Mac build and launcher smoke checks.
 
 ## Documentation and cleanup

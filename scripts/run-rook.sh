@@ -63,7 +63,7 @@ Notes:
   - the server always binds localhost; ROOK_BIND_IP adds a second remote listener
   - the server runs as a detached background process and logs to the selected profile's run directory
   - `stop` stops the current profile; `stop --all` is the explicit broad cleanup command
-  - development worktrees use a deterministic port and `~/.rook-<worktree-name>` by default
+  - development worktrees use a deterministic port and `~/.rook-<worktree-slug>` by default
   - iphone signing now follows the Xcode project’s configured DEVELOPMENT_TEAM and bundle identifiers
   - stop shuts down the server, mac app(s), iphone app(s), and android app if present
 EOF
