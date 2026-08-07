@@ -87,7 +87,7 @@ async function handleMessage(
         send(success(requestId!, {
           protocolVersion: 1,
           agentInfo: { name: "rook", title: "Rook", version: "0.1.0" },
-          agentCapabilities: { loadSession: true, sessionCapabilities: { list: {}, resume: {}, close: {} }, promptCapabilities: { image: false, audio: false, embeddedContext: false } },
+          agentCapabilities: { loadSession: true, sessionCapabilities: { list: {}, resume: {}, close: {} }, promptCapabilities: { image: runtimes.runtimeIds().some((runtimeId) => runtimes.supportsImagePrompts(runtimeId)), audio: false, embeddedContext: false } },
           authMethods: [],
           _meta: { runtimeIds: runtimes.runtimeIds(), defaultRuntimeId: runtimes.defaultRuntimeId(), "com.rookkeeper": { environmentOffers: { offerNotification: true, resolveRequest: true } } },
         }));
@@ -117,7 +117,10 @@ async function handleMessage(
         const title = typeof meta?.title === "string" && meta.title.trim() ? meta.title.trim() : "session";
         const record = await runtimes.createSession(runtimeId, withoutMeta(params), title);
         binding.bindSessionId(record.sessionId);
-        send(success(requestId!, { sessionId: record.sessionId }));
+        send(success(requestId!, {
+          sessionId: record.sessionId,
+          promptCapabilities: { image: runtimes.supportsImagePrompts(record.runtimeId) },
+        }));
         return;
       }
       case "session/load":
@@ -128,9 +131,18 @@ async function handleMessage(
         const params = object(message.params) ?? {};
         const sessionId = requiredBoundSessionId(params, binding);
         subscribe(sessionId);
-        const result = await runtimes.requestForSession(sessionId, message.method, withoutSessionId(params), {
+        if (message.method === "session/prompt" && hasImagePrompt(params.prompt)) {
+          validateImagePrompt(params.prompt);
+          const capabilities = await runtimes.sessionPromptCapabilities(sessionId);
+          if (!capabilities.image) throw new Error("The selected runtime does not support image prompts.");
+        }
+        let result = await runtimes.requestForSession(sessionId, message.method, withoutSessionId(params), {
           ...(message.method === "session/load" || message.method === "session/resume" ? { privateReplayListener: send } : {}),
         });
+        const resultObject = object(result);
+        if ((message.method === "session/load" || message.method === "session/resume") && resultObject) {
+          result = { ...resultObject, promptCapabilities: await runtimes.sessionPromptCapabilities(sessionId) };
+        }
         send(success(requestId!, result));
         return;
       }
@@ -153,6 +165,31 @@ async function handleMessage(
     }
   } catch (error) {
     send(failure(requestId, error instanceof Error ? error.message : String(error)));
+  }
+}
+
+const SUPPORTED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const MAX_IMAGE_BASE64_LENGTH = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
+
+function hasImagePrompt(value: unknown): boolean {
+  return Array.isArray(value) && value.some((block) => object(block)?.type === "image");
+}
+
+function validateImagePrompt(value: unknown): void {
+  if (!Array.isArray(value)) throw new Error("Prompt must be an array of content blocks.");
+  for (const block of value) {
+    const image = object(block);
+    if (image?.type !== "image") continue;
+    if (typeof image.mimeType !== "string" || !SUPPORTED_IMAGE_MIME_TYPES.has(image.mimeType.toLowerCase())) {
+      throw new Error("Unsupported image MIME type.");
+    }
+    if (typeof image.data !== "string" || image.data.length === 0 || image.data.length > MAX_IMAGE_BASE64_LENGTH || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data)) {
+      throw new Error("Invalid or oversized image data.");
+    }
+    const padding = image.data.endsWith("==") ? 2 : image.data.endsWith("=") ? 1 : 0;
+    const byteLength = Math.floor(image.data.length * 3 / 4) - padding;
+    if (byteLength > MAX_IMAGE_BYTES) throw new Error("Image exceeds the 12 MB limit.");
   }
 }
 

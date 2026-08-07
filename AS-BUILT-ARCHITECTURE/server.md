@@ -2,7 +2,7 @@
 
 ## Summary
 
-The server is a Fastify service on `127.0.0.1:7665` with an optional second remote/VPN listener. It exposes a session-bound ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes, sessions, transcripts, and environments, and an internal runtime broker that launches one ACP subprocess per public session.
+The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with an optional second remote/VPN listener. A Git worktree launched through `scripts/run-rook.sh` receives an isolated development profile with a deterministic alternate port and profile-specific local state. The server exposes a session-bound ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes, sessions, transcripts, and environments, and an internal runtime broker that launches one ACP subprocess per public session.
 
 ## Main components
 
@@ -16,6 +16,7 @@ The server is a Fastify service on `127.0.0.1:7665` with an optional second remo
   - restarts only the affected session when environment state changes
 - `runtime/SessionRuntime`
   - generic ACP stdio transport for a single session runtime process
+  - forwards standard ACP image prompt blocks unchanged to image-capable runtimes
   - initializes the subprocess, sends JSON-RPC, and relays notifications
 - `environments/services/EnvironmentManager`
   - tracks available environments, offers, approvals, active/recent state, and session subscriptions
@@ -75,7 +76,7 @@ See also: [database.md](./database.md)
   - `session/new` (unbound websocket only; success binds that websocket to the new public session)
   - `session/load`
   - `session/resume`
-  - `session/prompt`
+  - `session/prompt` (including standard ACP image blocks when the selected runtime supports them)
   - `session/cancel`
   - `session/set_mode`
   - `session/set_config_option`
@@ -102,7 +103,11 @@ See also: [database.md](./database.md)
 - `GET /api/diagnostics/environments`
 
 ### Runtime boundary
-`SessionRuntime` speaks newline-delimited ACP JSON-RPC over stdio to subprocesses launched from runtime profiles. Supported runtime types are configured, not implicit: `pi`, `claude`, `cursor`, and generic `acp`.
+`SessionRuntime` speaks newline-delimited ACP JSON-RPC over stdio to subprocesses launched from runtime profiles. Supported runtime types are configured, not implicit: `pi`, `claude`, `cursor`, and generic `acp`. Runtime profiles report image-prompt support explicitly (Pi defaults to supported), and the facade validates image MIME/data limits before forwarding.
+
+## Local profile configuration
+
+The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain isolated. On first launch, development profiles seed `ROOK_HOME` by copying the production `~/.rook` directory; later launches leave the existing profile home unchanged. Runtime definitions, user configuration, personal environment-repository state, and other durable local state therefore become profile-specific. `ROOK_AGENT_RUNTIMES_PATH` remains an explicit escape hatch. The canonical environment repository remains the `environment-repository/` directory belonging to the checkout that launched the server.
 
 ## Persistence shape
 

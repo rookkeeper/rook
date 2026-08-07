@@ -22,6 +22,10 @@ The server maps public session ids to runtime-local ACP session ids and owns nor
 
 Every configured runtime receives the base Rook identity prompt, including sessions with no entered environment. Environment-specific instructions are added later through the same runtime configuration.
 
+Standard ACP image content blocks are used for image-bearing prompts when the selected runtime advertises image support. Ordered text/image content is sent as ACP prompt blocks in the same sequence the user composed it. Rook does not turn Mac temporary file paths into a protocol-level attachment reference.
+
+ACP explicitly supports product-specific extensions in two ways:
+
 Environment changes are Rook orchestration around ACP:
 
 1. resolve approved/personal bundles from active capability memberships

@@ -16,6 +16,7 @@ export async function registerSessionRoutes(app: FastifyInstance, runtimeManager
         _meta: {
           runtimeId: record.runtimeId,
           startedAt: record.startedAt,
+          supportsImagePrompts: runtimeManager.supportsImagePrompts(record.runtimeId),
         },
       })),
     };

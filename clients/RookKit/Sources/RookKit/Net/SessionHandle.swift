@@ -25,6 +25,7 @@ public final class SessionHandle {
     public private(set) var isRunning = false { didSet { onStateChange?() } }
     public private(set) var statusLine = "" { didSet { onStateChange?() } }
     public private(set) var socketConnected = false { didSet { onStateChange?() } }
+    public var supportsImagePrompts: Bool { socket.supportsImagePrompts }
     public private(set) var reconnecting = false { didSet { onStateChange?() } }
     public private(set) var contextUsage: ContextUsageState? { didSet { onStateChange?() } }
     public private(set) var currentModes: AcpModesState? { didSet { onStateChange?() } }
@@ -54,11 +55,14 @@ public final class SessionHandle {
     private var replayAssistantBuffer = ""
     private var replayThinkingBuffer = ""
 
-    public init(sessionId: String, api: RookAPI, socket: AcpSocket? = nil, isLoaded: Bool = false) {
+    public init(sessionId: String, api: RookAPI, socket: AcpSocket? = nil, isLoaded: Bool = false, supportsImagePrompts: Bool? = nil) {
         self.sessionId = sessionId
         self.api = api
         self.socket = socket ?? AcpSocket()
         self.isLoaded = isLoaded
+        if let supportsImagePrompts {
+            self.socket.setSupportsImagePrompts(supportsImagePrompts)
+        }
         self.socket.onEvent = { [weak self] event in
             self?.handleSocketEvent(event)
         }
@@ -126,17 +130,20 @@ public final class SessionHandle {
 
     // MARK: - Messaging
 
-    public func send(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+    public func send(_ content: [ChatPromptContent]) {
+        guard !content.isEmptyPrompt else { return }
+        guard content.images.isEmpty || socket.supportsImagePrompts else {
+            appendErrorBlock(source: "prompt", message: "The selected runtime does not support image prompts.")
+            return
+        }
         if isRunning || !socket.isConnected {
-            queuedMessages.append(makeQueuedMessage(trimmed))
+            queuedMessages.append(makeQueuedMessage(content))
             if !socket.isConnected {
                 scheduleReconnect(delaySeconds: 0)
             }
             return
         }
-        deliver(trimmed)
+        deliver(content)
     }
 
     public func removeQueuedMessage(at index: Int) {
@@ -159,7 +166,9 @@ public final class SessionHandle {
     public func saveQueuedMessageEdit(_ id: String) {
         updateQueuedMessage(id) { message in
             let trimmed = message.draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-            message.text = trimmed.isEmpty ? message.text : trimmed
+            if !trimmed.isEmpty {
+                message.content = message.content.replacingText(with: trimmed)
+            }
             message.draftText = message.text
             message.isEditing = false
         }
@@ -345,14 +354,14 @@ public final class SessionHandle {
 
     // MARK: - Private: delivery
 
-    private func deliver(_ text: String) {
+    private func deliver(_ content: [ChatPromptContent]) {
         finalizeStreamingBlocks()
-        appendBlock(.user(text: text))
+        appendBlock(.userContent(content))
         isRunning = true
         statusLine = "Agent is working…"
         lastStopReason = nil
         autoScrollEnabled = true
-        socket.sendPrompt(text: text)
+        socket.sendPrompt(content: content)
     }
 
     private func deliverNextQueuedIfIdle() {
@@ -364,7 +373,7 @@ public final class SessionHandle {
                 queuedMessages.insert(next, at: 0)
                 return
             }
-            deliver(next.text)
+            deliver(next.content)
         }
     }
 
@@ -531,9 +540,9 @@ public final class SessionHandle {
 
     // MARK: - Private: blocks / streaming
 
-    private func makeQueuedMessage(_ text: String) -> QueuedChatMessage {
+    private func makeQueuedMessage(_ content: [ChatPromptContent]) -> QueuedChatMessage {
         queuedMessageCounter += 1
-        return QueuedChatMessage(id: "queued-\(queuedMessageCounter)", text: text, draftText: text)
+        return QueuedChatMessage(id: "queued-\(queuedMessageCounter)", content: content)
     }
 
     private func updateQueuedMessage(_ id: String, mutate: (inout QueuedChatMessage) -> Void) {

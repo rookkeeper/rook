@@ -18,6 +18,9 @@ export interface AgentRuntimeProfile {
   startupTimeoutMs?: number;
   mcpServers?: Array<Record<string, unknown>>;
   model?: string;
+  promptCapabilities?: {
+    image?: boolean;
+  };
 }
 
 export function getAgentRuntimesPath(): string {
@@ -48,6 +51,12 @@ function validProfile(value: unknown): value is AgentRuntimeProfile {
   if (!validStrings(profile.args) || !validStrings(profile.skillPaths) || !validStrings(profile.extensionPaths)) return false;
   if (profile.env !== undefined && (typeof profile.env !== "object" || profile.env === null || Array.isArray(profile.env) || Object.values(profile.env).some((item) => typeof item !== "string"))) return false;
   if (profile.mcpServers !== undefined && (!Array.isArray(profile.mcpServers) || profile.mcpServers.some((item) => typeof item !== "object" || item === null || Array.isArray(item)))) return false;
+  if (profile.promptCapabilities !== undefined && (
+    typeof profile.promptCapabilities !== "object" ||
+    profile.promptCapabilities === null ||
+    Array.isArray(profile.promptCapabilities) ||
+    (profile.promptCapabilities.image !== undefined && typeof profile.promptCapabilities.image !== "boolean")
+  )) return false;
   return true;
 }
 

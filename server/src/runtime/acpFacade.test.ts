@@ -82,6 +82,14 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
           args: [mockServerPath],
           cwd: process.cwd(),
         },
+        {
+          id: "ImageMockAcpAgent",
+          type: "acp",
+          command: "node",
+          args: [mockServerPath],
+          cwd: process.cwd(),
+          promptCapabilities: { image: true },
+        },
       ],
     }));
     process.env.ROOK_AGENT_RUNTIMES_PATH = runtimesPath;
@@ -207,6 +215,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     await request(ws, 6, "session/close", { sessionId });
     ws.close();
   });
+
 
   it("materializes approved environment skills during an environment restart", async () => {
     const ws = await connect();
@@ -368,6 +377,57 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     expect(personal?.skills.some((skill) => skill.id === "personal-skill")).not.toBe(true);
     expect(personal?.agentsMd).toBeUndefined();
     await request(ws, 4, "session/close", { sessionId });
+    ws.close();
+  });
+
+  it("forwards image prompt blocks for runtimes that advertise image support", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "ImageMockAcpAgent", title: "image-test" },
+    });
+    expect(created.promptCapabilities).toEqual({ image: true });
+    const result = await request(ws, 3, "session/prompt", {
+      sessionId: created.sessionId,
+      prompt: [{ type: "text", text: "describe this" }, { type: "image", mimeType: "image/png", data: "aGVsbG8=" }],
+    });
+    expect(result.stopReason).toBe("end_turn");
+    await request(ws, 4, "session/close", { sessionId: created.sessionId });
+    ws.close();
+  });
+
+  it("rejects image prompts for runtimes without image support", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "text-only-image-test" },
+    });
+    await expect(request(ws, 3, "session/prompt", {
+      sessionId: created.sessionId,
+      prompt: [{ type: "image", mimeType: "image/png", data: "aGVsbG8=" }],
+    })).rejects.toThrow("does not support image prompts");
+    await request(ws, 4, "session/close", { sessionId: created.sessionId });
+    ws.close();
+  });
+
+  it("rejects malformed image prompt data", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "ImageMockAcpAgent", title: "invalid-image-test" },
+    });
+    await expect(request(ws, 3, "session/prompt", {
+      sessionId: created.sessionId,
+      prompt: [{ type: "image", mimeType: "image/png", data: "not base64!" }],
+    })).rejects.toThrow("Invalid or oversized image data");
+    await request(ws, 4, "session/close", { sessionId: created.sessionId });
+
     ws.close();
   });
 

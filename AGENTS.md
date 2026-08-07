@@ -11,7 +11,8 @@ Product/design notes: `PRODUCT/`. When making PRs, make sure to reference anythi
 When big architecture, schema, layering, or cross-package structure changes happen, update the relevant files in `AS-BUILT-ARCHITECTURE/`. If you notice the structure is being modified from what these documents describe, make sure to eventually update them too.
 
 When making changes:
-- Keep tests in sync with code changes.
+- Keep tests in sync with code changes. Changes to `scripts/lib/run-rook/` should update the shell tests in that directory and run `npm run test:launcher`.
+- Keep run-rook tests hermetic: use temporary Git repositories/worktrees and fake processes/listeners; never modify the real `~/.rook` state or stop a developer's running Rook instance.
 - I will often ask about GitHub issues, pull requests, and related work. Typically use the GitHub CLI (`gh`) to access, inspect, search, create, and manage those things.
 - When I ask you to create a GitHub issue, write it like a person speaking naturally. Do not turn it into a formal template or over-structure it unless I ask for that.
 - When issue labeling is relevant, use the repor's current GitHub labels via `gh`. Current preferred labels are: `bug`, `documentation`, `good first issue`, `mac-client`, `iphone-client`, `android-client`, `server`, `environment-repository`, `ui/ux`, and `datamodel`.

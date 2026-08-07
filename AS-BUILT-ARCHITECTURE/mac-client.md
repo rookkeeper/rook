@@ -32,6 +32,9 @@ The macOS client is a native SwiftUI menu bar app with a regular app window. It 
   - loopback HTTP bridge for agent perception and control
 - `ServerController`
   - starts/stops a local dev server process and tails logs
+  - inherits the launcher-selected server profile when launched from the Mac client
+- `MacImageAttachmentFactory`
+  - normalizes pasted/dropped images into bounded ACP-ready PNG attachments
 - voice/control services
   - `VoiceController`, `HotKey`, `InputSynthesizer`, `ScreenCapturer`, `ScreenOCR`
 
@@ -69,7 +72,7 @@ The client derives and registers:
 - server status and runtime catalog
 - session list and current session
 - `blocks: [ChatBlock]`
-- queued chat messages
+- queued chat messages containing ordered text/image prompt content
 - current mode/config options
 - pending permission requests
 - pending environment offers and environment previews, including derived bundle hashes and capability content
@@ -110,7 +113,7 @@ Via `RookKit`:
 5. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and run `initialize`
 6. the handle reduces `AcpClientEvent`s into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
 7. switching sessions changes which handle the UI observes — background sessions keep their WebSocket and continue running
-8. queued messages are delivered automatically once the agent goes idle
+8. queued messages, including image attachments, are delivered automatically once the agent goes idle
 
 ### Foreground environment detection
 1. `ForegroundAppMonitor` detects app activation or window-title change
@@ -141,8 +144,11 @@ Via `RookKit`:
 
 ### Server supervision
 1. health polling marks server online/offline/starting
-2. if offline, the app can launch `npm run dev` via `ServerController`
+2. if offline, the app can launch `npm run dev` via `ServerController`, inheriting the selected `ROOK_HOME`, database path, port, and profile
 3. termination resets status and triggers a new health check
+
+### Worktree development profile
+When launched from a Git worktree through `scripts/run-rook.sh`, the Mac app is built with a distinct development bundle identity and display name. It connects to the worktree's deterministic development port and can run beside the production-like app from the main checkout without sharing app preferences or server state.
 
 ## Notable architectural characteristics
 
@@ -154,3 +160,4 @@ Via `RookKit`:
 - environment registration is local-first and derived from visible user context plus app-owned local data where needed
 - the Mac bridge centralizes Accessibility, Automation, and Screen Recording permissions in one native app
 - reconnect and queued-message handling are built into the client reducer
+- Mac image paste/drop is normalized locally, inserted inline in the composer, and sent in order as standard ACP image content; it is never coupled to the runtime `cwd`

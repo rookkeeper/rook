@@ -38,6 +38,15 @@ export interface AcpTextContentBlock {
   text: string;
 }
 
+export interface AcpImageContentBlock {
+  type: "image";
+  mimeType: string;
+  data: string;
+  uri?: string;
+}
+
+export type AcpPromptContentBlock = AcpTextContentBlock | AcpImageContentBlock;
+
 export interface AcpContentItem {
   type: "content";
   content: AcpTextContentBlock;
@@ -172,9 +181,18 @@ export interface AcpPromptTextParam {
   text: string;
 }
 
+export interface AcpPromptImageParam {
+  type: "image";
+  mimeType: string;
+  data: string;
+  uri?: string;
+}
+
+export type AcpPromptContentParam = AcpPromptTextParam | AcpPromptImageParam;
+
 export interface AcpPromptParams {
   sessionId: string;
-  prompt: AcpPromptTextParam[];
+  prompt: AcpPromptContentParam[];
   _meta?: JsonRpcMeta;
 }
 

@@ -17,7 +17,13 @@ Or from the repo root:
 ./scripts/run-rook.sh server
 ```
 
-That starts the backend on `http://127.0.0.1:7665`.
+That starts the backend on `http://127.0.0.1:7665` from the main checkout. When run from a Git worktree, `run-rook.sh` selects an isolated development profile with a deterministic alternate port and separate local state.
+
+## Local profiles and state
+
+The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH` for the selected profile. The main checkout keeps the existing defaults (`~/.rook/` for user-local state and `.var/rook/rook.sqlite` for the application database). A worktree defaults to `~/.rook-<worktree-slug>/rook.sqlite` and uses the worktree's canonical `environment-repository/` directory. The slug includes a short hash of the canonical worktree path.
+
+The server's user-local repository and environment-authoring bindings honor `ROOK_HOME`. Worktree slugs include a short path hash, so same-named worktrees receive separate homes. When the profile home does not exist, the launcher seeds it by copying `~/.rook`; subsequent configuration changes are isolated. `ROOK_AGENT_RUNTIMES_PATH` remains available as an explicit override. The environment-repository API and bundle layout are unchanged.
 
 ## Network binding and auth
 
@@ -100,7 +106,7 @@ It implements:
 - `session/list` — legacy/unbound-only session list (REST is preferred)
 - `session/new` — creates session for a chosen runtime via `_meta.runtimeId` and `_meta.title` on an unbound websocket; on success that same websocket becomes bound to the new public session
 - `session/load`, `session/resume` — loads an existing session; replay is requester-private, not broadcast to all watchers
-- `session/prompt`, `session/cancel` — standard prompt flow
+- `session/prompt`, `session/cancel` — standard prompt flow; image-capable runtimes accept standard ACP image content blocks with per-session capability reporting and bounded base64 validation
 - `session/set_mode`, `session/set_config_option` — ACP controls
 - `session/close` — closes a session
 - `session/request_permission` — permission request relay

@@ -7,7 +7,7 @@ import { REPO_ROOT } from "../paths.js";
 export class RookDatastore {
   readonly db: DatabaseSync;
 
-  constructor(location = path.join(REPO_ROOT, ".var", "rook", "rook.sqlite")) {
+  constructor(location = process.env.ROOK_DATABASE_PATH ?? path.join(REPO_ROOT, ".var", "rook", "rook.sqlite")) {
     if (location !== ":memory:") mkdirSync(path.dirname(location), { recursive: true });
     this.db = new DatabaseSync(location);
   }

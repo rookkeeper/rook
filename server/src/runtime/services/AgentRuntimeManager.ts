@@ -46,7 +46,7 @@ export class AgentRuntimeManager {
     return [...this.profilesById.keys()];
   }
 
-  runtimeDefinitions(): Array<Pick<AgentRuntimeProfile, "id" | "type" | "parentId" | "model">> {
+  runtimeDefinitions(): Array<Pick<AgentRuntimeProfile, "id" | "type" | "parentId" | "model"> & { supportsImagePrompts: boolean }> {
     return this.runtimeIds().map((id) => {
       const profile = this.profilesById.get(id)!;
       return {
@@ -54,8 +54,18 @@ export class AgentRuntimeManager {
         type: profile.type,
         ...(profile.parentId !== undefined ? { parentId: profile.parentId } : {}),
         ...(profile.model ? { model: profile.model } : {}),
+        supportsImagePrompts: supportsImagePrompts(profile),
       };
     });
+  }
+
+  supportsImagePrompts(runtimeId: string): boolean {
+    return supportsImagePrompts(this.requireProfile(runtimeId));
+  }
+
+  async sessionPromptCapabilities(sessionId: string): Promise<{ image: boolean }> {
+    const record = await this.requireSession(sessionId);
+    return { image: this.supportsImagePrompts(record.runtimeId) };
   }
 
   defaultRuntimeId(): string | undefined {
@@ -462,6 +472,10 @@ export class AgentRuntimeManager {
     if (!this.timingLogsEnabled) return;
     this.logger.info({ component: "AgentRuntimeManager", event, ...details }, "session timing");
   }
+}
+
+function supportsImagePrompts(profile: AgentRuntimeProfile): boolean {
+  return profile.promptCapabilities?.image ?? profile.type === "pi";
 }
 
 function roundMs(value: number): number {

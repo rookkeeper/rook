@@ -10,6 +10,7 @@
     "start": "npm run start --prefix server",
     "typecheck": "npm run typecheck --prefix server",
     "test": "npm run test --prefix server",
+    "test:launcher": "bash scripts/lib/run-rook/profile.test.sh && bash scripts/lib/run-rook/lifecycle.test.sh",
     "test:watch": "npm run test:watch --prefix server",
     "agent:cli": "bash scripts/interact-with-remote-agent.sh"
   }

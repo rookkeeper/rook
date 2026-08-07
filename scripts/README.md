@@ -16,11 +16,18 @@ The primary development entry point. Starts the server (if needed) and builds + 
 ./scripts/run-rook.sh iphone                    # build and deploy the current physical-iPhone client
 ./scripts/run-rook.sh sim                       # build and launch the iPhone simulator client
 ./scripts/run-rook.sh android                   # placeholder target for now
-./scripts/run-rook.sh server mac iphone         # run multiple current targets
-./scripts/run-rook.sh stop                      # stop everything (server + launched apps)
+./scripts/run-rook.sh server mac iphone         # run multiple targets
+./scripts/run-rook.sh stop                      # stop the current checkout's profile
+./scripts/run-rook.sh stop --all                # explicit broad cleanup of Rook processes
 ```
 
-Flags: `--device NAME_OR_UDID`, `--server-url URL`, `--reset-permissions`, `--simulate-arrival "LAT,LON"`
+Flags: `--device NAME_OR_UDID`, `--server-url URL`, `--reset-permissions`, `--simulate-arrival "LAT,LON"`, and `--all` for `stop`.
+
+`run-rook.sh` selects a production profile when run from the main checkout and an isolated development profile when run from a Git worktree. Development profiles use a deterministic port, `~/.rook-<worktree-slug>` for user-local state, an isolated SQLite database, and a distinct Mac app identity. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain distinct. Set `ROOK_RUN_MODE=production|development` to override detection, or `ROOK_PRODUCTION_ROOT` to identify the main checkout explicitly. Development servers are loopback-only unless `ROOK_DEV_ALLOW_REMOTE=1` is set. On first launch, development profiles seed their isolated home by copying `~/.rook`; later changes stay profile-local. Set `ROOK_AGENT_RUNTIMES_PATH` to use a different runtime catalog explicitly.
+
+### `npm run test:launcher` — test launcher profiles and lifecycle
+
+Runs hermetic Bash tests from `lib/run-rook/` using temporary Git worktrees, fake processes, and fake listeners. The tests cover profile selection, path/port configuration, same-basename worktrees, profile-scoped stopping, `stop --all` discovery, and refusal to adopt another profile's healthy server.
 
 ### `run-tests.sh` — run all test suites
 
@@ -122,6 +129,7 @@ lib/
 │   └── environment.ts                  # Re-exports from server/src/shared/environment
 └── run-rook/                           # Shared bash helpers + per-target launch logic
     ├── common.sh
+    ├── profile.sh
     ├── mac.sh
     ├── iphone.sh
     └── android.sh

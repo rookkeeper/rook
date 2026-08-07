@@ -53,7 +53,7 @@ export interface BuildServerOptions {
   poiProvider?: PoiLookupProvider;
   /** Optional bearer token required by all HTTP + WebSocket requests. */
   authToken?: string;
-  /** Optional canonical environment repository database. Directory storage remains the default until cutover. */
+  /** Optional canonical environment repository database. */
   environmentRepositoryDatabase?: string;
   /** Optional user-local environment repository database used with the canonical database. */
   personalEnvironmentRepositoryDatabase?: string;
