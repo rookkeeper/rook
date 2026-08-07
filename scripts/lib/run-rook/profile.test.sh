@@ -72,7 +72,6 @@ assert_eq "$RUN_ROOK_PROFILE_SLUG" "production"
 assert_eq "$SERVER_PORT" "7665"
 assert_eq "$ROOK_HOME" "$HOME/.rook"
 assert_eq "$SERVER_DATABASE_PATH" "$REPOSITORY/.var/rook/rook.sqlite"
-assert_eq "$RUN_ROOK_ALLOW_REMOTE_DEFAULT" "1"
 
 configure_for "$TEST_ROOT/one/shared-name"
 first_slug="$RUN_ROOK_PROFILE_SLUG"

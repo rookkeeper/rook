@@ -239,7 +239,7 @@ stop_everything_all() {
 stop_requested_targets() {
   (( HAS_MAC_TARGET )) && stop_mac_app
   (( HAS_ANDROID_TARGET )) && stop_android_app
-  if (( HAS_SERVER_TARGET || HAS_SERVER_NEXT_TARGET )); then
+  if (( HAS_SERVER_TARGET )); then
     stop_server_for_profile
   fi
 }
