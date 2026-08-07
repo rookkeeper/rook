@@ -20,7 +20,9 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
   input/output (including auto-rendering well-formed JSON tool arguments as
   human-readable YAML), and assistant markdown with native drag-selection,
   standard copy/paste behavior, a copy-source button, and progressive
-  render-as-it-streams for stabilized markdown prefixes; also renders plans,
+  render-as-it-streams for stabilized markdown prefixes. The composer accepts
+  pasted or dragged images, inserts thumbnails inline with text, preserves their
+  order, and sends them as standard ACP image blocks; it also renders plans,
   run errors, stop/cancel semantics, context usage, and optional usage cost.
 - **ACP controls** — native support for permission requests
   (`session/request_permission`), session mode changes (`session/set_mode` /

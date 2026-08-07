@@ -9,6 +9,7 @@ public final class AcpSocket {
 
     public private(set) var isConnected = false
     public private(set) var currentSessionId: String?
+    public private(set) var supportsImagePrompts = false
 
     private var task: URLSessionWebSocketTask?
     private var connectTask: Task<[String: Any], Error>?
@@ -45,6 +46,7 @@ public final class AcpSocket {
         task = nil
         connectTask = nil
         currentSessionId = nil
+        supportsImagePrompts = false
         runtimeIDs = []
         defaultRuntimeID = nil
         environmentOfferExtensionEnabled = false
@@ -60,6 +62,7 @@ public final class AcpSocket {
 
     public func runtimeCatalog() -> [String] { runtimeIDs }
     public func defaultRuntime() -> String? { defaultRuntimeID }
+    public func setSupportsImagePrompts(_ supported: Bool) { supportsImagePrompts = supported }
 
     public func selectSession(_ sessionId: String?) {
         currentSessionId = sessionId
@@ -90,12 +93,14 @@ public final class AcpSocket {
         guard let sessionId = result["sessionId"] as? String else {
             throw SocketError.server("Server returned no sessionId")
         }
+        supportsImagePrompts = imagePromptCapability(from: result)
         currentSessionId = sessionId
         return sessionId
     }
 
     public func loadSession(_ sessionId: String) async throws {
-        _ = try await request(method: "session/load", params: ["sessionId": sessionId])
+        let result = try await request(method: "session/load", params: ["sessionId": sessionId])
+        supportsImagePrompts = imagePromptCapability(from: result)
         currentSessionId = sessionId
     }
 
@@ -106,22 +111,35 @@ public final class AcpSocket {
         }
     }
 
-    public func sendPrompt(text: String) {
+    public func sendPrompt(content: [ChatPromptContent]) {
         guard let sessionId = currentSessionId else {
             onEvent?(.connectionError(message: "Not connected to a session"))
             return
         }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !content.isEmptyPrompt else { return }
         nextRequestID += 1
         let requestId = "prompt-\(nextRequestID)"
         pendingPromptIds.insert(requestId)
-        pendingUserMessageEchoes.append(trimmed)
+        let text = content.textValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty { pendingUserMessageEchoes.append(text) }
+        let prompt: [[String: Any]] = content.compactMap { item in
+            switch item {
+            case .text(let value):
+                guard !value.isEmpty else { return nil }
+                return ["type": "text", "text": value]
+            case .image(let image):
+                return [
+                    "type": "image",
+                    "mimeType": image.mimeType,
+                    "data": image.base64Data,
+                ]
+            }
+        }
         Task {
             do {
                 let _ = try await sendRequest(id: requestId, method: "session/prompt", params: [
                     "sessionId": sessionId,
-                    "prompt": [["type": "text", "text": trimmed]],
+                    "prompt": prompt,
                 ])
             } catch {
                 pendingPromptIds.remove(requestId)
@@ -208,6 +226,10 @@ public final class AcpSocket {
             "clientInfo": ["name": "rook", "title": "Rook", "version": "0.1.0"],
         ])
         let meta = initialize["_meta"] as? [String: Any]
+        if let agentCapabilities = initialize["agentCapabilities"] as? [String: Any],
+           let promptCapabilities = agentCapabilities["promptCapabilities"] as? [String: Any] {
+            supportsImagePrompts = promptCapabilities["image"] as? Bool ?? false
+        }
         runtimeIDs = (meta?["runtimeIds"] as? [String]) ?? []
         defaultRuntimeID = meta?["defaultRuntimeId"] as? String
         if let ext = meta?["com.rookkeeper"] as? [String: Any], ext["environmentOffers"] != nil {
@@ -425,6 +447,11 @@ public final class AcpSocket {
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed == "{}" ? nil : trimmed
+    }
+
+    private func imagePromptCapability(from result: [String: Any]) -> Bool {
+        guard let capabilities = result["promptCapabilities"] as? [String: Any] else { return false }
+        return capabilities["image"] as? Bool ?? false
     }
 
     private func parseUsageCost(_ value: Any?) -> AcpUsageCost? {

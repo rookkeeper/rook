@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import RookKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ChatDetail: View {
     @ObservedObject var model: RookMacModel
@@ -12,6 +13,8 @@ struct ChatDetail: View {
     @State private var isHoveringSend = false
     @State private var settingsExpanded = false
     @State private var threadIsAtBottom = true
+    @State private var composerContent: [ChatPromptContent] = []
+    @State private var composeError = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -37,6 +40,13 @@ struct ChatDetail: View {
 
             if settingsExpanded, hasSettings {
                 settingsCard
+            }
+
+            if !composeError.isEmpty {
+                Text(composeError)
+                    .font(.caption)
+                    .foregroundStyle(PanelPalette.danger)
+                    .padding(.horizontal, 6)
             }
 
             statusRow
@@ -237,6 +247,11 @@ struct ChatDetail: View {
                             .truncationMode(.tail)
                         Spacer(minLength: 4)
                         HStack(spacing: 6) {
+                            if !message.images.isEmpty {
+                                Label("\(message.images.count)", systemImage: "photo")
+                                    .font(.caption2)
+                                    .foregroundStyle(PanelPalette.secondaryText)
+                            }
                             queueButton("Edit", systemImage: "pencil", tint: PanelPalette.secondaryText) {
                                 model.beginEditingQueuedMessage(message.id)
                             }
@@ -327,10 +342,19 @@ struct ChatDetail: View {
     private var composeRow: some View {
         HStack(alignment: .bottom, spacing: 8) {
             ChatComposeTextView(
-                text: $draft,
+                content: $composerContent,
                 placeholder: composePlaceholder,
                 measuredHeight: $composeHeight,
-                onSubmit: submit
+                onSubmit: submit,
+                onContentChange: { content in
+                    guard content.images.isEmpty || model.supportsImagePrompts else {
+                        composeError = "The selected runtime does not support image prompts."
+                        return
+                    }
+                    composerContent = content
+                    composeError = ""
+                },
+                onError: { composeError = $0 }
             )
             .frame(minHeight: 38, maxHeight: 96)
             .frame(height: min(max(composeHeight, 38), 96))
@@ -358,7 +382,7 @@ struct ChatDetail: View {
             .onHover { isHoveringSend = $0 }
             .buttonStyle(.plain)
             .help(model.isRunning ? "Queue message" : "Send message")
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(composerContent.isEmptyPrompt)
             .pointingHandOnHover()
         }
     }
@@ -452,21 +476,25 @@ struct ChatDetail: View {
     }
 
     private func submit() {
-        let text = draft
-        draft = ""
+        let content = composerContent
+        guard !content.isEmptyPrompt else { return }
+        composerContent = []
+        composeError = ""
         model.resumeAutoScroll()
-        model.send(text)
+        model.send(content)
     }
 }
 
 private struct ChatComposeTextView: NSViewRepresentable {
-    @Binding var text: String
+    @Binding var content: [ChatPromptContent]
     var placeholder: String
     @Binding var measuredHeight: CGFloat
     var onSubmit: () -> Void
+    var onContentChange: ([ChatPromptContent]) -> Void
+    var onError: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, placeholder: placeholder, measuredHeight: $measuredHeight, onSubmit: onSubmit)
+        Coordinator(content: $content, placeholder: placeholder, measuredHeight: $measuredHeight, onSubmit: onSubmit, onContentChange: onContentChange, onError: onError)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -487,6 +515,22 @@ private struct ChatComposeTextView: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         textView.delegate = context.coordinator
+        textView.onPasteImage = { [weak coordinator = context.coordinator, weak textView] in
+            guard let textView else { return false }
+            return coordinator?.handlePasteboard(NSPasteboard.general, in: textView) ?? false
+        }
+        textView.onDrop = { [weak coordinator = context.coordinator, weak textView] pasteboard in
+            guard let textView else { return false }
+            return coordinator?.handlePasteboard(pasteboard, in: textView) ?? false
+        }
+        textView.registerForDraggedTypes([
+            .fileURL,
+            .png,
+            .tiff,
+            NSPasteboard.PasteboardType(UTType.jpeg.identifier),
+            NSPasteboard.PasteboardType(UTType.gif.identifier),
+            NSPasteboard.PasteboardType(UTType.webP.identifier),
+        ])
         textView.drawsBackground = false
         textView.isRichText = false
         textView.importsGraphics = false
@@ -498,8 +542,7 @@ private struct ChatComposeTextView: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
-        textView.string = text
-        context.coordinator.updateHeight(for: textView)
+        context.coordinator.apply(content: content, to: textView)
         return scrollView
     }
 
@@ -507,33 +550,63 @@ private struct ChatComposeTextView: NSViewRepresentable {
         guard let textView = scrollView.documentView as? SubmitTextView else {
             return
         }
-        if textView.string != text {
-            textView.string = text
-        }
+        context.coordinator.apply(content: content, to: textView)
         context.coordinator.placeholder = placeholder
         textView.needsDisplay = true
         context.coordinator.updateHeight(for: textView)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
-        @Binding var text: String
+        @Binding var content: [ChatPromptContent]
         @Binding var measuredHeight: CGFloat
         var placeholder: String
         var onSubmit: () -> Void
+        var onContentChange: ([ChatPromptContent]) -> Void
+        var onError: (String) -> Void
+        private var renderedContent: [ChatPromptContent] = []
+        private var applyingContent = false
 
-        init(text: Binding<String>, placeholder: String, measuredHeight: Binding<CGFloat>, onSubmit: @escaping () -> Void) {
-            _text = text
+        init(content: Binding<[ChatPromptContent]>, placeholder: String, measuredHeight: Binding<CGFloat>, onSubmit: @escaping () -> Void, onContentChange: @escaping ([ChatPromptContent]) -> Void, onError: @escaping (String) -> Void) {
+            _content = content
             _measuredHeight = measuredHeight
             self.placeholder = placeholder
             self.onSubmit = onSubmit
+            self.onContentChange = onContentChange
+            self.onError = onError
+        }
+
+        func apply(content: [ChatPromptContent], to textView: NSTextView) {
+            guard renderedContent != content else { return }
+            applyingContent = true
+            let selection = textView.selectedRange()
+            textView.textStorage?.setAttributedString(makeAttributedString(content))
+            let location = min(selection.location, textView.string.utf16.count)
+            textView.setSelectedRange(NSRange(location: location, length: 0))
+            applyingContent = false
+            renderedContent = content
+        }
+
+        func handlePasteboard(_ pasteboard: NSPasteboard, in textView: NSTextView) -> Bool {
+            do {
+                guard let attachment = try MacImageAttachmentFactory.make(from: pasteboard) else { return false }
+                guard !extractContent(from: textView).images.contains(where: { $0.base64Data == attachment.base64Data }) else { return true }
+                let replacement = makeAttributedString([.image(attachment)])
+                let selection = textView.selectedRange()
+                textView.textStorage?.replaceCharacters(in: selection, with: replacement)
+                textView.setSelectedRange(NSRange(location: selection.location + 1, length: 0))
+                notifyContentChanged(for: textView)
+                return true
+            } catch {
+                onError(error.localizedDescription)
+                return true
+            }
         }
 
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else {
+            guard !applyingContent, let textView = notification.object as? NSTextView else {
                 return
             }
-            text = textView.string
-            updateHeight(for: textView)
+            notifyContentChanged(for: textView)
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -552,6 +625,57 @@ private struct ChatComposeTextView: NSViewRepresentable {
             return false
         }
 
+        private func notifyContentChanged(for textView: NSTextView) {
+            let next = extractContent(from: textView)
+            renderedContent = next
+            onContentChange(next)
+            updateHeight(for: textView)
+        }
+
+        private func makeAttributedString(_ content: [ChatPromptContent]) -> NSAttributedString {
+            let result = NSMutableAttributedString()
+            let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize)]
+            for item in content {
+                switch item {
+                case .text(let text):
+                    result.append(NSAttributedString(string: text, attributes: attributes))
+                case .image(let image):
+                    guard let data = image.data, let nsImage = NSImage(data: data) else { continue }
+                    let attachment = NSTextAttachment()
+                    attachment.image = nsImage
+                    attachment.bounds = NSRect(x: 0, y: -4, width: 28, height: 28)
+                    let start = result.length
+                    result.append(NSAttributedString(attachment: attachment))
+                    result.addAttribute(NSAttributedString.Key("RookChatImageAttachment"), value: image, range: NSRange(location: start, length: 1))
+                }
+            }
+            return result
+        }
+
+        private func extractContent(from textView: NSTextView) -> [ChatPromptContent] {
+            guard let storage = textView.textStorage else { return [] }
+            let imageKey = NSAttributedString.Key("RookChatImageAttachment")
+            var result: [ChatPromptContent] = []
+            var location = 0
+            while location < storage.length {
+                var range = NSRange(location: location, length: 0)
+                if let image = storage.attribute(imageKey, at: location, effectiveRange: &range) as? ChatImageAttachment {
+                    result.append(.image(image))
+                } else {
+                    let text = storage.attributedSubstring(from: range).string
+                    if !text.isEmpty && text != "\u{FFFC}" {
+                        if case .text(let previous)? = result.last {
+                            result[result.count - 1] = .text(previous + text)
+                        } else {
+                            result.append(.text(text))
+                        }
+                    }
+                }
+                location = NSMaxRange(range)
+            }
+            return result
+        }
+
         func updateHeight(for textView: NSTextView) {
             guard let layoutManager = textView.layoutManager, let textContainer = textView.textContainer else {
                 return
@@ -567,6 +691,64 @@ private struct ChatComposeTextView: NSViewRepresentable {
 }
 
 private final class SubmitTextView: NSTextView {
+    var onPasteImage: (() -> Bool)?
+    var onDrop: ((NSPasteboard) -> Bool)?
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.keyCode == 9, event.modifierFlags.contains(.command), onPasteImage?() == true {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 9, event.modifierFlags.contains(.command), onPasteImage?() == true {
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func paste(_ sender: Any?) {
+        if onPasteImage?() == true { return }
+        super.paste(sender)
+    }
+
+    override func pasteAsPlainText(_ sender: Any?) {
+        if onPasteImage?() == true { return }
+        super.pasteAsPlainText(sender)
+    }
+
+    override func pasteAsRichText(_ sender: Any?) {
+        if onPasteImage?() == true { return }
+        super.pasteAsRichText(sender)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let types = sender.draggingPasteboard.types ?? []
+        let rawImageTypes: Set<NSPasteboard.PasteboardType> = [
+            .png,
+            .tiff,
+            NSPasteboard.PasteboardType(UTType.jpeg.identifier),
+            NSPasteboard.PasteboardType(UTType.gif.identifier),
+            NSPasteboard.PasteboardType(UTType.webP.identifier),
+        ]
+        guard sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) || !rawImageTypes.isDisjoint(with: Set(types)) else {
+            return []
+        }
+        return .copy
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let point = convert(sender.draggingLocation, from: nil)
+        let index = characterIndex(for: point)
+        setSelectedRange(NSRange(location: index, length: 0))
+        return .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        onDrop?(sender.draggingPasteboard) ?? false
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 

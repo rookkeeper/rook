@@ -19,6 +19,7 @@
 		3940FBAF5C395485EF47AD06 /* DescriptEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B45927F85F1F4A50E48CCDF /* DescriptEnvironmentProviderTests.swift */; };
 		419704B079AFD2478AA896D9 /* ObsidianEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 941EDDB77C90AA9FD6843DD6 /* ObsidianEnvironmentProviderTests.swift */; };
 		437DFA10167DD112587F7EB5 /* EnvironmentsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93A5264726E74327D489A47 /* EnvironmentsDetailView.swift */; };
+		60A23F92DBE7E8434F6058CD /* MacImageAttachmentFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77DA2212E080B005F7111E80 /* MacImageAttachmentFactoryTests.swift */; };
 		620DCBCC3C91EFE21C5C2697 /* RookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 08EDA88AD90E24EB23D3D170 /* RookKit */; };
 		63D2E0332EA1C12AED347106 /* DescriptEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6978A7CFCFEF87F2952C4AC5 /* DescriptEnvironmentProvider.swift */; };
 		64732F130DD711AA245FEE1A /* ScreenCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 684A1389822C3C6175B654FC /* ScreenCapturer.swift */; };
@@ -43,6 +44,7 @@
 		CEEBCE8607A6BCB97868C2A0 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2330969071E5BF5037823E /* ChatView.swift */; };
 		D323C04BBED012225BCB910F /* AppEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB3BA363AD70B9B41E1823F /* AppEnvironmentProvider.swift */; };
 		E1AE321D976D7E91E7CCE85F /* EnvironmentOfferControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700CE33894B323CBE9D99B12 /* EnvironmentOfferControllerTests.swift */; };
+		EB7ED8FCC7C9597E430A20D7 /* MacImageAttachmentFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 208361F86466FB1CF444A79B /* MacImageAttachmentFactory.swift */; };
 		EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0087B8D63F86E9DD505D802D /* LogViewerView.swift */; };
 		EC3CCE47D902A251BD27408A /* RookMacChatSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */; };
 /* End PBXBuildFile section */
@@ -61,6 +63,7 @@
 		0087B8D63F86E9DD505D802D /* LogViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogViewerView.swift; sourceTree = "<group>"; };
 		08EF90459F4F62F45D925B32 /* AXReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXReader.swift; sourceTree = "<group>"; };
 		1FD0CA244739F56CDABF5F1C /* OBSStudioEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBSStudioEnvironmentProviderTests.swift; sourceTree = "<group>"; };
+		208361F86466FB1CF444A79B /* MacImageAttachmentFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacImageAttachmentFactory.swift; sourceTree = "<group>"; };
 		25E9E22AB1F639E8B0DA98B4 /* FinderEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderEnvironmentProvider.swift; sourceTree = "<group>"; };
 		269B251888C4528269DA7E81 /* RookMacSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacSupport.swift; sourceTree = "<group>"; };
 		2970A475DCF3F26A17C649E2 /* Rook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rook.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -79,6 +82,7 @@
 		684A1389822C3C6175B654FC /* ScreenCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapturer.swift; sourceTree = "<group>"; };
 		6978A7CFCFEF87F2952C4AC5 /* DescriptEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DescriptEnvironmentProvider.swift; sourceTree = "<group>"; };
 		700CE33894B323CBE9D99B12 /* EnvironmentOfferControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferControllerTests.swift; sourceTree = "<group>"; };
+		77DA2212E080B005F7111E80 /* MacImageAttachmentFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacImageAttachmentFactoryTests.swift; sourceTree = "<group>"; };
 		7F2330969071E5BF5037823E /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		891E038256B011C6B53596BB /* HotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKey.swift; sourceTree = "<group>"; };
 		89D369786A8FE57C99D452D1 /* RookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookView.swift; sourceTree = "<group>"; };
@@ -165,6 +169,7 @@
 				700CE33894B323CBE9D99B12 /* EnvironmentOfferControllerTests.swift */,
 				F944826D4DF0C05CAB24B551 /* EnvironmentProviderSupportTests.swift */,
 				E9E5581B2B0E5B8573C71E69 /* FinderEnvironmentProviderTests.swift */,
+				77DA2212E080B005F7111E80 /* MacImageAttachmentFactoryTests.swift */,
 				941EDDB77C90AA9FD6843DD6 /* ObsidianEnvironmentProviderTests.swift */,
 				1FD0CA244739F56CDABF5F1C /* OBSStudioEnvironmentProviderTests.swift */,
 				3343AE46AAED661AD40C912B /* SlackEnvironmentProviderTests.swift */,
@@ -204,6 +209,7 @@
 				891E038256B011C6B53596BB /* HotKey.swift */,
 				5143B8CA8023334102A62F2C /* InputSynthesizer.swift */,
 				FCDBF5403D71795728D9928A /* MacBridge.swift */,
+				208361F86466FB1CF444A79B /* MacImageAttachmentFactory.swift */,
 				684A1389822C3C6175B654FC /* ScreenCapturer.swift */,
 				31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */,
 				3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */,
@@ -340,6 +346,7 @@
 				C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */,
 				EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */,
 				86F91627A128BBD4CBF341B2 /* MacBridge.swift in Sources */,
+				EB7ED8FCC7C9597E430A20D7 /* MacImageAttachmentFactory.swift in Sources */,
 				A42863FF4BE5CA2C3871D94D /* OBSStudioEnvironmentProvider.swift in Sources */,
 				071B3FB59CED95720606766F /* ObsidianEnvironmentProvider.swift in Sources */,
 				BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */,
@@ -364,6 +371,7 @@
 				E1AE321D976D7E91E7CCE85F /* EnvironmentOfferControllerTests.swift in Sources */,
 				85C2D954A01F79270B40A48D /* EnvironmentProviderSupportTests.swift in Sources */,
 				C85887BE97842995601DE67E /* FinderEnvironmentProviderTests.swift in Sources */,
+				60A23F92DBE7E8434F6058CD /* MacImageAttachmentFactoryTests.swift in Sources */,
 				159D103CE9B49E8DBB2CA0F5 /* OBSStudioEnvironmentProviderTests.swift in Sources */,
 				419704B079AFD2478AA896D9 /* ObsidianEnvironmentProviderTests.swift in Sources */,
 				C1C532DBF0E733EDBEE32EEA /* SlackEnvironmentProviderTests.swift in Sources */,

@@ -168,8 +168,70 @@ public struct EnvironmentBanner: Equatable {
     }
 }
 
+/// An image attachment carried in an ACP prompt. Data is base64 so the same
+/// value can be queued locally and serialized into a JSON-RPC prompt block.
+public struct ChatImageAttachment: Equatable, Identifiable {
+    public let id: String
+    public let mimeType: String
+    public let base64Data: String
+
+    public init(id: String = UUID().uuidString, mimeType: String, base64Data: String) {
+        self.id = id
+        self.mimeType = mimeType
+        self.base64Data = base64Data
+    }
+
+    public var data: Data? { Data(base64Encoded: base64Data) }
+}
+
+/// Ordered prompt content. Keeping text and images in one sequence preserves
+/// the order in which the user composed the request.
+public enum ChatPromptContent: Equatable {
+    case text(String)
+    case image(ChatImageAttachment)
+
+    public var textValue: String {
+        switch self {
+        case .text(let text): return text
+        case .image: return ""
+        }
+    }
+
+    public var imageValue: ChatImageAttachment? {
+        switch self {
+        case .text: return nil
+        case .image(let image): return image
+        }
+    }
+}
+
+public extension Array where Element == ChatPromptContent {
+    var textValue: String { compactMap(\.textValue).joined() }
+    var images: [ChatImageAttachment] { compactMap(\.imageValue) }
+    var isEmptyPrompt: Bool { images.isEmpty && textValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    func replacingText(with text: String) -> [ChatPromptContent] {
+        var result: [ChatPromptContent] = []
+        var inserted = false
+        for item in self {
+            switch item {
+            case .text:
+                if !inserted, !text.isEmpty {
+                    result.append(.text(text))
+                    inserted = true
+                }
+            case .image:
+                result.append(item)
+            }
+        }
+        if !inserted, !text.isEmpty { result.insert(.text(text), at: 0) }
+        return result
+    }
+}
+
 public enum ChatBlockKind: Equatable {
     case user(text: String)
+    case userContent([ChatPromptContent])
     case assistantText(text: String, streaming: Bool)
     case thinking(text: String, streaming: Bool)
     case tool(ToolBlockState)

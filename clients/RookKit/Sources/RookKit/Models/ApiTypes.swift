@@ -35,6 +35,7 @@ public struct AgentSessionSummary: Equatable, Identifiable {
 
     public var id: String { raw["id"]?.stringValue ?? raw["sessionId"]?.stringValue ?? "" }
     public var agent: String { raw["agent"]?.stringValue ?? raw["_meta"]?["runtimeId"]?.stringValue ?? "" }
+    public var supportsImagePrompts: Bool { raw["supportsImagePrompts"]?.boolValue ?? raw["_meta"]?["supportsImagePrompts"]?.boolValue ?? false }
     public var name: String { raw["name"]?.stringValue ?? raw["title"]?.stringValue ?? "default" }
     public var running: Bool { raw["running"]?.boolValue ?? false }
     public var connectedClients: Int { Int(raw["connectedClients"]?.numberValue ?? 0) }

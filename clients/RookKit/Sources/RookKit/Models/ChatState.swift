@@ -4,14 +4,17 @@ import Foundation
 
 public struct QueuedChatMessage: Identifiable, Equatable {
     public let id: String
-    public var text: String
+    public var content: [ChatPromptContent]
     public var draftText: String
     public var isEditing = false
 
-    public init(id: String, text: String, draftText: String, isEditing: Bool = false) {
+    public var text: String { content.textValue }
+    public var images: [ChatImageAttachment] { content.images }
+
+    public init(id: String, content: [ChatPromptContent], draftText: String? = nil, isEditing: Bool = false) {
         self.id = id
-        self.text = text
-        self.draftText = draftText
+        self.content = content
+        self.draftText = draftText ?? content.textValue
         self.isEditing = isEditing
     }
 }
