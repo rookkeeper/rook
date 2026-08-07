@@ -19,7 +19,9 @@ public struct ChatBlockView: View {
     public var body: some View {
         switch block.kind {
         case .user(let text):
-            UserBlockView(text: text)
+            UserBlockView(content: [.text(text)])
+        case .userContent(let content):
+            UserBlockView(content: content)
         case .assistantText(let text, let streaming):
             AssistantTextBlockView(text: text, streaming: streaming)
         case .thinking(let text, let streaming):
@@ -85,8 +87,10 @@ private func bubbleShape(tailAt corner: UnitPoint) -> UnevenRoundedRectangle {
 private struct UserBlockView: View {
     private static let collapsedLineLimit = 5
 
-    var text: String
+    var content: [ChatPromptContent]
     @State private var expanded = false
+
+    private var text: String { content.textValue }
 
     private var isCollapsedByDefault: Bool {
         estimatedLineCount(for: text) > Self.collapsedLineLimit
@@ -110,19 +114,43 @@ private struct UserBlockView: View {
                     }
                 }
 
-                Text(text)
-                    .font(.callout)
-                    .foregroundStyle(.white)
-                    .textSelection(.enabled)
-                    .multilineTextAlignment(.trailing)
-                    .lineLimit(isCollapsedByDefault && !expanded ? Self.collapsedLineLimit : nil)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                ForEach(Array(content.enumerated()), id: \.offset) { _, item in
+                    switch item {
+                    case .text(let text):
+                        Text(text)
+                            .font(.callout)
+                            .foregroundStyle(.white)
+                            .textSelection(.enabled)
+                            .multilineTextAlignment(.trailing)
+                            .lineLimit(isCollapsedByDefault && !expanded ? Self.collapsedLineLimit : nil)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    case .image(let attachment):
+                        if let image = chatImage(from: attachment) {
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 260, maxHeight: 220)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(bubbleShape(tailAt: .bottomTrailing).fill(PanelPalette.accent))
         }
     }
+}
+
+private func chatImage(from attachment: ChatImageAttachment) -> Image? {
+    guard let data = attachment.data else { return nil }
+#if os(macOS)
+    guard let image = NSImage(data: data) else { return nil }
+    return Image(nsImage: image)
+#else
+    guard let image = UIImage(data: data) else { return nil }
+    return Image(uiImage: image)
+#endif
 }
 
 private struct AssistantTextBlockView: View {

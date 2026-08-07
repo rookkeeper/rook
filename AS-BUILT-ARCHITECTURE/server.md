@@ -16,6 +16,7 @@ The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with 
   - restarts only the affected session when environment state changes
 - `runtime/SessionRuntime`
   - generic ACP stdio transport for a single session runtime process
+  - forwards standard ACP image prompt blocks unchanged to image-capable runtimes
   - initializes the subprocess, sends JSON-RPC, and relays notifications
 - `environments/services/EnvironmentManager`
   - tracks available environments, offers, approvals, active/recent state, and session subscriptions
@@ -68,7 +69,7 @@ See also: [database.md](./database.md)
   - `session/new` (unbound websocket only; success binds that websocket to the new public session)
   - `session/load`
   - `session/resume`
-  - `session/prompt`
+  - `session/prompt` (including standard ACP image blocks when the selected runtime supports them)
   - `session/cancel`
   - `session/set_mode`
   - `session/set_config_option`
@@ -93,7 +94,7 @@ See also: [database.md](./database.md)
 - `GET /api/diagnostics/environments`
 
 ### Runtime boundary
-`SessionRuntime` speaks newline-delimited ACP JSON-RPC over stdio to subprocesses launched from runtime profiles. Supported runtime types are configured, not implicit: `pi`, `claude`, `cursor`, and generic `acp`.
+`SessionRuntime` speaks newline-delimited ACP JSON-RPC over stdio to subprocesses launched from runtime profiles. Supported runtime types are configured, not implicit: `pi`, `claude`, `cursor`, and generic `acp`. Runtime profiles report image-prompt support explicitly (Pi defaults to supported), and the facade validates image MIME/data limits before forwarding.
 
 ## Local profile configuration
 

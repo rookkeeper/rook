@@ -46,6 +46,7 @@ final class ChatSessionController {
     var isRunning: Bool { currentHandle?.isRunning ?? false }
     var statusLine: String { currentHandle?.statusLine ?? "" }
     var socketConnected: Bool { currentHandle?.socketConnected ?? false }
+    var supportsImagePrompts: Bool { currentHandle?.supportsImagePrompts ?? false }
     var reconnecting: Bool { currentHandle?.reconnecting ?? false }
     var contextUsage: ContextUsageState? { currentHandle?.contextUsage }
     var currentModes: AcpModesState? { currentHandle?.currentModes }
@@ -157,7 +158,7 @@ final class ChatSessionController {
         }
     }
 
-    func send(_ text: String) { currentHandle?.send(text) }
+    func send(_ content: [ChatPromptContent]) { currentHandle?.send(content) }
     func stopAgent() { currentHandle?.stopAgent() }
     func removeQueuedMessage(at index: Int) { currentHandle?.removeQueuedMessage(at: index) }
     func beginEditingQueuedMessage(_ id: String) { currentHandle?.beginEditingQueuedMessage(id) }
@@ -179,7 +180,7 @@ final class ChatSessionController {
 
     private func getOrCreateHandle(for session: AgentSessionSummary) -> SessionHandle {
         if let existing = handles[session.id] { return existing }
-        let handle = SessionHandle(sessionId: session.id, api: api)
+        let handle = SessionHandle(sessionId: session.id, api: api, supportsImagePrompts: session.supportsImagePrompts)
         handles[session.id] = handle
         return handle
     }

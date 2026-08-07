@@ -17,7 +17,7 @@
 - `Models/ApiTypes.swift`
   - runtime/session/environment/location DTOs
 - `Models/ChatBlocks.swift`
-  - client-side chat/event abstractions used by both apps
+  - client-side chat/event abstractions used by both apps, including ACP-ready image attachments
 - `Models/JSONValue.swift`
   - Codable dynamic JSON representation for round-tripping wire payloads
 - `Design/*`
@@ -37,7 +37,7 @@
 - `disconnect()`
 - `createSession(runtimeId:title:cwd:)`
 - `loadSession(_:)`
-- `sendPrompt(text:)`
+- `sendPrompt(content:)` for ordered text/image blocks
 - `sendCancel()`
 - `setMode(_:)`
 - `setConfigOption(configId:value:)`
@@ -89,6 +89,8 @@
 - `AcpPermissionToolCall`, `AcpPermissionOption`
 - `EnvironmentBanner`
 - `AcpClientEvent`
+- `ChatImageAttachment`
+- `ChatPromptContent` — ordered text/image prompt items used by the composer, queues, blocks, and ACP transport
 
 ## Main processes
 
@@ -109,6 +111,7 @@
 2. RookKit design views render the block list consistently across macOS and iOS
 3. markdown/tool payload helpers normalize output for display
 4. `EnvironmentListPresentation` applies shared list-refresh behavior for environment metadata
+5. image prompts use standard ACP image blocks in composer order; Mac paste/drop staging never becomes part of the runtime working-directory contract
 
 ## Notable architectural characteristics
 

@@ -40,6 +40,13 @@
 
 **Notes:** [Boundary changes, new components, deprecated patterns]
 
+## New tests
+
+_If tests changed, summarize the new behavior covered at a high level. Keep this to a few bullets; do not list every test case._
+
+- [Behavior or boundary covered]
+- [Regression or integration behavior covered]
+
 ## Technical touchpoints
 
 _Optional. Abstract only — major types, services, APIs, events, schemas._

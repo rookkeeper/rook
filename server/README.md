@@ -102,7 +102,7 @@ It implements:
 - `session/list` — legacy/unbound-only session list (REST is preferred)
 - `session/new` — creates session for a chosen runtime via `_meta.runtimeId` and `_meta.title` on an unbound websocket; on success that same websocket becomes bound to the new public session
 - `session/load`, `session/resume` — loads an existing session; replay is requester-private, not broadcast to all watchers
-- `session/prompt`, `session/cancel` — standard prompt flow
+- `session/prompt`, `session/cancel` — standard prompt flow; image-capable runtimes accept standard ACP image content blocks with per-session capability reporting and bounded base64 validation
 - `session/set_mode`, `session/set_config_option` — ACP controls
 - `session/close` — closes a session
 - `session/request_permission` — permission request relay

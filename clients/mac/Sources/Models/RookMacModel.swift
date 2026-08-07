@@ -43,6 +43,7 @@ final class RookMacModel: ObservableObject {
     @Published var isRunning = false
     @Published var statusLine = ""
     @Published var socketConnected = false
+    @Published var supportsImagePrompts = false
     @Published var reconnecting = false
     @Published var contextUsage: ContextUsageState?
     @Published var currentModes: AcpModesState?
@@ -214,6 +215,7 @@ final class RookMacModel: ObservableObject {
         isRunning = chatSessionController.isRunning
         statusLine = chatSessionController.statusLine
         socketConnected = chatSessionController.socketConnected
+        supportsImagePrompts = chatSessionController.supportsImagePrompts
         reconnecting = chatSessionController.reconnecting
         contextUsage = chatSessionController.contextUsage
         currentModes = chatSessionController.currentModes
@@ -424,8 +426,8 @@ final class RookMacModel: ObservableObject {
         }
     }
 
-    func send(_ text: String) {
-        chatSessionController.send(text)
+    func send(_ content: [ChatPromptContent]) {
+        chatSessionController.send(content)
     }
 
     func stopAgent() {

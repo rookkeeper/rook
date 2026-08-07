@@ -14,6 +14,8 @@ Before ACP, Rookery used a custom realtime event vocabulary. ACP gives us a shar
 
 ## Rookery ACP extensions
 
+Standard ACP image content blocks are used for image-bearing prompts when the selected runtime advertises image support. Ordered text/image content is sent as ACP prompt blocks in the same sequence the user composed it. Rook does not turn Mac temporary file paths into a protocol-level attachment reference.
+
 ACP explicitly supports product-specific extensions in two ways:
 
 - custom data in `_meta`
