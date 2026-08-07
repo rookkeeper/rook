@@ -25,6 +25,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rookery.Rook
         PRODUCT_NAME: Rook
+        ROOK_APP_DISPLAY_NAME: Rook
         INFOPLIST_FILE: Sources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/Rook.entitlements
         ENABLE_HARDENED_RUNTIME: "NO"

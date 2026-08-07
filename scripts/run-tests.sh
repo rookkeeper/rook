@@ -65,6 +65,7 @@ run_step() {
   fi
 }
 
+run_step "run-rook launcher tests" bash -lc "cd '$REPO_ROOT' && npm run test:launcher"
 run_step "server tests" bash -lc "cd '$REPO_ROOT/server' && npm test"
 run_step "RookKit Swift package tests" bash -lc "cd '$REPO_ROOT/clients/RookKit' && swift test"
 run_step "iPhone XCTest suite" xcodebuild \

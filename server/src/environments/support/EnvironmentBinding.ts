@@ -1,6 +1,6 @@
 import { mkdirSync, readdirSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { getRookHomeDir } from "../../infrastructure/config/configPaths.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Environment Binding — user-local filesystem paths for environment authoring
@@ -11,7 +11,7 @@ import path from "node:path";
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function userEnvironmentRepositoryRoot(): string {
-  return path.join(os.homedir(), ".rook", "environment-repository");
+  return path.join(getRookHomeDir(), "environment-repository");
 }
 
 export interface EnvironmentBindingInfo {
