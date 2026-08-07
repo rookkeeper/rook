@@ -1,24 +1,6 @@
-// Mirrors clients/RookKit/Sources/RookKit/Net/AcpSocket.swift
-//
 // JSON-RPC 2.0 websocket client for /api/ws. Sends ACP requests over the websocket
 // and reduces standard ACP notifications into flat AcpClientEvents. Prompt completion
 // comes from the JSON-RPC response for the corresponding session/prompt request id.
-//
-// Divergences from the Swift source (all intentional):
-// - Events are a SharedFlow<AcpClientEvent> + StateFlow<Boolean> instead of closures.
-// - No @MainActor: OkHttp's WebSocketListener callbacks fire on OkHttp's reader thread,
-//   so each callback only `scope.launch{}`s the actual reducer call — same threading
-//   contract Swift's @MainActor imposes on callers. `handleFrame`/`handleUpdate` stay
-//   plain synchronous functions, which is what makes them unit-testable with no dispatcher.
-// - `sendPrompt`'s counter/pendingPromptIds/echo bookkeeping is split into `trackPrompt`
-//   so a test can drive the reducer without a real socket. Behavior is identical.
-// - Unlike Swift's `teardown()` (which sets its stored `isConnected` flag directly,
-//   bypassing `onConnectionChange`), this always updates the `isConnected` StateFlow —
-//   Kotlin's single reactive source of truth has no separate "state vs. notify" channel
-//   to replicate, and a stale StateFlow value would be a real bug, not just a quirk.
-// - `stringifyToolPayload` folds JSON null / non-string primitives to their plain content
-//   rather than replicating `String(describing: NSNull())`/`NSNumber` formatting quirks —
-//   those only affect the rare non-object tool payload, not shown to differ in practice.
 package com.rookery.rook.net
 
 import com.rookery.rook.model.AcpClientEvent

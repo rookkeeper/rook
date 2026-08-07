@@ -112,7 +112,6 @@ Columns:
 Important note:
 - only `approve` and `reject` are stored here
 - `bundle_id` is required for every durable decision
-- legacy nullable rows are discarded by the datastore schema migration
 - `accept` and `ignore` are intentionally in-memory session-scoped decisions managed by `EnvironmentManager`
 
 Used by:

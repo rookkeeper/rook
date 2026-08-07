@@ -110,4 +110,4 @@ Android defines Kotlin equivalents of the Swift shared models:
 - the location controller is intentionally process-wide so UI and services share one source of truth when the process is alive
 - the client is structurally close to the iPhone client, but the sensor/process model is much more Android-native
 - Android's session transport now follows the same session-bound ACP + REST transcript contract as the Apple clients
-- standard ACP notifications are the canonical event protocol; removed `_rookery_*` compatibility events are not part of the client
+- standard ACP notifications are the event protocol

@@ -36,7 +36,7 @@ class ApiTypesSerializationTest {
     }
 
     @Test
-    fun environmentListItemDecodesWithoutLegacyFields() {
+    fun environmentListItemDecodesServerShape() {
         val item = json.decodeFromString<EnvironmentListItem>(
             """
             {

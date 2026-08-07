@@ -38,7 +38,7 @@ Baseline: `AS-BUILT-ARCHITECTURE/README.md` and all six surface/database documen
 | `sessions` table | `SqliteSessionRepository` | Current |
 | `session_environments` table | `SqliteSessionRepository` | Current |
 | `session_transcript_events` table | `SessionTranscriptStore` | Current |
-| `environment_decisions` table | `EnvironmentDecisionStore` | Current bundle-hash lookup with required `bundle_id`; nullable legacy rows migrated out in [legacy decisions](server/environments/legacy-decision-shape.md) |
+| `environment_decisions` table | `EnvironmentDecisionStore` | Current bundle-hash lookup with required `bundle_id`; nullable legacy write path removed in [legacy decisions](server/environments/legacy-decision-shape.md) |
 | In-memory active/recent environments | `EnvironmentManager` | Intentional transient state |
 | In-memory accept/ignore decisions | `SessionDecisionRegistry` | Intentional lifetime split from durable decisions, not duplicate |
 

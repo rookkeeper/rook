@@ -199,7 +199,7 @@ Related tables:
 - one public session = one runtime subprocess
 - websocket connections are session-bound, not general multi-session ACP pipes
 - `session/load` replay is requester-private; it no longer fans out to every watcher of that session
-- session discovery has one canonical REST path; the removed WebSocket `session/list` compatibility method is not part of the facade
+- session discovery uses the REST sessions endpoint
 - the server owns a durable normalized transcript for each session so additional viewers can hydrate without runtime replay
 - environment state is session-specific at runtime launch time
 - durable decisions, transcript history, and session membership are SQLite-backed

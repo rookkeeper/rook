@@ -27,8 +27,6 @@ Rookery should prefer those sanctioned extension points rather than inventing no
 
 The live server-owned extension namespace is `_com.rookkeeper`. It currently carries environment offer notifications, offer resolution, and offer-resolution notifications. The extension is session-bound and is routed by `AgentRuntimeManager`.
 
-The older `_rookery/steering_prompt` design belonged to the removed room/agent stack and is not currently implemented by the as-built facade. It must not be revived by retaining old compatibility clients. If steering becomes an active product requirement again, implement it as a new, tested current-runtime extension with provider-specific details contained behind `SessionRuntime`.
-
 ### Future extension guidance
 
 When Rookery needs behavior outside the ACP core spec, prefer:

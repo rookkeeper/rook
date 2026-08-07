@@ -343,15 +343,12 @@ defaults write com.rookery.Rook ShowPanelWindow -bool false  # off
 
 ## Notes on the wire protocol
 
-- The websocket carries pure ACP JSON-RPC frames; the app sends only
-  `session/prompt` and treats the JSON-RPC response as end-of-turn.
-- `SessionHandle` reduces standard ACP updates and suppresses only the local
-  user-message echo that it already rendered.
-- Running sessions hydrate from the server-owned normalized transcript; inactive
-  sessions use requester-private ACP `session/load` replay.
-- There is one session-bound socket per session. The app keeps each handle alive
-  while a session is current - including while the panel is closed - and
-  reconnects that handle after genuine transport failures.
+- The websocket carries pure ACP JSON-RPC frames; the app sends standard
+  session methods and treats the JSON-RPC prompt response as end-of-turn.
+- Existing sessions hydrate from the server-owned REST transcript when the
+  runtime is already running; stopped sessions use ACP `session/load` replay.
+- The app keeps its session socket open while a session is current, including
+  while the panel is closed, and reconnects with the session-bound URL.
 - Intentional socket teardowns (switching sessions) are silent; only genuine
   transport failures trigger the reconnect path, and a successful connection
   cancels any armed reconnect.

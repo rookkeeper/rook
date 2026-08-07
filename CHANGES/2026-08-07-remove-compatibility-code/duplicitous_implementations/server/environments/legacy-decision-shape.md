@@ -2,7 +2,7 @@
 
 **Architecture area:** environment decisions and SQLite persistence.
 
-**Status:** Resolved: permanent decisions require known bundle hashes and the schema migration removes nullable legacy rows.
+**Status:** Resolved: permanent decisions require known bundle hashes; no nullable-schema compatibility bridge remains.
 
 ## Current model
 
@@ -29,4 +29,4 @@ Decide whether existing SQLite databases must remain readable. If not, make `bun
 - [x] Determine whether existing decision databases with null `bundle_id` are still supported.
 - [x] Audit all decision API callers for missing bundle hashes.
 - [x] If safe, make the schema and TypeScript signatures bundle-required.
-- [x] Add a migration or explicit rejection test for legacy rows.
+- [x] Add explicit API rejection and required storage types for legacy bundle-less decisions.

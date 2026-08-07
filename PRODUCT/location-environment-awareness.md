@@ -77,7 +77,7 @@ requested on first launch); without it the speed + server dwell gate still apply
   real?" picker could use the read-only path instead of auto-entering the best guess.
 - **Direct context summary.** If a concise pushed location summary is desired in addition
   to the skill bundle, define it as a current ACP/runtime feature with prompt-injection and
-  noise safeguards; do not restore the removed direct-renderer seam.
+  noise safeguards.
 - **Proactive location-triggered agent.** Have a location change auto-generate a prompt
   ("you're near X — any pending intents apply?"), backed by an intents store and **APNs**
   push, with cost/consent guards ("remind me to buy milk at the next grocery store").

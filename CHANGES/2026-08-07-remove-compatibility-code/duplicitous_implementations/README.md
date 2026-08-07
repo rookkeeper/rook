@@ -30,7 +30,7 @@ This began as an audit catalog and now records the completed cleanup. Compatibil
 - [Android session transport lag](clients/android/session-transport-lag.md) — Android now uses session-bound sockets and transcript hydration. **Resolved in code; device verification remains.**
 - [Android legacy ACP events](clients/android/legacy-acp-events.md) — obsolete `_rookery_*` event reducers were removed. **Resolved.**
 - [Legacy environment registration method](server/environments/legacy-registration-method.md) — candidate registration is now the sole registration path. **Resolved.**
-- [Legacy decision shape](server/environments/legacy-decision-shape.md) — permanent decisions now require known bundle hashes and legacy nullable rows are migrated out. **Resolved.**
+- [Legacy decision shape](server/environments/legacy-decision-shape.md) — permanent decisions now require known bundle hashes and the nullable legacy write path is gone. **Resolved.**
 - [Orphaned location prompt renderer](server/location/orphaned-location-prompt-renderer.md) — unused direct prompt rendering was removed; product docs now describe skill-bundle delivery. **Resolved.**
 - [Permissive motion compatibility](server/location/permissive-motion-compatibility.md) — missing motion data now fails closed. **Resolved.**
 - [CLI session transport lag](clients/cli/session-transport-lag.md) — the CLI now uses REST discovery/transcript hydration and session-bound attach. **Resolved.**

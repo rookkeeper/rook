@@ -139,7 +139,6 @@ class RookViewModel(
 
     // MARK: - Location / environment state (mirrors RookModel.swift)
 
-    // Places/suggestions are forwarded from the shared PlaceStore, not duplicated.
     val places: StateFlow<List<Place>> =
         locationController?.placeStore?.places ?: MutableStateFlow(emptyList())
     val suggestions: StateFlow<List<PlaceSuggestion>> =
