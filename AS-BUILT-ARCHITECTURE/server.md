@@ -97,7 +97,7 @@ See also: [database.md](./database.md)
 
 ## Local profile configuration
 
-The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain isolated. Development profiles inherit the production runtime catalog through `ROOK_AGENT_RUNTIMES_PATH` by default; runtime definitions are user configuration, while sessions and durable server state remain profile-specific. The canonical environment repository remains the `environment-repository/` directory belonging to the checkout that launched the server.
+The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain isolated. On first launch, development profiles seed `ROOK_HOME` by copying the production `~/.rook` directory; a marker prevents later launches from refreshing it. Runtime definitions, user configuration, personal environment-repository state, and other durable local state therefore become profile-specific. `ROOK_AGENT_RUNTIMES_PATH` remains an explicit escape hatch. The canonical environment repository remains the `environment-repository/` directory belonging to the checkout that launched the server.
 
 ## Persistence shape
 

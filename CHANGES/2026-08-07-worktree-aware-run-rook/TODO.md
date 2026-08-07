@@ -63,6 +63,7 @@ The launcher should support explicit overrides for unusual setups, but the defau
 - [x] Export the selected server port as `PORT` so the server cannot continue using the main `.env` value of `7665` accidentally.
 - [x] Preserve the existing `.env` loading behavior while making profile-specific values win over inherited production values.
 - [x] Set `ROOK_HOME` to `~/.rook` for production and `~/.rook-<worktree-slug>` for development.
+- [x] Seed a new development `ROOK_HOME` by copying `~/.rook` once, then keep later configuration changes isolated.
 - [x] Set a profile-specific database path through `ROOK_DATABASE_PATH`.
 - [x] Set a profile-specific run root for logs, PID files, build artifacts, and launch metadata.
 - [x] Make development loopback-only by default by overriding inherited remote bind settings unless explicitly opted into.
@@ -120,6 +121,7 @@ The launcher should support explicit overrides for unusual setups, but the defau
 - [x] Test slug sanitization, including same-basename worktrees in different paths.
 - [x] Test deterministic port allocation and explicit port overrides.
 - [x] Test that production and development resolve different Rook homes, databases, run roots, and ports.
+- [x] Test that a development home is seeded once from `~/.rook` and is not refreshed on later launches.
 - [x] Test that inherited `.env` values cannot silently force a development server back onto port `7665` or re-enable its remote listener.
 - [x] Add server tests for `ROOK_HOME`-based personal repository paths.
 - [x] Add server tests for the configurable application database path.

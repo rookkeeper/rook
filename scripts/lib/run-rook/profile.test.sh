@@ -29,6 +29,10 @@ assert_empty() {
   [[ -z "$1" ]] || fail "expected value to be empty, got '$1'"
 }
 
+assert_file() {
+  [[ -f "$1" ]] || fail "expected file '$1' to exist"
+}
+
 assert_match() {
   [[ "$1" =~ $2 ]] || fail "expected '$1' to match '$2'"
 }
@@ -84,7 +88,17 @@ assert_empty "${ROOK_BIND_IP:-}"
 assert_empty "${ROOK_TAILSCALE_IP:-}"
 assert_empty "${ROOK_REMOTE_HOSTNAME:-}"
 assert_eq "$ROOK_SERVER_HOST" "127.0.0.1"
-assert_eq "$ROOK_AGENT_RUNTIMES_PATH" "$HOME/.rook/config/agent-runtimes.json"
+assert_empty "${ROOK_AGENT_RUNTIMES_PATH:-}"
+initialize_development_home
+assert_file "$ROOK_HOME/config/agent-runtimes.json"
+assert_file "$ROOK_HOME/.run-rook-profile"
+printf 'worktree-only\n' >"$ROOK_HOME/worktree-only.txt"
+printf 'source-only\n' >"$HOME/.rook/source-only.txt"
+initialize_development_home
+assert_file "$ROOK_HOME/worktree-only.txt"
+if [[ -e "$ROOK_HOME/source-only.txt" ]]; then
+  fail "initialized profile home should not be refreshed on every launch"
+fi
 
 configure_for "$TEST_ROOT/two/shared-name"
 second_slug="$RUN_ROOK_PROFILE_SLUG"

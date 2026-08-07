@@ -19,6 +19,7 @@ source "$SCRIPT_DIR/lib/run-rook/common.sh"
 source "$SCRIPT_DIR/lib/run-rook/profile.sh"
 
 configure_run_profile
+initialize_development_home
 
 SERVER_AUTH_TOKEN="${ROOK_AUTH_TOKEN:-}"
 log_run_profile
