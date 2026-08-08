@@ -2,7 +2,7 @@ export interface EnvironmentRecord {
   id: string;
   displayName: string;
   description: string;
-  metadata?: Record<string, unknown>;
+  metadata: Record<string, unknown>;
 }
 
 export type CapabilityType = "skill" | "instructions" | "llms-txt" | "facts" | "mcp" | "app";

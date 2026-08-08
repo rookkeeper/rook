@@ -17,13 +17,8 @@ struct RookApp: App {
                     }
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    switch phase {
-                    case .background:
-                        model.handleEnteredBackground()
-                    case .active:
+                    if phase == .active {
                         model.handleBecameActive()
-                    default:
-                        break
                     }
                 }
         }

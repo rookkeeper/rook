@@ -197,11 +197,6 @@ async function handleMessage(message) {
     return;
   }
 
-  if (message.method === 'session/list') {
-    write({ jsonrpc: '2.0', id: message.id, result: { sessions: [...sessions.values()].map((session) => ({ sessionId: session.sessionId, title: 'mock', updatedAt: new Date().toISOString() })) } });
-    return;
-  }
-
   if (message.method === 'session/close') {
     write({ jsonrpc: '2.0', id: message.id, result: { ok: true } });
     return;

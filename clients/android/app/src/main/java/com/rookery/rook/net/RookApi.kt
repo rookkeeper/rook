@@ -56,13 +56,15 @@ class RookApi(
     private val token: String = authToken.trim()
 
     val webSocketUrl: String
-        get() {
-            val httpForm = base.newBuilder().encodedPath("/api/ws").build().toString()
-            return if (base.scheme == "https") httpForm.replaceFirst("https://", "wss://")
-            else httpForm.replaceFirst("http://", "ws://")
-        }
+        get() = webSocketUrl(null)
 
-    val webAppUrl: String get() = baseUrl
+    fun webSocketUrl(sessionId: String?): String {
+        val builder = base.newBuilder().encodedPath("/api/ws")
+        if (!sessionId.isNullOrBlank()) builder.addQueryParameter("sessionId", sessionId)
+        val httpForm = builder.build().toString()
+        return if (base.scheme == "https") httpForm.replaceFirst("https://", "wss://")
+        else httpForm.replaceFirst("http://", "ws://")
+    }
 
     suspend fun healthResult(timeoutMs: Long = 1500): RookHealthResult = withContext(Dispatchers.IO) {
         try {
@@ -96,6 +98,12 @@ class RookApi(
         @Serializable data class SessionsResponse(val sessions: List<JsonObject>)
         val body = getJson("api/sessions")
         return json.decodeFromJsonElement(SessionsResponse.serializer(), body).sessions
+    }
+
+    suspend fun sessionTranscript(sessionId: String): List<JsonObject> {
+        @Serializable data class TranscriptResponse(val events: List<JsonObject>)
+        val body = getJson("api/sessions/$sessionId/transcript")
+        return json.decodeFromJsonElement(TranscriptResponse.serializer(), body).events
     }
 
     suspend fun environmentPreview(environmentId: String): EnvironmentPreview {

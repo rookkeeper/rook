@@ -31,15 +31,16 @@ export const STATIONARY_SPEED_MPS = 1.5;
  * Whether an identify request looks like a real arrival/dwell (vs a drive-by). Trace
  * analysis shows visits are minutes-long at ~0 m/s while pass-throughs are brief and
  * fast, so we register only when the device is stationary / dwelled / slow. With no
- * usable motion signal we stay permissive (back-compat).
+ * usable motion signal is rejected because registration requires an explicit arrival
+ * signal from the provider.
  */
 export function isDwellArrival(m: ArrivalMotion | undefined, minDwellSeconds = MIN_DWELL_SECONDS, stationarySpeed = STATIONARY_SPEED_MPS): boolean {
-  if (!m) return true;
+  if (!m) return false;
   if (m.isStationary === true) return true;
   if ((m.dwellSeconds ?? 0) >= minDwellSeconds) return true;
   if (m.speedMetersPerSecond !== undefined) return m.speedMetersPerSecond <= stationarySpeed;
   if (m.isStationary === false) return false; // explicitly moving, no other signal
-  return true; // no usable motion signal -> permissive
+  return false;
 }
 
 /** Build the registration metadata from a candidate (the full business record). */

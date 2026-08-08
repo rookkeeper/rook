@@ -36,7 +36,5 @@ Run a quick diagnostic:
 
 ```bash
 source .env
-rook exec --runtime MockAcpAgent --auth-token "$ROOK_AUTH_TOKEN" "say hello"
+rook exec --runtime MockAcpAgent --auth-token "$ROOK_AUTH_TOKEN" "tell me a joke"
 ```
-
-

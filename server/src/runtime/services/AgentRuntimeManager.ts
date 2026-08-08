@@ -116,10 +116,10 @@ export class AgentRuntimeManager {
     await this.restoreEnvironmentMembership(record);
     const runtime = this.runtimeFor(record);
     const runtimeParams =
-      method === "session/load" || method === "session/resume"
+      method === "session/load"
         ? { cwd: record.cwd, mcpServers: [], ...params, sessionId: record.runtimeSessionId }
         : { ...params, sessionId: record.runtimeSessionId };
-    const privateReplay = (method === "session/load" || method === "session/resume") && options.privateReplayListener;
+    const privateReplay = method === "session/load" && options.privateReplayListener;
     if (privateReplay) this.beginPrivateReplay(sessionId, options.privateReplayListener!);
     try {
       const result = await runtime.request(method, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration));
