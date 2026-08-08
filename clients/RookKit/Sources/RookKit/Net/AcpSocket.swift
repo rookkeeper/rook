@@ -364,17 +364,18 @@ public final class AcpSocket {
             if let text = contentText(update["content"]) { onEvent?(.agentThoughtChunk(text: text)) }
         case "tool_call":
             guard let toolCallId = update["toolCallId"] as? String else { return }
-            let rawInput = stringifyToolPayload(update["rawInput"])
+            let rawInput = stringifyToolPayload(update["rawInput"]) ?? terminalCommandInput(update)
             if let rawInput { lastToolInputSnapshots[toolCallId] = rawInput }
             onEvent?(.toolCallStarted(toolCallId: toolCallId, title: update["title"] as? String ?? "Tool", kind: update["kind"] as? String ?? "", status: update["status"] as? String ?? "pending", rawInput: rawInput))
         case "tool_call_update":
             guard let toolCallId = update["toolCallId"] as? String else { return }
-            if let inputText = stringifyToolPayload(update["rawInput"]) {
+            if let inputText = stringifyToolPayload(update["rawInput"]) ?? terminalCommandInput(update) {
                 lastToolInputSnapshots[toolCallId] = inputText
                 onEvent?(.toolInputSnapshot(toolCallId: toolCallId, toolName: nil, text: inputText))
             }
-            let outputSnapshot = contentItemsText(update["content"]) ?? stringifyToolPayload(update["rawOutput"])
-            if let outputSnapshot {
+            if let outputDelta = terminalOutputDelta(update) {
+                onEvent?(.toolOutputDelta(toolCallId: toolCallId, toolName: nil, delta: outputDelta))
+            } else if let outputSnapshot = contentItemsText(update["content"]) ?? stringifyToolPayload(update["rawOutput"]) {
                 lastToolOutputSnapshots[toolCallId] = outputSnapshot
                 onEvent?(.toolOutputSnapshot(toolCallId: toolCallId, toolName: nil, text: outputSnapshot))
             }
@@ -421,6 +422,20 @@ public final class AcpSocket {
             return item["text"] as? String
         }.filter { !$0.isEmpty }
         return texts.isEmpty ? nil : texts.joined(separator: "\n")
+    }
+
+    private func terminalCommandInput(_ update: [String: Any]) -> String? {
+        guard let meta = update["_meta"] as? [String: Any],
+              let terminalInfo = meta["terminal_info"] as? [String: Any],
+              terminalInfo["terminal_id"] != nil,
+              let title = update["title"] as? String else { return nil }
+        return stringifyToolPayload(["command": title])
+    }
+
+    private func terminalOutputDelta(_ update: [String: Any]) -> String? {
+        guard let meta = update["_meta"] as? [String: Any],
+              let terminalOutput = meta["terminal_output"] as? [String: Any] else { return nil }
+        return terminalOutput["data"] as? String
     }
 
     private func stringifyToolPayload(_ value: Any?) -> String? {

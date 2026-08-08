@@ -75,7 +75,7 @@ The client derives and registers:
 - queued chat messages containing ordered text/image prompt content
 - current mode/config options
 - pending permission requests
-- pending environment offers and environment previews
+- pending environment offers and environment previews, including derived bundle hashes and capability content
 - entered environment IDs and environment list items
 - foreground app/context state
 - voice and bridge capability state

@@ -191,7 +191,7 @@ function trimLogFile(logFile: string) {
 export default function promptTraceLogger(pi: ExtensionAPI) {
   const logFile = process.env.ROOK_PI_TRACE_LOG_PATH?.trim()
     ? process.env.ROOK_PI_TRACE_LOG_PATH
-    : "/tmp/pi-traces.jsonl";
+    : "/tmp/pi/provider-payload.jsonl";
   mkdirSync(dirname(logFile), { recursive: true });
   if (!existsSync(logFile)) writeFileSync(logFile, "", "utf8");
 

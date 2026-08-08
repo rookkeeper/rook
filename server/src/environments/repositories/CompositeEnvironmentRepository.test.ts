@@ -4,12 +4,19 @@ import { CompositeEnvironmentRepository } from "./CompositeEnvironmentRepository
 import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
 class FakeRepository extends EnvironmentRepository {
-  constructor(private readonly result: any) {
+  writes: string[] = [];
+
+  constructor(private readonly result: any, readonly repositoryId?: string) {
     super();
   }
 
   async getBundles(): Promise<any> {
     return this.result;
+  }
+
+  override async replaceCapabilityFiles(_environmentId: string, bundleId: string): Promise<boolean> {
+    this.writes.push(bundleId);
+    return true;
   }
 }
 
@@ -32,5 +39,24 @@ describe("CompositeEnvironmentRepository", () => {
 
     expect(result.environment?.id).toBe("web:example.com");
     expect(result.bundles.map((bundle: any) => bundle.bundleId)).toEqual(["one", "two"]);
+  });
+
+  it("routes capability writes by repository and bundle identity", async () => {
+    const canonical = new FakeRepository({
+      environment: { id: "web:example.com", displayName: "example.com", description: "" },
+      bundles: [{ id: "web:example.com#personal", bundleId: "personal", environmentId: "web:example.com", repository: "canonical", skills: [], mcpServers: [], apps: [], valid: true, errors: [] }],
+      errors: [],
+    }, "canonical");
+    const personal = new FakeRepository({
+      environment: null,
+      bundles: [{ id: "web:example.com#personal", bundleId: "personal", environmentId: "web:example.com", repository: "personal", skills: [], mcpServers: [], apps: [], valid: true, errors: [] }],
+      errors: [],
+    }, "personal");
+    const repository = new CompositeEnvironmentRepository([canonical, personal]);
+
+    await repository.replaceCapabilityFiles("web:example.com", "personal", "instructions", "AGENTS.md", { "AGENTS.md": "updated" }, "personal");
+
+    expect(canonical.writes).toEqual([]);
+    expect(personal.writes).toEqual(["personal"]);
   });
 });

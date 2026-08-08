@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { SessionDecisionRegistry } from "./SessionDecisionRegistry.js";
-import { EnvironmentDecisionStore } from "../datastores/EnvironmentDecisionStore.js";
+import { EnvironmentDecisionRepository } from "../repositories/EnvironmentDecisionRepository.js";
 
 describe("SessionDecisionRegistry", () => {
   function makeStore() {
-    return new EnvironmentDecisionStore(":memory:");
+    return new EnvironmentDecisionRepository(":memory:");
   }
 
   it("returns undecided when nothing is stored", () => {

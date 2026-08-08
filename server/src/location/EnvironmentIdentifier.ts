@@ -7,7 +7,7 @@ import type { PoiLookupProvider, PoiResult } from "./PoiLookupProvider.js";
 
 /** Minimal repository surface needed to check if an environment is known. */
 export interface KnownEnvironmentLookup {
-  getBundleCollectionPaths(environmentId: string): Promise<string[]>;
+  hasKnownEnvironment(environmentId: string): Promise<boolean>;
 }
 
 export interface EnvironmentIdentifierDeps {
@@ -59,8 +59,7 @@ export class EnvironmentIdentifier {
     // from the chain's store-locator URL.
     const storeNumber = poi.storeNumber ?? storeNumberFromWebsite(website, domain) ?? undefined;
 
-    const bundleCollectionPaths = await this.deps.repository.getBundleCollectionPaths(environmentId);
-    const hasKnownEnvironment = bundleCollectionPaths.length > 0;
+    const hasKnownEnvironment = await this.deps.repository.hasKnownEnvironment(environmentId);
     const possibleSkills = await this.deps.skillSuggester.suggestSkills({ environmentId, operator });
 
     const matchReasons = computeMatchReasons(poi, !!storeNumber, hasKnownEnvironment);

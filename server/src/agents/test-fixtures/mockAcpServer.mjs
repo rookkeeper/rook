@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 
 const sessions = new Map();
 let currentSessionId = null;
@@ -242,6 +243,17 @@ async function handlePrompt(message) {
       await delay(20);
     }
     const response = 'Finished the long-running mock task.';
+    session.lastAssistantMessage = response;
+    session.transcript.push({ role: 'assistant', text: response });
+    await streamText(sessionId, response);
+    finish(message.id);
+    return;
+  }
+
+  if (lower.includes('edit personal skill') || lower.includes('edit personal instructions')) {
+    const target = text.match(/write-to:(\S+)/i)?.[1];
+    if (target) writeFileSync(target, 'updated by the mock agent', 'utf8');
+    const response = target ? 'Updated the personal content.' : 'No write target was provided';
     session.lastAssistantMessage = response;
     session.transcript.push({ role: 'assistant', text: response });
     await streamText(sessionId, response);

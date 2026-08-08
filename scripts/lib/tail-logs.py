@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tail /tmp/pi-traces.jsonl and print new messages as they appear.
+"""Tail /tmp/pi/provider-payload.jsonl and print new messages as they appear.
 
 Each JSONL line is a complete prompt sent to an LLM provider. This script
 normalizes both DeepSeek-format and GPT-format log entries into a common
@@ -32,7 +32,7 @@ try:
 except ImportError:
     HAS_YAML = False
 
-LOG_FILE = os.environ.get("PI_TRACE_LOG", "/tmp/pi-traces.jsonl")
+LOG_FILE = os.environ.get("PI_TRACE_LOG", "/tmp/pi/provider-payload.jsonl")
 
 # ── terminal styling ─────────────────────────────────────────────────
 

@@ -2,7 +2,10 @@ export interface EnvironmentRecord {
   id: string;
   displayName: string;
   description: string;
+  metadata: Record<string, unknown>;
 }
+
+export type CapabilityType = "skill" | "instructions" | "llms-txt" | "facts" | "mcp" | "app";
 
 export interface RepositoryReadError {
   code:
@@ -35,6 +38,10 @@ export interface EnvironmentBundle {
   skills: BundleArtifact[];
   mcpServers: BundleArtifact[];
   apps: BundleArtifact[];
+  /** Small arbitrary facts/references that may be injected as instructions or skills. */
+  facts?: BundleArtifact[];
+  /** Fetched llms.txt content when the bundle provides it. */
+  llmsTxt?: string;
   /** Raw content of AGENTS.md at the bundle root, when present. */
   agentsMd?: string;
   valid: boolean;

@@ -1,13 +1,13 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
-import type { EnvironmentDecisionStore } from "../datastores/EnvironmentDecisionStore.js";
+import type { EnvironmentDecisionRepository } from "../repositories/EnvironmentDecisionRepository.js";
 import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../shared/environment.js";
-import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
-import { ensurePersonalEnvironmentBinding } from "../support/EnvironmentBinding.js";
+import type { EnvironmentBundle } from "../../shared/environmentRepository.js";
+import { hashEnvironmentBundle, type EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import {
   NoopEnvironmentRegistrationCaptureSink,
   type EnvironmentRegistrationCaptureSink,
 } from "./environmentMetadataCapture.js";
-import { renderEnvironmentPrompt } from "../support/EnvironmentPromptTemplate.js";
 import { renderRookIdentityPrompt } from "../support/RookIdentityPrompt.js";
 import { SessionDecisionRegistry } from "./SessionDecisionRegistry.js";
 import type {
@@ -21,9 +21,9 @@ import type {
 } from "../support/types.js";
 
 interface RememberedBundleEntry {
+  repository: string;
   bundleId: string;
   bundleHash: string;
-  bundlePath?: string;
   skills: string[];
   mcpServers: string[];
   apps: string[];
@@ -39,7 +39,18 @@ interface RememberedEnvironmentEntry {
   status: "active" | "recent";
   bundles: RememberedBundleEntry[];
   bundleIds: string[];
-  bundleCollectionPaths: string[];
+}
+
+export interface RuntimeEnvironmentBundle {
+  environmentName: string;
+  bundleName: string;
+  editable: boolean;
+  bundle: EnvironmentBundle;
+  writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
+  writeBackDeleteSkill?: (skillId: string) => Promise<boolean>;
+  writeBackNewSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
+  writeBackInstructions?: (content: string) => Promise<boolean>;
+  writeBackDeleteInstructions?: () => Promise<boolean>;
 }
 
 export interface DiagnosticEnvironmentEntry {
@@ -52,7 +63,6 @@ export interface DiagnosticEnvironmentEntry {
   activeUntil?: string;
   bundles: Array<RememberedBundleEntry & { effectiveDecision: EffectiveDecision }>;
   bundleIds: string[];
-  bundleCollectionPaths: string[];
   effectiveDecision: EffectiveDecision;
 }
 
@@ -99,6 +109,26 @@ function observationInfoFromMetadata(metadata: Record<string, unknown>): Environ
 
 function deriveEnvironmentDisplayName(environmentId: string, metadata: Record<string, unknown>, info?: EnvironmentOfferInfo): string {
   return info?.displayName ?? stringMetadata(metadata, "displayName") ?? lastEnvironmentSegment(environmentId);
+}
+
+function isUserOwnedRepository(repository: string): boolean {
+  return repository === "personal" || repository === "project-directory";
+}
+
+function ephemeralPersonalBundle(environmentId: string): EnvironmentBundle {
+  const hex = createHash("sha256").update(`rook-personal-bundle:${environmentId}`).digest("hex");
+  const bundleId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  return {
+    id: `${environmentId}#${bundleId}`,
+    bundleId,
+    environmentId,
+    repository: "personal",
+    skills: [],
+    mcpServers: [],
+    apps: [],
+    valid: true,
+    errors: [],
+  };
 }
 
 function metadataWithoutDisplayName(metadata: CandidateEnvironmentMetadata): CandidateEnvironmentMetadata {
@@ -154,7 +184,7 @@ export class EnvironmentManager {
 
   constructor(
     private readonly repositoryService: EnvironmentRepositoryService,
-    decisions: EnvironmentDecisionStore,
+    decisions: EnvironmentDecisionRepository,
     options: EnvironmentManagerOptions = {},
   ) {
     this.sessionDecisions = new SessionDecisionRegistry(decisions);
@@ -206,14 +236,24 @@ export class EnvironmentManager {
 
     for (const environmentId of implied) {
       if (ids.has(environmentId)) continue;
-      const bundles = await this.repositoryService.getResolvedBundles(environmentId);
-      if (bundles.length > 0) ids.add(environmentId);
+      try {
+        const bundles = await this.repositoryService.getResolvedBundles(environmentId);
+        if (bundles.length > 0) ids.add(environmentId);
+      } catch (error) {
+        // An unreadable ancestor (for example, a dangling skill symlink in
+        // the user's home directory) must not prevent the observed candidate
+        // itself from being registered.
+        this.logger.info({ environmentId, error }, "failed to inspect implied environment");
+      }
     }
 
     return [...ids];
   }
 
-  private async rememberAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo): Promise<void> {
+  private async rememberAvailableEnvironment(
+    env: EnvironmentRecord,
+    info: EnvironmentOfferInfo,
+  ): Promise<void> {
     const now = this.now();
     const nowIso = new Date(now).toISOString();
     const existing = this.remembered.get(env.id);
@@ -221,21 +261,15 @@ export class EnvironmentManager {
     const activeUntil = new Date(now + this.activeEnvironmentWindowMs).toISOString();
     const resolvedBundles = await this.repositoryService.getResolvedBundles(env.id);
     const bundles = resolvedBundles.map(({ bundle, bundleHash }) => ({
+      repository: bundle.repository,
       bundleId: bundle.bundleId,
       bundleHash,
-      bundlePath: bundle.bundlePath,
       skills: bundle.skills.map((artifact) => artifact.id).sort((a, b) => a.localeCompare(b)),
       mcpServers: bundle.mcpServers.map((artifact) => artifact.id).sort((a, b) => a.localeCompare(b)),
       apps: bundle.apps.map((artifact) => artifact.id).sort((a, b) => a.localeCompare(b)),
       agentsMd: bundle.agentsMd,
     }));
     const bundleIds = bundles.map((bundle) => bundle.bundleId);
-    const bundleCollectionPaths = [...new Set(
-      bundles
-        .map((bundle) => bundle.bundlePath)
-        .filter((bundlePath): bundlePath is string => Boolean(bundlePath))
-        .map((bundlePath) => path.dirname(bundlePath)),
-    )].sort((a, b) => a.localeCompare(b));
     const entry: RememberedEnvironmentEntry = {
       record: {
         id: env.id,
@@ -251,7 +285,6 @@ export class EnvironmentManager {
       status: "active",
       bundles,
       bundleIds,
-      bundleCollectionPaths,
     };
     this.remembered.set(env.id, entry);
     this.logger.info(
@@ -262,7 +295,6 @@ export class EnvironmentManager {
         activeUntil,
         displayName: deriveEnvironmentDisplayName(env.id, entry.record.metadata, info),
         bundleIds,
-        bundleCollectionPaths,
       },
       "environment registered",
     );
@@ -339,6 +371,56 @@ export class EnvironmentManager {
     return this.repositoryService.getEnvironmentPreview(environmentId);
   }
 
+  async searchEnvironments(query: string): Promise<EnvironmentRecord[]> {
+    const normalized = query.trim().toLowerCase();
+    const environments = await this.repositoryService.listEnvironments();
+    if (!normalized) return environments;
+    return environments.filter((environment) => [environment.id, environment.displayName, environment.description]
+      .some((value) => value.toLowerCase().includes(normalized)));
+  }
+
+  async searchBundles(query: string, repositoryId?: string): Promise<EnvironmentBundle[]> {
+    return this.repositoryService.searchBundles(query, repositoryId);
+  }
+
+  /** Resolves the currently approved bundle content for runtime materialization. */
+  async runtimeBundlesForSession(sessionId: string): Promise<RuntimeEnvironmentBundle[]> {
+    this.pruneMemory();
+    const result: RuntimeEnvironmentBundle[] = [];
+    for (const environmentId of this.enteredEnvironments(sessionId)) {
+      const entry = this.remembered.get(environmentId);
+      if (!entry || entry.status !== "active") continue;
+      const resolved = await this.repositoryService.getResolvedBundles(environmentId);
+      const runtimeResolved = [...resolved];
+      if (!resolved.some(({ bundle }) => bundle.repository === "personal") && !environmentId.startsWith("dir:")) {
+        const bundle = ephemeralPersonalBundle(environmentId);
+        runtimeResolved.push({ bundle, bundleHash: hashEnvironmentBundle(bundle) });
+      }
+      for (const { bundle, bundleHash } of runtimeResolved) {
+        const decision = this.sessionDecisions.effective(bundleHash, sessionId);
+        if (!isUserOwnedRepository(bundle.repository) && decision !== "accept" && decision !== "approve") continue;
+        result.push({
+          environmentName: deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info),
+          bundleName: bundle.repository === "personal" || bundle.repository === "project-directory" ? "Personal capabilities" : "Environment capabilities",
+          editable: bundle.repository === "personal" || bundle.repository === "project-directory",
+          ...(bundle.repository === "personal" ? {
+            writeBackSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.replaceCapabilityFiles(environmentId, bundle.bundleId, "skill", skillId, files, bundle.repository),
+            writeBackDeleteSkill: (skillId: string) => this.repositoryService.deleteCapability(environmentId, bundle.bundleId, "skill", skillId, bundle.repository),
+          } : {}),
+          ...(bundle.repository === "personal" || bundle.repository === "project-directory" ? { writeBackNewSkill: (skillId: string, files: Record<string, string>) => this.repositoryService.createCapabilityFiles(environmentId, bundle.bundleId, "skill", skillId, files, bundle.repository) } : {}),
+          writeBackInstructions: bundle.repository === "personal" || bundle.repository === "project-directory"
+            ? (content) => this.repositoryService.replaceCapabilityFiles(environmentId, bundle.bundleId, "instructions", "AGENTS.md", { "AGENTS.md": content }, bundle.repository)
+            : undefined,
+          writeBackDeleteInstructions: bundle.repository === "personal"
+            ? () => this.repositoryService.deleteCapability(environmentId, bundle.bundleId, "instructions", "AGENTS.md", bundle.repository)
+            : undefined,
+          bundle,
+        });
+      }
+    }
+    return result;
+  }
+
   isAvailable(environmentId: string): boolean {
     this.pruneMemory();
     return this.remembered.get(environmentId)?.status === "active";
@@ -348,40 +430,19 @@ export class EnvironmentManager {
     return [...(this.entered.get(sessionId) ?? [])];
   }
 
-  runtimeInstructionsForSession(sessionId: string): string | undefined {
-    const entries = this.enteredEnvironments(sessionId)
-      .map((environmentId) => {
-        const remembered = this.remembered.get(environmentId);
-        const binding = ensurePersonalEnvironmentBinding(environmentId);
-        if (!binding) return null;
-
-        const agentsMdBundles = (remembered?.bundles ?? [])
-          .filter((b) => b.agentsMd)
-          .map((b) => ({ bundleId: b.bundleId, content: b.agentsMd! }));
-
-        return {
-          environmentId,
-          displayName: remembered ? deriveEnvironmentDisplayName(environmentId, remembered.record.metadata, remembered.info) : undefined,
-          metadata: (remembered?.record.metadata ?? {}) as Record<string, unknown>,
-          bindingDir: binding.personalBundleDir,
-          skillsDir: binding.skillsDir,
-          existingSkills: binding.existingSkills,
-          agentsMdBundles,
-        };
-      })
-      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-
-    const envPrompt = renderEnvironmentPrompt(entries);
-    return [renderRookIdentityPrompt(), envPrompt].filter(Boolean).join("\n\n");
+  runtimeIdentityInstructions(): string {
+    return renderRookIdentityPrompt();
   }
 
-  enterEnvironment(sessionId: string, environmentId: string): string[] {
+  async enterEnvironment(sessionId: string, environmentId: string): Promise<string[]> {
     this.pruneMemory();
     const listener = this.listeners.get(sessionId);
     if (!listener) return [];
 
     const entry = this.remembered.get(environmentId);
     if (!entry) return [];
+
+    await this.rememberAvailableEnvironment(entry.record, entry.info);
 
     if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
     this.explicitlyEntered.get(sessionId)!.add(environmentId);
@@ -417,7 +478,6 @@ export class EnvironmentManager {
           effectiveDecision: this.effectiveDecision(bundle.bundleHash, sessionId),
         })),
         bundleIds: entry.bundleIds,
-        bundleCollectionPaths: entry.bundleCollectionPaths,
         effectiveDecision: this.effectiveDecision(environmentId, sessionId),
       }))
       .sort((a, b) => {
@@ -473,11 +533,10 @@ export class EnvironmentManager {
       const entry = this.remembered.get(environmentId);
       if (!entry) continue;
 
-      ensurePersonalEnvironmentBinding(environmentId);
       listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sessionId));
 
       for (const bundle of entry.bundles) {
-        if (this.effectiveDecision(bundle.bundleHash, sessionId) !== "undecided") continue;
+        if (isUserOwnedRepository(bundle.repository) || this.effectiveDecision(bundle.bundleHash, sessionId) !== "undecided") continue;
         listener.onEnvironmentOffered({
           environmentId,
           displayName: deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info),
@@ -507,11 +566,8 @@ export class EnvironmentManager {
     const skillPaths: string[] = [];
     for (const bundle of entry.bundles) {
       const decision = this.sessionDecisions.effective(bundle.bundleHash, sessionId);
-      if (decision !== "accept" && decision !== "approve") continue;
-      if (!bundle.bundlePath) continue;
-      for (const skillId of bundle.skills) {
-        skillPaths.push(path.join(bundle.bundlePath, "skills", skillId));
-      }
+      if (!isUserOwnedRepository(bundle.repository) && decision !== "accept" && decision !== "approve") continue;
+      skillPaths.push(...bundle.skills);
     }
     return skillPaths;
   }

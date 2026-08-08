@@ -57,6 +57,8 @@ The server is organized **primarily by domain**:
 - `src/sessions/` — session routes, repository contract, SQLite session persistence, transcript storage/helpers
 - `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
 - `src/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
+  - `SQLiteEnvironmentRepository` and `EnvironmentRepositoryDatastore` are the live database-backed repository path
+- `src/runtime/CapabilityWorkspaceManager.ts` — shared writable sources, per-session links, watchers, read-only projections, and generated aggregate instructions
 - `src/location/` — location identification, POI providers, dwell logic, trace helpers, environment bridge helpers
 
 Within each domain, `routes/`, `services/`, `repositories/`, and `datastores/` appear only where that domain actually needs them.
@@ -71,7 +73,7 @@ For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTU
 
 ### Key examples
 
-- `sessions/datastores/SqliteSessionRepository.ts` — session persistence
+- `sessions/repositories/SqliteSessionRepository.ts` — session persistence
 - `infrastructure/datastores/RookDatastore.ts` — shared SQLite connection owner
 - `runtime/services/AgentRuntimeManager.ts` — per-session runtime orchestration
 - `environments/services/EnvironmentManager.ts` — environment lifecycle/orchestration
@@ -88,6 +90,8 @@ For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTU
 - `POST /api/environments/register` — mark an environment available
 - `POST /api/environments/decision` — record accept/approve/ignore/reject
 - `GET /api/environments/preview` — bundle/file preview data
+- `GET /api/environments/search?query=...` — repository environment search
+- `GET /api/bundles/search?query=...&repository=...` — repository bundle search with optional source filter
 - `GET /api/environments/list` — per-session environment list for client UI (`displayName`, `environmentId`, status, bundle counts)
 - `GET /api/diagnostics/environments` — active/recent environment diagnostics
 - `GET /api/ws` — session-bound ACP WebSocket facade (`?sessionId=<public-session-id>` preferred)
@@ -123,7 +127,7 @@ On environment change, only the affected session's runtime is restarted — the 
 
 ### Environment system
 
-The environment system (registration, decision store, repository) continues to work through its existing HTTP API. `/api/environments/register` is treated as candidate registration: the server finalizes candidates asynchronously, can inspect observed path/URL implied environment ids through `EnvironmentRepository`, and only finalized environments participate in offers / approvals / runtime updates. `AgentRuntimeManager` subscribes per-session to `EnvironmentManager` and applies skill paths to runtime launch configuration. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
+The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The live server uses three-table canonical and personal SQLite repositories plus the intentional direct project-directory adapter. `ROOK_ENVIRONMENT_REPOSITORY_DB` and `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB` can override SQLite locations. `CapabilityWorkspaceManager` clears and reuses one project-shaped shared environment source at `~/.rook/global-workspace/` for writable SQLite sources, retains it after shutdown for inspection, links those sources into per-session workspaces under `~/.rook/agent-workspaces/`, links project files directly, and materializes immutable external content read-only. Each runtime uses its agent workspace as cwd and discovers generated `AGENTS.md` plus standard `.agents/skills` there. Pi is launched with project approval because ACP is non-interactive and cannot answer Pi's trust prompt for the generated workspace. The aggregate contains tagged environment instructions, skill-authoring guidance, and a per-environment skill inventory; environment instructions are not duplicated through launch prompt injection. Watchers persist current personal capability content, soft-delete missing writable memberships, and reconcile direct project-source changes. `/api/environments/register` is treated as candidate registration: the server finalizes candidates asynchronously, can inspect observed path/URL implied environment ids through `EnvironmentRepository`, and only finalized environments participate in offers / approvals / runtime updates. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
 
 ### Key source files
 
@@ -135,8 +139,12 @@ The environment system (registration, decision store, repository) continues to w
 - `src/runtime/SessionRuntime.ts` — ACP stdio subprocess lifecycle
 - `src/runtime/runtimeLaunchPlan.ts` — provider-specific launch strategies
 - `src/infrastructure/datastores/RookDatastore.ts` — shared SQLite connection
-- `src/sessions/datastores/SqliteSessionRepository.ts` — session persistence
+- `src/sessions/repositories/SqliteSessionRepository.ts` — session persistence
 - `src/infrastructure/config/agentRuntimes.ts` — runtime config loader
+- `src/runtime/CapabilityWorkspaceManager.ts` — shared-source, link-projection, watcher, and aggregate-instruction lifecycle
+- `src/environments/repositories/SQLiteEnvironmentRepository.ts` — SQLite repository
+- `src/environments/datastores/EnvironmentRepositoryDatastore.ts` — repository database connection/schema
+- `src/environments/repositories/ProjectDirectoryEnvironmentRepository.ts` — direct project-file capability source
 - `src/agents/test-fixtures/mockAcpServer.mjs` — mock ACP runtime for testing
 
 ## Tests
@@ -149,6 +157,6 @@ npm test -- --run     # run once (no watch)
 Key test files:
 - `src/runtime/acpFacade.test.ts` — ACP integration (initialize, session lifecycle, error cases)
 - `src/infrastructure/config/agentRuntimes.test.ts` — runtime config validation
-- `src/sessions/datastores/SqliteSessionRepository.test.ts` — session persistence
-- `src/environments/datastores/EnvironmentDecisionStore.test.ts` — decision store
+- `src/sessions/repositories/SqliteSessionRepository.test.ts` — session persistence
+- `src/environments/repositories/EnvironmentDecisionRepository.test.ts` — decision repository
 - `src/environments/services/EnvironmentManager.test.ts` — environment lifecycle

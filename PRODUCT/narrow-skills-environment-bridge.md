@@ -1,9 +1,21 @@
-# Narrow Skills and Environment Bridge for Interaction w/ Environment
+# Narrow skills and the environment bridge
 
-The Rook is the agent that gets exposed to environments and learns how to interact with them and it interacts with them. But that line of communication needs to be pretty narrow so that we can contain security issues. I’m thinking about giving the Rook a special tool that lets it communicate to the environment that probably works about like cUrl. You can GET or POST data to an endpoint within an environment. `interact_with_environment(“mac:md.obsidian/reading_list”, “POST”, “new_reading_item”, {bla bla})`,
+The product direction is for Rook to interact with environments through narrow, reviewable capabilities rather than handing every agent direct access to every platform.
 
-The Skills for a particular environment describe the endpoints associated w/ that environment. And no matter where the Rook is called from or where it lives, it can address the environment the same way using that tool.
+A future environment bridge may expose a semantic operation such as:
 
-In particular, if I have a Rook that is simultaneously on my Mac and on my Android, then the Rook isn’t on my Android attempting to run Mac accessibility AppleScript stuff, it’s only concerned w/ using `interact_with_environment("mac:md.obsidian", ...)`-style calls. And then somewhere, probably in the EnvironmentManager, there is bridge software that has the intelligence of taking this tool call and doing the right thing with it. For `mac:` environments this is running the AppleScripts or whatever, for most environments this will be just making a straightforward translation between the tool call and a web request (but it will also manage login and tokens).
+```text
+interact_with_environment("mac:md.obsidian/MyVault", "POST", "new_reading_item", {...})
+```
 
-There will be relatively few environment bridges. For example, we need bridges to various operating systems – iOS (mac and iPhone and iPod), chrome (browser and OS), android, windows, linux(?). And there will be a bridge to web requests. And there will be a bridge to Internet of Things (Nest thermostat, garage door, the doorbell camera, alarm system).
+The skill would describe the operation; a bridge would translate it into the platform-specific action. A Mac bridge might use Accessibility/AppleScript, a web bridge might use authenticated HTTP, and an IoT bridge might use a device API.
+
+This lets one Rook session understand that an environment exists without assuming that the current client can execute that environment's native operations. It also gives the product a place to enforce authentication, permissions, and audit behavior.
+
+## Current boundary
+
+The current migration does not implement a universal bridge tool. Skills are loaded as files, the Mac bridge remains a separate client/server capability, and repository content is approved at bundle granularity. MCP configuration is stored and exposed for review, but MCP startup, tool enumeration, authentication, and lifecycle are deferred.
+
+## Future requirements
+
+A complete bridge must define an allowlisted operation vocabulary, environment and session scoping, authentication/token ownership, user confirmation for mutating operations, structured errors, audit events, and capability-specific approval/sandbox behavior.

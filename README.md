@@ -9,18 +9,19 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - [Configuration](docs/configuration.md)
 - [Product notes](PRODUCT/)
 - [As-built architecture notes](AS-BUILT-ARCHITECTURE/)
+- [Environment repository migration design log](CHANGES/2026-08-01-environment_repo_to_db/)
+- [Environment repository migration recap and verification guide](CHANGES/2026-08-01-environment_repo_to_db/recap.md)
 
 ## Packages
 
-- [server/](server/) — Fastify API organized by domain (`infrastructure`, `sessions`, `runtime`, `environments`, `location`), with per-domain layering only where needed
+- [server/](server/) — Fastify API organized by domain (`infrastructure`, `sessions`, `runtime`, `environments`, `location`), with three-table environment repositories, shared per-environment writable sources, and per-domain layering only where needed
 - [clients/cli](clients/cli/) — minimal ACP-first command-line client
 - [clients/mac](clients/mac/) — native macOS menu bar client
 - [clients/iphone](clients/iphone/) — native iPhone client
 - [clients/android](clients/android/) — native Android client
-- [clients/cli](clients/cli/) — minimal ACP-first command-line client
 - [clients/RookKit](clients/RookKit/) — shared Swift package for the native clients
-- [skills/](skills/) — repo-local Pi skills that Rook injects into Pi sessions (currently includes `create-skills`)
-- [dev-tools/](dev-tools/) — repo-local Pi development/debug extensions (currently includes provider-payload trace logging to `.var/pi-traces.jsonl`)
+- [.agents/skills/](.agents/skills/) — repo-local agent skills for coding-agent work; Rook runtime workspaces materialize their own standard `.agents/skills/` projection
+- [dev-tools/](dev-tools/) — repo-local Pi development/debug extensions (currently includes provider-payload trace logging to `/tmp/pi/provider-payload.jsonl`)
 
 ## Common entry points
 
@@ -33,8 +34,12 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 The launcher uses the main checkout as the production-like local profile. Running the same command from a Git worktree starts an isolated development profile with its own port, SQLite database, `~/.rook-<worktree-slug>` state directory, logs, and Mac app identity. The slug includes a short hash of the canonical worktree path so same-named worktrees remain distinct. Development profiles are initially seeded by copying `~/.rook` into their profile home when it does not exist; after that, configuration and session/server state remain isolated. Use `ROOK_RUN_MODE` or `ROOK_PRODUCTION_ROOT` for explicit profile selection.
 - `npm run test:launcher` — run hermetic worktree-profile and launcher-lifecycle tests
 - `./scripts/print-environments.sh` — dump active/recent environment diagnostics from the server
-- `./scripts/tail-pi-traces.sh` — inspect provider-payload traces in `.var/pi-traces.jsonl` (follows by default; use `--once` for one-shot output)
+- `./scripts/tail-logs.sh` — inspect provider-payload traces in `/tmp/pi/provider-payload.jsonl` (use `--instructions` and/or `--tools` for structured output)
 - `./scripts/run-tests.sh` — run the known server, Swift package, iPhone, and macOS test/build checks
+
+## CI checks
+
+Pull requests include a guard against adding compatibility markers to executable or configuration files. Configure the workflow's status check as required in GitHub branch protection to block merges when it fails.
 
 ## High-level docs map
 
@@ -42,6 +47,7 @@ The launcher uses the main checkout as the production-like local profile. Runnin
 - agent-profile config: [docs/configuration.md](docs/configuration.md)
 - as-built architecture index: [AS-BUILT-ARCHITECTURE/](AS-BUILT-ARCHITECTURE/)
 - server package details: [server/README.md](server/README.md)
+- shared environment workspace design/review: [CHANGES/2026-08-01-environment_repo_to_db/part_b/](CHANGES/2026-08-01-environment_repo_to_db/part_b/)
 - iPhone client details: [clients/iphone/README.md](clients/iphone/README.md)
 - macOS client details: [clients/mac/README.md](clients/mac/README.md)
 - Android client details: [clients/android/README.md](clients/android/README.md)

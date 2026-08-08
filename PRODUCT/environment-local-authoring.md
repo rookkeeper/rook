@@ -1,47 +1,69 @@
 # Environment-local authoring
 
-When you're inside an environment, Rook can write skills, instructions, and tools directly into that environment's personal bundle. Whatever Rook writes will come back the next time you enter the environment.
+Rook can learn environment-specific skills and instructions from the user. Personal SQLite content is the durable source for non-directory environments. A project directory is the durable source for a `dir:` environment.
 
-## Personal bundles
+## Ownership
 
-Every environment has exactly one writable personal bundle at:
+Canonical capabilities are immutable and read-only. Personal capabilities are writable and do not require approval. Project-directory capabilities are direct project files and never become personal SQLite rows.
 
-```text
-~/.rook/environment-repository/<kind>/<path>/.bundles/personal/
-```
+A capability may be shared by multiple bundle memberships. Soft deletion is membership-scoped: deleting a personal skill or instruction from one environment sets `bundles.deleted_at`, while the capability files remain available for restoration or other memberships.
 
-Inside the personal bundle you can write three kinds of assets:
+Entering an environment with no personal content does not create an empty bundle. Rook creates temporary session authoring state; the first real authored instruction or capability creates the durable rows.
 
-| Asset | Path |
-|---|---|
-| Skill | `.../.bundles/personal/skills/<skill-name>/SKILL.md` |
-| AGENTS.md | `.../.bundles/personal/AGENTS.md` |
-| MCP server | `.../.bundles/personal/mcp-servers/<server-name>/` |
+## Uniform capability content
 
-The personal bundle is created automatically when you enter an environment — no setup needed.
-
-## What Rook sees
-
-When you enter an environment, Rook's system message is extended with three sections:
-
-**1. Rook identity prompt.** Explains what Rook is, how environments and bundles work, and that Rook can write into any entered environment's personal bundle.
-
-**2. Authoring instructions.** For each entered environment, Rook sees the exact paths where it can write skills, AGENTS.md, and MCP servers. It also sees what skills already exist.
-
-**3. Environment metadata.** Each entered environment dumps its metadata (display name, app name, observed paths/URLs, window title, latitude/longitude, etc.) so Rook has context for what you're doing.
-
-Because Rook may be in several environments at once, the instructions remind Rook to clarify which environment a skill or instruction belongs to before writing anything.
-
-## AGENTS.md in bundles
-
-Anyone can put an `AGENTS.md` at the root of a bundle directory:
+All capability kinds use the same nested file-map representation in SQLite:
 
 ```text
-environment-repository/web/x.com/.bundles/using-x/AGENTS.md
+skill:        <skill-name>/SKILL.md, scripts/, references/, ...
+instructions: AGENTS.md
+llms-txt:     llms.txt
+facts:        one or more fact files
+mcp/app:      configuration and supporting files
 ```
 
-When a bundle is accepted, its `AGENTS.md` content is injected into Rook's system message under a "Environment instructions" section. This is additive across bundles — you can have instructions from the canonical repo, community bundles, and your personal bundle all at once.
+Each capability has a UUID `TEXT` id, a human-readable name, a type, the complete file map, and a content hash. There is no revision history.
 
-## Over time
+## Workspace topology
 
-This should settle into a rhythm. You do something with Rook in an environment. After a few rounds you tell Rook "remember this for next time." Rook writes a skill or updates `AGENTS.md`. Next time you're there, it just works.
+Rook keeps one shared writable source per personal environment:
+
+```text
+~/.rook/global-workspace/writable/<environment-key>/
+├── AGENTS.md
+└── .agents/skills/<skill-name>/
+```
+
+Each session links into that source:
+
+```text
+~/.rook/agent-workspaces/<session-id>/.agents/
+├── editable-per-environment/<environment> -> shared environment directory
+└── skills/<visible-name>                  -> shared skill source
+```
+
+The root workspace `AGENTS.md` is a generated read-only aggregate. The editable source is `.agents/editable-per-environment/<environment>/`, which contains both `AGENTS.md` and `.agents/skills/`. New skills must be created at `.agents/editable-per-environment/<environment>/.agents/skills/<skill-name>/SKILL.md`; `SKILL.md` makes a new skill eligible for persistence.
+
+The shared global watcher observes the writable environment directories. It debounces content changes, persists settled current file maps, detects missing writable instruction or skill entries as membership deletion, and updates all active session projections. Workspace rebuild and shutdown cleanup are not treated as user deletion.
+
+## Project-directory authoring
+
+A project environment keeps ownership in the project:
+
+```text
+<project>/
+├── AGENTS.md
+└── .agents/skills/<skill-name>/
+```
+
+Session links point directly to these files. Project edits remain project edits. Deleting a project file is not a personal SQLite soft delete.
+
+## Safety boundaries
+
+- [ ] Canonical and external projections remain read-only.
+- [ ] Non-writable skills must not be changed or made writable.
+- [ ] The generated aggregate must not be edited directly.
+- [ ] Deleting a writable authoring source affects only that bundle membership.
+- [ ] A deleted membership can be restored without losing its capability file map.
+
+Filesystem permissions are not a strong security boundary against an agent with arbitrary same-user shell access. Stronger OS-level isolation remains future work.

@@ -34,7 +34,9 @@ export function normalizedEventsFromRuntimeMessage(message: JsonRpcMessage): Nor
         title: typeof update?.title === "string" ? update.title : "Tool",
         toolKind: typeof update?.kind === "string" ? update.kind : "",
         status: typeof update?.status === "string" ? update.status : "pending",
-        rawInput: update?.rawInput ?? null,
+        // pi-acp represents bash commands as ACP terminal calls: the command is
+        // carried in the title and terminal_info, rather than rawInput.
+        rawInput: update?.rawInput ?? terminalCommandInput(update),
       }];
     }
     case "tool_call_update": {
@@ -45,7 +47,8 @@ export function normalizedEventsFromRuntimeMessage(message: JsonRpcMessage): Nor
         toolCallId,
         status: typeof update?.status === "string" ? update.status : "",
         toolName: typeof update?.toolName === "string" ? update.toolName : null,
-        rawOutput: update?.rawOutput ?? null,
+        rawOutput: update?.rawOutput ?? terminalOutputData(update) ?? null,
+        outputDelta: terminalOutputData(update) ?? null,
       }];
     }
     case "plan_update": {
@@ -75,4 +78,17 @@ function object(value: unknown): JsonObject | undefined {
 function contentText(content: unknown): string | undefined {
   const value = object(content);
   return typeof value?.text === "string" ? value.text : undefined;
+}
+
+function terminalCommandInput(update: JsonObject | undefined): JsonObject | null {
+  const meta = object(update?._meta);
+  const terminalInfo = object(meta?.terminal_info);
+  if (typeof terminalInfo?.terminal_id !== "string" || typeof update?.title !== "string") return null;
+  return { command: update.title };
+}
+
+function terminalOutputData(update: JsonObject | undefined): string | undefined {
+  const meta = object(update?._meta);
+  const terminalOutput = object(meta?.terminal_output);
+  return typeof terminalOutput?.data === "string" ? terminalOutput.data : undefined;
 }

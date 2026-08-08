@@ -21,11 +21,18 @@ The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with 
 - `environments/services/EnvironmentManager`
   - tracks available environments, offers, approvals, active/recent state, and session subscriptions
 - `environments/services/EnvironmentRepositoryService`
-  - resolves environment bundles from repo-backed repositories
-- `sessions/datastores/SqliteSessionRepository`
-  - persists sessions and session↔environment membership
-- `environments/datastores/EnvironmentDecisionStore`
-  - persists durable environment decisions keyed by bundle hash
+  - resolves environment bundles from repo-backed repositories and canonical content hashes
+- `environments/repositories/SQLiteEnvironmentRepository`
+  - stores canonical and personal capability content and bundle memberships in separate SQLite repositories
+- `environments/repositories/ProjectDirectoryEnvironmentRepository`
+  - reads project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files in place
+- `runtime/CapabilityWorkspaceManager`
+  - owns the process-wide `~/.rook/global-workspace/` SQLite materialization, environment-level manifest, watchers, and disposable per-session link projections; clears the global root at startup and retains it after shutdown
+  - links writable personal content into every applicable session, links project sources directly, and materializes immutable external content read-only
+- `sessions/repositories/SqliteSessionRepository`
+  - persists sessions and session↔environment membership directly in SQLite
+- `environments/repositories/EnvironmentDecisionRepository`
+  - persists durable environment decisions keyed by bundle hash directly in SQLite
 - location services
   - `location/EnvironmentIdentifier` ranks nearby `location:` environments
   - `location/LocationRegistrar` syncs identified locations into the environment manager
@@ -85,6 +92,8 @@ See also: [database.md](./database.md)
 - `POST /api/environments/register`
 - `POST /api/environments/decision`
 - `GET /api/environments/preview`
+- `GET /api/environments/search?query=...`
+- `GET /api/bundles/search?query=...&repository=...`
 - `POST /api/environments/identify`
 - `POST /api/environments/register-location`
 - `POST /api/session/environments`
@@ -100,11 +109,12 @@ The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configurat
 
 ## Persistence shape
 
-Current durable persistence is SQLite-backed and centered on:
-- session records
-- append-only normalized transcript events per session
-- session-environment membership
-- durable environment bundle decisions
+Current durable persistence is SQLite-backed and split between:
+
+- the application database: session records, append-only normalized transcript events, session-environment membership, and durable environment decisions
+- the environment repository databases: environments, reusable capabilities, and bundle memberships for canonical and personal repositories
+
+Canonical and personal environment-repository content is SQLite-only; the legacy directory repository and importer are no longer runtime or migration sources. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
 
 The database details live in [database.md](./database.md).
 
@@ -139,11 +149,13 @@ Related tables:
   - `bundles[]`
 - `EnvironmentBundlePreview`
   - `id`, `bundleId`, `environmentId`, `repository`, `valid`, `bundleHash`
-  - `skills[]`, `mcpServers[]`, `apps[]`, `errors[]`
+  - bundle content hash derived from active capability memberships
+  - `skills[]`, `mcpServers[]`, `apps[]`, `facts[]`, optional `llmsTxt`, `agentsMd`, `errors[]`
+- bundle search supports filtering by repository id (`canonical`, `personal`, or source-specific ids)
 - `EnvironmentBundleOffer`
   - `environmentId`, `bundleId`, `bundleHash`
   - `displayName`
-  - `skills[]`, `mcpServers[]`, `apps[]`
+  - capability summary for skills, MCP/apps, facts, `llms.txt`, and instructions as available
 
 ### Location identification
 `IdentifyAvailableRequest`:
@@ -165,13 +177,14 @@ Related tables:
 5. server returns that public session ID and binds the same websocket to it
 
 ### Prompt execution
-1. client sends ACP `session/prompt` on a session-bound websocket
-2. ACP facade resolves the public session
-3. `AgentRuntimeManager` rewrites to the runtime-local session ID
-4. `SessionRuntime` forwards the request to the subprocess
-5. runtime emits `session/update` notifications
-6. server normalizes live transcript events into `session_transcript_events`
-7. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
+1. every configured runtime starts with the base `## You are Rook` identity prompt and uses its agent workspace as process cwd; environment-specific instructions are discovered through generated `AGENTS.md`
+2. client sends ACP `session/prompt` on a session-bound websocket
+3. ACP facade resolves the public session
+4. `AgentRuntimeManager` rewrites to the runtime-local session ID
+5. `SessionRuntime` forwards the request to the subprocess
+6. runtime emits `session/update` notifications
+7. server normalizes live transcript events into `session_transcript_events`
+8. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
 
 ### Environment offer and approval
 1. a provider registers an environment candidate with `POST /api/environments/register`
@@ -179,14 +192,15 @@ Related tables:
 3. finalized environments resolve matching bundles and hash them
 4. undecided bundles are offered to subscribed sessions when that session enters the finalized environment
 5. client resolves via REST decision or ACP extension resolution
-6. approved skill paths are attached to that session's launch configuration
+6. approved/personal bundle content is resolved for workspace projection. The generated aggregate `AGENTS.md` exposes approved/user-owned instruction sources in environment-tagged blocks, gives authoring guidance, inventories known skill names by environment, and the workspace uses the standard `.agents/skills/` discovery directory; Pi receives one-run project approval because ACP is non-interactive, and the runtime no longer receives duplicate environment prompt injection.
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment
-2. `AgentRuntimeManager` computes merged `skillPaths`, `enteredEnvironmentIds`, and appended prompt text
-3. it creates a replacement `SessionRuntime`
-4. replacement must successfully `session/load` the exact existing runtime session
-5. only then is the old subprocess retired
+2. `AgentRuntimeManager` resolves approved bundle content and asks `CapabilityWorkspaceManager` to update that session’s links and generated aggregate
+3. shared SQLite/project sources receive a final assessment before replacement; ordinary file edits do not themselves require runtime restart
+4. it creates a replacement `SessionRuntime` with the workspace as cwd
+5. replacement must successfully `session/load` the exact existing runtime session
+6. only then is the old subprocess retired
 
 ### Location registration
 1. phone client posts `register-location`
@@ -202,5 +216,9 @@ Related tables:
 - session discovery uses the REST sessions endpoint
 - the server owns a durable normalized transcript for each session so additional viewers can hydrate without runtime replay
 - environment state is session-specific at runtime launch time
+- writable SQLite capability files have one process-wide temporary materialization and are linked into per-session workspaces
 - durable decisions, transcript history, and session membership are SQLite-backed
+- canonical and personal environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
+- facts and `llms.txt` use capability-specific projections; MCP content is reviewable/read-only but not started by the runtime
+- personal authoring uses one shared writable source per environment, watcher-mediated current-content write-back and membership soft deletion, and explicit environment authoring directories; filesystem permissions are not a strong sandbox against same-user arbitrary shell access
 - location identification is provider-pluggable behind `PoiLookupProvider`
