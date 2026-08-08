@@ -49,6 +49,9 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
     const errors: RepositoryReadError[] = [];
     const skills = await this.readSkills(directory, errors, environmentId);
     const agents = await readOptionalText(path.join(directory, "AGENTS.md"));
+    // THIS IS COMPATIBILITY CODE
+    // Preserve project instructions authored under the established CLAUDE.md
+    // convention when a project has not adopted AGENTS.md yet.
     const claude = await readOptionalText(path.join(directory, "CLAUDE.md"));
     const mcp = await readOptionalText(path.join(directory, ".mcp.json"));
     // AGENTS.md is the project source when present. CLAUDE.md is a fallback
@@ -77,6 +80,9 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
   }
 
   private async readSkills(directory: string, errors: RepositoryReadError[], environmentId: string): Promise<BundleArtifact[]> {
+    // THIS IS COMPATIBILITY CODE
+    // Preserve skill discovery from the established tool-specific project
+    // directories while the standard .agents/skills layout is adopted.
     const roots = [".agents/skills", ".claude/skills", ".codex/skills", ".cursor/skills", ".github/skills"]
       .map((relative) => path.join(directory, relative))
       .filter((candidate) => existsSync(candidate));
