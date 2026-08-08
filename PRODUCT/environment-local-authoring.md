@@ -38,12 +38,11 @@ Each session links into that source:
 
 ```text
 ~/.rook/agent-workspaces/<session-id>/.agents/
-├── AGENTS_FILES/<environment>        -> shared environment directory
-├── editable-skills/<environment>     -> shared environment/.agents/skills
-└── skills/<visible-name>             -> shared skill source
+├── editable-per-environment/<environment> -> shared environment directory
+└── skills/<visible-name>                  -> shared skill source
 ```
 
-The root workspace `AGENTS.md` is a generated read-only aggregate. The editable instruction source is `.agents/AGENTS_FILES/<environment>/AGENTS.md`. New skills must be created at `.agents/editable-skills/<environment>/<skill-name>/SKILL.md`; `SKILL.md` makes a new skill eligible for persistence.
+The root workspace `AGENTS.md` is a generated read-only aggregate. The editable source is `.agents/editable-per-environment/<environment>/`, which contains both `AGENTS.md` and `.agents/skills/`. New skills must be created at `.agents/editable-per-environment/<environment>/.agents/skills/<skill-name>/SKILL.md`; `SKILL.md` makes a new skill eligible for persistence.
 
 The shared global watcher observes the writable environment directories. It debounces content changes, persists settled current file maps, detects missing writable instruction or skill entries as membership deletion, and updates all active session projections. Workspace rebuild and shutdown cleanup are not treated as user deletion.
 

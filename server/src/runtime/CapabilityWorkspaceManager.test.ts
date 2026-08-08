@@ -48,15 +48,15 @@ describe("CapabilityWorkspaceManager", () => {
     const second = await manager.materialize("session-two", bundles);
     const firstSkill = path.join(first.skillsRoot, "remember", "SKILL.md");
     const secondSkill = path.join(second.skillsRoot, "remember", "SKILL.md");
-    const authoringSkill = path.join(first.editableSkillsRoot, "mail", "remember", "SKILL.md");
-    const instructionSourceRoot = path.join(first.instructionSourcesRoot, "mail");
+    const authoringSkill = path.join(first.editablePerEnvironmentRoot, "mail", ".agents", "skills", "remember", "SKILL.md");
+    const instructionSourceRoot = path.join(first.editablePerEnvironmentRoot, "mail");
     const aggregate = await readFile(first.agentsPath, "utf8");
 
     expect(aggregate).toContain("# Rook environment instructions");
     expect(aggregate).toContain("## Environment instructions");
-    expect(aggregate).toContain("<environment_instruction environment=\"mail\" editable=\"true\" path=\".agents/AGENTS_FILES/mail/AGENTS.md\">");
+    expect(aggregate).toContain("<environment_instruction environment=\"mail\" editable=\"true\" path=\".agents/editable-per-environment/mail/AGENTS.md\">");
     expect(aggregate).toContain("## Skill editing");
-    expect(aggregate).toContain("- For the `mail` environment, create new skills in `.agents/editable-skills/mail/<skill-name>/SKILL.md`");
+    expect(aggregate).toContain("- For the `mail` environment, create new skills in `.agents/editable-per-environment/mail/.agents/skills/<skill-name>/SKILL.md`");
     expect(aggregate).toContain("## Environment skills");
     expect(aggregate).toContain("- `mail`: `remember`");
 
@@ -67,9 +67,10 @@ describe("CapabilityWorkspaceManager", () => {
 
     await writeFile(firstSkill, "updated", "utf8");
     expect(await readFile(secondSkill, "utf8")).toBe("updated");
-    expect(JSON.parse(await readFile(path.join(manager.globalRoot(), "manifest.json"), "utf8")).sources).toEqual(expect.arrayContaining([
-      expect.objectContaining({ repository: "personal", environmentId: "web:mail.example", bundleId: "personal", artifactId: "remember" }),
-    ]));
+    expect(JSON.parse(await readFile(path.join(manager.globalRoot(), "manifest.json"), "utf8"))).toMatchObject({
+      version: 2,
+      environments: [{ repository: "personal", environmentId: "web:mail.example", bundleId: "personal", path: "writable/web-mail-example" }],
+    });
 
     await manager.close();
   });
@@ -84,7 +85,7 @@ describe("CapabilityWorkspaceManager", () => {
     };
 
     const workspace = await manager.materialize("session", [bundle]);
-    expect(await readFile(path.join(workspace.instructionSourcesRoot, "mail", "AGENTS.md"), "utf8")).toContain("No user-authored instructions have been added for this environment yet.");
+    expect(await readFile(path.join(workspace.editablePerEnvironmentRoot, "mail", "AGENTS.md"), "utf8")).toContain("No user-authored instructions have been added for this environment yet.");
     await manager.assessAndFlush();
 
     expect(persisted).toEqual([]);
@@ -106,8 +107,8 @@ describe("CapabilityWorkspaceManager", () => {
     const workspace = await manager.materialize("session", [bundle]);
 
     await writeFile(path.join(workspace.skillsRoot, "existing", "SKILL.md"), "after", "utf8");
-    await mkdir(path.join(workspace.editableSkillsRoot, "mail", "new-skill"), { recursive: true });
-    await writeFile(path.join(workspace.editableSkillsRoot, "mail", "new-skill", "SKILL.md"), "new", "utf8");
+    await mkdir(path.join(workspace.editablePerEnvironmentRoot, "mail", ".agents", "skills", "new-skill"), { recursive: true });
+    await writeFile(path.join(workspace.editablePerEnvironmentRoot, "mail", ".agents", "skills", "new-skill", "SKILL.md"), "new", "utf8");
     await manager.assessAndFlush();
 
     expect(persisted).toEqual(expect.arrayContaining([
@@ -115,7 +116,7 @@ describe("CapabilityWorkspaceManager", () => {
       { id: "new-skill", files: { "new-skill/SKILL.md": "new" } },
     ]));
     expect(await realpath(path.join(workspace.skillsRoot, "new-skill", "SKILL.md"))).toBe(
-      await realpath(path.join(workspace.editableSkillsRoot, "mail", "new-skill", "SKILL.md")),
+      await realpath(path.join(workspace.editablePerEnvironmentRoot, "mail", ".agents", "skills", "new-skill", "SKILL.md")),
     );
     expect(await readFile(workspace.agentsPath, "utf8")).toContain("- `mail`: `existing`, `new-skill`");
     await manager.close();
@@ -133,8 +134,8 @@ describe("CapabilityWorkspaceManager", () => {
     const first = await manager.materialize("session-one", [bundle]);
     const second = await manager.materialize("session-two", [bundle]);
 
-    await rm(path.join(first.editableSkillsRoot, "mail", "remember"), { recursive: true, force: true });
-    await rm(path.join(first.instructionSourcesRoot, "mail", "AGENTS.md"), { recursive: true, force: true });
+    await rm(path.join(first.editablePerEnvironmentRoot, "mail", ".agents", "skills", "remember"), { recursive: true, force: true });
+    await rm(path.join(first.editablePerEnvironmentRoot, "mail", "AGENTS.md"), { recursive: true, force: true });
     await manager.assessAndFlush();
 
     expect(deletedSkills).toContain("remember");
@@ -145,9 +146,9 @@ describe("CapabilityWorkspaceManager", () => {
     expect(aggregate).toContain("- `mail`: none");
     expect(await readFile(second.agentsPath, "utf8")).not.toContain("Remember this.");
 
-    await mkdir(path.join(first.editableSkillsRoot, "mail", "remember"), { recursive: true });
-    await writeFile(path.join(first.editableSkillsRoot, "mail", "remember", "SKILL.md"), "Remember again.", "utf8");
-    await writeFile(path.join(first.instructionSourcesRoot, "mail", "AGENTS.md"), "Remember again.", "utf8");
+    await mkdir(path.join(first.editablePerEnvironmentRoot, "mail", ".agents", "skills", "remember"), { recursive: true });
+    await writeFile(path.join(first.editablePerEnvironmentRoot, "mail", ".agents", "skills", "remember", "SKILL.md"), "Remember again.", "utf8");
+    await writeFile(path.join(first.editablePerEnvironmentRoot, "mail", "AGENTS.md"), "Remember again.", "utf8");
     await manager.assessAndFlush();
 
     expect(recreatedSkills).toContain("remember");
@@ -209,7 +210,7 @@ describe("CapabilityWorkspaceManager", () => {
     const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
     const workspace = await manager.materialize("session", [projectBundle(project, skillRoot)]);
     const workspaceSkill = path.join(workspace.skillsRoot, "deploy", "SKILL.md");
-    const workspaceInstructions = path.join(workspace.instructionSourcesRoot, path.basename(project).toLowerCase(), "AGENTS.md");
+    const workspaceInstructions = path.join(project, "AGENTS.md");
 
     expect(await realpath(workspaceSkill)).toBe(await realpath(path.join(skillRoot, "SKILL.md")));
     expect(await realpath(workspaceInstructions)).toBe(await realpath(path.join(project, "AGENTS.md")));
@@ -257,6 +258,18 @@ describe("CapabilityWorkspaceManager", () => {
       }
     });
     expect(await readFile(workspace.agentsPath, "utf8")).toContain("after");
+
+    const newSkillRoot = path.join(project, ".agents", "skills", "new-project-skill");
+    await mkdir(newSkillRoot, { recursive: true });
+    await writeFile(path.join(newSkillRoot, "SKILL.md"), "created directly in project", "utf8");
+    await waitFor(async () => {
+      try {
+        return (await readFile(path.join(workspace.skillsRoot, "new-project-skill", "SKILL.md"), "utf8")) === "created directly in project";
+      } catch {
+        return false;
+      }
+    });
+    expect(await realpath(path.join(workspace.skillsRoot, "new-project-skill"))).toBe(await realpath(newSkillRoot));
     await manager.close();
   });
 });

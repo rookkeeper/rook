@@ -77,12 +77,11 @@ Each session receives disposable links:
 ~/.rook/agent-workspaces/<session-id>/
 ├── AGENTS.md
 └── .agents/
-    ├── AGENTS_FILES/<environment>        -> shared environment directory
-    ├── editable-skills/<environment>     -> shared environment/.agents/skills
-    └── skills/<visible-name>             -> shared skill source
+    ├── editable-per-environment/<environment> -> shared environment directory
+    └── skills/<visible-name>                  -> shared skill source
 ```
 
-The root `AGENTS.md` is a generated, read-only aggregate. Individual linked files under `AGENTS_FILES` are the editable instruction sources. New skills belong under `.agents/editable-skills/<environment>/`, never directly under `.agents/skills/`.
+The root `AGENTS.md` is a generated, read-only aggregate. The linked `.agents/editable-per-environment/<environment>/` directory is the editable source for both instructions and skills. New skills belong under its `.agents/skills/` directory, never directly under the session workspace's `.agents/skills/`.
 
 Canonical content is materialized read-only into the session workspace. Project-directory skills and instructions link directly to project files. The global watcher observes shared personal sources, debounces settled changes, writes current capability content to SQLite, and interprets missing writable source entries as membership soft deletion. Rebuild and cleanup operations are suppressed from deletion inference.
 

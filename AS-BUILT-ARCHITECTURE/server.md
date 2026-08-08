@@ -27,7 +27,7 @@ The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with 
 - `environments/repositories/ProjectDirectoryEnvironmentRepository`
   - reads project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files in place
 - `runtime/CapabilityWorkspaceManager`
-  - owns the process-wide `~/.rook/global-workspace/` SQLite materialization, source manifest, watchers, and disposable per-session link projections; clears the global root at startup and retains it after shutdown
+  - owns the process-wide `~/.rook/global-workspace/` SQLite materialization, environment-level manifest, watchers, and disposable per-session link projections; clears the global root at startup and retains it after shutdown
   - links writable personal content into every applicable session, links project sources directly, and materializes immutable external content read-only
 - `sessions/repositories/SqliteSessionRepository`
   - persists sessions and session↔environment membership directly in SQLite

@@ -297,7 +297,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const afterSkill = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ repository: string; skills: Array<{ id: string; files: Record<string, string> }> }> };
     const personalAfterSkill = afterSkill.bundles.find((candidate) => candidate.repository === "personal");
     expect(personalAfterSkill?.skills.find((skill) => skill.id === "personal-skill")?.files["personal-skill/SKILL.md"]).toBe("updated by the mock agent");
-    const workspaceAgents = path.join(workspaceRoot, ".agents", "AGENTS_FILES", "example", "AGENTS.md");
+    const workspaceAgents = path.join(workspaceRoot, ".agents", "editable-per-environment", "example", "AGENTS.md");
     await request(ws, 5, "session/prompt", {
       sessionId,
       prompt: [{ type: "text", text: `edit personal instructions write-to:${workspaceAgents}` }],
@@ -334,7 +334,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     }).then((response) => response.json()) as { entered: string[] };
     expect(entered.entered).toContain(environmentId);
 
-    const workspaceSkill = path.join(agentWorkspaceRoot(tempConfigDir, sessionId), ".agents", "editable-skills", "new-skill-test", "navigating-xkcd");
+    const workspaceSkill = path.join(agentWorkspaceRoot(tempConfigDir, sessionId), ".agents", "editable-per-environment", "new-skill-test", ".agents", "skills", "navigating-xkcd");
     mkdirSync(workspaceSkill, { recursive: true });
     writeFileSync(path.join(workspaceSkill, "SKILL.md"), "---\nname: navigating-xkcd\ndescription: Navigate XKCD.\n---\n", "utf8");
     await request(ws, 3, "session/prompt", { sessionId, prompt: [{ type: "text", text: "say hi briefly" }] });
@@ -368,8 +368,8 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     });
 
     const workspaceRoot = agentWorkspaceRoot(tempConfigDir, sessionId);
-    rmSync(path.join(workspaceRoot, ".agents", "editable-skills", "example", "personal-skill"), { recursive: true, force: true });
-    rmSync(path.join(workspaceRoot, ".agents", "AGENTS_FILES", "example", "AGENTS.md"), { recursive: true, force: true });
+    rmSync(path.join(workspaceRoot, ".agents", "editable-per-environment", "example", ".agents", "skills", "personal-skill"), { recursive: true, force: true });
+    rmSync(path.join(workspaceRoot, ".agents", "editable-per-environment", "example", "AGENTS.md"), { recursive: true, force: true });
     await request(ws, 3, "session/prompt", { sessionId, prompt: [{ type: "text", text: "say hi briefly" }] });
 
     const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=web:example.com`).then((response) => response.json()) as { bundles: Array<{ repository: string; skills: Array<{ id: string }>; agentsMd?: string }> };

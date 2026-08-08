@@ -165,8 +165,8 @@ describe("SQLiteEnvironmentRepository", () => {
       writeBackDeleteInstructions: () => repository.deleteCapability("web:example.com", BUNDLE_ID, "instructions", "AGENTS.md"),
     }]);
 
-    await rm(path.join(workspace.editableSkillsRoot, "example", "mail-search"), { recursive: true, force: true });
-    await rm(path.join(workspace.instructionSourcesRoot, "example", "AGENTS.md"), { recursive: true, force: true });
+    await rm(path.join(workspace.editablePerEnvironmentRoot, "example", ".agents", "skills", "mail-search"), { recursive: true, force: true });
+    await rm(path.join(workspace.editablePerEnvironmentRoot, "example", "AGENTS.md"), { recursive: true, force: true });
     await manager.assessAndFlush();
 
     expect((await repository.getBundles("web:example.com")).bundles).toEqual([]);

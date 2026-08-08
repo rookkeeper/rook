@@ -53,8 +53,7 @@ Each active session gets disposable links into that shared source:
 ~/.rook/agent-workspaces/<session-id>/
 ├── AGENTS.md                                      generated aggregate, read-only
 └── .agents/
-    ├── AGENTS_FILES/<environment>                -> global environment directory
-    ├── editable-skills/<environment>             -> global environment/.agents/skills
+    ├── editable-per-environment/<environment>   -> global environment directory
     └── skills/<visible-name>                     -> shared skill source
 ```
 
@@ -71,16 +70,16 @@ This mirrors the project-directory layout, keeps instructions and skills in one 
 - [x] Scope deletion to the bundle membership. A shared capability's content remains in `capabilities` when one environment deletes its membership.
 - [x] Treat canonical capabilities as immutable and read-only; do not allow filesystem deletion to create personal tombstones for canonical content.
 - [x] Treat `dir:` environments as direct project-file sources. Their `AGENTS.md` and `.agents/skills` files remain project-owned and are not written to SQLite.
-- [x] Treat the generated workspace-root `AGENTS.md` as a read-only projection. Only `.agents/AGENTS_FILES/<environment>/AGENTS.md` is an editable instruction source.
+- [x] Treat the generated workspace-root `AGENTS.md` as a read-only projection. Only `.agents/editable-per-environment/<environment>/AGENTS.md` is an editable instruction source.
 - [x] Keep the public repository/service layer bundle-oriented where possible by projecting normalized capability rows into the existing `EnvironmentBundle` shape, while removing revision metadata and adding generic capability deletion/restoration operations.
 - [x] The former revision-based implementation and revision-oriented tests were removed; the final repository uses the three-table capability schema.
 - [x] The former persistent-empty-bundle behavior was removed; authoring state is temporary until real content creates a membership.
 - [x] Prefer the existing global watcher and the merged per-environment global source topology over a new watcher. Add another watcher only if the target symlink topology cannot reliably surface source deletion.
 - [x] Suppress deletion inference while materializing, rebuilding, cleaning up, or intentionally removing session projections.
-- [x] Preserve the existing safety rule that normal `.agents/skills` discovery may contain read-only content, while new user-authored content belongs under `.agents/editable-skills/<environment>/`.
+- [x] Preserve the existing safety rule that normal `.agents/skills` discovery may contain read-only content, while new user-authored content belongs under `.agents/editable-per-environment/<environment>/.agents/skills/`.
 
 - [x] Confirm the deletion contract: only writable personal sources can be soft-deleted; canonical content remains read-only, and project-directory content remains owned by the project filesystem.
-- [x] Keep generated workspace-root `AGENTS.md` projection-only and read-only; treat deletion of `.agents/AGENTS_FILES/<environment>/AGENTS.md` as deletion of that environment's writable instruction source.
+- [x] Keep generated workspace-root `AGENTS.md` projection-only and read-only; treat deletion of `.agents/editable-per-environment/<environment>/AGENTS.md` as deletion of that environment's writable instruction source.
 - [x] Define the durable membership identity as bundle, environment, and capability UUID, with a nullable `deleted_at` timestamp on the bundle membership.
 - [x] Store capability content in the unified `capabilities` table and deletion state in the `bundles` membership table; do not add a revision or current-source table.
 - [x] Preserve deleted capability content so a membership can be restored without losing its files; do not preserve revision history.
@@ -90,8 +89,7 @@ This mirrors the project-directory layout, keeps instructions and skills in one 
 - [x] Reshape writable personal materialization into one project-shaped global source per environment:
   - [x] `global-workspace/writable/<environment-key>/AGENTS.md`
   - [x] `global-workspace/writable/<environment-key>/.agents/skills/<skill-name>/`
-- [x] Link `.agents/AGENTS_FILES/<environment>` to the shared environment source directory.
-- [x] Link `.agents/editable-skills/<environment>` to the shared environment `.agents/skills` directory.
+- [x] Link `.agents/editable-per-environment/<environment>` to the shared personal environment source directory.
 - [x] Continue linking runtime-discovered `.agents/skills/<skill-name>` entries to the same shared skill source while preserving collision handling and read-only external materialization.
 - [x] Keep project-directory links direct to project-owned `AGENTS.md` and `.agents/skills`; do not route project deletions through the personal SQLite repository.
 - [x] Update `CapabilityWorkspaceManager` source descriptors, manifests, fingerprints, materialization, write-back, and cleanup for the unified per-environment source.
@@ -105,7 +103,7 @@ This mirrors the project-directory layout, keeps instructions and skills in one 
 - [x] Modify existing repository tests to cover the three-table schema and membership-scoped deletion behavior.
 - [x] Add new workspace tests for unified symlink topology, instruction deletion, skill deletion, shared multi-session propagation, rebuild suppression, and aggregate regeneration.
 - [x] Modify existing workspace/materialization tests for the unified per-environment source layout and lazy authoring.
-- [x] Add end-to-end tests that delete `.agents/AGENTS_FILES/<environment>/AGENTS.md` and `.agents/editable-skills/<environment>/<skill>` and verify SQLite soft deletion.
+- [x] Add end-to-end tests that delete `.agents/editable-per-environment/<environment>/AGENTS.md` and `.agents/editable-per-environment/<environment>/.agents/skills/<skill>` and verify SQLite soft deletion.
 - [x] Verify that deleting the generated root `AGENTS.md` is either blocked by read-only permissions or safely regenerated without changing source records.
 - [x] Update `PRODUCT/` documentation for unified capabilities, membership tombstones, restoration, and lazy personal bundles.
 - [x] Update `AS-BUILT-ARCHITECTURE/` documentation for the three-table schema, repository/API projection, and workspace topology.
@@ -149,8 +147,7 @@ The following decisions supersede the earlier revision-oriented schema items abo
 - [x] Implement the project-shaped personal global source per environment:
   - [x] `global-workspace/writable/<environment-key>/AGENTS.md`
   - [x] `global-workspace/writable/<environment-key>/.agents/skills/<skill-name>/`
-- [x] Link `.agents/AGENTS_FILES/<environment>` to the shared environment source directory.
-- [x] Link `.agents/editable-skills/<environment>` to the shared environment `.agents/skills` directory.
+- [x] Link `.agents/editable-per-environment/<environment>` to the shared personal environment source directory.
 - [x] Extend the existing global watcher to reconcile deleted instruction files and skill directories without adding a separate session watcher unless the merged topology proves insufficient.
 - [x] Suppress deletion inference during session rebuild, startup cleanup, and intentional projection removal.
 - [x] Add new schema-bootstrap, repository, API, materialization, watcher, soft-delete, restoration, lazy-authoring, and multi-session regression tests for this final model.
@@ -173,8 +170,8 @@ The following decisions supersede the earlier revision-oriented schema items abo
 - [x] Bundle hashes change when active capability content or membership changes and remain independent of filesystem paths.
 - [x] Canonical content cannot be made writable or soft-deleted through a session workspace.
 - [x] Project-directory edits remain in the project filesystem and never appear as personal SQLite capability rows.
-- [x] Deleting `.agents/AGENTS_FILES/<environment>/AGENTS.md` soft-deletes only the corresponding writable membership.
-- [x] Deleting `.agents/editable-skills/<environment>/<skill>` soft-deletes only the corresponding writable membership.
+- [x] Deleting `.agents/editable-per-environment/<environment>/AGENTS.md` soft-deletes only the corresponding writable membership.
+- [x] Deleting `.agents/editable-per-environment/<environment>/.agents/skills/<skill>` soft-deletes only the corresponding writable membership.
 - [x] All active sessions sharing the source observe deletion/restoration and regenerated aggregate instructions.
 - [x] Workspace rebuilds and session cleanup do not create false deletion records.
 - [x] New and modified tests cover schema bootstrap/recreation, repository projection, API behavior, symlink topology, watcher reconciliation, deletion, restoration, lazy authoring, and multiple sessions.

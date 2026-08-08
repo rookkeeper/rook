@@ -78,9 +78,8 @@ Each session receives disposable links:
 ~/.rook/agent-workspaces/<session-id>/
 ├── AGENTS.md
 └── .agents/
-    ├── AGENTS_FILES/<environment>        -> shared environment directory
-    ├── editable-skills/<environment>     -> shared environment/.agents/skills
-    └── skills/<visible-name>             -> shared skill source
+    ├── editable-per-environment/<environment> -> shared environment directory
+    └── skills/<visible-name>                  -> shared skill source
 ```
 
 `AGENTS.md` at the workspace root is a generated read-only aggregate. The individual instruction and skill sources are the editable paths. Canonical/external content is materialized read-only, while project-directory content links directly to project files.
