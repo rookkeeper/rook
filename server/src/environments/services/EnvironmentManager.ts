@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { EnvironmentDecisionRepository } from "../repositories/EnvironmentDecisionRepository.js";
 import type { CandidateEnvironmentMetadata, EnvironmentPreview } from "../../shared/environment.js";
-import type { EnvironmentBundle } from "../../shared/environmentRepository.js";
+import type { EnvironmentBundle, EnvironmentRecord as RepositoryEnvironmentRecord } from "../../shared/environmentRepository.js";
 import { hashEnvironmentBundle, type EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import {
   NoopEnvironmentRegistrationCaptureSink,
@@ -48,7 +48,9 @@ export interface RuntimeEnvironmentBundle {
   bundle: EnvironmentBundle;
   writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
   writeBackNewSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
+  writeBackDeleteSkill?: (skillId: string) => Promise<boolean>;
   writeBackInstructions?: (content: string) => Promise<boolean>;
+  writeBackDeleteInstructions?: () => Promise<boolean>;
 }
 
 export interface DiagnosticEnvironmentEntry {
@@ -384,7 +386,7 @@ export class EnvironmentManager {
     return this.repositoryService.getEnvironmentPreview(environmentId);
   }
 
-  async searchEnvironments(query: string): Promise<EnvironmentRecord[]> {
+  async searchEnvironments(query: string): Promise<RepositoryEnvironmentRecord[]> {
     const normalized = query.trim().toLowerCase();
     const environments = await this.repositoryService.listEnvironments();
     if (!normalized) return environments;

@@ -23,6 +23,14 @@ Important adjacent files reviewed so far:
 
 Working split idea:
 
+Implementation notes so far:
+
+- `WorkspaceSource` and `SourceKind` moved into `workspaceSources.ts`.
+- Aggregate rendering types moved alongside `renderAggregateAgents.ts`.
+- Project-directory reconciliation stayed in `CapabilityWorkspaceManager.ts` for the first pass.
+- The first extraction pass reduced `CapabilityWorkspaceManager.ts` from 937 lines to 623 lines before full wrap-up.
+
+
 - keep `CapabilityWorkspaceManager` as the stateful coordinator for:
   - session projection lifecycle
   - source/session maps
@@ -71,66 +79,84 @@ This document can be refined as the code teaches us more, but the default should
 
 ### Discovery and boundary lock-in
 
-- [ ] Re-read `server/src/runtime/CapabilityWorkspaceManager.ts` and group its contents by responsibility before moving code.
-- [ ] Confirm current behavioral coverage in `server/src/runtime/CapabilityWorkspaceManager.test.ts` and note any gaps that would make the extraction risky.
-- [ ] Decide whether `WorkspaceSource`, aggregate-rendering types, and related helpers should live in the manager file or move to `workspaceSources.ts`.
-- [ ] Decide whether project-directory reconciliation stays in the manager for the first pass or is extracted immediately.
-- [ ] Update this document if the planned module boundaries change materially during implementation.
+- [x] Re-read `server/src/runtime/CapabilityWorkspaceManager.ts` and group its contents by responsibility before moving code.
+- [x] Confirm current behavioral coverage in `server/src/runtime/CapabilityWorkspaceManager.test.ts` and note any gaps that would make the extraction risky.
+- [x] Decide whether `WorkspaceSource`, aggregate-rendering types, and related helpers should live in the manager file or move to `workspaceSources.ts`.
+- [x] Decide whether project-directory reconciliation stays in the manager for the first pass or is extracted immediately.
+- [x] Update this document if the planned module boundaries change materially during implementation.
 
 ### Extract aggregate rendering
 
-- [ ] Create `server/src/runtime/workspace/renderAggregateAgents.ts`.
-- [ ] Move `renderAggregateAgents` and its rendering-only helpers there.
-- [ ] Keep the generated document content byte-for-byte equivalent unless we intentionally change it.
-- [ ] Update imports/usages in `CapabilityWorkspaceManager.ts`.
-- [ ] Verify tests that assert aggregate content still pass unchanged.
+- [x] Create `server/src/runtime/workspace/renderAggregateAgents.ts`.
+- [x] Move `renderAggregateAgents` and its rendering-only helpers there.
+- [x] Keep the generated document content byte-for-byte equivalent unless we intentionally change it.
+- [x] Update imports/usages in `CapabilityWorkspaceManager.ts`.
+- [x] Verify tests that assert aggregate content still pass unchanged.
 
 ### Extract filesystem and artifact helpers
 
-- [ ] Create `server/src/runtime/workspace/workspaceFs.ts`.
-- [ ] Move low-level helpers there, including safe path handling, artifact materialization, skill file reading, symlink replacement, read-only application, and recursive deletion helpers.
-- [ ] Keep helper names straightforward and avoid turning this into a generic shared filesystem library.
-- [ ] Update `CapabilityWorkspaceManager.ts` to import the extracted helpers.
-- [ ] Verify behavior around symlinks, chmod, and deletion inference remains unchanged.
+- [x] Create `server/src/runtime/workspace/workspaceFs.ts`.
+- [x] Move low-level helpers there, including safe path handling, artifact materialization, skill file reading, symlink replacement, read-only application, and recursive deletion helpers.
+- [x] Keep helper names straightforward and avoid turning this into a generic shared filesystem library.
+- [x] Update `CapabilityWorkspaceManager.ts` to import the extracted helpers.
+- [x] Verify behavior around symlinks, chmod, and deletion inference remains unchanged.
 
 ### Extract source/path/fingerprint helpers
 
-- [ ] Create `server/src/runtime/workspace/workspaceSources.ts`.
-- [ ] Move source-descriptor, digest, path-derivation, environment-key/nickname, and fingerprint helpers there.
-- [ ] Move any source-related shared types there if that improves readability without creating circular imports.
-- [ ] Keep source identity semantics exactly the same so existing writable roots and manifests do not drift.
-- [ ] Update the manager and tests to import the extracted helpers/types as needed.
+- [x] Create `server/src/runtime/workspace/workspaceSources.ts`.
+- [x] Move source-descriptor, digest, path-derivation, environment-key/nickname, and fingerprint helpers there.
+- [x] Move any source-related shared types there if that improves readability without creating circular imports.
+- [x] Keep source identity semantics exactly the same so existing writable roots and manifests do not drift.
+- [x] Update the manager and tests to import the extracted helpers/types as needed.
 
 ### Simplify the manager after extraction
 
-- [ ] Reduce `CapabilityWorkspaceManager.ts` to orchestration logic, watcher lifecycle, source persistence flow, and session fanout.
-- [ ] Remove any now-dead local helpers/imports.
-- [ ] Re-check that the file reads top-down as a coordinator rather than as a dump of unrelated utilities.
-- [ ] If the file is still uncomfortably large, decide whether a follow-up extraction such as `projectWorkspaceReconciler.ts` is justified.
+- [x] Reduce `CapabilityWorkspaceManager.ts` to orchestration logic, watcher lifecycle, source persistence flow, and session fanout.
+- [x] Remove any now-dead local helpers/imports.
+- [x] Re-check that the file reads top-down as a coordinator rather than as a dump of unrelated utilities.
+- [x] If the file is still uncomfortably large, decide whether a follow-up extraction such as `projectWorkspaceReconciler.ts` is justified.
 
 ### Documentation and implementation notes
 
-- [ ] Update this document with any important decisions or deviations discovered during implementation.
-- [ ] Update `AS-BUILT-ARCHITECTURE/server.md` if the refactor meaningfully changes how the runtime workspace subsystem should be described.
-- [ ] Update `PRODUCT/` if the refactor changes a documented product or architecture idea rather than being purely internal cleanup.
-- [ ] Add a short completion note to this TODO once the split is done, including any deviations from the original plan.
+- [x] Update this document with any important decisions or deviations discovered during implementation.
+- [x] Update `AS-BUILT-ARCHITECTURE/server.md` if the refactor meaningfully changes how the runtime workspace subsystem should be described.
+- [x] Update `PRODUCT/` if the refactor changes a documented product or architecture idea rather than being purely internal cleanup.
+- [x] Add a short completion note to this TODO once the split is done, including any deviations from the original plan.
 
 ### End-of-pass wrap-up
 
-- [ ] Run targeted workspace tests: `npm run test --prefix server -- CapabilityWorkspaceManager` or the closest supported equivalent.
-- [ ] Run the full server test suite.
-- [ ] Run server typecheck.
-- [ ] Run server build.
-- [ ] Review the final diff specifically for accidental path/layout changes in generated workspaces.
-- [ ] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [ ] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Run targeted workspace tests: `npm run test --prefix server -- CapabilityWorkspaceManager` or the closest supported equivalent.
+- [x] Run the full server test suite.
+- [x] Run server typecheck.
+- [x] Run server build.
+- [x] Review the final diff specifically for accidental path/layout changes in generated workspaces.
+- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
 
 ## Exit criteria
 
-- [ ] `CapabilityWorkspaceManager.ts` is materially smaller and reads primarily as a coordinator.
-- [ ] Aggregate rendering, filesystem helpers, and source/path/fingerprint helpers are split into focused modules with clear boundaries.
-- [ ] Runtime workspace behavior is unchanged from the user's point of view.
-- [ ] Projected workspace layout, generated `AGENTS.md` semantics, and write-back behavior remain correct.
-- [ ] Tests, typecheck, and build pass.
-- [ ] No unnecessary backward-compatibility code, compatibility docs, fallback paths, or abandoned transition code remain from the refactor.
-- [ ] Relevant `AS-BUILT-ARCHITECTURE/` and `PRODUCT/` docs are updated if needed.
+- [x] `CapabilityWorkspaceManager.ts` is materially smaller and reads primarily as a coordinator.
+- [x] Aggregate rendering, filesystem helpers, and source/path/fingerprint helpers are split into focused modules with clear boundaries.
+- [x] Runtime workspace behavior is unchanged from the user's point of view.
+- [x] Projected workspace layout, generated `AGENTS.md` semantics, and write-back behavior remain correct.
+- [x] Tests, typecheck, and build pass.
+- [x] No unnecessary backward-compatibility code, compatibility docs, fallback paths, or abandoned transition code remain from the refactor.
+- [x] Relevant `AS-BUILT-ARCHITECTURE/` and `PRODUCT/` docs are updated if needed.
+
+## Completion note
+
+Completed with a conservative helper-module extraction rather than a redesign.
+
+What changed:
+
+- extracted aggregate rendering into `server/src/runtime/workspace/renderAggregateAgents.ts`
+- extracted filesystem and artifact helpers into `server/src/runtime/workspace/workspaceFs.ts`
+- extracted source/path/fingerprint helpers into `server/src/runtime/workspace/workspaceSources.ts`
+- kept project-directory reconciliation inside `CapabilityWorkspaceManager.ts` for the first pass
+- made a small adjacent type cleanup in `server/src/environments/services/EnvironmentManager.ts` so the build reflected the runtime bundle shape actually used by `CapabilityWorkspaceManager`
+
+Notable outcomes:
+
+- `CapabilityWorkspaceManager.ts` went from 937 lines to 623 lines
+- targeted workspace tests, full server tests, typecheck, and build all passed
+- no `AS-BUILT-ARCHITECTURE/` or `PRODUCT/` updates were needed because this was an internal refactor with no behavior or architecture-contract change
