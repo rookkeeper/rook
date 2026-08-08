@@ -53,12 +53,15 @@ describe("CapabilityWorkspaceManager", () => {
     const aggregate = await readFile(first.agentsPath, "utf8");
 
     expect(aggregate).toContain("# Rook environment instructions");
-    expect(aggregate).toContain("## Environment instructions");
+    expect(aggregate).toContain("Treat the visible projected paths in this workspace as authoritative.");
+    expect(aggregate).toContain("## Environment instructions and memories");
     expect(aggregate).toContain("<environment_instruction environment=\"mail\" editable=\"true\" path=\".agents/editable-per-environment/mail/AGENTS.md\">");
-    expect(aggregate).toContain("## Skill editing");
-    expect(aggregate).toContain("- For the `mail` environment, create new skills in `.agents/editable-per-environment/mail/.agents/skills/<skill-name>/SKILL.md`");
-    expect(aggregate).toContain("## Environment skills");
+    expect(aggregate).toContain("## Environment skills and procedures");
     expect(aggregate).toContain("- `mail`: `remember`");
+    expect(aggregate).toContain("## Adding, editing, and deleting instructions and memories");
+    expect(aggregate).toContain("## Adding, editing, and deleting skills and processes");
+    expect(aggregate).toContain("Skills are discovered from `.agents/skills/`, but treat that directory as inventory only.");
+    expect(aggregate).toContain("- For the `mail` environment, add, edit, or delete skills in `.agents/editable-per-environment/mail/.agents/skills/<skill-name>/SKILL.md`.");
 
     expect((await lstat(path.join(first.skillsRoot, "remember"))).isSymbolicLink()).toBe(true);
     expect((await lstat(instructionSourceRoot)).isSymbolicLink()).toBe(true);
