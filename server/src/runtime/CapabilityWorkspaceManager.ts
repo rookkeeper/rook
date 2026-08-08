@@ -1,10 +1,12 @@
-import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, readFile, readlink, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readlink, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { EnvironmentBundle, BundleArtifact } from "../shared/environmentRepository.js";
 import { ProjectDirectoryEnvironmentRepository } from "../environments/repositories/ProjectDirectoryEnvironmentRepository.js";
+import { DEFAULT_EMPTY_INSTRUCTIONS, renderAggregateAgents, type AggregateFact, type AggregateSource, writableInstructionsContent } from "./workspace/renderAggregateAgents.js";
+import { clearDirectory, makeReadOnly, materializeReadOnlyFile, pathExists, readSkillFiles, removeTree, replaceWithSymlink, safeChild, skillDirectories, writeArtifact } from "./workspace/workspaceFs.js";
+import { environmentNicknames, nextVisibleSkillName, personalEnvironmentPath, personalEnvironmentPathForSource, personalSourcePath, projectDirectory, safeName, sameSource, sourceDescriptor, sourceDigest, sourceFingerprint, type SourceKind, type WorkspaceSource, uniqueSkillName } from "./workspace/workspaceSources.js";
 
 /** A bundle resolved for an agent workspace. */
 export interface CapabilityWorkspaceBundle {
@@ -28,37 +30,12 @@ export interface CapabilityWorkspaceResult {
   skillPaths: string[];
 }
 
-type SourceKind = "skill" | "instructions" | "authoring-slot";
-
-const DEFAULT_EMPTY_INSTRUCTIONS = "No user-authored instructions have been added for this environment yet. You may edit this file upon the user's request to save simple instructions or reminders. Complex instructions and processes belong in the skill files for this environment.";
-
-type AggregateSource = { nickname: string; sourcePath: string; displayPath: string; writable: boolean };
-type AggregateFact = { nickname: string; environmentName: string; bundleName: string; name: string; content: string };
-
 interface SessionAggregateData {
   root: string;
   sources: AggregateSource[];
   facts: AggregateFact[];
   skillNamesByEnvironment: Map<string, Set<string>>;
   skillAuthoringPaths: Map<string, string>;
-}
-
-interface WorkspaceSource {
-  key: string;
-  kind: SourceKind;
-  repository: string;
-  environmentId: string;
-  bundleId: string;
-  artifactId?: string;
-  mutable: boolean;
-  path: string;
-  lastFingerprint: string;
-  knownSkillIds?: Set<string>;
-  writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
-  writeBackNewSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
-  writeBackDeleteSkill?: (skillId: string) => Promise<boolean>;
-  writeBackInstructions?: (content: string) => Promise<boolean>;
-  writeBackDeleteInstructions?: () => Promise<boolean>;
 }
 
 /**
@@ -373,12 +350,16 @@ export class CapabilityWorkspaceManager {
       if (await pathExists(claudePath)) return { path: claudePath, writable: true };
       // A project AGENTS.md is created only when its empty temporary source is
       // first promoted by the project watcher. Until then this is disposable.
-      const temporary = await this.ensureProjectStagingSource(entry, "instructions", async (target) => writeFile(target, DEFAULT_EMPTY_INSTRUCTIONS, "utf8"));
+      const temporary = await this.ensureProjectStagingSource(entry, "instructions", async (target) => {
+        await writeFile(target, DEFAULT_EMPTY_INSTRUCTIONS, "utf8");
+      });
       return { path: temporary.path, writable: true };
     }
 
     if (entry.editable) {
-      const source = await this.ensureWritableSource(entry, "instructions", undefined, async (target) => writeFile(target, writableInstructionsContent(entry.bundle.agentsMd), "utf8"));
+      const source = await this.ensureWritableSource(entry, "instructions", undefined, async (target) => {
+        await writeFile(target, writableInstructionsContent(entry.bundle.agentsMd), "utf8");
+      });
       return { path: source.path, writable: true };
     }
 
@@ -393,10 +374,14 @@ export class CapabilityWorkspaceManager {
       if (await pathExists(skillsPath)) return skillsPath;
       // Do not create project-owned directories merely by entering an environment.
       // The project watcher will promote this separate temporary slot on first SKILL.md.
-      const staging = await this.ensureProjectStagingSource(entry, "authoring-slot", async (target) => mkdir(target, { recursive: true }));
+      const staging = await this.ensureProjectStagingSource(entry, "authoring-slot", async (target) => {
+        await mkdir(target, { recursive: true });
+      });
       return staging.path;
     }
-    const source = await this.ensureWritableSource(entry, "authoring-slot", undefined, async (target) => mkdir(target, { recursive: true }));
+    const source = await this.ensureWritableSource(entry, "authoring-slot", undefined, async (target) => {
+      await mkdir(target, { recursive: true });
+    });
     return source.path;
   }
 
@@ -505,7 +490,7 @@ export class CapabilityWorkspaceManager {
       if (!source.writeBackDeleteSkill) continue;
       const handled = await source.writeBackDeleteSkill(skillId);
       if (!handled) throw new Error(`Skill deletion write-back declined for ${source.key}/${skillId}.`);
-      source.knownSkillIds.delete(skillId);
+      source.knownSkillIds?.delete(skillId);
       await this.removeDeletedSkillSessions(source, skillId);
     }
     for (const skillId of currentSkillIds) {
@@ -624,169 +609,12 @@ export class CapabilityWorkspaceManager {
   }
 }
 
-function sameSource(entry: CapabilityWorkspaceBundle, source: WorkspaceSource): boolean {
-  return entry.bundle.repository === source.repository
-    && entry.bundle.environmentId === source.environmentId
-    && entry.bundle.bundleId === source.bundleId;
-}
-
-async function nextVisibleSkillName(skillsRoot: string, skillId: string): Promise<string> {
-  const existing = new Set((await readdir(skillsRoot, { withFileTypes: true })).map((entry) => entry.name));
-  let name = skillId;
-  for (let number = 2; existing.has(name); number += 1) name = `${skillId}_${number}`;
-  return name;
-}
-
-function sourceDescriptor(entry: CapabilityWorkspaceBundle, kind: SourceKind, artifactId?: string): Record<string, string | undefined> {
-  return {
-    repository: entry.bundle.repository,
-    environmentId: entry.bundle.environmentId,
-    bundleId: entry.bundle.bundleId,
-    kind,
-    artifactId,
-  };
-}
-
-function sourceDigest(descriptor: Record<string, string | undefined>): string {
-  return createHash("sha256").update(JSON.stringify(descriptor)).digest("base64url");
-}
-
-function personalEnvironmentPath(workspaceRoot: string, entry: CapabilityWorkspaceBundle): string {
-  return safeChild(workspaceRoot, "writable", environmentKey(entry.bundle.environmentId));
-}
-
-function personalEnvironmentPathForSource(workspaceRoot: string, source: WorkspaceSource): string {
-  return safeChild(workspaceRoot, "writable", environmentKey(source.environmentId));
-}
-
-function personalSourcePath(workspaceRoot: string, entry: CapabilityWorkspaceBundle, kind: SourceKind, artifactId?: string): string {
-  const root = personalEnvironmentPath(workspaceRoot, entry);
-  if (kind === "instructions") return path.join(root, "AGENTS.md");
-  if (kind === "authoring-slot") return path.join(root, ".agents", "skills");
-  if (!artifactId) throw new Error("Personal skill source requires an artifact id.");
-  return path.join(root, ".agents", "skills", artifactId);
-}
-
-function environmentKey(environmentId: string): string {
-  return pathSafeName(environmentId);
-}
-
-function environmentNicknames(bundles: CapabilityWorkspaceBundle[]): Map<string, string> {
-  const byId = new Map<string, string>();
-  const names = [...new Map(bundles.map((entry) => [entry.bundle.environmentId, entry.environmentName])).entries()]
-    .sort(([idA], [idB]) => idA.localeCompare(idB));
-  const used = new Set<string>();
-  for (const [environmentId, environmentName] of names) {
-    const base = pathSafeName(environmentName);
-    let nickname = base;
-    for (let number = 2; used.has(nickname); number += 1) nickname = `${base}_${number}`;
-    used.add(nickname);
-    byId.set(environmentId, nickname);
-  }
-  return byId;
-}
-
-function uniqueSkillName(skillId: string, used: Set<string>): string {
-  let visibleName = skillId;
-  for (let number = 2; used.has(visibleName); number += 1) visibleName = `${skillId}_${number}`;
-  used.add(visibleName);
-  return visibleName;
-}
-
-async function renderAggregateAgents(
-  root: string,
-  sources: AggregateSource[],
-  inlineFacts: AggregateFact[],
-  skillNamesByEnvironment: Map<string, Set<string>>,
-  skillAuthoringPaths: Map<string, string>,
-): Promise<string> {
-  const blocks = (await Promise.all(sources.map(async (source) => {
-    const absoluteSource = path.isAbsolute(source.sourcePath) ? source.sourcePath : path.join(root, source.sourcePath);
-    if (!(await pathExists(absoluteSource))) return undefined;
-    const content = await readFile(absoluteSource, "utf8");
-    const editable = source.writable ? "true" : "false";
-    const pathAttribute = source.writable ? ` path="${escapeAttribute(source.displayPath)}"` : "";
-    return `<environment_instruction environment="${escapeAttribute(source.nickname)}" editable="${editable}"${pathAttribute}>\n${content.trim()}\n</environment_instruction>`;
-  }))).filter((block): block is string => block !== undefined);
-  const factBlocks = inlineFacts.map((fact) => `<environment_instruction environment="${escapeAttribute(fact.nickname)}" editable="false">\n${fact.name}: ${fact.content.trim()}\n</environment_instruction>`);
-  const environmentNames = [...new Set([
-    ...sources.map((source) => source.nickname),
-    ...skillNamesByEnvironment.keys(),
-  ])].sort((a, b) => a.localeCompare(b));
-  const locations = [...skillAuthoringPaths.entries()].sort(([a], [b]) => a.localeCompare(b));
-  const locationText = locations.length > 0
-    ? locations.map(([nickname, authoringPath]) => `- For the \`${nickname}\` environment, add, edit, or delete skills in \`${authoringPath}/<skill-name>/SKILL.md\`.`).join("\n")
-    : "No environments are currently entered with writable projected skill authoring locations.";
-  const exampleNickname = locations.some(([nickname]) => nickname === "example-com") ? "example-com" : locations[0]?.[0];
-  const examplePath = exampleNickname ? skillAuthoringPaths.get(exampleNickname) : undefined;
-  const example = exampleNickname && examplePath ? `\nUse the normal Agent Skills format. For example, to create a very simple skill in the visible projected path for ${exampleNickname}:\n\n\`\`\`sh\nmkdir -p ${examplePath}/say-hello\ncat > ${examplePath}/say-hello/SKILL.md <<'EOF'\n---\nname: say-hello\ndescription: Say hello when the user asks for a greeting.\n---\n\nWhen asked for a greeting, say hello.\nEOF\n\`\`\`\n\nOnce \`SKILL.md\` exists, Rook will preserve it and refresh the projected \`.agents/skills/\` inventory automatically.` : "";
-  const skillInventory = environmentNames.map((nickname) => {
-    const names = [...(skillNamesByEnvironment.get(nickname) ?? [])].sort((a, b) => a.localeCompare(b));
-    return `- \`${nickname}\`: ${names.length > 0 ? names.map((name) => `\`${formatInlineCode(name)}\``).join(", ") : "none"}`;
-  }).join("\n");
-  return `# Rook environment instructions
-
-This file is generated by Rook and is read-only. Do not edit it directly.
-
-Treat the visible projected paths in this workspace as authoritative. When you need to add, edit, or delete instructions, memories, skills, or processes, do it through those visible paths rather than resolving symlinks or searching for backing stores. After edits, deletions, or creations, the projected files and this aggregate may refresh shortly afterward; trust that automatic rematerialization.
-
-## Adding, editing, and deleting instructions and memories
-
-Instructions and memories are usually small pieces of guidance, facts, or reminders associated with an environment that the agent should keep in mind while working there.
-
-Each environment's instructions and memories appear inside the \`<environment_instruction>\` tags below. Use the instruction text as context.
-
-The tag attributes mean:
-
-- \`environment\` is the path-safe environment nickname.
-- \`editable=\"false\"\` marks instructions that come from a read-only source.
-- \`editable=\"true\"\` marks instructions that the user may edit.
-- \`path\` identifies the visible projected file to edit for writable instructions. Paths are relative.
-
-When an editable block has a \`path\`, edit that visible path rather than this generated aggregate. Do not resolve symlinks or hunt for deeper backing stores. If an editable block contains only the default message, no user-authored instructions or memories exist for that environment yet.
-
-## Adding, editing, and deleting skills and processes
-
-Skills usually hold deeper or more reusable procedures that can be applied when working in an environment.
-
-Skills are discovered from \`.agents/skills/\`, but treat that directory as inventory only. Do not add, edit, or delete skills there, even if some entries appear writable.
-
-Instead, for writable environments, add, edit, or delete skills only through the visible projected environment skill directories listed below. Do not resolve symlinks, search for deeper backing stores, or try to force read-only skill directories writable by changing permissions, replacing links, or copying files elsewhere.
-
-Do not create new skills directly under \`.agents/skills/\`. For writable environments, use the visible projected environment skill directories:
-
-${locationText}${example}
-
-## Environment instructions and memories
-
-${[...blocks, ...factBlocks].join("\n\n")}
-
-## Environment skills and procedures
-
-The following list shows the skills currently known for each environment.
-
-${skillInventory || "- none"}
-`;
-}
-
-function escapeAttribute(value: string): string {
-  return value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
-
-function formatInlineCode(value: string): string {
-  return value.replaceAll("`", "\\`");
-}
-
 async function materializeDerivedSkill(skillsRoot: string, artifact: BundleArtifact, usedSkillNames: Set<string>, skillPaths: string[]): Promise<void> {
   const visibleName = uniqueSkillName(artifact.id, usedSkillNames);
   const target = path.join(skillsRoot, visibleName);
   await writeArtifact(target, artifact);
   await makeReadOnly(target);
   skillPaths.push(target);
-}
-
-function writableInstructionsContent(content: string | undefined): string {
-  return content?.trim() ? content : DEFAULT_EMPTY_INSTRUCTIONS;
 }
 
 function artifactText(artifact: BundleArtifact): string {
@@ -800,138 +628,4 @@ function generatedReferenceSkill(id: string, sourceName: string, content: string
       [`${id}/SKILL.md`]: `---\nname: ${id}\ndescription: Reference material from ${sourceName}.\n---\n\n# ${sourceName}\n\n${content}`,
     },
   };
-}
-
-async function sourceFingerprint(source: WorkspaceSource): Promise<string> {
-  if (!(await pathExists(source.path))) return "missing";
-  if (source.kind === "instructions") return fingerprint(await readFile(source.path, "utf8"));
-  if (source.kind === "skill") return fingerprint(await readSkillFiles(source.path, source.artifactId ?? "skill"));
-  const files: Record<string, string> = {};
-  for (const skillId of await skillDirectories(source.path)) {
-    Object.assign(files, await readSkillFiles(path.join(source.path, skillId), skillId));
-  }
-  return fingerprint(files);
-}
-
-function fingerprint(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-async function skillDirectories(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true });
-  return entries.filter((entry) => entry.isDirectory() || entry.isSymbolicLink()).map((entry) => entry.name).sort((a, b) => a.localeCompare(b));
-}
-
-async function readSkillFiles(root: string, artifactId: string): Promise<Record<string, string>> {
-  const files: Record<string, string> = {};
-  async function walk(directory: string, prefix: string): Promise<void> {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-      const child = path.join(directory, entry.name);
-      if (entry.isDirectory()) await walk(child, relative);
-      else if (entry.isFile()) files[`${artifactId}/${relative}`] = await readFile(child, "utf8");
-    }
-  }
-  await walk(root, "");
-  return files;
-}
-
-async function writeArtifact(targetRoot: string, artifact: BundleArtifact): Promise<void> {
-  await rm(targetRoot, { recursive: true, force: true });
-  await mkdir(targetRoot, { recursive: true });
-  for (const [rawPath, content] of Object.entries(artifact.files)) {
-    const target = safeChild(targetRoot, artifactRelativePath(rawPath, artifact.id));
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, content, "utf8");
-  }
-}
-
-function artifactRelativePath(rawPath: string, artifactId: string): string {
-  const normalized = rawPath.replaceAll("\\", "/");
-  return normalized.startsWith(`${artifactId}/`) ? normalized.slice(artifactId.length + 1) : normalized;
-}
-
-async function clearDirectory(root: string): Promise<void> {
-  await mkdir(root, { recursive: true });
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    await removeTree(path.join(root, entry.name));
-  }
-}
-
-async function removeTree(root: string): Promise<void> {
-  if (!(await pathExists(root))) return;
-  const stat = await lstat(root);
-  if (stat.isSymbolicLink() || stat.isFile()) {
-    await chmod(root, 0o644).catch(() => undefined);
-    await rm(root, { force: true });
-    return;
-  }
-  await chmod(root, 0o755).catch(() => undefined);
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const child = path.join(root, entry.name);
-    if (entry.isSymbolicLink()) {
-      await rm(child, { force: true });
-    } else if (entry.isDirectory()) {
-      await removeTree(child);
-    } else {
-      await chmod(child, 0o644).catch(() => undefined);
-      await rm(child, { force: true });
-    }
-  }
-  await chmod(root, 0o755).catch(() => undefined);
-  await rm(root, { recursive: true, force: true });
-}
-
-async function materializeReadOnlyFile(target: string, content: string): Promise<void> {
-  await rm(target, { force: true });
-  await writeFile(target, content, "utf8");
-  await chmod(target, 0o444);
-}
-
-async function replaceWithSymlink(linkPath: string, target: string): Promise<void> {
-  await rm(linkPath, { recursive: true, force: true });
-  await mkdir(path.dirname(linkPath), { recursive: true });
-  await symlink(target, linkPath, "dir");
-}
-
-async function makeReadOnly(root: string): Promise<void> {
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const child = path.join(root, entry.name);
-    if (entry.isDirectory()) await makeReadOnly(child);
-    else if (entry.isFile()) await chmod(child, 0o444);
-  }
-  await chmod(root, 0o555);
-}
-
-function pathSafeName(value: string): string {
-  return safeName(value) || "environment";
-}
-
-function safeName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "reference";
-}
-
-function safeChild(root: string, ...parts: string[]): string {
-  const target = path.resolve(root, ...parts);
-  const resolvedRoot = path.resolve(root);
-  if (target !== resolvedRoot && !target.startsWith(`${resolvedRoot}${path.sep}`)) throw new Error(`Workspace path escapes its root: ${parts.join("/")}`);
-  return target;
-}
-
-function projectDirectory(environmentId: string): string | undefined {
-  return environmentId.startsWith("dir:/") ? path.posix.normalize(environmentId.slice("dir:".length)) : undefined;
-}
-
-async function pathExists(target: string): Promise<boolean> {
-  try {
-    await lstat(target);
-    return true;
-  } catch (error) {
-    if (isMissingPath(error)) return false;
-    throw error;
-  }
-}
-
-function isMissingPath(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "ENOENT";
 }
