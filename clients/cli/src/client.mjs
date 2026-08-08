@@ -43,6 +43,8 @@ export class RookCliClient {
     this.toolLineWidth = 0;
     this.toolCallId = null;
     this.pendingOffers = [];
+    this.sessionRecord = null;
+    this.sessionLoaded = false;
   }
 
   baseRestUrl() {
@@ -52,6 +54,7 @@ export class RookCliClient {
   async run() {
     this.installSignalHandlers();
     if (this.runtimeId) await this.ensureRuntimeExists();
+    if (this.sessionId) await this.loadSessionRecord();
     await this.connect();
     await this.initialize();
     if (this.sessionId) await this.loadExistingSession();
@@ -86,7 +89,8 @@ export class RookCliClient {
   }
 
   async connect() {
-    const wsUrl = this.serverUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:").replace(/\/$/, "") + "/api/ws";
+    const wsUrl = this.serverUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:").replace(/\/$/, "") + "/api/ws" +
+      (this.sessionId ? `?sessionId=${encodeURIComponent(this.sessionId)}` : "");
     const headers = this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {};
     this.ws = new WebSocket(wsUrl, { headers });
     await new Promise((resolve, reject) => {
@@ -130,9 +134,50 @@ export class RookCliClient {
     if (!this.lastMessageOnly) printLine(COLORS.gray, `session: ${this.sessionId} (${this.runtimeId})`);
   }
 
+  async loadSessionRecord() {
+    const response = await fetchJson(`${this.baseRestUrl()}/api/sessions`, this.authToken);
+    const sessions = Array.isArray(response?.sessions) ? response.sessions : [];
+    this.sessionRecord = sessions.find((session) => session?.sessionId === this.sessionId || session?.id === this.sessionId) ?? null;
+    if (!this.sessionRecord) throw new Error(`Unknown session: ${this.sessionId}`);
+  }
+
   async loadExistingSession() {
-    await this.request("session/load", { sessionId: this.sessionId });
+    if (this.sessionLoaded) return;
+    if (this.sessionRecord?.running) {
+      const response = await fetchJson(`${this.baseRestUrl()}/api/sessions/${encodeURIComponent(this.sessionId)}/transcript`, this.authToken);
+      for (const event of response?.events ?? []) this.applyTranscriptEvent(event);
+    } else {
+      await this.request("session/load", { sessionId: this.sessionId });
+    }
+    this.sessionLoaded = true;
     if (!this.lastMessageOnly && !this.transcript) printLine(COLORS.gray, `session: ${this.sessionId}`);
+  }
+
+  applyTranscriptEvent(event) {
+    const kind = event?.kind;
+    if (kind === "run_completed" || kind === "run_failed") return;
+    const update = {
+      sessionUpdate: kind === "plan_update" ? "plan" : kind,
+      ...(kind === "user_message_chunk" || kind === "agent_message_chunk" || kind === "agent_thought_chunk"
+        ? { content: { type: "text", text: event.text } }
+        : {}),
+      ...(kind === "tool_call" ? {
+        toolCallId: event.toolCallId,
+        title: event.title,
+        kind: event.toolKind,
+        status: event.status,
+        rawInput: event.rawInput,
+      } : {}),
+      ...(kind === "tool_call_update" ? {
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        status: event.status,
+        rawOutput: event.rawOutput,
+      } : {}),
+      ...(kind === "plan_update" ? { entries: event.entries } : {}),
+      ...(kind === "usage_update" ? { used: event.used, size: event.size, cost: event.cost } : {}),
+    };
+    if (update.sessionUpdate) this.handleUpdate(update);
   }
 
   async applyEnvironmentChanges() {
@@ -164,7 +209,6 @@ export class RookCliClient {
   async runTranscriptMode() {
     if (!this.sessionId) fatal("--transcript requires --sessionId.");
     await this.loadExistingSession();
-    await new Promise((resolve) => setTimeout(resolve, 2000));
     this.printSessionId();
     await this.close();
   }

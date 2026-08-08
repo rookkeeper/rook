@@ -42,8 +42,6 @@ public struct RookAPI {
         return components.url!
     }
 
-    public var webAppURL: URL { baseURL }
-
     public func webSocketRequest(sessionId: String? = nil) -> URLRequest {
         var request = authorizedRequest(url: webSocketURL(sessionId: sessionId))
         request.timeoutInterval = 30

@@ -601,9 +601,6 @@ private struct HomeContent: View {
 
     private var footerActions: some View {
         HStack(spacing: 8) {
-            FooterIconButton(title: "Open Web App", systemImage: "safari") {
-                model.openWebApp()
-            }
             FooterIconButton(title: "Open Server Log", systemImage: "doc.text.magnifyingglass") {
                 model.openServerLog()
             }

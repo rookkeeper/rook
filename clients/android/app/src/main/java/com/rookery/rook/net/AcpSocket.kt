@@ -1,26 +1,6 @@
-// Mirrors clients/RookKit/Sources/RookKit/Net/AcpSocket.swift
-//
-// JSON-RPC 2.0 websocket client for connection-level /api/ws. Sends ACP requests over the
-// websocket and reduces ACP-shaped notifications into flat AcpClientEvents. Mirrors the
-// web client's behavior closely: user_message_chunk echoes and _rookery_run_*/
-// _rookery_status_changed updates are ignored; prompt completion comes from the JSON-RPC
-// response for the corresponding session/prompt request id.
-//
-// Divergences from the Swift source (all intentional):
-// - Events are a SharedFlow<AcpClientEvent> + StateFlow<Boolean> instead of closures.
-// - No @MainActor: OkHttp's WebSocketListener callbacks fire on OkHttp's reader thread,
-//   so each callback only `scope.launch{}`s the actual reducer call — same threading
-//   contract Swift's @MainActor imposes on callers. `handleFrame`/`handleUpdate` stay
-//   plain synchronous functions, which is what makes them unit-testable with no dispatcher.
-// - `sendPrompt`'s counter/pendingPromptIds/echo bookkeeping is split into `trackPrompt`
-//   so a test can drive the reducer without a real socket. Behavior is identical.
-// - Unlike Swift's `teardown()` (which sets its stored `isConnected` flag directly,
-//   bypassing `onConnectionChange`), this always updates the `isConnected` StateFlow —
-//   Kotlin's single reactive source of truth has no separate "state vs. notify" channel
-//   to replicate, and a stale StateFlow value would be a real bug, not just a quirk.
-// - `stringifyToolPayload` folds JSON null / non-string primitives to their plain content
-//   rather than replicating `String(describing: NSNull())`/`NSNumber` formatting quirks —
-//   those only affect the rare non-object tool payload, not shown to differ in practice.
+// JSON-RPC 2.0 websocket client for /api/ws. Sends ACP requests over the websocket
+// and reduces standard ACP notifications into flat AcpClientEvents. Prompt completion
+// comes from the JSON-RPC response for the corresponding session/prompt request id.
 package com.rookery.rook.net
 
 import com.rookery.rook.model.AcpClientEvent
@@ -192,11 +172,6 @@ class AcpSocket(
         pendingPromptIds.add(requestId)
         pendingUserMessageEchoes.addLast(text)
         return requestId
-    }
-
-    suspend fun sessionList(): List<JsonObject> {
-        val result = sendSocketRequest("session/list", buildJsonObject { }, includeSessionId = false)
-        return result["sessions"]?.jsonArray?.mapNotNull { it as? JsonObject } ?: emptyList()
     }
 
     suspend fun createSession(runtimeId: String, title: String, cwd: String): String {
@@ -458,20 +433,6 @@ class AcpSocket(
                     )
                 )
             }
-            "_rookery_tool_input_delta" -> {
-                val toolCallId = update["toolCallId"]?.stringValue ?: return
-                val delta = update["delta"]?.stringValue ?: return
-                emit(AcpClientEvent.ToolInputDelta(toolCallId, update["toolName"]?.stringValue, delta))
-            }
-            "_rookery_tool_call_ready" -> {
-                val toolCallId = update["toolCallId"]?.stringValue ?: return
-                emit(AcpClientEvent.ToolCallReady(toolCallId, update["toolName"]?.stringValue))
-            }
-            "_rookery_tool_output_delta" -> {
-                val toolCallId = update["toolCallId"]?.stringValue ?: return
-                val delta = update["delta"]?.stringValue ?: return
-                emit(AcpClientEvent.ToolOutputDelta(toolCallId, update["toolName"]?.stringValue, delta))
-            }
             "plan" -> {
                 val rawEntries = update["entries"] as? JsonArray ?: return
                 val entries = rawEntries.mapIndexed { index, entryElement ->
@@ -490,19 +451,11 @@ class AcpSocket(
                 val size = intValue(update["size"]) ?: return
                 emit(AcpClientEvent.UsageUpdate(used, size, parseUsageCost(update["cost"])))
             }
-            "_rookery_modes_state" ->
-                parseModesState(update["modes"])?.let { emit(AcpClientEvent.ModesState(it.currentModeId, it.availableModes)) }
             "current_mode_update" ->
                 update["modeId"]?.stringValue?.let { emit(AcpClientEvent.CurrentModeUpdate(it)) }
             "config_option_update" ->
                 parseConfigOptions(update["configOptions"])?.let { emit(AcpClientEvent.ConfigOptionUpdate(it)) }
-            "_rookery_protocol_error" -> emit(AcpClientEvent.ProtocolError(update["error"]?.stringValue ?: "Protocol error"))
-            "_rookery_connection_error" -> emit(AcpClientEvent.ConnectionError(update["error"]?.stringValue ?: "Connection error"))
-            else -> {
-                // user_message_chunk echoes are handled above; _rookery_run_*,
-                // _rookery_status_changed, _rookery_assistant_* are intentionally
-                // ignored, matching the web client.
-            }
+            else -> Unit
         }
     }
 

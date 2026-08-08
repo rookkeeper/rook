@@ -50,7 +50,7 @@
 `RookAPI` exposes:
 - `healthResult()` / `health()`
 - `agents()`
-- `sessions()` — session list over REST (replaces the old WebSocket `session/list`)
+- `sessions()` — session list over REST
 - `sessionTranscript(sessionId:)` — normalized transcript hydration for second viewers / running sessions
 - `environmentPreview(environmentId:)`
 - `registerEnvironment(candidate)`

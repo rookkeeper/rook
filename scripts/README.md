@@ -73,20 +73,6 @@ The mock ACP test server (`server/src/agents/test-fixtures/mockAcpServer.mjs`) r
 
 MockAgent is fully modular: delete `MockAgent.ts` and its single registration line in `agentDiscovery.ts` to remove it. Nothing else depends on it.
 
-### `interact-with-remote-agent.sh` — CLI agent session
-
-Exercise the remote-agent bridge from the terminal. Starts a local server, opens a WebSocket, runs a prompt through any registered agent, and prints the resulting ACP client events as JSONL on stdout.
-
-```bash
-./scripts/interact-with-remote-agent.sh --agent PiAgent --omit-deltas "hello"
-./scripts/interact-with-remote-agent.sh --list-agents
-./scripts/interact-with-remote-agent.sh --raw-acp --agent MyPiOpenAiAgent "Run sleep 5"
-```
-
-Supports: `--steer`, `--steer-after-ms`, `--cancel-after-ms`, `--permission allow-once|allow-always|reject-once|cancel`, `--mode`, `--session`, `--restart`, `--replay`, `--raw-acp`, and event-type filtering (`--omit`, `--only`, `--omit-deltas`).
-
-Supporting library: `lib/interact-with-remote-agent/`
-
 ### `print-environments.sh` — dump environment diagnostics
 
 Hits `GET /api/diagnostics/environments` on the running server and pretty-prints active/recent environment state with counts.
@@ -120,13 +106,6 @@ Runs any command, voiced by `say`. Used during screen recordings to signal when 
 lib/
 ├── dump-environment-decisions/         # TypeScript tool to read the decisions DB
 │   └── dump-environment-decisions.ts
-├── interact-with-remote-agent/         # Remote agent CLI + shared ACP types/helpers
-│   ├── interact-with-remote-agent.ts   # Main CLI entry point
-│   ├── remoteAgent.ts                  # WebSocket-based remote agent client
-│   ├── acpClientTypes.ts               # ACP client event type definitions
-│   ├── acp.ts                          # Re-exports from server/src/shared/acp
-│   ├── agent.ts                        # Re-exports from server/src/shared/agent
-│   └── environment.ts                  # Re-exports from server/src/shared/environment
 └── run-rook/                           # Shared bash helpers + per-target launch logic
     ├── common.sh
     ├── profile.sh

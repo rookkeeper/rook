@@ -132,7 +132,7 @@ function projectPath(environmentId: string): string | null {
 }
 
 function environmentRecord(environmentId: string, directory: string): EnvironmentRecord {
-  return { id: environmentId, displayName: path.basename(directory) || directory, description: `Project directory ${directory}` };
+  return { id: environmentId, displayName: path.basename(directory) || directory, description: `Project directory ${directory}`, metadata: {} };
 }
 
 async function readOptionalText(filePath: string): Promise<string | undefined> {

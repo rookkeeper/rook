@@ -141,7 +141,7 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   saveBundle(bundle: EnvironmentBundle): void {
     this.db.exec("BEGIN");
     try {
-      this.upsertEnvironment({ id: bundle.environmentId, displayName: bundle.environmentId, description: `Environment ${bundle.environmentId}` });
+      this.upsertEnvironment({ id: bundle.environmentId, displayName: bundle.environmentId, description: `Environment ${bundle.environmentId}`, metadata: {} });
       this.writeBundle(bundle, normalizedBundleId(bundle.bundleId));
       this.db.exec("COMMIT");
     } catch (error) {
@@ -260,7 +260,7 @@ function validEnvironmentId(environmentId: string): boolean {
 function defaultEnvironmentRecord(environmentId: string): EnvironmentRecord {
   const envPath = environmentId.split(":")[1] ?? environmentId;
   const displayName = envPath.split("/").filter(Boolean).map((segment) => segment.replace(/[-_]+/g, " ")).join(" / ") || environmentId;
-  return { id: environmentId, displayName, description: `Environment ${environmentId}` };
+  return { id: environmentId, displayName, description: `Environment ${environmentId}`, metadata: {} };
 }
 
 function environmentFromRow(row: unknown): EnvironmentRecord {

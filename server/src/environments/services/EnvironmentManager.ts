@@ -47,8 +47,8 @@ export interface RuntimeEnvironmentBundle {
   editable: boolean;
   bundle: EnvironmentBundle;
   writeBackSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
-  writeBackNewSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
   writeBackDeleteSkill?: (skillId: string) => Promise<boolean>;
+  writeBackNewSkill?: (skillId: string, files: Record<string, string>) => Promise<boolean>;
   writeBackInstructions?: (content: string) => Promise<boolean>;
   writeBackDeleteInstructions?: () => Promise<boolean>;
 }
@@ -197,22 +197,6 @@ export class EnvironmentManager {
     this.expiryTimer.unref?.();
   }
 
-  async registerAvailableEnvironment(env: EnvironmentRecord, info: EnvironmentOfferInfo = {}): Promise<void> {
-    this.pruneMemory();
-
-    const nowIso = new Date(this.now()).toISOString();
-    try {
-      await this.registrationCaptureSink.capture({
-        capturedAt: nowIso,
-        environmentId: env.id,
-        metadata: env.metadata,
-      });
-    } catch (error) {
-      this.logger.info({ environmentId: env.id, error }, "failed to append environment metadata capture");
-    }
-    await this.rememberAvailableEnvironment(env, info);
-  }
-
   async registerCandidateEnvironment(candidate: CandidateEnvironmentRecord): Promise<void> {
     this.pruneMemory();
 
@@ -332,7 +316,8 @@ export class EnvironmentManager {
       : undefined;
 
     if (decision === "approve" || decision === "reject") {
-      this.sessionDecisions.setPermanent(decisionKey, environmentId, bundle?.bundleId ?? null, decision);
+      if (!bundleHash || !bundle) throw new Error("A known bundleHash is required for a permanent environment decision.");
+      this.sessionDecisions.setPermanent(bundleHash, environmentId, bundle.bundleId, decision);
     } else {
       const targetSessions = sessionId
         ? [sessionId]

@@ -96,17 +96,12 @@ class RookViewModelReduceTest {
     }
 
     @Test
-    fun repeatedIdenticalErrorsAreDeduped() {
+    fun connectionErrorsAreShown() {
         val viewModel = RookViewModel()
-
-        viewModel.handleSocketEvent(AcpClientEvent.ProtocolError("boom"))
-        viewModel.handleSocketEvent(AcpClientEvent.ProtocolError("boom"))
-
-        assertEquals(1, viewModel.blocks.value.size)
 
         viewModel.handleSocketEvent(AcpClientEvent.ConnectionError("different"))
 
-        assertEquals(2, viewModel.blocks.value.size)
+        assertEquals(1, viewModel.blocks.value.size)
     }
 
     @Test

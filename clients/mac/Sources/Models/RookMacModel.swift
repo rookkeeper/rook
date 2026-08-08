@@ -341,10 +341,6 @@ final class RookMacModel: ObservableObject {
         }
     }
 
-    func openWebApp() {
-        NSWorkspace.shared.open(api.webAppURL)
-    }
-
     private var logViewerWindow: NSPanel?
 
     func openServerLog() {
