@@ -1,54 +1,28 @@
 # Environment repository
 
-This document is the terse product-level description of the environment repository architecture and filesystem shape.
+Rook's environment repository maps recognizable environments to capability bundles that Rook can discover, preview, approve, and load.
 
-## Purpose
+## Storage model
 
-An environment repository is the catalog of environment-linked bundles that Rook can discover and review.
+Each environment-repository SQLite database has exactly three tables:
 
-It is intentionally broader than a skill repository.
+- `environments` — environment identity and display metadata.
+- `capabilities` — reusable capability content and a content hash.
+- `bundles` — membership rows joining a bundle, environment, and capability.
 
-An environment may have one or more bundles, and a bundle may contain:
-- skills
-- MCP server configuration
-- app-related instructions / metadata
-- other environment-bound artifacts later
+A capability is stored in one uniform nested file-map format. A skill stores its complete directory, including `SKILL.md`, scripts, references, and assets. `AGENTS.md`, `llms.txt`, facts, MCP content, and app content use the same representation.
 
-## Layered architecture
+Capabilities use UUID `TEXT` identifiers and may be referenced by bundle memberships in multiple environments. A bundle is the atomic publication, review, approval, and runtime-loading unit. The bundle hash is derived deterministically from its active capability memberships and their content. Rook does not store revisions or revision pointers.
 
-```text
-API / controllers
-    ↓
-Service
-    ↓
-EnvironmentRepository
-    ↓
-Storage
-```
+`deleted_at` belongs to a bundle membership, not the shared capability row. Deleting a writable capability from one environment leaves the capability content available to other memberships. Restoration clears the membership timestamp.
 
-Current intent by layer:
-- **API / controllers** — optional for now; if present, exposes environment/bundle inspection to clients
-- **Service** — thin business-logic layer that looks up an environment and returns its bundles
-- **EnvironmentRepository** — repository abstraction for reading environments/bundles from one or more backing stores
-- **Storage** — filesystem today; other storage types later
+The canonical database and personal database use the same schema but different repository instances:
 
-## Repository model
+- canonical content is read-only and externally curated;
+- personal content is writable and does not require approval;
+- project-directory content is a direct filesystem source and is not stored in SQLite.
 
-We want a shared repository abstraction:
-- `EnvironmentRepository`
-
-First implementations:
-- `DirectoryEnvironmentRepository`
-- `CompositeEnvironmentRepository`
-
-Initially we support two directory-backed repositories with the same layout:
-- canonical repo in this monorepo at `environment-repository/`
-- local user repo at `~/.rook/environment-repository/`
-
-The monorepo repository is the canonical/shared bundle catalog.
-The `~/.rook/environment-repository/` repository is the user-local/personal one.
-
-At runtime these are presented as one logical union repository.
+Entering an environment does not create an empty personal bundle. Rook creates temporary authoring state for the session and creates durable environment, capability, and bundle-membership rows only when real content is authored.
 
 ## Environment ids
 
@@ -58,130 +32,71 @@ Environment ids use:
 <type>:<uri-like-path>
 ```
 
-Current top-level environment types we want to standardize around:
-- `location`
-- `web`
-- `mac`
-- `dir`
-- `iphone`
-- `android`
-- `windows`
-
 Examples:
+
 - `mac:md.obsidian`
-- `mac:md.obsidian/reading_vault`
 - `web:example.com`
-- `web:example.com/stuff`
 - `location:office`
 - `dir:/Users/johnberryman/projects/github/rookkeeper/rook`
 
-## Filesystem shape
+Registration and entry are literal. Observed paths and URLs can discover known repository environments, but entering a child environment does not implicitly enter its parent.
 
-Top level is organized by environment type:
+## Repository projection and API
 
-```text
-environment-repository/
-├── android/
-├── dir/
-├── iphone/
-├── location/
-├── mac/
-├── web/
-└── windows/
-```
+The repository layer stores normalized rows and projects them into the existing bundle-facing `EnvironmentBundle` API:
 
-Environment ids map directly to nested directories under those type roots.
+- `skill` capabilities become `bundle.skills`;
+- `instructions` becomes `bundle.agentsMd`;
+- `llms-txt` becomes `bundle.llmsTxt`;
+- `facts`, `mcp`, and `app` capabilities become their corresponding bundle collections.
 
-Examples:
-- `mac:md.obsidian` → `mac/md.obsidian/`
-- `mac:md.obsidian/reading_vault` → `mac/md.obsidian/reading_vault/`
-- `location:office` → `location/office/`
-- `dir:/Users/johnberryman/projects/github/rookkeeper/rook` → `dir/Users/johnberryman/projects/github/rookkeeper/rook/`
-- `web:example.com` → `web/example.com/`
-
-## Bundles
-
-Each environment directory may contain:
+The server exposes:
 
 ```text
-.bundles/
+GET  /api/environments/search?query=...
+GET  /api/bundles/search?query=...&repository=canonical|personal|project-directory
+GET  /api/environments/preview?environmentId=...
 ```
 
-Bundles live at:
+Previews expose the bundle hash, active capability content, and repository identity. Revision metadata is not part of the API.
+
+## Runtime workspace projection
+
+The process-wide writable source is project-shaped and contains one environment directory per personal environment:
 
 ```text
-<environment>/.bundles/<bundle-id>/
+~/.rook/global-workspace/writable/<environment-key>/
+├── AGENTS.md
+└── .agents/
+    └── skills/<skill-name>/
 ```
 
-Bundle ids are local to the environment.
-
-Bundle identifiers conceptually use:
+Each session receives disposable links:
 
 ```text
-<environment-id>#<bundle-id>
+~/.rook/agent-workspaces/<session-id>/
+├── AGENTS.md
+└── .agents/
+    ├── editable-per-environment/<environment> -> shared environment directory
+    └── skills/<visible-name>                  -> shared skill source
 ```
 
-## Bundle contents
+The root `AGENTS.md` is a generated, read-only aggregate. The linked `.agents/editable-per-environment/<environment>/` directory is the editable source for both instructions and skills. New skills belong under its `.agents/skills/` directory, never directly under the session workspace's `.agents/skills/`.
 
-Bundle contents are grouped by type inside the bundle directory.
+Canonical content is materialized read-only into the session workspace. Project-directory skills and instructions link directly to project files. The global watcher observes shared personal sources, debounces settled changes, writes current capability content to SQLite, and interprets missing writable source entries as membership soft deletion. Rebuild and cleanup operations are suppressed from deletion inference.
 
-Current first-pass content directories are:
-- `skills/`
-- `mcp-servers/`
-- `apps/`
+## Approval and deletion
 
-Examples:
-- `skills/<skill-name>/SKILL.md`
-- `mcp-servers/config.json`
-- `apps/instructions.md`
+Personal capabilities are user-owned and do not require approval. Canonical capabilities remain immutable and require the normal decision flow. Decisions apply to the derived content hash of an atomic bundle; changing active capability content or membership produces a different hash.
 
-A bundle may contain only the content groups it needs.
+A writable skill or instruction source can be soft-deleted through its authoring path. The membership remains with a nullable `deleted_at` timestamp, the capability files remain available for restoration, and deleted content is omitted from bundle resolution, search, previews, aggregate instructions, and runtime discovery.
 
-## Example layout
+The generated aggregate `AGENTS.md` is never an editable source. Deleting or rebuilding it only causes regeneration and does not delete capability content.
 
-```text
-environment-repository/
-├── mac/
-│   └── md.obsidian/
-│       ├── .bundles/
-│       │   └── using-obsidian/
-│       │       ├── .manifest
-│       │       ├── apps/
-│       │       │   └── instructions.md
-│       │       └── skills/
-│       │           └── obsidian-cli/
-│       │               └── SKILL.md
-│       ├── .manifest
-│       └── reading_vault/
-│           ├── .bundles/
-│           │   ├── save-documents-to-read/
-│           │   │   └── skills/
-│           │   │       └── save-documents-to-read/
-│           │   │           └── SKILL.md
-│           │   └── identify-next-most-important-read/
-│           │       └── skills/
-│           │           └── identify-next-most-important-read/
-│           │               ├── references/
-│           │               ├── scripts/
-│           │               └── SKILL.md
-│           └── .manifest
-├── location/
-└── web/
-```
+## Deferred work
 
-## Other dot-paths
-
-Other environment-level and bundle-level metadata should live in dot-paths.
-
-Current expected locations:
-- environment manifest: `<environment>/.manifest`
-- bundle manifest: `<environment>/.bundles/<bundle>/.manifest`
-
-## Preview / review intent
-
-The repository itself does not store separate preview files.
-
-Review UI should render the actual contents of a bundle as a filesystem-style review:
-- file tree on the left
-- file contents on the right
-- bundle errors shown per-bundle
+- publishing, sharing, signed publishers, and remote repository adapters;
+- capability-level approval or dependency graphs;
+- conflict merging for concurrent personal edits;
+- MCP startup and lifecycle;
+- stronger OS-level sandboxing.

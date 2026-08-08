@@ -7,7 +7,7 @@ import type { PoiLookupProvider, PoiResult } from "./PoiLookupProvider.js";
 
 const TEST_COORD = { latitude: 37.3318, longitude: -122.0312 };
 
-const emptyRepo: KnownEnvironmentLookup = { async getBundleCollectionPaths() { return []; } };
+const emptyRepo: KnownEnvironmentLookup = { async hasKnownEnvironment() { return false; } };
 function identifierFor(poi: PoiResult): EnvironmentIdentifier {
   const provider: PoiLookupProvider = { async nearbyPois() { return [poi]; } };
   return new EnvironmentIdentifier({ poiProvider: provider, repository: emptyRepo, skillSuggester: new MockBuildingSkillSuggester() });
@@ -15,8 +15,8 @@ function identifierFor(poi: PoiResult): EnvironmentIdentifier {
 
 function makeIdentifier(knownIds: string[] = []) {
   const repository: KnownEnvironmentLookup = {
-    async getBundleCollectionPaths(environmentId: string) {
-      return knownIds.includes(environmentId) ? [`/repo/${environmentId}/.bundles`] : [];
+    async hasKnownEnvironment(environmentId: string) {
+      return knownIds.includes(environmentId);
     },
   };
   return new EnvironmentIdentifier({

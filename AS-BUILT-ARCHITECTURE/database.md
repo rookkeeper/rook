@@ -2,184 +2,86 @@
 
 ## Summary
 
-Rook's durable server-side state currently lives in one SQLite database, created by `server/src/infrastructure/datastores/RookDatastore.ts` at:
+Rook's durable server state is split across SQLite databases:
 
-- `.var/rook/rook.sqlite` in normal local development
-- `:memory:` in tests when explicitly configured
+- the application database stores sessions, transcripts, session membership, and durable environment decisions;
+- the canonical environment repository database stores curated environment/capability content;
+- the personal environment repository database stores writable user content.
 
-This database is intentionally small. Today it stores session persistence and durable environment decisions. Other environment state, runtime process state, subscriptions, and active/recent caches are still in memory. The main checkout keeps the database under `.var/rook/rook.sqlite`; worktree profiles select an isolated SQLite path through `ROOK_DATABASE_PATH`.
+The application database remains separate from environment repositories. This database is intentionally small: it stores session persistence and durable environment decisions. Runtime processes, active/recent environment caches, subscribers, and workspace projections remain transient. The main checkout keeps the database under `.var/rook/rook.sqlite`; worktree profiles select an isolated SQLite path through `ROOK_DATABASE_PATH`.
 
-## Ownership and layering
+## Environment repository schema
 
-The server is now organized **primarily by domain**. Within a domain, layering appears only where it is actually needed:
+Each environment repository database has exactly three tables.
 
-- routes/API when the behavior is externally exposed
-- services for orchestration and business rules
-- repositories or stores for persistence-facing interfaces
-- datastores for the underlying database connection or concrete persistence backend
+### `environments`
 
-Not every feature needs every layer:
-- internal-only logic does not need routes
-- logic with no persistence does not need repositories/datastores
-- pure in-memory services may stop at the service layer
+- `environment_id TEXT PRIMARY KEY` — canonical environment identifier.
+- `display_name TEXT NOT NULL` — UI name.
+- `description TEXT NOT NULL` — environment description.
+- `metadata_json TEXT NOT NULL DEFAULT '{}'` — serialized discovery metadata.
 
-As built today:
-- `infrastructure/datastores/RookDatastore.ts` owns the shared SQLite connection
-- `sessions/datastores/SqliteSessionRepository.ts` owns session/session-environment SQL
-- `environments/datastores/EnvironmentDecisionStore.ts` owns durable environment-decision SQL
-- `sessions/services/SessionTranscriptStore.ts` owns transcript-event SQL while remaining session-domain persistence code
+### `capabilities`
 
-## Current tables
+- `capability_id TEXT PRIMARY KEY` — UUID identifying reusable capability content.
+- `type TEXT NOT NULL` — `skill`, `instructions`, `llms-txt`, `facts`, `mcp`, or `app`.
+- `name TEXT NOT NULL` — human-readable/source name used for display and authoring paths.
+- `files_json TEXT NOT NULL` — complete nested file map for the capability.
+- `content_hash TEXT NOT NULL` — hash of the capability file map.
 
-### `sessions`
+A skill stores all of its files, including `SKILL.md`, scripts, references, and assets. Instructions, `llms.txt`, facts, MCP content, and app content use the same file-map shape.
 
-Purpose:
-- durable public session catalog
-- mapping from public Rook session IDs to runtime-local ACP session IDs
+### `bundles`
 
-Columns:
-- `session_id TEXT PRIMARY KEY`
-- `runtime_id TEXT NOT NULL`
-- `runtime_session_id TEXT NOT NULL`
-- `title TEXT NOT NULL`
-- `cwd TEXT NOT NULL`
-- `started_at TEXT NOT NULL`
-- `updated_at TEXT NOT NULL`
+The bundle table is the environment/capability membership table:
 
-Constraints and indexes:
-- primary key: `session_id`
-- unique constraint: `(runtime_id, runtime_session_id)`
-- index: `sessions_updated_at_idx ON sessions(updated_at DESC)`
+- `bundle_id TEXT NOT NULL` — UUID grouping one atomic bundle.
+- `environment_id TEXT NOT NULL` — owning environment, foreign key to `environments`.
+- `capability_id TEXT NOT NULL` — referenced capability, foreign key to `capabilities`.
+- `publisher TEXT NOT NULL DEFAULT 'default'` — publisher metadata.
+- `deleted_at TEXT NULL` — membership tombstone; a timestamp means the capability is deleted from this bundle/environment.
 
-Used by:
-- `SqliteSessionRepository`
-- `AgentRuntimeManager`
-- ACP `session/list`, `session/new`, `session/load`, `session/close`
+Primary key:
 
-### `session_environments`
+```text
+(bundle_id, capability_id)
+```
 
-Purpose:
-- durable session-to-environment membership
-- restore entered environments when a session is reloaded or its runtime is restarted
+A capability can be referenced by memberships in multiple environments. Deleting one membership does not delete shared capability content. There are no revision tables, revision pointers, or persistent empty personal bundles.
 
-Columns:
-- `session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE`
-- `environment_id TEXT NOT NULL`
-- `entered_at TEXT NOT NULL`
+## Repository layering
 
-Constraints:
-- primary key: `(session_id, environment_id)`
-- cascade delete when the owning session is deleted
+- `EnvironmentRepositoryDatastore` owns the SQLite connection and three-table schema.
+- `SQLiteEnvironmentRepository` reads and writes normalized rows and projects them into the bundle-facing `EnvironmentBundle` model.
+- `CompositeEnvironmentRepository` combines canonical, personal, project-directory, and synthetic repositories.
+- `EnvironmentRepositoryService` resolves bundles, calculates atomic bundle hashes, exposes search/preview, and routes capability write/delete/restore operations.
 
-Used by:
-- `SqliteSessionRepository.environmentIds(...)`
-- `SqliteSessionRepository.replaceEnvironmentIds(...)`
-- `AgentRuntimeManager.restoreEnvironmentMembership(...)`
+The API remains bundle-oriented even though storage is capability-oriented. Instructions and `llms.txt` are projected into `agentsMd` and `llmsTxt`; skills, facts, MCP, and apps are projected into their corresponding collections.
 
-### `session_transcript_events`
+## Hashing and approval
 
-Purpose:
-- durable append-only normalized transcript history per session
-- lets second viewers hydrate from server state without asking the runtime to replay again
+Rook derives one deterministic bundle hash from the active capability memberships and their file content. Durable approve/reject decisions in the application database continue to use that bundle hash. Changing capability content or membership changes the hash; filesystem paths do not participate.
 
-Columns:
-- `sequence INTEGER PRIMARY KEY AUTOINCREMENT`
-- `session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE`
-- `created_at TEXT NOT NULL`
-- `event_json TEXT NOT NULL`
+## Workspace projection
 
-Indexes:
-- `session_transcript_events_session_idx ON session_transcript_events(session_id, sequence ASC)`
+Writable personal content is materialized once per environment:
 
-Used by:
-- `SessionTranscriptStore`
-- session transcript hydration route
-- live runtime-notification normalization in `AgentRuntimeManager`
+```text
+~/.rook/global-workspace/writable/<environment-key>/
+├── AGENTS.md
+└── .agents/skills/<skill-name>/
+```
 
-### `environment_decisions`
+Each session receives disposable links:
 
-Purpose:
-- durable environment bundle decisions
-- stores only persistent decisions, not per-session ephemeral ones
+```text
+~/.rook/agent-workspaces/<session-id>/
+├── AGENTS.md
+└── .agents/
+    ├── editable-per-environment/<environment> -> shared environment directory
+    └── skills/<visible-name>                  -> shared skill source
+```
 
-Columns:
-- `bundle_hash TEXT PRIMARY KEY`
-- `environment_id TEXT NOT NULL`
-- `bundle_id TEXT`
-- `decision TEXT NOT NULL CHECK (decision IN ('approve', 'reject'))`
-- `updated_at TEXT NOT NULL`
+`AGENTS.md` at the workspace root is a generated read-only aggregate. The individual instruction and skill sources are the editable paths. Canonical/external content is materialized read-only, while project-directory content links directly to project files.
 
-Important note:
-- only `approve` and `reject` are stored here
-- `accept` and `ignore` are intentionally in-memory session-scoped decisions managed by `EnvironmentManager`
-
-Used by:
-- `EnvironmentDecisionStore`
-- `EnvironmentManager`
-- environment offer resolution and durable approvals/rejections
-
-## Current persistence interfaces
-
-### `RookDatastore`
-
-Role:
-- owns the shared SQLite connection
-- creates the database directory when needed
-- is the lowest-level persistence primitive currently in use
-
-### `SqliteSessionRepository`
-
-Role:
-- repository for session rows and session-environment membership
-- hides SQL from the rest of the session/runtime orchestration code
-
-Main methods:
-- `list()`
-- `get(sessionId)`
-- `save(record)`
-- `touch(sessionId)`
-- `delete(sessionId)`
-- `environmentIds(sessionId)`
-- `replaceEnvironmentIds(sessionId, environmentIds)`
-
-### `SessionTranscriptStore`
-
-Role:
-- append-only persistence wrapper for normalized transcript events
-- session-domain persistence code even though it is named as a store rather than a repository
-
-Main methods:
-- `append(sessionId, event, createdAt?)`
-- `list(sessionId)`
-- `clear(sessionId)`
-
-### `EnvironmentDecisionStore`
-
-Role:
-- persistence wrapper for durable bundle decisions
-- store-shaped rather than named as a repository, but serving the same architectural purpose
-
-Main methods:
-- `getDecision(bundleHash)`
-- `setDecision(bundleHash, environmentId, bundleId, decision)`
-- `clearDecision(bundleHash)`
-
-## What is not yet in the database
-
-Still in memory today:
-- active and recent environment availability windows
-- ephemeral `accept` / `ignore` decisions
-- unresolved environment offers
-- runtime subprocess handles
-- per-session subscribers and notification routing
-- environment restart queues
-- location-context synthesis and most transient location state
-
-## Current exceptions / cleanup targets
-
-Small footnote on as-built reality:
-- the server now has a clearer domain-first organization
-- persistence naming is still intentionally mixed between `Repository` and `Store` where the existing behavior and public understanding were preserved
-- some environment and location modules still mix domain logic, orchestration, and persistence-adjacent concerns more than the long-term structure might eventually want
-
-That is acceptable for now because the refactor preserved behavior, APIs, and schema while improving navigability.
+The global watcher debounces settled shared-source changes, persists current file maps, recognizes missing writable source entries as membership deletion, and refreshes active session projections. Rebuild, startup cleanup, and session disposal are excluded from deletion inference.

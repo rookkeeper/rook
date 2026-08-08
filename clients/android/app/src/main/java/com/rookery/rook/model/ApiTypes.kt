@@ -121,9 +121,11 @@ data class EnvironmentBundlePreview(
     val skills: List<EnvironmentArtifactPreview>,
     val mcpServers: List<EnvironmentArtifactPreview>,
     val apps: List<EnvironmentArtifactPreview>,
-    val errors: List<RepositoryReadError>
+    val errors: List<RepositoryReadError>,
+    val facts: List<EnvironmentArtifactPreview> = emptyList(),
+    val llmsTxt: String? = null
 ) {
-    val allArtifacts: List<EnvironmentArtifactPreview> get() = skills + mcpServers + apps
+    val allArtifacts: List<EnvironmentArtifactPreview> get() = skills + mcpServers + apps + facts
     val allFilePaths: List<String> get() = allArtifacts.flatMap { it.sortedFilePaths }.sorted()
 
     fun content(path: String): String? {

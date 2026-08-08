@@ -414,7 +414,9 @@ class AcpSocket(
             "tool_call" -> {
                 val toolCallId = update["toolCallId"]?.stringValue ?: return
                 val meta = rookeryMeta(update)
-                val rawInput = stringifyToolPayload(update["rawInput"]) ?: stringifyToolPayload(meta?.get("rawInput"))
+                val rawInput = stringifyToolPayload(update["rawInput"])
+                    ?: stringifyToolPayload(meta?.get("rawInput"))
+                    ?: terminalCommandInput(update)
                 if (rawInput != null) lastToolInputSnapshots[toolCallId] = rawInput
                 emit(
                     AcpClientEvent.ToolCallStarted(
@@ -429,7 +431,7 @@ class AcpSocket(
             "tool_call_update" -> {
                 val toolCallId = update["toolCallId"]?.stringValue ?: return
                 val meta = rookeryMeta(update)
-                val inputText = stringifyToolPayload(update["rawInput"])
+                val inputText = stringifyToolPayload(update["rawInput"]) ?: terminalCommandInput(update)
                 if (inputText != null) {
                     lastToolInputSnapshots[toolCallId] = inputText
                     emit(AcpClientEvent.ToolInputSnapshot(toolCallId, meta?.get("toolName")?.stringValue, inputText))
@@ -437,10 +439,15 @@ class AcpSocket(
                 val validStatuses = setOf("pending", "in_progress", "completed", "failed", "cancelled")
                 val statusRaw = update["status"]?.stringValue
                 val status = if (statusRaw != null && validStatuses.contains(statusRaw)) statusRaw else "in_progress"
-                val outputSnapshot = contentItemsText(update["content"]) ?: stringifyToolPayload(update["rawOutput"])
-                if (outputSnapshot != null) {
-                    lastToolOutputSnapshots[toolCallId] = outputSnapshot
-                    emit(AcpClientEvent.ToolOutputSnapshot(toolCallId, meta?.get("toolName")?.stringValue, outputSnapshot))
+                val outputDelta = terminalOutputDelta(update)
+                if (outputDelta != null) {
+                    emit(AcpClientEvent.ToolOutputDelta(toolCallId, meta?.get("toolName")?.stringValue, outputDelta))
+                } else {
+                    val outputSnapshot = contentItemsText(update["content"]) ?: stringifyToolPayload(update["rawOutput"])
+                    if (outputSnapshot != null) {
+                        lastToolOutputSnapshots[toolCallId] = outputSnapshot
+                        emit(AcpClientEvent.ToolOutputSnapshot(toolCallId, meta?.get("toolName")?.stringValue, outputSnapshot))
+                    }
                 }
                 emit(
                     AcpClientEvent.ToolCallUpdate(
@@ -593,6 +600,20 @@ class AcpSocket(
 
     private fun rookeryMeta(update: JsonObject): JsonObject? =
         (update["_meta"] as? JsonObject)?.get("rookery") as? JsonObject
+
+    private fun terminalCommandInput(update: JsonObject): String? {
+        val meta = update["_meta"] as? JsonObject ?: return null
+        val terminalInfo = meta["terminal_info"] as? JsonObject ?: return null
+        if (terminalInfo["terminal_id"] == null) return null
+        val title = update["title"]?.stringValue ?: return null
+        return stringifyToolPayload(buildJsonObject { put("command", title) })
+    }
+
+    private fun terminalOutputDelta(update: JsonObject): String? {
+        val meta = update["_meta"] as? JsonObject ?: return null
+        val terminalOutput = meta["terminal_output"] as? JsonObject ?: return null
+        return terminalOutput["data"]?.stringValue
+    }
 
     private fun contentText(value: JsonElement?): String? {
         val content = value as? JsonObject ?: return null

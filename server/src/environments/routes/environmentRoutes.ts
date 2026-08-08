@@ -92,6 +92,17 @@ export async function registerEnvironmentRoutes(
     return preview;
   });
 
+  app.get<{ Querystring: { query?: string } }>("/api/environments/search", async (request) => {
+    const query = typeof request.query.query === "string" ? request.query.query : "";
+    return { environments: await environmentManager.searchEnvironments(query) };
+  });
+
+  app.get<{ Querystring: { query?: string; repository?: string } }>("/api/bundles/search", async (request) => {
+    const query = typeof request.query.query === "string" ? request.query.query : "";
+    const repositoryId = typeof request.query.repository === "string" ? request.query.repository.trim() || undefined : undefined;
+    return { bundles: await environmentManager.searchBundles(query, repositoryId) };
+  });
+
   function parseIdentifyRequest(body: Record<string, unknown>): IdentifyAvailableRequest | null {
     const latitude = body.latitude;
     const longitude = body.longitude;

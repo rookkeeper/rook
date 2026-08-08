@@ -228,9 +228,11 @@ public struct EnvironmentBundlePreview: Codable, Equatable, Identifiable {
     public let skills: [EnvironmentArtifactPreview]
     public let mcpServers: [EnvironmentArtifactPreview]
     public let apps: [EnvironmentArtifactPreview]
+    public let facts: [EnvironmentArtifactPreview]
+    public let llmsTxt: String?
     public let errors: [RepositoryReadError]
 
-    public init(id: String, bundleId: String, environmentId: String, repository: String, valid: Bool, bundleHash: String, skills: [EnvironmentArtifactPreview], mcpServers: [EnvironmentArtifactPreview], apps: [EnvironmentArtifactPreview], errors: [RepositoryReadError]) {
+    public init(id: String, bundleId: String, environmentId: String, repository: String, valid: Bool, bundleHash: String, skills: [EnvironmentArtifactPreview], mcpServers: [EnvironmentArtifactPreview], apps: [EnvironmentArtifactPreview], errors: [RepositoryReadError], facts: [EnvironmentArtifactPreview] = [], llmsTxt: String? = nil) {
         self.id = id
         self.bundleId = bundleId
         self.environmentId = environmentId
@@ -240,11 +242,13 @@ public struct EnvironmentBundlePreview: Codable, Equatable, Identifiable {
         self.skills = skills
         self.mcpServers = mcpServers
         self.apps = apps
+        self.facts = facts
+        self.llmsTxt = llmsTxt
         self.errors = errors
     }
 
     public var allArtifacts: [EnvironmentArtifactPreview] {
-        skills + mcpServers + apps
+        skills + mcpServers + apps + facts
     }
 
     public var allFilePaths: [String] {

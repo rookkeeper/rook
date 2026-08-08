@@ -248,10 +248,10 @@ shell access (so it could `osascript`/`cliclick` regardless), but routing
 control through this one toggle gives a single, visible kill switch. Turn it off
 when you're not actively supervising.
 
-The shipped `environment-repository/mac/slack/` bundle is a worked example:
-focusing Slack offers a skill that reads `/context` to learn the current
-channel and uses `slack://` deep links + AppleScript through the bridge to
-navigate and draft messages.
+The server database can associate approved bundles with Mac environment ids;
+focusing Slack offers matching capabilities that read `/context` to learn the
+current channel and use `slack://` deep links + AppleScript through the bridge
+to navigate and draft messages.
 
 ## Getting it running - exact steps
 

@@ -7,7 +7,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'EOF'
 Usage: tail-logs.sh [--instructions] [--tools]
 
-Tails /tmp/pi-traces.jsonl (or $PI_TRACE_LOG) and prints new messages as
+Tails /tmp/pi/provider-payload.jsonl (or $PI_TRACE_LOG) and prints new messages as
 they appear. Each log line is a complete prompt sent to the LLM; only the
 delta (messages not yet printed) is shown.
 

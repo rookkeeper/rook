@@ -1,12 +1,14 @@
 import dotenv from "dotenv";
 import fastify from "fastify";
 import websocket from "@fastify/websocket";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { EnvironmentDecisionStore } from "./environments/datastores/EnvironmentDecisionStore.js";
+import { EnvironmentDecisionRepository } from "./environments/repositories/EnvironmentDecisionRepository.js";
 import { EnvironmentManager } from "./environments/services/EnvironmentManager.js";
 import { CompositeEnvironmentRepository } from "./environments/repositories/CompositeEnvironmentRepository.js";
-import { DirectoryEnvironmentRepository } from "./environments/repositories/DirectoryEnvironmentRepository.js";
+import { SQLiteEnvironmentRepository } from "./environments/repositories/SQLiteEnvironmentRepository.js";
+import { ProjectDirectoryEnvironmentRepository } from "./environments/repositories/ProjectDirectoryEnvironmentRepository.js";
 import { LocationContextRepository } from "./environments/repositories/LocationContextRepository.js";
 import { EnvironmentRepositoryService } from "./environments/services/EnvironmentRepositoryService.js";
 import { JsonlEnvironmentMetadataCaptureSink } from "./environments/services/environmentMetadataCapture.js";
@@ -24,11 +26,11 @@ import { registerSessionRoutes } from "./sessions/routes/sessionRoutes.js";
 import { registerAcpFacadeRoute } from "./runtime/routes/acpFacadeRoute.js";
 import { ServerAuth } from "./infrastructure/auth.js";
 import { loadAgentRuntimes } from "./infrastructure/config/agentRuntimes.js";
-import { getRookHomeDir } from "./infrastructure/config/configPaths.js";
 import { RookDatastore } from "./infrastructure/datastores/RookDatastore.js";
-import { SqliteSessionRepository } from "./sessions/datastores/SqliteSessionRepository.js";
+import { SqliteSessionRepository } from "./sessions/repositories/SqliteSessionRepository.js";
 import { AgentRuntimeManager } from "./runtime/services/AgentRuntimeManager.js";
-import { SessionTranscriptStore } from "./sessions/services/SessionTranscriptStore.js";
+import { CapabilityWorkspaceManager } from "./runtime/CapabilityWorkspaceManager.js";
+import { SessionTranscriptRepository } from "./sessions/repositories/SessionTranscriptRepository.js";
 import { startRemoteProxy } from "./infrastructure/remoteProxy.js";
 
 dotenv.config({ path: path.join(REPO_ROOT, ".env") });
@@ -51,6 +53,10 @@ export interface BuildServerOptions {
   poiProvider?: PoiLookupProvider;
   /** Optional bearer token required by all HTTP + WebSocket requests. */
   authToken?: string;
+  /** Optional canonical environment repository database. */
+  environmentRepositoryDatabase?: string;
+  /** Optional user-local environment repository database used with the canonical database. */
+  personalEnvironmentRepositoryDatabase?: string;
   /** Test hook: observe registered routes. */
   onRoute?: (route: { method: string | readonly string[]; url: string; websocket?: boolean }) => void;
 }
@@ -71,17 +77,22 @@ export async function buildServer(options: BuildServerOptions = {}) {
   });
   // Programmatic repo for the synthesized location-context bundle (no extraSkillPaths).
   const locationContextRepository = new LocationContextRepository();
+  const environmentRepositoryDatabase = options.environmentRepositoryDatabase ?? process.env.ROOK_ENVIRONMENT_REPOSITORY_DB ?? path.join(REPO_ROOT, "environment-repository.db");
+  const personalEnvironmentRepositoryDatabase = options.personalEnvironmentRepositoryDatabase ?? process.env.ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB ?? path.join(os.homedir(), ".rook", "environment-repository.db");
+  const canonicalEnvironmentRepository = new SQLiteEnvironmentRepository(environmentRepositoryDatabase, "canonical");
+  const personalEnvironmentRepository = new SQLiteEnvironmentRepository(personalEnvironmentRepositoryDatabase, "personal");
   const environmentRepository = new CompositeEnvironmentRepository([
-    new DirectoryEnvironmentRepository(path.join(REPO_ROOT, "environment-repository")),
-    new DirectoryEnvironmentRepository(path.join(getRookHomeDir(), "environment-repository")),
+    canonicalEnvironmentRepository,
+    personalEnvironmentRepository,
+    new ProjectDirectoryEnvironmentRepository(),
     locationContextRepository,
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
   const datastore = new RookDatastore(options.environmentDecisionStoreLocation);
-  const environmentDecisionStore = new EnvironmentDecisionStore(datastore);
+  const environmentDecisionRepository = new EnvironmentDecisionRepository(datastore);
   const environmentMetadataCaptureSink = new JsonlEnvironmentMetadataCaptureSink();
   await environmentMetadataCaptureSink.initialize();
-  const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionStore, {
+  const environmentManager = new EnvironmentManager(environmentRepositoryService, environmentDecisionRepository, {
     activeEnvironmentWindowMs: options.environmentActiveWindowMs ?? Number(process.env.ROOK_ENVIRONMENT_ACTIVE_WINDOW_MS ?? 5 * 60_000 + 15_000),
     recentEnvironmentRetentionMs: options.environmentRecentRetentionMs ?? Number(process.env.ROOK_ENVIRONMENT_RECENT_RETENTION_MS ?? 30 * 60_000),
     logger: app.log,
@@ -97,8 +108,9 @@ export async function buildServer(options: BuildServerOptions = {}) {
   });
   const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
   const sessionRepository = new SqliteSessionRepository(datastore);
-  const transcriptStore = new SessionTranscriptStore(datastore);
-  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, environmentManager, transcriptStore, app.log);
+  const transcriptRepository = new SessionTranscriptRepository(datastore);
+  const workspaceManager = await CapabilityWorkspaceManager.create();
+  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, workspaceManager, environmentManager, transcriptRepository, app.log);
   await app.register(websocket);
 
   app.addHook("onRequest", async (request, reply) => {
@@ -110,12 +122,15 @@ export async function buildServer(options: BuildServerOptions = {}) {
   app.addHook("onClose", async () => {
     environmentManager.close();
     await runtimeManager.close();
+    await workspaceManager.close();
+    canonicalEnvironmentRepository.close();
+    personalEnvironmentRepository.close();
     datastore.close();
   });
 
   app.get("/api/health", async () => ({ ok: true, service: "rook" }));
   await registerRuntimeRoutes(app, runtimeManager);
-  await registerSessionRoutes(app, runtimeManager, transcriptStore);
+  await registerSessionRoutes(app, runtimeManager, transcriptRepository);
   await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar, runtimeManager);
   await registerDiagnosticRoutes(app, environmentManager);
   await registerAcpFacadeRoute(app, runtimeManager, auth);

@@ -7,6 +7,8 @@ export interface EnvironmentBundlePreview extends Pick<EnvironmentBundle, "id" |
   skills: BundleArtifactPreview[];
   mcpServers: BundleArtifactPreview[];
   apps: BundleArtifactPreview[];
+  facts: BundleArtifactPreview[];
+  llmsTxt?: string;
   errors: RepositoryReadError[];
 }
 

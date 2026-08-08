@@ -4,8 +4,9 @@ import type { EnvironmentBundleOffer, EnvironmentEventListener, EnvironmentResol
 import type { SessionRecord, SessionRepository } from "../../sessions/repositories/SessionRepository.js";
 import { SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotification, type SessionRuntimeConfiguration } from "../SessionRuntime.js";
 import { runtimeLaunchPlan, runtimeSessionParams } from "../runtimeLaunchPlan.js";
-import { SessionTranscriptStore } from "../../sessions/services/SessionTranscriptStore.js";
+import { SessionTranscriptRepository } from "../../sessions/repositories/SessionTranscriptRepository.js";
 import { normalizedEventsFromRuntimeMessage, runCompletedEvent, runFailedEvent } from "../../sessions/services/sessionTranscriptEvents.js";
+import { CapabilityWorkspaceManager, type CapabilityWorkspaceResult } from "../CapabilityWorkspaceManager.js";
 
 /**
  * Owns the configured runtime catalog and lazily creates one isolated
@@ -27,13 +28,15 @@ export class AgentRuntimeManager {
   private readonly privateReplayIdleTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly privateReplayWaiters = new Map<string, Set<() => void>>();
   private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
+  private readonly workspaceResults = new Map<string, CapabilityWorkspaceResult>();
 
   constructor(
     profiles: AgentRuntimeProfile[],
     private readonly sessions: SessionRepository,
     private readonly repoRoot: string,
+    private readonly workspaceManager: CapabilityWorkspaceManager,
     private readonly environmentManager?: EnvironmentManager,
-    private readonly transcriptStore?: SessionTranscriptStore,
+    private readonly transcriptRepository?: SessionTranscriptRepository,
     private readonly logger: { info: (obj: Record<string, unknown>, msg?: string) => void } = console,
   ) {
     this.profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
@@ -76,18 +79,21 @@ export class AgentRuntimeManager {
   async createSession(runtimeId: string, params: JsonObject, title: string): Promise<SessionRecord> {
     const startedAt = performance.now();
     const profile = this.requireProfile(runtimeId);
-    this.timingLog("create_session_begin", { runtimeId, title, cwd: typeof params.cwd === "string" ? params.cwd : this.repoRoot });
-    const runtime = this.createSessionRuntime(profile);
+    const sessionId = crypto.randomUUID();
+    const workspace = await this.workspaceManager.materialize(sessionId, []);
+    this.workspaceResults.set(sessionId, workspace);
+    this.timingLog("create_session_begin", { runtimeId, title, cwd: workspace.root });
+    const runtime = this.createSessionRuntime(profile, { ...this.baseRuntimeConfiguration(), workspaceRoot: workspace.root });
     const beforeRuntimeSessionNew = performance.now();
-    const result = await runtime.request("session/new", runtimeSessionParams(profile, params, runtime.configuration));
+    const result = await runtime.request("session/new", runtimeSessionParams(profile, { ...params, cwd: workspace.root }, runtime.configuration));
     const runtimeSessionId = sessionIdFromResult(result);
     const now = new Date().toISOString();
     const record: SessionRecord = {
-      sessionId: crypto.randomUUID(),
+      sessionId,
       runtimeId,
       runtimeSessionId,
       title,
-      cwd: typeof params.cwd === "string" ? params.cwd : this.repoRoot,
+      cwd: workspace.root,
       startedAt: now,
       updatedAt: now,
     };
@@ -119,7 +125,8 @@ export class AgentRuntimeManager {
       const result = await runtime.request(method, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration));
       if (method === "session/prompt") {
         const stopReason = typeof (result as JsonObject | undefined)?.stopReason === "string" ? String((result as JsonObject).stopReason) : "end_turn";
-        await this.transcriptStore?.append(sessionId, runCompletedEvent(stopReason));
+        await this.transcriptRepository?.append(sessionId, runCompletedEvent(stopReason));
+        await this.workspaceManager.assessAndFlush();
       }
       await this.sessions.touch(sessionId);
       this.timingLog("request_complete", {
@@ -131,7 +138,7 @@ export class AgentRuntimeManager {
       return rewriteResultSessionId(record, result);
     } catch (error) {
       if (method === "session/prompt") {
-        await this.transcriptStore?.append(sessionId, runFailedEvent(error instanceof Error ? error.message : String(error)));
+        await this.transcriptRepository?.append(sessionId, runFailedEvent(error instanceof Error ? error.message : String(error)));
       }
       this.timingLog("request_failed", {
         method,
@@ -165,7 +172,7 @@ export class AgentRuntimeManager {
     await this.requireSession(sessionId);
     this.subscribeToEnvironments(sessionId);
     for (const environmentId of leaveEnvironmentIds) this.environmentManager.exitEnvironment(sessionId, environmentId);
-    for (const environmentId of enterEnvironmentIds) this.environmentManager.enterEnvironment(sessionId, environmentId);
+    for (const environmentId of enterEnvironmentIds) await this.environmentManager.enterEnvironment(sessionId, environmentId);
     await this.environmentRestartQueues.get(sessionId);
     const entered = this.environmentManager.enteredEnvironments(sessionId);
     await this.sessions.replaceEnvironmentIds(sessionId, entered);
@@ -204,9 +211,11 @@ export class AgentRuntimeManager {
 
   async closeSession(sessionId: string): Promise<unknown> {
     const record = await this.requireSession(sessionId);
+    await this.workspaceManager.assessAndFlush();
     const runtime = this.runtimeFor(record);
     const result = await runtime.request("session/close", { sessionId: record.runtimeSessionId });
     await runtime.close();
+    await this.workspaceManager.removeSession(sessionId);
     this.detachSessionRuntime(sessionId);
     await this.sessions.delete(sessionId);
     return result;
@@ -241,9 +250,11 @@ export class AgentRuntimeManager {
   }
 
   async close(): Promise<void> {
+    await this.workspaceManager.assessAndFlush();
     for (const unsubscribe of this.runtimeSubscriptions.values()) unsubscribe();
     this.runtimeSubscriptions.clear();
     await Promise.all([...this.sessionRuntimes.values()].map((runtime) => runtime.close()));
+    await Promise.all([...this.workspaceResults.keys()].map((sessionId) => this.workspaceManager.removeSession(sessionId)));
     this.sessionRuntimes.clear();
     this.inboundRequestRoutes.clear();
     if (this.environmentManager) {
@@ -253,19 +264,33 @@ export class AgentRuntimeManager {
     this.environmentSkillPaths.clear();
     this.environmentRestartQueues.clear();
     this.restoredEnvironmentMembership.clear();
+    this.workspaceResults.clear();
   }
 
   private runtimeFor(record: SessionRecord): SessionRuntime {
     const existing = this.sessionRuntimes.get(record.sessionId);
     if (existing) return existing;
-    const runtime = this.createSessionRuntime(this.requireProfile(record.runtimeId));
+    const workspace = this.workspaceResults.get(record.sessionId);
+    const runtime = this.createSessionRuntime(this.requireProfile(record.runtimeId), {
+      ...this.baseRuntimeConfiguration(),
+      ...(workspace ? { workspaceRoot: workspace.root } : {}),
+    });
     this.attachSessionRuntime(record.sessionId, runtime);
     this.subscribeToEnvironments(record.sessionId);
     return runtime;
   }
 
-  private createSessionRuntime(profile: AgentRuntimeProfile): SessionRuntime {
-    return new SessionRuntime(profile, this.repoRoot, runtimeLaunchPlan, undefined, this.logger);
+  private createSessionRuntime(profile: AgentRuntimeProfile, configuration: SessionRuntimeConfiguration = this.baseRuntimeConfiguration()): SessionRuntime {
+    return new SessionRuntime(profile, this.repoRoot, runtimeLaunchPlan, configuration, this.logger);
+  }
+
+  private baseRuntimeConfiguration(): SessionRuntimeConfiguration {
+    return {
+      enteredEnvironmentIds: [],
+      skillPaths: [],
+      extensionPaths: [],
+      ...(this.environmentManager ? { appendSystemPrompt: this.environmentManager.runtimeIdentityInstructions() } : {}),
+    };
   }
 
   private attachSessionRuntime(sessionId: string, runtime: SessionRuntime): void {
@@ -312,6 +337,7 @@ export class AgentRuntimeManager {
     this.environmentSkillPaths.delete(sessionId);
     this.environmentRestartQueues.delete(sessionId);
     this.restoredEnvironmentMembership.delete(sessionId);
+    this.workspaceResults.delete(sessionId);
   }
 
   private subscribeToEnvironments(sessionId: string): void {
@@ -346,9 +372,12 @@ export class AgentRuntimeManager {
   private async restoreEnvironmentMembership(record: SessionRecord): Promise<void> {
     if (!this.environmentManager || this.restoredEnvironmentMembership.has(record.sessionId)) return;
     this.subscribeToEnvironments(record.sessionId);
+    if (!this.workspaceResults.has(record.sessionId)) {
+      this.workspaceResults.set(record.sessionId, await this.workspaceManager.materialize(record.sessionId, []));
+    }
     this.restoredEnvironmentMembership.add(record.sessionId);
     for (const environmentId of await this.sessions.environmentIds(record.sessionId)) {
-      this.environmentManager.enterEnvironment(record.sessionId, environmentId);
+      await this.environmentManager.enterEnvironment(record.sessionId, environmentId);
     }
     await this.environmentRestartQueues.get(record.sessionId);
   }
@@ -367,12 +396,17 @@ export class AgentRuntimeManager {
 
   private scheduleEnvironmentRestart(sessionId: string): void {
     const restart = async () => {
+      await this.workspaceManager.assessAndFlush();
       const paths = this.environmentSkillPaths.get(sessionId);
+      const runtimeBundles = await this.environmentManager?.runtimeBundlesForSession(sessionId) ?? [];
+      const materialized = await this.workspaceManager.materialize(sessionId, runtimeBundles);
+      this.workspaceResults.set(sessionId, materialized);
       const configuration: SessionRuntimeConfiguration = {
         enteredEnvironmentIds: [...(paths?.keys() ?? [])],
-        skillPaths: [...new Set([...(paths?.values() ?? [])].flat())],
+        skillPaths: [],
         extensionPaths: [],
-        appendSystemPrompt: this.environmentManager?.runtimeInstructionsForSession(sessionId),
+        workspaceRoot: materialized.root,
+        appendSystemPrompt: this.environmentManager?.runtimeIdentityInstructions(),
       };
       await this.restartSessionForEnvironmentChange(sessionId, configuration);
     };
@@ -380,6 +414,7 @@ export class AgentRuntimeManager {
     const queued = previous.then(restart, restart);
     this.environmentRestartQueues.set(sessionId, queued);
   }
+
 
   private beginPrivateReplay(sessionId: string, listener: RuntimeNotification): void {
     const listeners = this.privateReplayTargets.get(sessionId) ?? new Set<RuntimeNotification>();
@@ -417,7 +452,7 @@ export class AgentRuntimeManager {
 
   private async captureTranscriptEvents(sessionId: string, message: JsonRpcMessage): Promise<void> {
     for (const event of normalizedEventsFromRuntimeMessage(message)) {
-      await this.transcriptStore?.append(sessionId, event);
+      await this.transcriptRepository?.append(sessionId, event);
     }
   }
 

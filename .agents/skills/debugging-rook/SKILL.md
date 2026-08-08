@@ -121,7 +121,7 @@ Tail Pi provider-payload traces:
 ./scripts/tail-logs.sh --instructions    # pretty-print system instructions
 ./scripts/tail-logs.sh --tools           # YAML-style tool definitions
 ```
-Reads from `.var/pi-traces.jsonl`. Shows the raw prompts sent to the LLM — useful for debugging prompt construction and environment context injection.
+Reads from `/tmp/pi/provider-payload.jsonl` by default, or the path supplied through `PI_TRACE_LOG`. Shows the raw prompts sent to the LLM — useful for debugging prompt construction and environment context injection.
 
 ### Inspecting agent instructions
 

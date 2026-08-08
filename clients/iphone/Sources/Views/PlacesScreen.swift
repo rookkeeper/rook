@@ -20,7 +20,7 @@ struct PlacesScreen: View {
                         }
                         suggestionsList
                         placesList
-                        Text("Define a place here, and create a matching skill bundle on the server at environment-repository/location/<slug>/. When you arrive, Rook offers that place's skills.")
+                        Text("Define a place here. Rook stores matching location capabilities in the server database and offers them when you arrive.")
                             .font(.caption2)
                             .foregroundStyle(PanelPalette.textMuted)
                             .padding(.horizontal, 4)

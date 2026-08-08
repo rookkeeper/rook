@@ -8,9 +8,8 @@ the Chrome extension's `web:<slug>` and the Mac menu bar app's `mac:<slug>`.
 The iPhone is a **fourth environment provider**. Its signal is GPS/geofence
 instead of a frontmost app or a browser tab, but it speaks the same REST + ACP
 contract to `:3000` and needs **zero server changes** — `location:office` resolves
-to `environment-repository/location/office/` exactly the way
-`web:en.wikipedia.org/wiki/Main_Page` resolves to
-`environment-repository/web/en.wikipedia.org/wiki/Main_Page/`.
+to the server's SQLite-backed environment repository, just as
+`web:en.wikipedia.org/wiki/Main_Page` resolves to its matching capabilities.
 
 UI, networking, models, chat rendering, and voice are shared with the macOS menu
 bar app through the [`RookKit`](../RookKit/) Swift package, so the two clients
@@ -113,17 +112,11 @@ Mirrors `RookMacModel.handleForegroundApp`, with place in place of mac. Chat/ses
 5. **Reconnect / relaunch**: re-announce the current place. **Background**:
    released on `scenePhase == .background`.
 
-## Place skill bundles
+## Place capabilities
 
-A place maps to skills iff `environment-repository/location/<slug>/<skill>/SKILL.md`
-exists at the repo root — no server code involved. The shipped example:
-
-```
-environment-repository/location/office/office-companion/SKILL.md
-```
-
-Define a place named "Office" (slug `office`) and entering its geofence offers
-that bundle.
+A place maps to capabilities through the server's canonical and personal
+SQLite environment repositories. Define a place named "Office" (slug `office`)
+and entering its geofence offers matching approved bundles.
 
 ## Getting it running
 

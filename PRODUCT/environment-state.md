@@ -1,16 +1,38 @@
-# Environment State Management and Notifications
+# Environment state management and notifications
 
-This doc is a placeholder. We need to find some way to track state of the environments as it's changing and relay that to the agent.
+This document separates the current environment lifecycle from future ambient-state work.
 
-Questions (TBD):
-- How do we become aware that an environment is changing? Probably the environment provider will have a callback they can call that sends information to Rook EnvironmentManager and that will be conveyed to the Rook agent.
-- How do we represent state to the agent? The full state could easily get overwhelming. Maybe we just show the agent the deltas. And do we show it as JSON? Or do we cast it into text explanations? – Think through lots of scenarios here:
-  - Changing web apps - what page we're on, how a form is filled out, how to get information from those pages and fill out forms - maybe even accessibility stuff.
-  - Events/Locations – scheduling changes, nearby activities or sites
-  - People – arrival of friends nearby
-- When do we show state to the agent? Whenever the user sends a message we can incorporate state. Or we could send it in as steering messages as the state changes.
-- How do we keep it safe? If the environment can send arbitrary messages that end up in user messages, then this is a huge source of prompt injection. A safer model might be pull-only state. Never have the environment notify the agent of state change.
-  - Though when an agent enters and environment, a state injection is probably very important. The agent needs to understand its surroundings and have its attention drawn to useful skills.
-- How do we keep it unnoisy? The agent can partake in many environments at once, and if they are all beaming updates, then the agent will get confused.
-  - We could have a sub-agent filter out the less relevant state messages.
-  - We could notify the user of particularly noise environments.
+## Current state model
+
+`EnvironmentManager` tracks, in memory:
+
+- registered/available environments
+- active and recent availability windows
+- explicit session membership
+- pending bundle offers
+- ephemeral `accept`/`ignore` decisions
+- listeners that trigger affected-session runtime restarts
+
+Durable state lives elsewhere:
+
+- session membership is stored with the session
+- durable `approve`/`reject` decisions are keyed by bundle content hash
+- environment, capability, and bundle-membership content lives in canonical/personal SQLite databases; membership deletion uses nullable timestamps
+
+## Current runtime behavior
+
+Environment entry is explicit and literal. When a session enters or leaves an environment, the server resolves effective bundles, updates shared/direct source links, regenerates the read-only aggregate instructions, and reloads the existing ACP session in a replacement runtime. This preserves session identity and transcript history while keeping writable SQLite content shared across sessions.
+
+Environment availability does not automatically enter an environment or inject capabilities. Providers may register candidates, and clients/users decide what to enter and which bundles to accept or approve.
+
+## State delivered to the agent
+
+The generated read-only `AGENTS.md` includes environment-tagged instruction sources, authoring guidance, concrete source paths, and a per-environment inventory of known skill names. Each personal environment has one linked `.agents/editable-per-environment/<environment-nickname>/` source containing both `AGENTS.md` and `.agents/skills/`; runtime skill paths are discovered from `.agents/skills` rather than injected into the prompt. Directory environments expose their concrete project paths instead of a personal authoring link.
+
+Dynamic UI/client environment banners and bundle offers are separate from repository content. The server does not currently stream arbitrary environment state directly into the agent as user messages. Pi receives one-run approval for the generated session workspace so its non-interactive ACP process loads `.agents/skills`; this runtime trust is distinct from accepting or approving environment bundles.
+
+## Safety and noise boundaries
+
+Environment-provided text is agent-visible content and participates in the relevant bundle hash. Canonical/external materializations are read-only by filesystem policy. Arbitrary shell-capable agents can potentially bypass same-user permissions, so strong OS isolation and prompt-injection validation remain future work.
+
+The system does not yet solve high-frequency ambient state, relevance filtering, proactive prompts, or cross-environment state summarization. Those should be pull-oriented or explicitly user-consented rather than unrestricted environment-originated messages.

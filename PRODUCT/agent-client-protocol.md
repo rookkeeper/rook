@@ -1,63 +1,48 @@
 # Agent Client Protocol
 
-Rookery uses [Agent Client Protocol (ACP)](https://agentclientprotocol.com/get-started/introduction) as the wire format between clients and agent runtimes — the same problem space as LSP, but for coding agents. [Read details in llms.txt](https://agentclientprotocol.com/llms.txt) 
+Rook uses [Agent Client Protocol (ACP)](https://agentclientprotocol.com/get-started/introduction) across its runtime boundary. The server is the stable broker between native clients, public sessions, and selected agent runtimes.
 
-## Where ACP shows up
+## Protocol shape
 
-- **Server/client boundary:** WebSocket JSON-RPC between the React UI (or macOS menu bar client) and `SessionRoom`
-- **Agent subprocess boundary:** `BaseAgent` spawns stdio ACP servers — Pi via `pi-acp`, Claude via `@agentclientprotocol/claude-agent-acp`, Cursor via `agent acp`
-- **UI state:** chat reducer and controls (tools, permissions, plans, stop/cancel, queued messages) map to ACP session methods and `session/update` notifications
+```text
+Mac/iPhone/Android client
+        │ REST + ACP WebSocket
+        ▼
+Fastify Rook server
+        │ ACP over stdio
+        ▼
+one runtime subprocess per public session
+```
 
-## Why ACP
+Client interaction uses a session-bound WebSocket at `/api/ws?sessionId=...` plus REST for health, session listing, transcript hydration, environment previews, registration, and decisions. An unbound socket can create a session and becomes bound to it.
 
-Before ACP, Rookery used a custom realtime event vocabulary. ACP gives us a shared protocol with other editors and agents, first-class permission/plan/usage concepts, and a path to interoperate without per-agent custom integration.
+The server maps public session ids to runtime-local ACP session ids and owns normalized transcript persistence. A second client can hydrate a running session from the server transcript without asking the runtime to replay publicly.
 
-## Rookery ACP extensions
+## Environment integration
+
+Every configured runtime receives the base Rook identity prompt, including sessions with no entered environment. Environment-specific instructions are added later through the same runtime configuration.
 
 Standard ACP image content blocks are used for image-bearing prompts when the selected runtime advertises image support. Ordered text/image content is sent as ACP prompt blocks in the same sequence the user composed it. Rook does not turn Mac temporary file paths into a protocol-level attachment reference.
 
 ACP explicitly supports product-specific extensions in two ways:
 
-- custom data in `_meta`
-- custom JSON-RPC methods whose names start with `_`
+Environment changes are Rook orchestration around ACP:
 
-Rookery should prefer those sanctioned extension points rather than inventing non-ACP-shaped protocol additions.
+1. resolve approved/personal bundles from active capability memberships
+2. update shared writable environment sources and per-session links
+3. generate the read-only aggregate `AGENTS.md`
+4. replace the affected runtime with the agent workspace as cwd
+5. load the existing runtime session successfully
+6. retire the old subprocess
 
-### `_rookery/steering_prompt`
+The runtime receives files and paths, not repository/database handles. Personal source edits are watched and persisted to SQLite; project edits remain direct project-file changes. For Pi, Rook starts the generated workspace with one-run project approval so non-interactive ACP startup loads the standard `.agents/skills` project resources; this is separate from Rook's bundle approval decisions.
 
-Rookery adds a custom ACP-style JSON-RPC request named `_rookery/steering_prompt` on the client/server websocket boundary.
+## Rook ACP extensions
 
-Purpose:
-- let the user send a message **into the current workflow** without using the normal next-turn queue
-- preserve the product affordance of Cursor-style **Send now** while keeping the semantics encapsulated inside the runtime/agent layer
+Rook uses ACP extension points for product-specific messages, including environment offers and their resolutions. Custom methods use `_`-prefixed names and carry Rook-specific semantics; standard ACP methods remain the runtime contract.
 
-Why it is an extension:
-- ACP has `session/prompt` and `session/cancel`
-- ACP does **not** define a standard mid-workflow steering prompt primitive
-- this behavior is therefore product-specific and belongs in a custom `_...` method
+Provider-specific behavior belongs inside the runtime adapter. Clients observe semantic session/environment events rather than knowing whether the subprocess is Pi, Claude, Cursor, or another ACP runtime.
 
-Current Rookery semantics:
-- client sends `_rookery/steering_prompt { sessionId, text }`
-- websocket route delegates to `SessionRoom.sendSteeringMessage(text)`
-- runtime delegates to `BaseAgent.sendSteeringMessage(text)`
-- `PiAgent` uses a provider-specific ACP extension hop into `pi-acp`, which forwards the message to pi with `streamingBehavior: "steer"` so pi handles it as a real steering prompt during the active run
-- other ACP-backed runtimes currently use the generic fallback: apply the steering prompt at the **next safe point inside the active workflow** before ordinary queued next-turn messages resume
+## Runtime safety
 
-Important design rule:
-- the client knows only the semantic intent: **steering prompt**
-- provider-specific details must remain contained within the runtime / `BaseAgent` subclass boundary
-
-### Future extension guidance
-
-When Rookery needs behavior outside the ACP core spec, prefer:
-1. standard ACP if it already exists
-2. `_meta` for annotation/correlation
-3. `_rookery/...` custom methods for product-specific behavior
-
-Avoid adding custom root fields to ACP-defined objects.
-
-## Further reading
-
-- Spec: https://agentclientprotocol.com/get-started/introduction
-- Extensibility: https://agentclientprotocol.com/protocol/v1/extensibility
-- Migration history: `PRODUCT_CHANGES/earlier-documentation/moving-to-agent-client-protocol.md`
+ACP does not itself provide repository trust or filesystem isolation. Rook's bundle approval hash, per-session workspace, writable-source mapping, and read-only projection policy sit above ACP. Stronger OS isolation, runtime-specific tool replacement, prompt-injection validation, and MCP lifecycle security remain future work.

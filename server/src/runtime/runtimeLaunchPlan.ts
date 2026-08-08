@@ -6,7 +6,7 @@ import type { JsonObject, RuntimeLaunchPlan, RuntimeLaunchPlanner, SessionRuntim
 
 /** Resolves provider-specific startup into a process plan, not a runtime subclass. */
 export const runtimeLaunchPlan: RuntimeLaunchPlanner = (profile, repoRoot, configuration) => {
-  const cwd = profile.cwd ? path.resolve(repoRoot, profile.cwd) : repoRoot;
+  const cwd = configuration.workspaceRoot ?? (profile.cwd ? path.resolve(repoRoot, profile.cwd) : repoRoot);
   if (profile.type === "pi") {
     return {
       command: "node",
@@ -47,12 +47,12 @@ function piLauncher(profile: AgentRuntimeProfile, repoRoot: string, configuratio
   mkdirSync(generatedDir, { recursive: true });
   const skillPaths = [...new Set([...(profile.skillPaths ?? []), ...configuration.skillPaths])];
   const extensionPaths = [...new Set([...(profile.extensionPaths ?? []), ...configuration.extensionPaths])];
-  const spec = JSON.stringify({ command: profile.command?.trim() || "pi", args: profile.args ?? [], skillPaths, extensionPaths, appendSystemPrompt: configuration.appendSystemPrompt ?? "" });
+  const spec = JSON.stringify({ command: profile.command?.trim() || "pi", args: profile.args ?? [], skillPaths, extensionPaths, appendSystemPrompt: configuration.appendSystemPrompt ?? "", approveWorkspace: true });
   const digest = createHash("sha256").update(spec).digest("hex").slice(0, 12);
   const launcher = path.join(generatedDir, `pi-runtime-${digest}.mjs`);
   writeFileSync(launcher, `#!/usr/bin/env node
 import { spawn } from "node:child_process";
-const child = spawn(${JSON.stringify(profile.command?.trim() || "pi")}, [...${JSON.stringify(profile.args ?? [])}, ...${JSON.stringify(extensionPaths)}.flatMap((item) => ["-e", item]), ...${JSON.stringify(skillPaths)}.flatMap((item) => ["--skill", item]), ...${JSON.stringify(configuration.appendSystemPrompt ?? "")} ? ["--append-system-prompt", ${JSON.stringify(configuration.appendSystemPrompt ?? "")}] : [], ...process.argv.slice(2)], { cwd: process.cwd(), env: process.env, stdio: "inherit" });
+const child = spawn(${JSON.stringify(profile.command?.trim() || "pi")}, [...${JSON.stringify(profile.args ?? [])}, "--approve", ...${JSON.stringify(extensionPaths)}.flatMap((item) => ["-e", item]), ...${JSON.stringify(skillPaths)}.flatMap((item) => ["--skill", item]), ...${JSON.stringify(configuration.appendSystemPrompt ?? "")} ? ["--append-system-prompt", ${JSON.stringify(configuration.appendSystemPrompt ?? "")}] : [], ...process.argv.slice(2)], { cwd: process.cwd(), env: process.env, stdio: "inherit" });
 child.on("exit", (code, signal) => signal ? process.kill(process.pid, signal) : process.exit(code ?? 0));
 child.on("error", (error) => { process.stderr.write(String(error) + "\\n"); process.exit(1); });
 `, "utf8");

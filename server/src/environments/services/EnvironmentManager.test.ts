@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EnvironmentManager } from "./EnvironmentManager.js";
-import { EnvironmentDecisionStore } from "../datastores/EnvironmentDecisionStore.js";
+import { EnvironmentDecisionRepository } from "../repositories/EnvironmentDecisionRepository.js";
 import type { EnvironmentRepositoryService } from "./EnvironmentRepositoryService.js";
 import { JsonlEnvironmentMetadataCaptureSink } from "./environmentMetadataCapture.js";
 import type { EnvironmentEventListener } from "../support/types.js";
@@ -13,7 +13,7 @@ function mockRepositoryService(): EnvironmentRepositoryService {
   return {
     getResolvedBundles: vi.fn(async () => []),
     getValidBundles: vi.fn(async () => []),
-    getBundleCollectionPaths: vi.fn(async () => []),
+    hasKnownEnvironment: vi.fn(async () => false),
     getEnvironmentPreview: vi.fn().mockResolvedValue({ environmentId: "web:example.com", bundles: [] }),
   } as unknown as EnvironmentRepositoryService;
 }
@@ -46,14 +46,14 @@ function resolvedBundle(environmentId: string, bundleId = "default") {
 }
 
 describe("EnvironmentManager", () => {
-  let decisions: EnvironmentDecisionStore;
+  let decisions: EnvironmentDecisionRepository;
   let nowMs: number;
   let originalHome: string | undefined;
   let tempHome: string;
   let captureDir: string;
 
   beforeEach(() => {
-    decisions = new EnvironmentDecisionStore(":memory:");
+    decisions = new EnvironmentDecisionRepository(":memory:");
     nowMs = Date.parse("2026-07-02T12:00:00.000Z");
     originalHome = process.env.HOME;
     tempHome = mkdtempSync(path.join(os.tmpdir(), "rook-home-"));
@@ -82,12 +82,17 @@ describe("EnvironmentManager", () => {
     });
   }
 
-  it("keeps a registered environment active in memory", async () => {
-    const manager = newManager();
+  it("keeps a registered environment active in memory without creating a personal bundle", async () => {
+    const repositoryService = mockRepositoryService();
+    const manager = newManager(repositoryService);
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
 
     await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} }, { displayName: "Example" });
 
     expect(manager.isAvailable("web:example.com")).toBe(true);
+    expect(manager.environmentList("s1")[0]?.bundleCount).toBe(0);
+    expect(manager.environmentList("s1")[0]?.approvedBundleCount).toBe(0);
   });
 
   it("captures registration metadata as jsonl", async () => {
@@ -158,6 +163,23 @@ describe("EnvironmentManager", () => {
     expect(manager.isAvailable("dir:/Users/john/project")).toBe(true);
   });
 
+  it("keeps the exact candidate when an implied ancestor cannot be inspected", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {
+      if (environmentId === "dir:/Users") throw new Error("dangling skill symlink");
+      if (environmentId === "dir:/Users/john/project/src") return resolvedBundle(environmentId);
+      return [];
+    });
+    const manager = newManager(repositoryService);
+
+    await expect(manager.registerCandidateEnvironment({
+      id: "dir:/Users/john/project/src",
+      metadata: { displayName: "src", observedPaths: ["/Users/john/project/src/file.ts"] },
+    })).resolves.toBeUndefined();
+
+    expect(manager.isAvailable("dir:/Users/john/project/src")).toBe(true);
+  });
+
   it("moves an active environment to recent after the active window", async () => {
     const manager = newManager(mockRepositoryService(), 1_000, 10_000);
     await manager.registerAvailableEnvironment({ id: "web:example.com", metadata: {} });
@@ -212,12 +234,60 @@ describe("EnvironmentManager", () => {
     await manager.registerAvailableEnvironment({ id: "mac:md.obsidian", metadata: { displayName: "Obsidian" } }, { displayName: "Obsidian" });
     await manager.registerAvailableEnvironment({ id: "mac:md.obsidian/Rooknanigans", metadata: { displayName: "Rooknanigans" } }, { displayName: "Rooknanigans" });
 
-    const entered = manager.enterEnvironment("s1", "mac:md.obsidian/Rooknanigans");
+    const entered = await manager.enterEnvironment("s1", "mac:md.obsidian/Rooknanigans");
 
     expect(entered).toEqual(["mac:md.obsidian/Rooknanigans"]);
     expect(manager.enteredEnvironments("s1")).toEqual(["mac:md.obsidian/Rooknanigans"]);
     expect(listener.onEnvironmentEntered).toHaveBeenCalledTimes(1);
     expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("mac:md.obsidian/Rooknanigans", []);
+  });
+
+  it("resolves approved bundle content for runtime materialization", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockImplementation(async (environmentId: string) => {
+      if (environmentId !== "web:example.com") return [];
+      return [{
+        bundle: {
+          id: "web:example.com#mail",
+          bundleId: "mail",
+          environmentId,
+          repository: "canonical",
+          skills: [{ id: "mail-search", files: { "mail-search/SKILL.md": "Search mail." } }],
+          mcpServers: [],
+          apps: [],
+          agentsMd: "Confirm before sending.",
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-mail",
+      }] as any;
+    });
+    const manager = newManager(repositoryService);
+    manager.subscribe("s1", mockListener());
+    await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: { displayName: "Gmail" } });
+    await manager.enterEnvironment("s1", "web:example.com");
+    manager.decideEnvironment("web:example.com", "approve", "hash-mail", "s1");
+
+    await expect(manager.runtimeBundlesForSession("s1")).resolves.toMatchObject([
+      {
+        environmentName: "Gmail",
+        bundleName: "Environment capabilities",
+        editable: false,
+        bundle: { bundleId: "mail", agentsMd: "Confirm before sending." },
+      },
+      {
+        environmentName: "Gmail",
+        bundleName: "Personal capabilities",
+        editable: true,
+        bundle: { repository: "personal", skills: [] },
+      },
+    ]);
+
+  });
+
+
+  it("provides the Rook identity for plain sessions", () => {
+    expect(newManager().runtimeIdentityInstructions()).toContain("## You are Rook");
   });
 
   it("offers undecided bundles with displayName only", async () => {
@@ -234,7 +304,7 @@ describe("EnvironmentManager", () => {
       id: "web:example.com",
       metadata: { displayName: "Example" },
     });
-    manager.enterEnvironment("s1", "web:example.com");
+    await manager.enterEnvironment("s1", "web:example.com");
 
     expect(listener.onEnvironmentOffered).toHaveBeenCalledWith({
       environmentId: "web:example.com",

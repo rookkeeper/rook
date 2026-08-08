@@ -19,7 +19,7 @@ final class ServerController {
         }
         let fm = FileManager.default
         // Markers that live only at the repo root.
-        let markers = ["environment-repository", ".git", "AGENTS.md"]
+        let markers = ["environment-repository.db", ".git", "AGENTS.md"]
         var dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         while true {
             if markers.contains(where: { fm.fileExists(atPath: dir.appending(path: $0).path) }) {

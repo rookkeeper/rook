@@ -1,57 +1,42 @@
-# Environments, skills, and the Rook agent
+# Environments, capabilities, and the Rook agent
 
-The Rook agent is isolated from environment internals for security. It learns what to do from skills, but the skills only provide a narrow means of communication w/ the environment (see [[narrow-skills-environment-bridge]]).
+Rook is separated from environment internals by a repository, approval, and runtime-materialization boundary. The agent receives ordinary files and instructions in its session workspace; it does not depend on repository storage paths.
 
 ## Environment
 
-Core object. It has a URL-like identifier: `<kind>:<unique-path>` (e.g. `web:en.wikipedia.org/wiki/Julius_Caesar`, `mac:md.obsidian/MyVault/Projects/Foo`, `location:lowes.com/store-1234`, `dir:/Users/johnberryman/projects/github/rookkeeper/rook`). And is associated w/ metadata (display name, provenance, other fields TBD). An environment has an arbitrary state which changes over time that we will _somehow_ communicate to the Rook agent (Also TBD). And an environment is associated with Skills that allow the agent to interact with it and draw information from it.
+An environment is a recognizable context with an id such as:
 
-Current top-level environment kinds are:
-- `location`
-- `web`
-- `mac`
-- `dir`
-- `iphone`
-- `android`
-- `windows`
+- `web:example.com`
+- `mac:md.obsidian/MyVault`
+- `location:office`
+- `dir:/Users/johnberryman/projects/github/rookkeeper/rook`
 
-Environment ids may still look hierarchical (`web:reddit.com/r/foo`, `dir:/Users/john/...`), but registration and entry are literal. Rook can still use observed paths/URLs to discover other known environments with attached capabilities, but it should not implicitly expand every path segment into an active environment. Multiple overlapping envs can be active at once. Skills and state can be associated w/ any explicit environment id.
-
-For some terminology, there are many "known" environments (ones that are available in an environment repository somewhere). The "available" environments are the ones that the Rook can currently choose to enter (like if you're at Home Depot, then `location:homedepot.com/store-4321` will be available; if you're using Obsidian on the Mac, then `mac:md.obsidian/HomeProjects/ToDos` could be available; if you're browsing the Rook repo in Finder, then `dir:/Users/johnberryman/projects/github/rookkeeper/rook` could be available). And an environment is "entered" if the current session has loaded its skills and is accepting its state changes. (Though it is also possible to request to enter environments that aren't available - like if you want the Rook to know how to navigate a Home Depot even though you're not there. Implementation and UX TBD)
+An environment has metadata and can have one or more capability bundles. Registration and entry are literal, although observed paths and URLs may discover additional known repository environments.
 
 ## Environment repositories
 
-Catalog of environment → bundle content. Same API whether local disk or remote HTTP/Git.
+An environment repository is a searchable catalog of environment metadata, reusable capabilities, and atomic bundle memberships. The live logical view combines canonical SQLite content, personal SQLite content, direct project-directory content, and synthetic sources such as location context.
 
-See also: [`PRODUCT/environment-repository.md`](./environment-repository.md)
+A bundle remains the unit of publication, review, approval, and runtime loading. It may contain skills, nested skill files, instructions, facts, `llms.txt`, app metadata, and MCP configuration/content.
 
-**Logical model:**
+The canonical approval boundary is the exact agent-visible content hash. Personal content is writable and does not require approval; canonical/external content is immutable to the user.
 
-```text
-EnvironmentRepository
-  └── environments[]
-        └── environment   # id + metadata
-        └── skills[]
-              └── skill   # id + metadata + SKILL.md body
-              └── references[], scripts[]
-```
+## Capability materialization
 
-**Types of environment repositories:**
+For an entered environment, approved or personal bundle content is projected into the session workspace:
 
-- **Canonical** — curated, trusted catalog (official Rook repo; today lives at `environment-repository/` in monorepo)
-- **Local** — user-owned disk repo for personal envs/skills – not built as separate path yet; same directory-backed repository backend, different root – users can some somehow instruct the Rook agent to add and update skills in environments.
-- **External** — repositories from other providers
+- skills become `.agents/skills/<name>/`
+- instructions become generated `AGENTS.md` sections
+- small facts become inline facts; large facts become pseudo-skills
+- `llms.txt` becomes a generated reference skill
+- MCP content becomes a separate read-only area
 
-And environment repository needs to be searchable so that you can find environments and skills that might be useful.
+The runtime is restarted for environment changes only after the existing ACP session has been loaded into the replacement process. The workspace is rebuilt instead of trusting stale files. Pi receives one-run project approval for the generated workspace so non-interactive ACP startup discovers `.agents/skills`; this is separate from Rook's bundle approval boundary.
 
 ## EnvironmentManager
 
-Runtime coordinator that serves as a connection between Rook agents, the environments, and the skills. It also remembers skill choices.
+`EnvironmentManager` coordinates availability, offers, decisions, entry, and runtime bundle resolution. It distinguishes temporary `accept`/`ignore` decisions from durable `approve`/`reject` decisions keyed by exact bundle hash. Sessions do not automatically enter every available environment.
 
-When a new environment candidate becomes available, the environment manager can finalize it into one or more real environments by checking known repository-backed capabilities (including exact ids plus path/url-implied known environments). Then the user can review the skills of any finalized environment and "allow once", "allow always", "reject", "ignore".
+## Narrow environment bridge
 
-- If "allow once" or "allow always", the skills are injected into the running session.
-- If "reject" or "ignore", then the skills are not injected.
-- If "allow always" then the skills are cached locally, and every time the environment becomes available, the user/agent will automatically enter it and get the cached skills. If the skills are modified by the environment provider, then the users will be again asked to approve.
-- If "reject" then this decision will be saved, and when the environment becomes available, it will not be entered. The user can revisit these decisions later.
-- On the UI we need some way to represent the number of environments available and entered. And when they click on this they can modify past decisions - TBD.
+The long-term interaction model is that skills describe narrow environment operations rather than granting arbitrary environment access. The current migration does not implement a universal `interact_with_environment` tool; the Mac bridge and other platform mechanisms remain separate runtime/client features. MCP lifecycle and a stronger capability permission model are future work.
