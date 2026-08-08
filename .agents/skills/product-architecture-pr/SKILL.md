@@ -22,7 +22,7 @@ Read [`references/pr-workflow.md`](./references/pr-workflow.md) when deciding wh
 - If the developer says to use a branch / PR flow, then do not push directly to `main` / `master`.
 - **Read every file under `PRODUCT/`** before writing the PR. (You should ignore PRODUCT_CHANGES, as it is for work in progress scratch documentation, todos, and status.) Treat drafts and placeholders as current intent until superseded.
 - **Update `PRODUCT/` in the same PR** when the change introduces, modifies, or removes a product or architecture idea - but don't be overly nit-picky because we don't want too much documentation churn. Most of product documents are quite high-level, so we don't need low-level product changes. See [AGENTS.md](../../../AGENTS.md).
-- **Mark compatibility code before creating the PR.** Inspect the changed code for legacy shims, fallback paths, migration bridges, or other behavior retained for compatibility. Mark each compatibility block with a language-appropriate comment whose first line is exactly `THIS IS COMPATIBILITY CODE`, followed by an explanation of what it is compatible with and why it remains. If no compatibility code is present, record that in the PR review notes rather than adding a marker.
+- **Mark backward-compatibility surfaces before creating the PR.** Inspect every changed file—not just source code—for legacy shims, fallback paths, migration bridges, retained file formats, deprecated configuration, compatibility documentation, or other behavior preserved for existing users. This includes code, tests, documentation, configuration, manifests, schemas, workflows, and scripts. Mark each relevant block, section, or entry with a format-appropriate annotation whose marker text is exactly `THIS IS FOR BACKWARDS COMPATIBILITY`, followed by an explanation of what is being preserved and why it remains. Use comments or admonitions that are valid for the file format; never make a config or data file invalid just to add a marker. If a format has no safe annotation syntax, record the compatibility surface in the PR review notes instead. If none are present, explicitly record that too.
 - **Do not ship** until product/architecture alignment sections are complete and doc updates are included (or explicitly marked N/A with reason).
 - If the **why this matters** section of the PR is missing or weak, **stop and ask the developer** before opening the PR.
 - Prefer short, casual, scannable PR prose over exhaustive writeups. Use plain language, short bullets, and only enough context for a reviewer to orient quickly.
@@ -37,7 +37,7 @@ Copy and track:
 - [ ] 0. Ask whether to use branch/PR flow or push directly to main/master
 - [ ] 1. Read all PRODUCT/ docs
 - [ ] 2. Analyze branch diff (product + architecture lens)
-- [ ] 3. Inspect and mark compatibility code
+- [ ] 3. Inspect and mark backward-compatibility surfaces across code, documentation, configuration, and other changed files
 - [ ] 4. Classify product & architecture alignment
 - [ ] 5. Update PRODUCT/ (and READMEs if structural)
 - [ ] 6. Draft PR title + body (template below)
@@ -66,15 +66,17 @@ Compare the branch to the default branch (`git diff`, commit history, chat conte
 
 Skip exhaustive file lists, implementation narration, and ADR-style ceremony unless the change genuinely needs it.
 
-### 3. Mark compatibility code
+### 3. Mark backward-compatibility surfaces
 
-Before creating the PR, inspect the changed code for legacy shims, fallback paths, migration bridges, and other compatibility behavior. Add a language-appropriate comment to each compatibility block. The first line of the comment must be exactly:
+Before creating the PR, inspect every changed file for legacy shims, fallback paths, migration bridges, retained formats, deprecated configuration, compatibility documentation, or other behavior preserved for existing users. Review source code, tests, documentation, configuration, manifests, schemas, workflows, and scripts—not only code.
+
+Add a valid, format-appropriate annotation to each compatibility block, section, or entry. The annotation's marker text must be exactly:
 
 ```
-THIS IS COMPATIBILITY CODE
+THIS IS FOR BACKWARDS COMPATIBILITY
 ```
 
-Follow it with an explanation of what compatibility is being preserved and why the code remains. If the change contains no compatibility code, note that explicitly in the PR review notes.
+Follow it with an explanation of what is being preserved and why it remains. Use a code comment in source files, a Markdown comment or admonition in documentation, and a valid comment in configuration files where the syntax supports comments. Do not make configuration or data files invalid to add a marker; if a format has no safe annotation syntax, document the compatibility surface in the PR review notes instead. If the change contains no backward-compatibility surfaces, note that explicitly in the PR review notes.
 
 ### 4. Classify alignment
 
