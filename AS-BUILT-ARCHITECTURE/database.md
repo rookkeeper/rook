@@ -8,7 +8,7 @@ Rook's durable server state is split across SQLite databases:
 - the canonical environment repository database stores curated environment/capability content;
 - the personal environment repository database stores writable user content.
 
-The application database remains separate from environment repositories. This database is intentionally small: it stores session persistence and durable environment decisions. Runtime processes, active/recent environment caches, subscribers, and workspace projections remain transient. The main checkout keeps the database under `.var/rook/rook.sqlite`; worktree profiles select an isolated SQLite path through `ROOK_DATABASE_PATH`.
+The application database remains separate from environment repositories. This database is intentionally small: it stores session persistence and durable environment decisions. Runtime processes, active/recent environment caches, subscribers, and workspace projections remain transient. By default it lives under `ROOK_HOME/rook.sqlite` (`~/.rook/rook.sqlite` for the main checkout and `~/.rook-<worktree-slug>/rook.sqlite` for development worktrees), with `ROOK_DATABASE_PATH` as an explicit override.
 
 ## Environment repository schema
 
