@@ -167,3 +167,20 @@ say 'I am blocked on the restart behavior.' &
 ```
 
 After that, the user will review the work. If things look good, proceed with the PR flow using the `product-architecture-pr` skill. If things do not look good yet, then work with the user to brainstorm and update the `CHANGES/` docs and continue working.
+
+## Post execution
+
+Once Jon is satisfied, and the PR has been created and merged into `main`, do the final cleanup work for that `CHANGES/<date>-<topic>/` directory.
+
+Add an `OUTCOMES.md` file in the same `CHANGES/<date>-<topic>/` directory.
+
+Keep `OUTCOMES.md` very short. It should:
+
+- point to the merged PR
+- briefly explain what happened
+- call out the start commit
+- call out the end commit
+
+This is mainly a completion marker so we can scan `CHANGES/` later and quickly tell which work items were fully carried through to merge.
+
+After that, clean up the implementation workspace/worktree if it is no longer needed.
