@@ -103,15 +103,13 @@ configure_run_profile() {
   BUILD_ROOT="${RUN_ROOK_BUILD_ROOT:-$RUN_ROOT/build}"
   CURRENT_SERVER_LOG="$RUN_ROOT/server.log"
   CURRENT_SERVER_PIDFILE="$RUN_ROOT/server.pid"
-  ROOK_HOME="${ROOK_HOME:-$RUN_ROOK_HOME_DEFAULT}"
+  ROOK_HOME="${RUN_ROOK_HOME:-$RUN_ROOK_HOME_DEFAULT}"
   ROOK_DEV_ALLOW_REMOTE="${ROOK_DEV_ALLOW_REMOTE:-0}"
-  SERVER_DATABASE_PATH="${ROOK_DATABASE_PATH:-$ROOK_HOME/rook.sqlite}"
-
-  if [[ "$RUN_ROOK_PROFILE" == "production" ]]; then
-    # Preserve the existing production database location unless explicitly
-    # overridden. Development instances default to their isolated Rook home.
-    SERVER_DATABASE_PATH="${ROOK_DATABASE_PATH:-$REPO_ROOT/.var/rook/rook.sqlite}"
+  RUN_ROOK_DATABASE_PATH_EXPLICIT=0
+  if [[ -n "${RUN_ROOK_DATABASE_PATH:-}" ]]; then
+    RUN_ROOK_DATABASE_PATH_EXPLICIT=1
   fi
+  SERVER_DATABASE_PATH="${RUN_ROOK_DATABASE_PATH:-$ROOK_HOME/rook.sqlite}"
 
   export RUN_ROOK_PROFILE RUN_ROOK_PROFILE_SLUG
   export RUN_ROOK_APP_BUNDLE_ID RUN_ROOK_APP_DISPLAY_NAME
@@ -141,10 +139,36 @@ initialize_development_home() {
   mkdir -p "$ROOK_HOME"
   if [[ -d "$source_home" && "$source_home" != "$ROOK_HOME" ]]; then
     cp -a "$source_home/." "$ROOK_HOME/"
-    log "initialized development Rook home by copying $source_home"
+    rm -f "$ROOK_HOME/rook.sqlite" "$ROOK_HOME/rook.sqlite-shm" "$ROOK_HOME/rook.sqlite-wal"
+    log "initialized development Rook home by copying $source_home without session database"
   else
     log "initialized empty development Rook home at $ROOK_HOME"
   fi
+}
+
+migrate_legacy_production_database_if_needed() {
+  # THIS IS FOR BACKWARDS COMPATIBILITY: preserve existing production session
+  # history by moving the legacy repo-local application database into the new
+  # ROOK_HOME/rook.sqlite location the first time the launcher starts.
+  [[ "$RUN_ROOK_PROFILE" == "production" ]] || return 0
+  [[ "$RUN_ROOK_DATABASE_PATH_EXPLICIT" == "0" ]] || return 0
+
+  local legacy_database_path="$REPO_ROOT/.var/rook/rook.sqlite"
+  [[ -e "$legacy_database_path" ]] || return 0
+  [[ ! -e "$SERVER_DATABASE_PATH" ]] || return 0
+
+  mkdir -p "$(dirname "$SERVER_DATABASE_PATH")"
+  local suffix
+  for suffix in "" "-shm" "-wal"; do
+    [[ -e "$legacy_database_path$suffix" ]] || continue
+    mv "$legacy_database_path$suffix" "$SERVER_DATABASE_PATH$suffix"
+  done
+  log "migrated legacy production database to $SERVER_DATABASE_PATH"
+}
+
+initialize_profile_state() {
+  initialize_development_home
+  migrate_legacy_production_database_if_needed
 }
 
 log_run_profile() {
