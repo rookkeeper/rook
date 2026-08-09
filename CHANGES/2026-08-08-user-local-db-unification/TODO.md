@@ -15,12 +15,14 @@ Current behavior:
 - development already defaults the application DB to `ROOK_HOME/rook.sqlite`
 - production still forces the application DB to `REPO_ROOT/.var/rook/rook.sqlite`
 - `RookDatastore` itself already honors `ROOK_DATABASE_PATH`; the main mismatch is launcher/default-path policy and the documented architecture
+- `run-rook.sh` must not accidentally inherit ambient `ROOK_HOME` / `ROOK_DATABASE_PATH` from another profile; launcher-specific overrides should be explicit
 
 Desired behavior after this chunk:
 
 - production default application DB path becomes `ROOK_HOME/rook.sqlite`
 - development keeps using `ROOK_HOME/rook.sqlite`
-- `ROOK_DATABASE_PATH` remains the override escape hatch
+- direct server startup keeps `ROOK_DATABASE_PATH` as the override escape hatch
+- launcher-specific overrides use `RUN_ROOK_HOME` and `RUN_ROOK_DATABASE_PATH`
 - docs and tests describe the new default consistently
 - we decide and implement an explicit migration strategy for users who already have production data in `.var/rook/rook.sqlite`
 
@@ -52,31 +54,31 @@ Migration questions to settle while implementing:
 
 ## Steps
 
-- [ ] Decide the exact migration behavior from legacy production `.var/rook/rook.sqlite` to `ROOK_HOME/rook.sqlite`.
-- [ ] Update the production launcher/default profile behavior so the default application database path is `ROOK_HOME/rook.sqlite` instead of repo-local `.var/rook/rook.sqlite`.
-- [ ] Implement the selected migration behavior for existing production databases without breaking explicit `ROOK_DATABASE_PATH` overrides.
-- [ ] Confirm `RookDatastore` and any server startup path assumptions still behave correctly once production defaults move under `ROOK_HOME`.
-- [ ] Update hermetic launcher tests in `scripts/lib/run-rook/profile.test.sh` to reflect the new production default and cover the intended migration behavior if the launcher owns it.
-- [ ] Update server-side tests around application database path selection if needed.
-- [ ] Verify this chunk does not change development/worktree database isolation behavior.
-- [ ] Verify this chunk does not change personal environment repository behavior or canonical repository behavior.
-- [ ] Update `README.md` if the local-state story described there changes materially.
-- [ ] Update `server/README.md` to describe the new production default database location and any migration behavior.
-- [ ] Update `AS-BUILT-ARCHITECTURE/database.md` to describe the new default application database location.
-- [ ] Update `AS-BUILT-ARCHITECTURE/server.md` anywhere it still describes repo-local production application DB storage.
-- [ ] Run tests/build/typecheck appropriate to the change and confirm they pass.
-- [ ] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [ ] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
-- [ ] Update `AS-BUILT-ARCHITECTURE/` as needed.
-- [ ] Update `PRODUCT/` as needed.
+- [x] Decide the exact migration behavior from legacy production `.var/rook/rook.sqlite` to `ROOK_HOME/rook.sqlite`.
+- [x] Update the production launcher/default profile behavior so the default application database path is `ROOK_HOME/rook.sqlite` instead of repo-local `.var/rook/rook.sqlite`.
+- [x] Implement the selected migration behavior for existing production databases without breaking explicit direct-server `ROOK_DATABASE_PATH` overrides or launcher `RUN_ROOK_DATABASE_PATH` overrides.
+- [x] Confirm `RookDatastore` and any server startup path assumptions still behave correctly once production defaults move under `ROOK_HOME`.
+- [x] Update hermetic launcher tests in `scripts/lib/run-rook/profile.test.sh` to reflect the new production default and cover the intended migration behavior if the launcher owns it.
+- [x] Update server-side tests around application database path selection if needed.
+- [x] Verify this chunk does not change development/worktree database isolation behavior.
+- [x] Verify this chunk does not change personal environment repository behavior or canonical repository behavior.
+- [x] Update `README.md` if the local-state story described there changes materially.
+- [x] Update `server/README.md` to describe the new production default database location and any migration behavior.
+- [x] Update `AS-BUILT-ARCHITECTURE/database.md` to describe the new default application database location.
+- [x] Update `AS-BUILT-ARCHITECTURE/server.md` anywhere it still describes repo-local production application DB storage.
+- [x] Run tests/build/typecheck appropriate to the change and confirm they pass.
+- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Update `AS-BUILT-ARCHITECTURE/` as needed.
+- [x] Decide no `PRODUCT/` updates are needed for this storage-default change.
 
 ## Exit criteria
 
-- [ ] Production Rook defaults its application database to `ROOK_HOME/rook.sqlite`.
-- [ ] Development/worktree Rook still uses isolated `ROOK_HOME/rook.sqlite` paths as before.
-- [ ] Existing production users with a repo-local `.var/rook/rook.sqlite` have a clear, implemented migration path.
-- [ ] Explicit `ROOK_DATABASE_PATH` overrides still work.
-- [ ] No changes were made to canonical repository storage semantics.
-- [ ] No changes were made to personal environment repository storage semantics in this chunk.
-- [ ] Tests cover the intended default-path behavior and pass.
-- [ ] Docs and architecture notes describe the final behavior accurately.
+- [x] Production Rook defaults its application database to `ROOK_HOME/rook.sqlite`.
+- [x] Development/worktree Rook still uses isolated `ROOK_HOME/rook.sqlite` paths as before.
+- [x] Existing production users with a repo-local `.var/rook/rook.sqlite` have a clear, implemented migration path.
+- [x] Explicit direct-server `ROOK_DATABASE_PATH` overrides still work, and launcher-specific path overrides use `RUN_ROOK_DATABASE_PATH`.
+- [x] No changes were made to canonical repository storage semantics.
+- [x] No changes were made to personal environment repository storage semantics in this chunk.
+- [x] Tests cover the intended default-path behavior and pass.
+- [x] Docs and architecture notes describe the final behavior accurately.

@@ -33,6 +33,10 @@ assert_file() {
   [[ -f "$1" ]] || fail "expected file '$1' to exist"
 }
 
+assert_not_file() {
+  [[ ! -e "$1" ]] || fail "expected file '$1' not to exist"
+}
+
 assert_match() {
   [[ "$1" =~ $2 ]] || fail "expected '$1' to match '$2'"
 }
@@ -41,6 +45,9 @@ REPOSITORY="$TEST_ROOT/repository"
 HOME="$TEST_ROOT/home"
 mkdir -p "$HOME/.rook/config" "$REPOSITORY"
 printf '{"profiles": []}\n' >"$HOME/.rook/config/agent-runtimes.json"
+printf 'source-db\n' >"$HOME/.rook/rook.sqlite"
+printf 'source-wal\n' >"$HOME/.rook/rook.sqlite-wal"
+printf 'source-shm\n' >"$HOME/.rook/rook.sqlite-shm"
 git -C "$REPOSITORY" init -q -b main
 git -C "$REPOSITORY" config user.email test@example.com
 git -C "$REPOSITORY" config user.name "Rook test"
@@ -55,6 +62,7 @@ git -C "$REPOSITORY" worktree add -q "$TEST_ROOT/two/shared-name" -b feature-two
 reset_environment() {
   unset ROOK_RUN_MODE ROOK_PRODUCTION_ROOT ROOK_SERVER_PORT ROOK_HOME
   unset ROOK_DATABASE_PATH ROOK_AGENT_RUNTIMES_PATH ROOK_RUN_ROOT RUN_ROOK_BUILD_ROOT PORT
+  unset RUN_ROOK_HOME RUN_ROOK_DATABASE_PATH
   unset ROOK_BIND_IP ROOK_TAILSCALE_IP ROOK_REMOTE_HOSTNAME ROOK_SERVER_HOST
   unset ROOK_DEV_ALLOW_REMOTE
   SERVER_BIND_HOST="127.0.0.1"
@@ -71,7 +79,16 @@ assert_eq "$RUN_ROOK_PROFILE" "production"
 assert_eq "$RUN_ROOK_PROFILE_SLUG" "production"
 assert_eq "$SERVER_PORT" "7665"
 assert_eq "$ROOK_HOME" "$HOME/.rook"
-assert_eq "$SERVER_DATABASE_PATH" "$REPOSITORY/.var/rook/rook.sqlite"
+assert_eq "$SERVER_DATABASE_PATH" "$HOME/.rook/rook.sqlite"
+rm -f "$HOME/.rook/rook.sqlite" "$HOME/.rook/rook.sqlite-wal" "$HOME/.rook/rook.sqlite-shm"
+mkdir -p "$REPOSITORY/.var/rook"
+printf 'legacy-db' >"$REPOSITORY/.var/rook/rook.sqlite"
+initialize_profile_state
+assert_file "$HOME/.rook/rook.sqlite"
+assert_not_file "$REPOSITORY/.var/rook/rook.sqlite"
+printf 'source-db\n' >"$HOME/.rook/rook.sqlite"
+printf 'source-wal\n' >"$HOME/.rook/rook.sqlite-wal"
+printf 'source-shm\n' >"$HOME/.rook/rook.sqlite-shm"
 
 configure_for "$TEST_ROOT/one/shared-name"
 first_slug="$RUN_ROOK_PROFILE_SLUG"
@@ -90,6 +107,9 @@ assert_eq "$ROOK_SERVER_HOST" "127.0.0.1"
 assert_empty "${ROOK_AGENT_RUNTIMES_PATH:-}"
 initialize_development_home
 assert_file "$ROOK_HOME/config/agent-runtimes.json"
+assert_not_file "$ROOK_HOME/rook.sqlite"
+assert_not_file "$ROOK_HOME/rook.sqlite-wal"
+assert_not_file "$ROOK_HOME/rook.sqlite-shm"
 printf 'worktree-only\n' >"$ROOK_HOME/worktree-only.txt"
 printf 'source-only\n' >"$HOME/.rook/source-only.txt"
 initialize_development_home
@@ -116,6 +136,22 @@ assert_eq "$ROOK_AGENT_RUNTIMES_PATH" "$TEST_ROOT/custom-runtimes.json"
 assert_eq "$PORT" "8123"
 assert_empty "$ROOK_BIND_IP"
 assert_empty "$ROOK_REMOTE_HOSTNAME"
+
+reset_environment
+REPO_ROOT="$TEST_ROOT/one/shared-name"
+ROOK_HOME="$HOME/.rook"
+ROOK_DATABASE_PATH="$HOME/.rook/rook.sqlite"
+configure_run_profile
+assert_eq "$ROOK_HOME" "$HOME/.rook-$first_slug"
+assert_eq "$SERVER_DATABASE_PATH" "$HOME/.rook-$first_slug/rook.sqlite"
+
+reset_environment
+REPO_ROOT="$TEST_ROOT/one/shared-name"
+RUN_ROOK_HOME="$TEST_ROOT/custom-home"
+RUN_ROOK_DATABASE_PATH="$TEST_ROOT/custom-home/custom.sqlite"
+configure_run_profile
+assert_eq "$ROOK_HOME" "$TEST_ROOT/custom-home"
+assert_eq "$SERVER_DATABASE_PATH" "$TEST_ROOT/custom-home/custom.sqlite"
 
 if (reset_environment; REPO_ROOT="$TEST_ROOT/one/shared-name"; ROOK_RUN_MODE=production; configure_run_profile) >/dev/null 2>&1; then
   fail "production mode should be rejected outside the production checkout"

@@ -1,15 +1,16 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { REPO_ROOT } from "../paths.js";
+import { getRookHomeDir } from "../config/configPaths.js";
 
 /** One SQLite datastore for Rook's durable server-side state. */
 export class RookDatastore {
   readonly db: DatabaseSync;
 
-  constructor(location = process.env.ROOK_DATABASE_PATH ?? path.join(REPO_ROOT, ".var", "rook", "rook.sqlite")) {
-    if (location !== ":memory:") mkdirSync(path.dirname(location), { recursive: true });
-    this.db = new DatabaseSync(location);
+  constructor(location?: string) {
+    const resolvedLocation = location ?? process.env.ROOK_DATABASE_PATH ?? path.join(getRookHomeDir(), "rook.sqlite");
+    if (resolvedLocation !== ":memory:") mkdirSync(path.dirname(resolvedLocation), { recursive: true });
+    this.db = new DatabaseSync(resolvedLocation);
   }
 
   close(): void {
