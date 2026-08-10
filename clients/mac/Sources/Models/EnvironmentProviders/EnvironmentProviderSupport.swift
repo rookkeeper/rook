@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 import RookKit
 
 struct EnvironmentCandidate: Equatable {
@@ -23,6 +22,7 @@ protocol SpecializedEnvironmentProvider: AnyObject {
 @MainActor
 final class EnvironmentRegistrationController {
     private static let duplicateSuppressionWindow: TimeInterval = 60
+    private static let logger = RookLog.environment
 
     private let register: ([EnvironmentCandidate], String) -> Void
     private var timer: Timer?
@@ -39,10 +39,12 @@ final class EnvironmentRegistrationController {
 
     func setServerOnline(_ online: Bool) {
         isServerOnline = online
+        Self.logger.info("environment registration serverOnline=\(online, privacy: .public)")
         flushIfPossible()
     }
 
     func update(candidates: [EnvironmentCandidate], delay: TimeInterval, reason: String) {
+        Self.logger.info("environment registration update reason=\(reason, privacy: .public) candidates=\(candidates.count, privacy: .public) delay=\(delay, privacy: .public)")
         let signature = Self.signature(for: candidates)
         guard !signature.isEmpty else {
             clear()
@@ -73,6 +75,7 @@ final class EnvironmentRegistrationController {
     }
 
     func emitNow(candidates: [EnvironmentCandidate], reason: String) {
+        Self.logger.info("environment registration emitNow reason=\(reason, privacy: .public) candidates=\(candidates.count, privacy: .public)")
         currentCandidates = candidates
         currentReason = reason
         readyToEmit = true
@@ -80,6 +83,7 @@ final class EnvironmentRegistrationController {
     }
 
     func clear() {
+        Self.logger.info("environment registration clear")
         timer?.invalidate()
         timer = nil
         currentSignature = nil
@@ -97,11 +101,15 @@ final class EnvironmentRegistrationController {
             }
             return now.timeIntervalSince(lastEmission) >= Self.duplicateSuppressionWindow
         }
-        guard !eligible.isEmpty else { return }
+        guard !eligible.isEmpty else {
+            Self.logger.info("environment registration suppressed reason=\(self.currentReason, privacy: .public) candidates=\(self.currentCandidates.count, privacy: .public)")
+            return
+        }
         for candidate in eligible {
             lastEmissionAtByEnvironmentId[candidate.id] = now
         }
-        register(eligible, currentReason)
+        Self.logger.info("environment registration flush reason=\(self.currentReason, privacy: .public) candidates=\(eligible.map(\.id).joined(separator: ","), privacy: .public)")
+        register(eligible, self.currentReason)
     }
 
     private static func signature(for candidates: [EnvironmentCandidate]) -> String {

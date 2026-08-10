@@ -35,6 +35,7 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     func activate(app: ForegroundApp, title: String?) {
+        providerInfo("finder provider activate title=\(title ?? "(null)")")
         currentApp = app
         currentTitle = title
         let observation = observe()
@@ -74,12 +75,22 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
 
     private func poll() {
         guard let currentApp else { return }
+        let timed = RookPerformance.begin(
+            "FinderEnvironmentPoll",
+            operation: "finder-environment-poll",
+            description: "bundleId=\(currentApp.bundleId)",
+            logger: RookLog.environment,
+            signposter: RookLog.environmentSignposter,
+            slowThresholdMs: 150,
+            hangThresholdMs: 600
+        )
         let title = AXReader.focusedWindowTitle(pid: currentApp.pid) ?? currentTitle
         currentTitle = title
         let observation = observe()
         currentAppEnvironmentId = Self.currentEnvironmentId(from: observation)
         let candidates = Self.candidates(for: currentApp, title: title, observation: observation)
         registration.emitNow(candidates: candidates, reason: "finder")
+        timed.finish(details: "candidates=\(candidates.count)")
         onStateChange?()
     }
 
@@ -136,35 +147,46 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     static func observeFinder() -> FinderObservation {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", finderObservationScript]
+        RookPerformance.measure(
+            "FinderObservation",
+            operation: "finder-observe",
+            description: "osascript finder windows",
+            logger: RookLog.environment,
+            signposter: RookLog.environmentSignposter,
+            slowThresholdMs: 150,
+            hangThresholdMs: 600,
+            details: { observation in "directories=\(observation.allDirectoryPaths.count)" }
+        ) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = ["-e", finderObservationScript]
 
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
+            let stdout = Pipe()
+            let stderr = Pipe()
+            process.standardOutput = stdout
+            process.standardError = stderr
 
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            providerLog("finder observe error: \(error.localizedDescription)")
-            return FinderObservation(currentDirectoryPath: nil, allDirectoryPaths: [])
-        }
-
-        guard process.terminationStatus == 0 else {
-            let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-            let errorOutput = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if !errorOutput.isEmpty {
-                providerLog("finder observe error: \(errorOutput)")
+            do {
+                try process.run()
+                process.waitUntilExit()
+            } catch {
+                providerError("finder observe failed error=\(error.localizedDescription)")
+                return FinderObservation(currentDirectoryPath: nil, allDirectoryPaths: [])
             }
-            return FinderObservation(currentDirectoryPath: nil, allDirectoryPaths: [])
-        }
 
-        let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: outputData, encoding: .utf8) ?? ""
-        return parseObservation(from: output)
+            guard process.terminationStatus == 0 else {
+                let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+                let errorOutput = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !errorOutput.isEmpty {
+                    providerError("finder observe failed error=\(errorOutput)")
+                }
+                return FinderObservation(currentDirectoryPath: nil, allDirectoryPaths: [])
+            }
+
+            let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: outputData, encoding: .utf8) ?? ""
+            return parseObservation(from: output)
+        }
     }
 
     private static let finderObservationScript = #"""

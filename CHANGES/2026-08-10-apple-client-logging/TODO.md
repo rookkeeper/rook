@@ -35,24 +35,24 @@ Important files/modules inspected up front:
 
 ## Steps
 
-- [ ] Add a shared Apple-client logging utility in `clients/RookKit/` that standardizes subsystem/category names and provides reusable performance/timing helpers for both apps.
-- [ ] Replace mac-only ad-hoc provider file logging with standard unified logging, and update the mac log-viewing path so it can still inspect the relevant logs after the change.
-- [ ] Instrument mac environment/provider code with structured logs and timing around foreground activation, AX reads, Finder observation, environment registration, bridge activity, and managed-server lifecycle events.
-- [ ] Instrument shared session/network code in `RookKit` with structured logs around REST requests, WebSocket connect/disconnect, session load/hydration, reconnects, queued prompts, and run lifecycle transitions.
-- [ ] Instrument the iPhone client and location provider with structured logs around health refresh, session resume/start, place monitoring, visit arrivals, environment identification, and voice/location state changes where useful.
-- [ ] Add or update focused tests for any new shared logging/performance helpers and keep existing Apple-client tests/builds passing.
-- [ ] Update Apple-client docs (`clients/mac/README.md`, `clients/iphone/README.md`, and any other touched README/docs) to describe the logging approach and how to capture logs for hang investigation.
-- [ ] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [ ] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
-- [ ] Update `AS-BUILT-ARCHITECTURE/` as needed.
-- [ ] Update `PRODUCT/` as needed.
-- [ ] Run the appropriate Apple-client tests/builds and confirm they pass.
+- [x] Add a shared Apple-client logging utility in `clients/RookKit/` that standardizes subsystem/category names and provides reusable performance/timing helpers for both apps.
+- [x] Replace mac-only ad-hoc provider file logging with standard unified logging, and update the mac log-viewing path so it can still inspect the relevant logs after the change.
+- [x] Instrument mac environment/provider code with structured logs and timing around foreground activation, AX reads, Finder observation, environment registration, bridge activity, and managed-server lifecycle events.
+- [x] Instrument shared session/network code in `RookKit` with structured logs around REST requests, WebSocket connect/disconnect, session load/hydration, reconnects, queued prompts, and run lifecycle transitions.
+- [x] Instrument the iPhone client and location provider with structured logs around health refresh, session resume/start, place monitoring, visit arrivals, environment identification, and voice/location state changes where useful.
+- [x] Add or update focused tests for any new shared logging/performance helpers and keep existing Apple-client tests/builds passing.
+- [x] Update Apple-client docs (`clients/mac/README.md`, `clients/iphone/README.md`, and any other touched README/docs) to describe the logging approach and how to capture logs for hang investigation.
+- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Update `AS-BUILT-ARCHITECTURE/` as needed.
+- [x] Update `PRODUCT/` as needed.
+- [x] Run the appropriate Apple-client tests/builds and confirm they pass; the iPhone app build passes, while the existing `ArrivalGateTests` target contains unrelated stale `RookModel` test references and does not compile on the starting revision.
 
 ## Exit criteria
 
-- [ ] The mac and iPhone clients use one coherent unified-logging approach instead of mixing ad-hoc logging styles.
-- [ ] High-value beachball-adjacent paths in the mac client emit structured timing/performance logs that are practical to inspect after a hang.
-- [ ] Shared `RookKit` session/network code emits enough logs to reconstruct connection, session, and prompt lifecycle behavior on both Apple clients.
-- [ ] The mac log-viewing/documentation story reflects the new authoritative logging path.
-- [ ] Tests/builds relevant to the Apple-client changes pass.
-- [ ] Architecture/docs reflect the final logging design, and no unnecessary compatibility shims remain.
+- [x] The mac and iPhone clients use one coherent unified-logging approach instead of mixing ad-hoc logging styles.
+- [x] High-value beachball-adjacent paths in the mac client emit structured timing/performance logs that are practical to inspect after a hang.
+- [x] Shared `RookKit` session/network code emits enough logs to reconstruct connection, session, and prompt lifecycle behavior on both Apple clients.
+- [x] The mac log-viewing/documentation story reflects the new authoritative logging path.
+- [x] Tests/builds relevant to the Apple-client changes pass, with the pre-existing stale iPhone test-target issue recorded above.
+- [x] Architecture/docs reflect the final logging design, and no unnecessary compatibility shims remain.

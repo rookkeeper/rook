@@ -254,6 +254,26 @@ xcrun simctl launch booted com.rookery.Rook       # bring Rook back
 xcrun simctl io booted screenshot /tmp/rook.png   # screenshot the simulator
 ```
 
+## Client logging
+
+The iPhone app and shared `RookKit` networking/session layer use Apple Unified
+Logging with subsystem `com.rookery.Rook`. Categories include `app`, `session`,
+`network`, `location`, `voice`, and `performance`. REST requests, WebSocket
+connect/disconnect/reconnect, session hydration, prompt lifecycle, location
+authorization/arrival gates, and voice transitions are logged without prompt
+contents, auth tokens, or image data. Slow operations include elapsed
+milliseconds and signposts for Instruments.
+
+When diagnosing an iPhone connection or lifecycle issue, reproduce it with the
+same timestamp recorded on the phone, then collect the device/simulator log for
+that subsystem from Console.app or Xcode's Devices and Simulators window. For a
+simulator, this is also useful:
+
+```zsh
+xcrun simctl spawn booted log show --last 10m --style compact \\
+  --predicate 'subsystem == "com.rookery.Rook"'
+```
+
 ## Capabilities & Info.plist
 
 - **Background Modes → Location updates** (`UIBackgroundModes: location`).

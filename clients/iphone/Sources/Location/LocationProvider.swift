@@ -1,6 +1,7 @@
 import CoreLocation
 import CoreMotion
 import Foundation
+import RookKit
 
 /// Context captured when the device appears to have meaningfully arrived
 /// somewhere, used to ask the server which `location:` environments are available.
@@ -19,6 +20,8 @@ struct ArrivalContext {
 /// regions). The model turns that into `location:<slug>` register/unregister.
 @MainActor
 final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private static let logger = RookLog.location
+
     var onRegionChange: ((Place?) -> Void)?
     var onVisitArrival: ((CLLocationCoordinate2D) -> Void)?
     /// Fires only when the arrival passes the dwell/motion gate (stationary,
@@ -61,6 +64,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
 
     /// Opt into motion-based drive-by filtering. Triggers the OS Motion prompt the first time.
     func requestMotion() {
+        Self.logger.info("location request motion")
         if startMotionUpdatesIfAvailable() { motionRequested = true }
     }
 
@@ -86,6 +90,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     }
 
     func requestAuthorization() {
+        Self.logger.info("location request authorization status=\(String(describing: self.authorizationStatus), privacy: .public)")
         // Two-step: When-In-Use first (iOS shows the Always upgrade prompt later).
         if authorizationStatus == .notDetermined {
             manager.requestWhenInUseAuthorization()
@@ -95,12 +100,14 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     }
 
     func requestCurrentLocation() {
+        Self.logger.info("location request current location")
         manager.requestLocation()
     }
 
     /// Fire a synthesized stationary arrival (for Simulator/E2E validation, since CLVisit
     /// never fires in the Simulator). Drives the same `onArrival` path as a real dwell.
     func simulateArrival(latitude: Double, longitude: Double) {
+        Self.logger.info("location simulate arrival latitude=\(latitude, privacy: .public) longitude=\(longitude, privacy: .public)")
         onArrival?(ArrivalContext(
             coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
             horizontalAccuracy: 10,
@@ -113,11 +120,13 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     /// CLVisit-based "where you spend time" detection (Phase E). Fires
     /// `onVisitArrival` when you settle at a place — used to suggest naming it.
     func startMonitoringVisits() {
+        Self.logger.info("location start monitoring visits")
         manager.startMonitoringVisits()
     }
 
     /// (Re)build the monitored geofences from the user's places.
     func updateMonitoredPlaces(_ places: [Place]) {
+        Self.logger.info("location update monitored places count=\(places.count, privacy: .public)")
         for region in manager.monitoredRegions {
             manager.stopMonitoring(for: region)
         }
@@ -148,6 +157,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
         let status = manager.authorizationStatus
         Task { @MainActor in
             let wasAuthorized = self.isAuthorized
+            Self.logger.info("location authorization changed status=\(String(describing: status), privacy: .public)")
             self.authorizationStatus = status
             if status == .authorizedAlways {
                 manager.allowsBackgroundLocationUpdates = true
@@ -170,6 +180,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
 
     nonisolated func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         Task { @MainActor in
+            Self.logger.info("location entered region id=\(region.identifier, privacy: .public)")
             guard let place = monitoredPlaces[region.identifier] else {
                 return
             }
@@ -180,6 +191,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
 
     nonisolated func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         Task { @MainActor in
+            Self.logger.info("location exited region id=\(region.identifier, privacy: .public)")
             if current?.id == region.identifier {
                 current = nil
                 onRegionChange?(nil)
@@ -189,6 +201,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
 
     nonisolated func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
         Task { @MainActor in
+            Self.logger.info("location determined region state id=\(region.identifier, privacy: .public) state=\(String(describing: state), privacy: .public)")
             guard let place = monitoredPlaces[region.identifier] else {
                 return
             }
@@ -218,6 +231,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
         let arrivalDate = visit.arrivalDate
         let accuracy = visit.horizontalAccuracy
         Task { @MainActor in
+            Self.logger.info("location visit arrival latitude=\(coordinate.latitude, privacy: .public) longitude=\(coordinate.longitude, privacy: .public) accuracy=\(accuracy, privacy: .public)")
             // Always feed place-suggestion detection on arrival.
             onVisitArrival?(coordinate)
 
@@ -233,7 +247,11 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
                 isAutomotive: latestActivityIsAutomotive,
                 now: Date(),
                 stationarySpeedThreshold: stationarySpeedThreshold
-            ) else { return }
+            ) else {
+                Self.logger.info("location visit arrival rejected by dwell gate")
+                return
+            }
+            Self.logger.info("location visit arrival accepted dwellSeconds=\(context.dwellSeconds ?? -1, privacy: .public)")
             onArrival?(context)
         }
     }
@@ -267,6 +285,9 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            Self.logger.error("location manager error=\(error.localizedDescription, privacy: .public)")
+        }
         // Best-effort; region monitoring continues.
     }
 }

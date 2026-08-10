@@ -3,6 +3,8 @@ import RookKit
 
 @MainActor
 final class ServerStateController {
+    private static let logger = RookLog.server
+
     var onStateChange: (() -> Void)?
     var didBecomeOnline: (() -> Void)?
     var didBecomeOffline: (() -> Void)?
@@ -58,6 +60,12 @@ final class ServerStateController {
     }
 
     func refreshNow() async {
+        let timed = RookPerformance.begin(
+            "MacServerHealthRefresh",
+            operation: "mac-server-health-refresh",
+            logger: Self.logger,
+            signposter: RookLog.serverSignposter
+        )
         let healthy = await api.health()
         managedServerRunning = serverController.isManagedServerRunning
         if healthy {
@@ -65,10 +73,13 @@ final class ServerStateController {
         } else if serverState != .starting || !managedServerRunning {
             serverState = managedServerRunning ? .starting : .offline
         }
+        Self.logger.info("server state refresh state=\(String(describing: self.serverState), privacy: .public) managed=\(self.managedServerRunning, privacy: .public)")
+        timed.finish(details: "state=\(String(describing: serverState)) managed=\(self.managedServerRunning)")
     }
 
     func startManagedServer() {
         guard serverState != .online else { return }
+        Self.logger.info("server state controller start managed server")
         serverController.start()
         managedServerRunning = serverController.isManagedServerRunning
         if managedServerRunning {
@@ -77,6 +88,7 @@ final class ServerStateController {
     }
 
     func stopManagedServer() {
+        Self.logger.info("server state controller stop managed server")
         serverController.stop()
         managedServerRunning = false
         Task {
@@ -87,6 +99,8 @@ final class ServerStateController {
 
 @MainActor
 final class EnvironmentOfferController {
+    private static let logger = RookLog.environment
+
     var onStateChange: (() -> Void)?
     var onWantsOfferView: (() -> Void)?
     var onDismissOfferView: (() -> Void)?
@@ -103,8 +117,10 @@ final class EnvironmentOfferController {
 
     func handleEnvironmentOffered(_ offer: EnvironmentOffer) {
         guard !pendingOffers.contains(where: { $0.bundleHash == offer.bundleHash }) else {
+            Self.logger.info("environment offer duplicate ignored bundleHash=\(offer.bundleHash, privacy: .public)")
             return
         }
+        Self.logger.info("environment offer queued environment=\(offer.environmentId, privacy: .public) bundleId=\(offer.bundleId, privacy: .public)")
         let wasEmpty = pendingOffers.isEmpty
         pendingOffers.append(offer)
         if wasEmpty {
@@ -114,6 +130,7 @@ final class EnvironmentOfferController {
     }
 
     func handleEnvironmentOfferResolved(bundleHash: String) {
+        Self.logger.info("environment offer resolved bundleHash=\(bundleHash, privacy: .public)")
         let removedHead = pendingOffer?.bundleHash == bundleHash
         pendingOffers.removeAll { $0.bundleHash == bundleHash }
         guard removedHead else { return }
@@ -122,6 +139,7 @@ final class EnvironmentOfferController {
 
     func decideEnvironment(_ decision: String) {
         guard let offer = pendingOffer else { return }
+        Self.logger.info("environment offer decision decision=\(decision, privacy: .public) environment=\(offer.environmentId, privacy: .public) bundleId=\(offer.bundleId, privacy: .public)")
         Task {
             do {
                 try await resolveOffer?(offer.environmentId, offer.bundleHash, decision)
@@ -167,6 +185,8 @@ final class EnvironmentOfferController {
 
 @MainActor
 final class EnvironmentListController {
+    private static let logger = RookLog.environment
+
     var onStateChange: (() -> Void)?
 
     private let api: RookAPI
@@ -190,6 +210,7 @@ final class EnvironmentListController {
 
     func refreshEnvironmentList(sessionId: String?, showLoading: Bool = true) {
         guard let sessionId else {
+            Self.logger.info("environment list refresh cleared no session")
             environmentListItems = []
             enteredEnvironmentIds = []
             return
@@ -198,14 +219,23 @@ final class EnvironmentListController {
             environmentsLoading = true
         }
         Task {
+            let timed = RookPerformance.begin(
+                "EnvironmentListRefresh",
+                operation: "environment-list-refresh",
+                description: "session=\(sessionId)",
+                logger: Self.logger,
+                signposter: RookLog.environmentSignposter
+            )
             defer { environmentsLoading = false }
             do {
                 let refreshedItems = try await api.environmentList(sessionId: sessionId)
                 EnvironmentListPresentation.apply(refreshedItems, to: &environmentListItems)
                 enteredEnvironmentIds = Set(refreshedItems.filter(\.entered).map(\.environmentId))
                 environmentsError = ""
+                timed.finish(details: "items=\(refreshedItems.count) entered=\(enteredEnvironmentIds.count)")
             } catch {
                 environmentsError = error.localizedDescription
+                timed.fail(error)
             }
         }
     }
@@ -231,6 +261,7 @@ final class EnvironmentListController {
 
     func joinEnvironment(sessionId: String?, environmentId: String) {
         guard let sessionId else { return }
+        Self.logger.info("environment list join session=\(sessionId, privacy: .public) environment=\(environmentId, privacy: .public)")
         Task {
             do {
                 let entered = try await api.enterEnvironment(sessionId: sessionId, environmentId: environmentId)
@@ -244,6 +275,7 @@ final class EnvironmentListController {
 
     func leaveEnvironment(sessionId: String?, environmentId: String) {
         guard let sessionId else { return }
+        Self.logger.info("environment list leave session=\(sessionId, privacy: .public) environment=\(environmentId, privacy: .public)")
         Task {
             do {
                 let entered = try await api.exitEnvironment(sessionId: sessionId, environmentId: environmentId)

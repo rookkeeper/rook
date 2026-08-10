@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 import RookKit
 
 /// Session lifecycle and registry.  One `SessionHandle` per session, each
@@ -7,7 +6,7 @@ import RookKit
 /// observes — background sessions keep running.
 @MainActor
 final class ChatSessionController {
-    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.Rook", category: "ChatSessionController")
+    private static let logger = RookLog.session
     private static let timingLogsEnabled = ProcessInfo.processInfo.environment["ROOK_SESSION_TIMING_LOGS"] == "1"
     var onStateChange: (() -> Void)?
     var onCurrentSessionChange: ((AgentSessionSummary?) -> Void)?
@@ -61,18 +60,27 @@ final class ChatSessionController {
     }
 
     func stop() {
+        Self.logger.info("chat session controller stop handles=\(self.handles.count, privacy: .public)")
         for handle in handles.values { handle.close() }
         handles = [:]
     }
 
     func loadSessions() async {
         sessionsLoading = true
+        let timed = RookPerformance.begin(
+            "MacLoadSessions",
+            operation: "mac-load-sessions",
+            logger: Self.logger,
+            signposter: RookLog.sessionSignposter
+        )
         defer { sessionsLoading = false }
         do {
             sessions = try await api.sessions()
             sessionsError = ""
+            timed.finish(details: "sessions=\(sessions.count)")
         } catch {
             sessionsError = error.localizedDescription
+            timed.fail(error)
         }
     }
 
@@ -91,6 +99,7 @@ final class ChatSessionController {
     func startNewSession(agentId: String, name: String, completion: (() -> Void)? = nil) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = trimmed.isEmpty ? "session" : trimmed
+        Self.logger.info("chat session controller start new runtime=\(agentId, privacy: .public) title=\(title, privacy: .public)")
         startingSession = true
         Task {
             defer { self.startingSession = false; completion?() }
@@ -137,6 +146,7 @@ final class ChatSessionController {
     }
 
     func resumeSession(_ session: AgentSessionSummary, completion: (() -> Void)? = nil) {
+        Self.logger.info("chat session controller resume session=\(session.id, privacy: .public) runtime=\(session.agent, privacy: .public) running=\(session.running, privacy: .public)")
         startingSession = true
         Task {
             defer { self.startingSession = false; completion?() }

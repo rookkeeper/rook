@@ -114,6 +114,16 @@
 4. `EnvironmentListPresentation` applies shared list-refresh behavior for environment metadata
 5. image prompts use standard ACP image blocks in composer order; Mac paste/drop staging never becomes part of the runtime working-directory contract
 
+## Logging and performance instrumentation
+
+`Logging/RookLog.swift` provides the shared `com.rookery.Rook` Unified Logging
+subsystem, stable categories, `OSSignposter` intervals, and reusable timed
+operations. `RookAPI`, `AcpSocket`, and `SessionHandle` use it to record REST
+request status/latency, WebSocket lifecycle, session creation/loading,
+transcript attachment, reconnect attempts, queued delivery, and run outcomes.
+The Mac and iPhone app-specific models add their platform-specific lifecycle,
+environment, location, voice, bridge, and server-supervision events on top.
+
 ## Notable architectural characteristics
 
 - RookKit is not a full app framework; it is the shared protocol + UI substrate

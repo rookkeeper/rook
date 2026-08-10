@@ -7,6 +7,8 @@ import Speech
 /// configures the shared AVAudioSession (macOS has none).
 @MainActor
 public final class VoiceController: NSObject {
+    private static let logger = RookLog.voice
+
     public var onTranscript: ((String) -> Void)?              // final utterance → agent
     public var onListeningChanged: ((Bool) -> Void)?
     public var onSpeakingChanged: ((Bool) -> Void)?
@@ -47,6 +49,7 @@ public final class VoiceController: NSObject {
             return
         }
         Task { @MainActor in
+            Self.logger.info("voice audio interruption began")
             self.stopSpeaking()
             if self.isListening {
                 self.stopListening(send: false)
@@ -63,10 +66,13 @@ public final class VoiceController: NSObject {
     }
 
     public func requestPermissions(_ completion: @escaping (Bool) -> Void) {
+        Self.logger.info("voice request permissions")
         SFSpeechRecognizer.requestAuthorization { speechStatus in
             AVCaptureDevice.requestAccess(for: .audio) { micGranted in
                 Task { @MainActor in
-                    completion(speechStatus == .authorized && micGranted)
+                    let granted = speechStatus == .authorized && micGranted
+                    Self.logger.info("voice permissions result granted=\(granted, privacy: .public)")
+                    completion(granted)
                 }
             }
         }
@@ -103,10 +109,12 @@ public final class VoiceController: NSObject {
     }
 
     public func startListening() {
+        Self.logger.info("voice start listening authorized=\(self.authorized(), privacy: .public)")
         guard !isListening else {
             return
         }
         guard authorized() else {
+            Self.logger.error("voice start rejected not authorized")
             onError?("Microphone or speech recognition not authorized")
             return
         }
@@ -130,6 +138,7 @@ public final class VoiceController: NSObject {
         do {
             try audioEngine.start()
         } catch {
+            Self.logger.error("voice audio engine start failed error=\(error.localizedDescription, privacy: .public)")
             onError?("Audio engine failed: \(error.localizedDescription)")
             cleanupAudio()
             return
@@ -155,6 +164,7 @@ public final class VoiceController: NSObject {
         }
 
         isListening = true
+        Self.logger.info("voice listening started")
         onListeningChanged?(true)
     }
 
@@ -172,6 +182,7 @@ public final class VoiceController: NSObject {
 
         let transcript = latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         latestTranscript = ""
+        Self.logger.info("voice listening stopped send=\(send, privacy: .public) transcriptChars=\(transcript.count, privacy: .public)")
         if send, !transcript.isEmpty {
             onTranscript?(transcript)
         }
@@ -202,6 +213,7 @@ public final class VoiceController: NSObject {
 
     public func speak(_ text: String) {
         let cleaned = Self.cleanForSpeech(text)
+        Self.logger.info("voice speak requested inputChars=\(text.count, privacy: .public) outputChars=\(cleaned.count, privacy: .public)")
         guard !cleaned.isEmpty else {
             return
         }
@@ -214,6 +226,7 @@ public final class VoiceController: NSObject {
 
     public func stopSpeaking() {
         if synthesizer.isSpeaking {
+            Self.logger.info("voice speaking stopped")
             synthesizer.stopSpeaking(at: .immediate)
         }
     }
@@ -252,6 +265,7 @@ public final class VoiceController: NSObject {
 extension VoiceController: AVSpeechSynthesizerDelegate {
     public nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
         Task { @MainActor in
+            Self.logger.info("voice speech started")
             self.isSpeaking = true
             self.onSpeakingChanged?(true)
         }
@@ -260,6 +274,7 @@ extension VoiceController: AVSpeechSynthesizerDelegate {
     public nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
             if !synthesizer.isSpeaking {
+                Self.logger.info("voice speech finished")
                 self.isSpeaking = false
                 self.onSpeakingChanged?(false)
                 self.deactivateAudioSession()
