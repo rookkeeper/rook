@@ -42,6 +42,16 @@ The first pass does not need automatic `sample`/spindump capture or AX-call inst
 
 Event 002 found a roughly 41-second `activeTabURL` lookup against the other Rook process. That exposed a broader design issue beyond the watchdog: generic perception can treat another Rook instance as an external app, apply browser-specific Accessibility behavior to it, and block the main actor while searching for a URL that cannot exist there.
 
+### Investigation sequence
+
+The Safari/Firefox specialist is containment, not yet the root-cause fix. The remaining work should proceed in this order:
+
+1. [ ] Exclude every internal Rook bundle ID and stop any active provider when Rook becomes frontmost. This directly removes the known cross-Rook trigger.
+2. [ ] Add per-operation AX timing for focused-window lookup, document attributes, child traversal, and URL lookup, logging only operation names, PIDs, bundle IDs, node counts, and durations.
+3. [ ] Add bounded AX messaging timeouts and move synchronous AX work off the main actor where the API permits, so a pathological target cannot freeze the client UI.
+4. [ ] Reproduce with one Rook and two Rook instances, comparing the timings and watchdog records.
+5. [ ] Capture process samples during any remaining stall to identify whether the wait is inside an AX IPC call, a SwiftUI/AppKit operation, or another main-actor dependency.
+
 ### Immediate safeguard
 
 - [ ] Define one internal-Rook bundle-ID predicate that covers the production app and all worktree/development Rook bundle IDs.
