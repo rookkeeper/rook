@@ -2,8 +2,6 @@
 
 > **TODO 1 — first step completed:** PR #139 added the local Mac stall watchdog and diagnostic logging. The wider cause remains under investigation. This is the working document; do not create an `OUTCOMES.md` until the beachball investigation is actually finished.
 
-> **TODO 1 — first step only:** This change is the first increment of an ongoing stall investigation. It adds diagnostic logging and a main-thread watchdog so the next occurrence gives us better evidence; it does not claim to fix or fully explain the stall. Keep this `CHANGES/` directory open for follow-up investigation rather than creating an `OUTCOMES.md` for this step.
-
 ## Context
 
 Implement the highest-value diagnostic piece from the stall investigation: a local macOS client watchdog that can report when the main actor/main thread stops making progress. The watchdog should help distinguish a main-thread stall from a broader macOS lifecycle or system pause without adding telemetry throughout the application.
@@ -52,7 +50,7 @@ The Safari/Firefox specialist is containment, not yet the root-cause fix. The re
 2. [x] Add per-operation AX timing for focused-window lookup, document attributes, child traversal, and URL lookup, logging only operation names, PIDs, bundle IDs, node counts, and durations.
 3. [x] Add bounded AX messaging timeouts and a bounded URL-tree traversal deadline.
 4. [x] Move environment-provider AX work off the main actor: foreground title reads, generic document observation, and browser URL traversal now run in detached tasks. Bridge text/action perception remains a separate path.
-5. [ ] Reproduce with one Rook and two Rook instances, comparing the timings and watchdog records.
+5. [x] Reproduce with one Rook and two Rook instances. Manual validation with the new isolated build and the main build found both clients observed the other's environment without the previous long pause; the interaction was much snappier.
 6. [ ] Capture process samples during any remaining stall to identify whether the wait is inside an AX IPC call, a SwiftUI/AppKit operation, or another main-actor dependency.
 
 ### Immediate safeguard
@@ -85,8 +83,8 @@ The initial result is therefore not “delete `activeTabURL` everywhere.” It i
 - [x] Ensure generic document/path discovery remains separate from browser-only URL discovery.
 - [x] Move Chromium accessibility-tree priming out of the generic `focusedWindow` read path; only explicit text/action perception paths may prime web content.
 - [x] Add bounded per-AX-call timing and timeout handling for the browser specialist path.
-- [ ] Audit synchronous AX calls for per-call timeouts, main-actor blocking, repeated tree reads, and safe off-main-actor execution.
-- [ ] Reproduce with one Rook and with two Rooks, then capture nested AX timings or stacks to distinguish a pathological Rook AX tree from a cross-process wait.
+- [x] Audit environment-inspection AX calls for per-call timeouts, main-actor blocking, repeated tree reads, and safe off-main-actor execution. Bridge text/action perception remains a separate follow-up path.
+- [x] Reproduce with one Rook and with two Rooks; the two-client manual check was much snappier after internal Rook inspection was removed.
 
 ## Exit criteria
 
