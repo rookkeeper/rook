@@ -69,6 +69,9 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         formatDate(dateFromISO(updatedAtISO))
     }
 
+    // THIS IS FOR BACKWARDS COMPATIBILITY
+    // Preserve unknown server fields while updating known session-list values so
+    // older/newer clients can continue round-tripping the shared summary shape.
     public func updating(title: String? = nil, updatedAtISO: String? = nil, running: Bool? = nil) -> AgentSessionSummary {
         var object = raw.objectValue ?? [:]
         if let title {
