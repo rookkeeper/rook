@@ -493,6 +493,21 @@ final class RookModel: ObservableObject {
         }
     }
 
+    private func replaceSessionSummary(_ summary: AgentSessionSummary) {
+        guard let index = sessions.firstIndex(where: { $0.id == summary.id }) else { return }
+        sessions[index] = summary
+    }
+
+    private func applyLocalSessionTitle(_ title: String, to sessionId: String) {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "session" : title.trimmingCharacters(in: .whitespacesAndNewlines)
+        sessions = sessions.map { existing in
+            existing.id == sessionId ? existing.updating(title: normalizedTitle) : existing
+        }
+        if currentSession?.id == sessionId {
+            currentSession = currentSession?.updating(title: normalizedTitle)
+        }
+    }
+
     func startNewSession(agentId: String, name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         startingSession = true
@@ -552,6 +567,12 @@ final class RookModel: ObservableObject {
                 } else {
                     try await handle.load()
                 }
+                let touched = try await api.touchSession(sessionId: session.id)
+                currentSession = touched
+                await loadSessions()
+                if let refreshed = sessions.first(where: { $0.id == session.id }) {
+                    currentSession = refreshed
+                }
                 selectedAgentId = nil
                 chatVisible = true
                 enteredEnvironments = []
@@ -564,12 +585,74 @@ final class RookModel: ObservableObject {
         }
     }
 
+    func renameSession(_ session: AgentSessionSummary, title: String) {
+        Task {
+            applyLocalSessionTitle(title, to: session.id)
+            do {
+                let renamed = try await api.renameSession(sessionId: session.id, title: title)
+                replaceSessionSummary(renamed)
+                if currentSession?.id == session.id {
+                    currentSession = renamed
+                }
+                await loadSessions()
+                if currentSession?.id == session.id, let refreshed = sessions.first(where: { $0.id == session.id }) {
+                    currentSession = refreshed
+                }
+                updateLiveActivity()
+            } catch {
+                sessionsError = error.localizedDescription
+                await loadSessions()
+                if currentSession?.id == session.id, let refreshed = sessions.first(where: { $0.id == session.id }) {
+                    currentSession = refreshed
+                }
+            }
+        }
+    }
+
+    func deleteSession(_ session: AgentSessionSummary) {
+        Task {
+            do {
+                try await api.deleteSession(sessionId: session.id)
+                handles.removeValue(forKey: session.id)?.close()
+                if currentSession?.id == session.id {
+                    currentSession = nil
+                    chatVisible = false
+                    selectedAgentId = nil
+                    environmentListItems = []
+                    enteredEnvironments = []
+                }
+                sessions.removeAll { $0.id == session.id }
+                await loadSessions()
+                updateLiveActivity()
+            } catch {
+                sessionsError = error.localizedDescription
+            }
+        }
+    }
+
+    func touchCurrentSession() {
+        guard let session = currentSession else { return }
+        Task {
+            do {
+                let touched = try await api.touchSession(sessionId: session.id)
+                currentSession = touched
+                await loadSessions()
+                if let refreshed = sessions.first(where: { $0.id == session.id }) {
+                    currentSession = refreshed
+                }
+            } catch {
+                sessionsError = error.localizedDescription
+            }
+        }
+    }
+
     /// Bring the (already live) current session's chat on screen — used by the
     /// "Resume chat" affordance and the Live Activity deep link.
     func openChat() {
         guard currentSession != nil else {
             return
         }
+        touchCurrentSession()
         selectedAgentId = nil
         chatVisible = true
     }
@@ -699,10 +782,74 @@ final class RookModel: ObservableObject {
         appendBlock(.error(source: source, message: message))
     }
 
+    func finalizeActiveTools(as finalStatus: ToolBlockStatus) {
+        for index in blocks.indices {
+            guard case .tool(var state) = blocks[index].kind else { continue }
+            guard !state.status.isTerminal else { continue }
+            state.status = finalStatus
+            blocks[index].kind = .tool(state)
+        }
+    }
 
+    func handleSocketEvent(_ event: AcpClientEvent) {
+        switch event {
+        case .toolCallStarted(let toolCallId, let title, let kind, let status, let rawInput):
+            let toolStatus: ToolBlockStatus = status == "in_progress" ? .running : .pending
+            let state = ToolBlockState(toolCallId: toolCallId, title: title, kindLabel: kind, status: toolStatus, arguments: rawInput ?? "", output: "")
+            appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
+        case .toolCallUpdate(let toolCallId, let status, let toolName, let output):
+            updateTool(toolCallId) { tool in
+                if let toolName, tool.title.isEmpty { tool.title = toolName }
+                switch status {
+                case "pending": tool.status = .pending
+                case "in_progress": tool.status = .running; if let output { tool.output = output }
+                case "completed": tool.status = .completed; if let output { tool.output = output }
+                case "failed": tool.status = .failed; if let output { tool.output = output }
+                case "cancelled": tool.status = .cancelled
+                default: break
+                }
+            }
+        case .toolInputSnapshot(let toolCallId, _, let text):
+            updateTool(toolCallId) { tool in
+                tool.status = .inputStreaming
+                tool.arguments = text
+            }
+        case .toolInputDelta(let toolCallId, _, let delta):
+            updateTool(toolCallId) { tool in
+                tool.status = .inputStreaming
+                tool.arguments += delta
+            }
+        case .toolCallReady(let toolCallId, _):
+            updateTool(toolCallId) { tool in
+                tool.status = .ready
+            }
+        case .toolOutputSnapshot(let toolCallId, _, let text):
+            updateTool(toolCallId) { tool in
+                tool.status = .running
+                tool.output = text
+            }
+        case .toolOutputDelta(let toolCallId, _, let delta):
+            updateTool(toolCallId) { tool in
+                tool.status = .running
+                tool.output += delta
+            }
+        default:
+            return
+        }
+    }
 
-
-
+    private func updateTool(_ toolCallId: String, mutate: (inout ToolBlockState) -> Void) {
+        for index in blocks.indices.reversed() {
+            if case .tool(var state) = blocks[index].kind, state.toolCallId == toolCallId {
+                mutate(&state)
+                blocks[index].kind = .tool(state)
+                return
+            }
+        }
+        var state = ToolBlockState(toolCallId: toolCallId, title: "Tool", kindLabel: "", status: .running, arguments: "", output: "")
+        mutate(&state)
+        appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
+    }
 
     // MARK: - Environment offers
 

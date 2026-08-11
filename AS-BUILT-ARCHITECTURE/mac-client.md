@@ -110,10 +110,12 @@ Via `RookKit`:
 2. starting a new session opens an unbound WebSocket, sends ACP `session/new`, then keeps that same socket as the new session's `SessionHandle`
 3. resuming an existing session creates or retrieves a `SessionHandle`
 4. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
-5. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and run `initialize`
-6. the handle reduces `AcpClientEvent`s into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
-7. switching sessions changes which handle the UI observes — background sessions keep their WebSocket and continue running
-8. queued messages, including image attachments, are delivered automatically once the agent goes idle
+5. after a successful resume/open, the client calls `POST /api/sessions/:id/touch` so the shared recents list reflects viewed sessions even without a prompt
+6. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and run `initialize`
+7. the handle reduces `AcpClientEvent`s into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
+8. switching sessions changes which handle the UI observes — background sessions keep their WebSocket and continue running
+9. session rows expose rename/delete management actions that call the REST session-management routes without stealing the primary click-to-resume interaction
+10. queued messages, including image attachments, are delivered automatically once the agent goes idle
 
 ### Foreground environment detection
 1. `ForegroundAppMonitor` detects app activation or window-title change

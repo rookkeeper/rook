@@ -76,6 +76,24 @@ export class AgentRuntimeManager {
     return this.sessions.list();
   }
 
+  async getSession(sessionId: string): Promise<SessionRecord> {
+    return this.requireSession(sessionId);
+  }
+
+  async renameSession(sessionId: string, title: string): Promise<SessionRecord> {
+    const record = await this.requireSession(sessionId);
+    const normalizedTitle = title.trim() || "session";
+    await this.sessions.rename(sessionId, normalizedTitle);
+    return { ...record, title: normalizedTitle };
+  }
+
+  async touchSession(sessionId: string): Promise<SessionRecord> {
+    await this.requireSession(sessionId);
+    const updatedAt = new Date().toISOString();
+    await this.sessions.touch(sessionId, updatedAt);
+    return await this.requireSession(sessionId);
+  }
+
   async createSession(runtimeId: string, params: JsonObject, title: string): Promise<SessionRecord> {
     const startedAt = performance.now();
     const profile = this.requireProfile(runtimeId);
@@ -209,16 +227,35 @@ export class AgentRuntimeManager {
     await this.sessions.touch(sessionId);
   }
 
-  async closeSession(sessionId: string): Promise<unknown> {
+  async deleteSession(sessionId: string): Promise<unknown> {
     const record = await this.requireSession(sessionId);
     await this.workspaceManager.assessAndFlush();
-    const runtime = this.runtimeFor(record);
-    const result = await runtime.request("session/close", { sessionId: record.runtimeSessionId });
-    await runtime.close();
+    let result: unknown = { ok: true };
+    const runtime = this.sessionRuntimes.get(record.sessionId);
+    if (runtime) {
+      // ACP runtimes are not required to implement session/close. The server
+      // owns the public session lifecycle, so terminating the per-session
+      // runtime must not be blocked by an optional/unsupported ACP method.
+      try {
+        result = await runtime.request("session/close", { sessionId: record.runtimeSessionId });
+      } catch (error) {
+        this.logger.info({ sessionId, error: error instanceof Error ? error.message : String(error) }, "runtime did not accept session/close; terminating runtime directly");
+      } finally {
+        await runtime.close();
+      }
+    }
+    await this.transcriptRepository?.clear(sessionId);
     await this.workspaceManager.removeSession(sessionId);
     this.detachSessionRuntime(sessionId);
     await this.sessions.delete(sessionId);
     return result;
+  }
+
+  // THIS IS FOR BACKWARDS COMPATIBILITY
+  // Keep ACP session/close callers on the existing manager entry point while
+  // applying the new durable deletion semantics underneath.
+  async closeSession(sessionId: string): Promise<unknown> {
+    return this.deleteSession(sessionId);
   }
 
   /** Relay a standard ACP response to an ACP request initiated by a runtime. */

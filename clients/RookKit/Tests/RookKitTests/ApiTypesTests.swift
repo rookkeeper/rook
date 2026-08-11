@@ -76,6 +76,20 @@ final class ApiTypesTests: XCTestCase {
         XCTAssertEqual(summary.updatedAtISO, "2026-01-15T11:00:00Z")
     }
 
+    func testAgentSessionSummaryUpdatingPreservesUnknownFields() {
+        let raw = JSONValue.object([
+            "sessionId": .string("s1"),
+            "title": .string("before"),
+            "updatedAt": .string("2026-01-15T11:00:00Z"),
+            "extra": .string("keep-me")
+        ])
+        let summary = AgentSessionSummary(raw: raw).updating(title: "after", updatedAtISO: "2026-01-15T12:00:00Z", running: true)
+        XCTAssertEqual(summary.name, "after")
+        XCTAssertEqual(summary.updatedAtISO, "2026-01-15T12:00:00Z")
+        XCTAssertEqual(summary.running, true)
+        XCTAssertEqual(summary.raw["extra"]?.stringValue, "keep-me")
+    }
+
     // MARK: - EnvironmentCandidate Codable
 
     func testEnvironmentCandidateRoundTrip() throws {

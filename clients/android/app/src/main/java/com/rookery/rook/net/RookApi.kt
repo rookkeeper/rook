@@ -106,6 +106,19 @@ class RookApi(
         return json.decodeFromJsonElement(TranscriptResponse.serializer(), body).events
     }
 
+    suspend fun renameSession(sessionId: String, title: String): JsonObject =
+        patchJson(
+            "api/sessions/$sessionId",
+            buildJsonObject { put("title", title) }
+        ).jsonObject
+
+    suspend fun touchSession(sessionId: String): JsonObject =
+        postJson("api/sessions/$sessionId/touch", buildJsonObject { }).jsonObject
+
+    suspend fun deleteSession(sessionId: String) {
+        deleteJson("api/sessions/$sessionId")
+    }
+
     suspend fun environmentPreview(environmentId: String): EnvironmentPreview {
         val body = getJson("api/environments/preview", mapOf("environmentId" to environmentId))
         return json.decodeFromJsonElement(EnvironmentPreview.serializer(), body)
@@ -194,8 +207,21 @@ class RookApi(
     }
 
     private suspend fun postJson(path: String, payload: JsonElement): JsonElement {
+        return sendJson(path, "POST", payload)
+    }
+
+    private suspend fun patchJson(path: String, payload: JsonElement): JsonElement {
+        return sendJson(path, "PATCH", payload)
+    }
+
+    private suspend fun deleteJson(path: String): JsonElement {
+        val request = authorized(Request.Builder().url(requestUrl(path)).delete()).build()
+        return execute(request)
+    }
+
+    private suspend fun sendJson(path: String, method: String, payload: JsonElement): JsonElement {
         val body = json.encodeToString(JsonElement.serializer(), payload).toRequestBody("application/json".toMediaType())
-        val request = authorized(Request.Builder().url(requestUrl(path)).post(body)).build()
+        val request = authorized(Request.Builder().url(requestUrl(path)).method(method, body)).build()
         return execute(request)
     }
 
