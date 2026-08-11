@@ -66,6 +66,7 @@ final class ServerStateController {
             logger: Self.logger,
             signposter: RookLog.serverSignposter
         )
+        let previousState = serverState
         let healthy = await api.health()
         managedServerRunning = serverController.isManagedServerRunning
         if healthy {
@@ -73,7 +74,11 @@ final class ServerStateController {
         } else if serverState != .starting || !managedServerRunning {
             serverState = managedServerRunning ? .starting : .offline
         }
-        Self.logger.info("server state refresh state=\(String(describing: self.serverState), privacy: .public) managed=\(self.managedServerRunning, privacy: .public)")
+        if previousState != serverState {
+            Self.logger.info("server state changed state=\(String(describing: self.serverState), privacy: .public) managed=\(self.managedServerRunning, privacy: .public)")
+        } else if RookLog.verboseEnabled {
+            Self.logger.debug("server state unchanged state=\(String(describing: self.serverState), privacy: .public) managed=\(self.managedServerRunning, privacy: .public)")
+        }
         timed.finish(details: "state=\(String(describing: serverState)) managed=\(self.managedServerRunning)")
     }
 

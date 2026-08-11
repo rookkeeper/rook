@@ -54,7 +54,11 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     func activate(app: ForegroundApp, title: String?) {
-        Self.logger.info("generic provider activate bundleId=\(app.bundleId, privacy: .public) title=\(title ?? "(null)", privacy: .public)")
+        if RookLog.verboseEnabled {
+            Self.logger.debug("generic provider activate bundleId=\(app.bundleId, privacy: .public) title=\(title ?? "(null)", privacy: .public)")
+        } else {
+            Self.logger.info("generic provider activate bundleId=\(app.bundleId, privacy: .public)")
+        }
         currentApp = app
         currentTitle = title
         previousNormalizedIds = nil
@@ -63,7 +67,9 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     func update(app: ForegroundApp, title: String?) {
-        Self.logger.info("generic provider update bundleId=\(app.bundleId, privacy: .public) title=\(title ?? "(null)", privacy: .public)")
+        if RookLog.verboseEnabled {
+            Self.logger.debug("generic provider update bundleId=\(app.bundleId, privacy: .public) title=\(title ?? "(null)", privacy: .public)")
+        }
         currentApp = app
         currentTitle = title
     }

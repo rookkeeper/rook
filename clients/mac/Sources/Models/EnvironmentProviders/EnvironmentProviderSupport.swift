@@ -38,13 +38,17 @@ final class EnvironmentRegistrationController {
     }
 
     func setServerOnline(_ online: Bool) {
+        guard isServerOnline != online else {
+            flushIfPossible()
+            return
+        }
         isServerOnline = online
         Self.logger.info("environment registration serverOnline=\(online, privacy: .public)")
         flushIfPossible()
     }
 
     func update(candidates: [EnvironmentCandidate], delay: TimeInterval, reason: String) {
-        Self.logger.info("environment registration update reason=\(reason, privacy: .public) candidates=\(candidates.count, privacy: .public) delay=\(delay, privacy: .public)")
+        Self.logger.debug("environment registration update reason=\(reason, privacy: .public) candidates=\(candidates.count, privacy: .public) delay=\(delay, privacy: .public)")
         let signature = Self.signature(for: candidates)
         guard !signature.isEmpty else {
             clear()
@@ -75,7 +79,7 @@ final class EnvironmentRegistrationController {
     }
 
     func emitNow(candidates: [EnvironmentCandidate], reason: String) {
-        Self.logger.info("environment registration emitNow reason=\(reason, privacy: .public) candidates=\(candidates.count, privacy: .public)")
+        Self.logger.debug("environment registration emitNow reason=\(reason, privacy: .public) candidates=\(candidates.count, privacy: .public)")
         currentCandidates = candidates
         currentReason = reason
         readyToEmit = true
@@ -83,7 +87,7 @@ final class EnvironmentRegistrationController {
     }
 
     func clear() {
-        Self.logger.info("environment registration clear")
+        Self.logger.debug("environment registration clear")
         timer?.invalidate()
         timer = nil
         currentSignature = nil
@@ -102,7 +106,7 @@ final class EnvironmentRegistrationController {
             return now.timeIntervalSince(lastEmission) >= Self.duplicateSuppressionWindow
         }
         guard !eligible.isEmpty else {
-            Self.logger.info("environment registration suppressed reason=\(self.currentReason, privacy: .public) candidates=\(self.currentCandidates.count, privacy: .public)")
+            Self.logger.debug("environment registration suppressed reason=\(self.currentReason, privacy: .public) candidates=\(self.currentCandidates.count, privacy: .public)")
             return
         }
         for candidate in eligible {

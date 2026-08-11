@@ -156,7 +156,11 @@ Apple-client logging is centralized in `RookKit/Logging/RookLog.swift` and uses
 Unified Logging with subsystem `com.rookery.Rook`. The Mac app uses categories
 for app, session, network, environment, bridge, server, and performance work.
 `RookPerformance` records elapsed milliseconds and emits `OSSignposter` intervals;
-100 ms is the slow-operation threshold and 500 ms is the hang-warning threshold.
+fast successful operations are debug-level, 100 ms is the slow-operation threshold,
+and 500 ms is the hang-warning threshold. `ROOK_VERBOSE_LOGGING=1` enables
+additional polling and raw foreground-context details for a short diagnostic run;
+otherwise window titles, document paths, and URLs are summarized rather than
+logged.
 
 The Mac instruments the beachball-adjacent paths: Accessibility title/document,
 web-tree, text, and actionable-element reads; Finder AppleScript observation;

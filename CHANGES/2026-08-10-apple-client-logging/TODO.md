@@ -42,6 +42,7 @@ Important files/modules inspected up front:
 - [x] Instrument the iPhone client and location provider with structured logs around health refresh, session resume/start, place monitoring, visit arrivals, environment identification, and voice/location state changes where useful.
 - [x] Add or update focused tests for any new shared logging/performance helpers and keep existing Apple-client tests/builds passing.
 - [x] Update Apple-client docs (`clients/mac/README.md`, `clients/iphone/README.md`, and any other touched README/docs) to describe the logging approach and how to capture logs for hang investigation.
+- [x] Reduce default log noise by moving fast timing/polling details to debug level and gate raw foreground context behind `ROOK_VERBOSE_LOGGING=1`.
 - [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
 - [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
 - [x] Update `AS-BUILT-ARCHITECTURE/` as needed.

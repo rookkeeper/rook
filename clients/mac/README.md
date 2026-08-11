@@ -177,23 +177,34 @@ re-announced if the server restarts.
 
 The Mac app uses Apple Unified Logging through the shared `RookKit` logger. The
 subsystem is `com.rookery.Rook`; categories include `app`, `session`, `network`,
-`environment`, `bridge`, `server`, and `performance`. Slow operations are logged
-with elapsed milliseconds and emitted as signposts for Instruments. Operations
-that take at least 100 ms are warnings; operations that take at least 500 ms are
-errors, making main-thread and Accessibility/Finder stalls easy to identify.
+`environment`, `bridge`, `server`, and `performance`. Fast successful timings
+are debug-level; operations that take at least 100 ms are warnings, and
+operations that take at least 500 ms are errors. This keeps normal logs small
+while making main-thread and Accessibility/Finder stalls easy to identify.
 
 Open **Rook Log** from the app to view the last ten minutes of the client
 subsystem log plus the managed server-log tail, followed by a live unified-log
 stream. The viewer is an inspection aid; the authoritative client log is
 Unified Logging, not a temporary file.
 
-Useful commands while reproducing a hang:
+You can view the logs in **Console.app** by selecting the Mac, searching for
+`subsystem:com.rookery.Rook`, and pressing **Start**. Terminal equivalents:
 
 ```zsh
 log stream --style compact --predicate 'subsystem == "com.rookery.Rook"'
 log show --last 10m --style compact --predicate 'subsystem == "com.rookery.Rook"'
 sample Rook 10 -file ~/Desktop/rook-sample.txt
 ```
+
+For a short diagnostic run with detailed polling and raw foreground context,
+launch from the worktree with:
+
+```zsh
+ROOK_VERBOSE_LOGGING=1 ./scripts/run-rook.sh server mac
+```
+
+Verbose mode is opt-in; it includes window titles, document paths, and URLs, so
+do not enable it for logs you plan to share without reviewing them.
 
 Capture the timestamp of the beachball and collect the unified log plus a
 `sample` while it is visible. In particular, search the `performance` and

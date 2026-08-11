@@ -16,6 +16,7 @@ public enum RookLogCategory: String {
 
 public enum RookLog {
     public static let subsystem = "com.rookery.Rook"
+    public static let verboseEnabled = ProcessInfo.processInfo.environment["ROOK_VERBOSE_LOGGING"] == "1"
 
     public static let app = logger(.app)
     public static let ui = logger(.ui)
@@ -131,14 +132,14 @@ public final class RookTimedOperation {
             logger.warning("\(message, privacy: .public)")
             logger.warning("operation=\(self.operation, privacy: .public) failed error=\(error.localizedDescription, privacy: .public)")
         case (_, let error?):
-            logger.info("\(message, privacy: .public)")
+            logger.error("\(message, privacy: .public)")
             logger.error("operation=\(self.operation, privacy: .public) failed error=\(error.localizedDescription, privacy: .public)")
         case (.error, nil):
             logger.error("\(message, privacy: .public)")
         case (.warning, nil):
             logger.warning("\(message, privacy: .public)")
         case (.info, nil):
-            logger.info("\(message, privacy: .public)")
+            logger.debug("\(message, privacy: .public)")
         }
     }
 }

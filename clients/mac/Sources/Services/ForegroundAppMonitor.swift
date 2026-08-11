@@ -12,6 +12,11 @@ func providerWarning(_ message: String) {
     providerLogger.warning("\(message, privacy: .public)")
 }
 
+func providerDebug(_ message: String) {
+    guard RookLog.verboseEnabled else { return }
+    providerLogger.debug("\(message, privacy: .public)")
+}
+
 func providerError(_ message: String) {
     providerLogger.error("\(message, privacy: .public)")
 }
@@ -132,7 +137,7 @@ final class ForegroundAppMonitor {
     private func emitContext(for app: ForegroundApp) {
         let title = AXReader.focusedWindowTitle(pid: app.pid)
         currentTitle = title
-        providerInfo("context refresh bundleId=\(app.bundleId) title=\(title ?? "(null)")")
+        providerDebug("context refresh bundleId=\(app.bundleId) title=\(title ?? "(null)")")
         onContextRefresh?(app, title)
     }
 

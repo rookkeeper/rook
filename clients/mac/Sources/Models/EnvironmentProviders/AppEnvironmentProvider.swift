@@ -150,18 +150,9 @@ final class AppEnvironmentProvider {
         lastLoggedURL = webURL
         lastLoggedDocumentValues = documentValues
 
-        var lines: [String] = []
-        lines.append("raw-context reason=\(reason)")
-        lines.append("  mac:          \(app.name)  bundleId=\(app.bundleId)  pid=\(app.pid)")
-        let titleText = title.map { "\"\($0)\"" } ?? "(null)"
-        lines.append("  windowTitle:  \(titleText)")
-        lines.append("  axDocument:   \(documentValues.isEmpty ? "(none)" : documentValues.joined(separator: " | "))")
-        if let webURL {
-            lines.append("  axWebURL:     \(webURL)")
-        }
-        lines.append("  trustedAX:    \(AXReader.isTrusted())")
-        for line in lines {
-            providerInfo(line)
+        providerInfo("context reason=\(reason) app=\(app.name) bundleId=\(app.bundleId) pid=\(app.pid) titlePresent=\(title != nil) documents=\(documentValues.count) webURLPresent=\(webURL != nil) trustedAX=\(AXReader.isTrusted())")
+        if RookLog.verboseEnabled {
+            providerDebug("context raw reason=\(reason) app=\(app.name) bundleId=\(app.bundleId) title=\(title ?? "(null)") documents=\(documentValues.joined(separator: " | ")) webURL=\(webURL ?? "(null)")")
         }
     }
 
