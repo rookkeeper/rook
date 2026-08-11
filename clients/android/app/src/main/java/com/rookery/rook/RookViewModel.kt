@@ -343,6 +343,10 @@ class RookViewModel(
                 } else {
                     socket.loadSession(session.id)
                 }
+                val touched = AgentSessionSummary(api.touchSession(session.id))
+                _currentSession.value = touched
+                _sessions.value = api.sessions().map(::AgentSessionSummary)
+                _sessions.value.firstOrNull { it.id == session.id }?.let { _currentSession.value = it }
             } catch (e: Exception) {
                 _sessionsError.value = e.message ?: "Failed to resume session"
             } finally {
@@ -351,8 +355,58 @@ class RookViewModel(
         }
     }
 
+    fun renameSession(session: AgentSessionSummary, title: String) {
+        scope.launch {
+            try {
+                val renamed = AgentSessionSummary(api.renameSession(session.id, title))
+                if (_currentSession.value?.id == session.id) {
+                    _currentSession.value = renamed
+                }
+                _sessions.value = api.sessions().map(::AgentSessionSummary)
+                _sessions.value.firstOrNull { it.id == session.id }?.let {
+                    if (_currentSession.value?.id == session.id) _currentSession.value = it
+                }
+            } catch (e: Exception) {
+                _sessionsError.value = e.message ?: "Failed to rename session"
+            }
+        }
+    }
+
+    fun deleteSession(session: AgentSessionSummary) {
+        scope.launch {
+            try {
+                api.deleteSession(session.id)
+                if (_currentSession.value?.id == session.id) {
+                    socket.disconnect()
+                    connectedSocketSessionId = null
+                    _currentSession.value = null
+                    _chatVisible.value = false
+                }
+                _sessions.value = _sessions.value.filterNot { it.id == session.id }
+                _sessions.value = api.sessions().map(::AgentSessionSummary)
+            } catch (e: Exception) {
+                _sessionsError.value = e.message ?: "Failed to delete session"
+            }
+        }
+    }
+
+    fun touchCurrentSession() {
+        val session = _currentSession.value ?: return
+        scope.launch {
+            try {
+                val touched = AgentSessionSummary(api.touchSession(session.id))
+                _currentSession.value = touched
+                _sessions.value = api.sessions().map(::AgentSessionSummary)
+                _sessions.value.firstOrNull { it.id == session.id }?.let { _currentSession.value = it }
+            } catch (e: Exception) {
+                _sessionsError.value = e.message ?: "Failed to update session recency"
+            }
+        }
+    }
+
     fun openChat() {
         if (_currentSession.value == null) return
+        touchCurrentSession()
         _chatVisible.value = true
     }
 
