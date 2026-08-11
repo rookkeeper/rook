@@ -16,10 +16,10 @@ final class AppEnvironmentProvider {
     private var isServerOnline = false
 
     private var lastLoggedTitle: String?
-    private var lastLoggedURL: String?
     private var lastLoggedDocumentValues: [String] = []
     private var lastLoggedBundleId: String?
     private var hasLoggedContext = false
+    private var rawContextReadTask: Task<Void, Never>?
 
     private(set) var foregroundEnvironmentId: String?
     private(set) var foregroundSiteEnvironmentId: String?
@@ -59,6 +59,9 @@ final class AppEnvironmentProvider {
         monitor.onContextRefresh = { [weak self] app, title in
             self?.handleContextRefresh(app: app, title: title)
         }
+        monitor.onInternalRookActivation = { [weak self] in
+            self?.handleInternalRookActivation()
+        }
     }
 
     func start() {
@@ -67,6 +70,8 @@ final class AppEnvironmentProvider {
 
     func stop() {
         monitor.stop()
+        rawContextReadTask?.cancel()
+        rawContextReadTask = nil
         baseRegistration.clear()
         activeProvider?.deactivate()
     }
@@ -84,9 +89,7 @@ final class AppEnvironmentProvider {
 
     private func handleForegroundApp(_ app: ForegroundApp) {
         providerInfo("handle foreground app bundleId=\(app.bundleId) pid=\(app.pid)")
-        AXReader.primeAccessibility(pid: app.pid)
-        let title = AXReader.focusedWindowTitle(pid: app.pid)
-        logRawContext(app: app, title: title, reason: "app-switch")
+        let title: String? = nil
         foregroundAppName = app.name
         foregroundWindowTitle = title
         currentApp = app
@@ -102,6 +105,20 @@ final class AppEnvironmentProvider {
         foregroundWindowTitle = title
         currentApp = app
         activeProvider?.update(app: app, title: title)
+        syncPublishedEnvironmentState()
+    }
+
+    private func handleInternalRookActivation() {
+        rawContextReadTask?.cancel()
+        rawContextReadTask = nil
+        activeProvider?.deactivate()
+        activeProvider = nil
+        baseRegistration.clear()
+        currentApp = nil
+        foregroundEnvironmentId = nil
+        foregroundSiteEnvironmentId = nil
+        foregroundAppName = nil
+        foregroundWindowTitle = nil
         syncPublishedEnvironmentState()
     }
 
@@ -135,24 +152,40 @@ final class AppEnvironmentProvider {
     }
 
     private func logRawContext(app: ForegroundApp, title: String?, reason: String) {
-        let documentValues = AXReader.focusedWindowDocumentValues(pid: app.pid)
-        let webURL = AXReader.activeTabURL(pid: app.pid)
+        rawContextReadTask?.cancel()
+        rawContextReadTask = Task.detached { [weak self] in
+            let documentValues = AXReader.focusedWindowDocumentValues(pid: app.pid)
+            guard !Task.isCancelled else { return }
+            await self?.recordRawContext(
+                app: app,
+                title: title,
+                reason: reason,
+                documentValues: documentValues
+            )
+        }
+    }
+
+    private func recordRawContext(
+        app: ForegroundApp,
+        title: String?,
+        reason: String,
+        documentValues: [String]
+    ) {
+        guard currentApp == app else { return }
         let appChanged = app.bundleId != lastLoggedBundleId
         let titleChanged = title != lastLoggedTitle
-        let urlChanged = webURL != lastLoggedURL
         let documentChanged = documentValues != lastLoggedDocumentValues
-        if hasLoggedContext, !appChanged, !titleChanged, !urlChanged, !documentChanged {
+        if hasLoggedContext, !appChanged, !titleChanged, !documentChanged {
             return
         }
         hasLoggedContext = true
         lastLoggedBundleId = app.bundleId
         lastLoggedTitle = title
-        lastLoggedURL = webURL
         lastLoggedDocumentValues = documentValues
 
-        providerInfo("context reason=\(reason) app=\(app.name) bundleId=\(app.bundleId) pid=\(app.pid) titlePresent=\(title != nil) documents=\(documentValues.count) webURLPresent=\(webURL != nil) trustedAX=\(AXReader.isTrusted())")
+        providerInfo("context reason=\(reason) app=\(app.name) bundleId=\(app.bundleId) pid=\(app.pid) titlePresent=\(title != nil) documents=\(documentValues.count) trustedAX=\(AXReader.isTrusted())")
         if RookLog.verboseEnabled {
-            providerDebug("context raw reason=\(reason) app=\(app.name) bundleId=\(app.bundleId) title=\(title ?? "(null)") documents=\(documentValues.joined(separator: " | ")) webURL=\(webURL ?? "(null)")")
+            providerDebug("context raw reason=\(reason) app=\(app.name) bundleId=\(app.bundleId) title=\(title ?? "(null)") documents=\(documentValues.joined(separator: " | "))")
         }
     }
 

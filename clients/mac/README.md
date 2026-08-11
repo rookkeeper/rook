@@ -123,7 +123,7 @@ Tracked foreground environments include:
   - `mac:com.descript.beachcube/<project>`
   - `mac:com.hnc.Discord/<server>/<channel>`
   - exact `dir:/...` folder environments discovered from Finder windows
-- frontmost browser pages as host-level `web:<host>` ids
+- frontmost browser pages as host-level `web:<host>` ids (Safari and Firefox use browser-specialist Accessibility detection; Chrome can use its top-level document signal)
 
 Examples:
 
@@ -153,9 +153,12 @@ The Mac app registers the exact encountered ID it sees at the moment, such as:
 
 Specialist providers now live under `Sources/Models/EnvironmentProviders/` and
 are assembled into an explicit bundle-id registry. Bundle IDs with no
-specialist use the generic provider. Finder is a specialist too, but it emits
-`dir:/...` environments instead of Finder-specific IDs so local file context
-stays consistent. For Obsidian, vault parsing is title-based and works
+specialist use the generic provider. Safari and Firefox are browser specialists:
+they are the only environment providers that walk a focused `AXWebArea` to find
+the active page URL. The generic provider uses only top-level document values,
+so Electron and other arbitrary applications are not treated as browsers.
+Finder is a specialist too, but it emits `dir:/...` environments instead of
+Finder-specific IDs so local file context stays consistent. For Obsidian, vault parsing is title-based and works
 backwards so note names may contain dashes safely. For plain apps the base
 identity is the bundle id: `mac:<bundleId>`.
 
@@ -174,9 +177,11 @@ for:
 - server/wake reconciliation of currently visible environments
 
 Foreground activations are still debounced (700 ms) so ⌘-Tab flicker doesn't
-thrash the richer foreground context, the app ignores its own activations
-(opening the panel doesn't end the episode), and cached registrations are
-re-announced if the server restarts.
+thrash the richer foreground context. All production and development Rook
+bundle IDs are excluded from environment inspection; when a Rook window
+becomes frontmost, the current external provider is stopped rather than
+retaining its target PID. Cached registrations are re-announced if the server
+restarts.
 
 ### Client logging and beachball diagnostics
 

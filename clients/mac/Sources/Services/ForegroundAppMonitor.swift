@@ -21,7 +21,7 @@ func providerError(_ message: String) {
     providerLogger.error("\(message, privacy: .public)")
 }
 
-struct ForegroundApp: Equatable {
+struct ForegroundApp: Equatable, Sendable {
     let bundleId: String
     let name: String
     let pid: pid_t
@@ -44,12 +44,14 @@ struct ForegroundApp: Equatable {
 final class ForegroundAppMonitor {
     var onForegroundChange: ((ForegroundApp) -> Void)?
     var onContextRefresh: ((ForegroundApp, String?) -> Void)?
+    var onInternalRookActivation: (() -> Void)?
 
     private(set) var current: ForegroundApp?
     private(set) var currentTitle: String?
 
     private var observer: NSObjectProtocol?
     private var debounceTask: Task<Void, Never>?
+    private var titleReadTask: Task<Void, Never>?
     private var pollTimer: Timer?
     private let debounceNanoseconds: UInt64 = 700_000_000
 
@@ -89,6 +91,7 @@ final class ForegroundAppMonitor {
         }
         observer = nil
         debounceTask?.cancel()
+        titleReadTask?.cancel()
         pollTimer?.invalidate()
         pollTimer = nil
     }
@@ -114,8 +117,8 @@ final class ForegroundAppMonitor {
             "foregroundPid": String(app.pid),
         ])
         providerInfo("activation app=\(app.name) bundleId=\(app.bundleId) pid=\(app.pid)")
-        // Our own panel/window gaining focus must not end the current episode.
-        if app.bundleId == Bundle.main.bundleIdentifier {
+        guard !RookBundleIdentity.isInternalRookBundleId(app.bundleId) else {
+            clearCurrentAppForInternalRook()
             return
         }
         guard app != current else {
@@ -133,13 +136,28 @@ final class ForegroundAppMonitor {
 
     private func commit(_ app: ForegroundApp) {
         current = app
+        currentTitle = nil
         providerInfo("commit foreground app=\(app.name) bundleId=\(app.bundleId)")
         onForegroundChange?(app)
         emitContext(for: app)
     }
 
     private func emitContext(for app: ForegroundApp) {
-        let title = AXReader.focusedWindowTitle(pid: app.pid)
+        titleReadTask?.cancel()
+        titleReadTask = Task.detached { [weak self] in
+            let title = AXReader.focusedWindowTitle(pid: app.pid)
+            guard !Task.isCancelled else { return }
+            await self?.deliverContext(for: app, title: title)
+        }
+    }
+
+    private func deliverContext(for app: ForegroundApp, title: String?) {
+        guard current == app else {
+            return
+        }
+        guard currentTitle != title else {
+            return
+        }
         currentTitle = title
         providerDebug("context refresh bundleId=\(app.bundleId) title=\(title ?? "(null)")")
         onContextRefresh?(app, title)
@@ -147,8 +165,11 @@ final class ForegroundAppMonitor {
 
     private func poll() {
         guard let frontmost = NSWorkspace.shared.frontmostApplication,
-              let app = Self.makeApp(frontmost),
-              app.bundleId != Bundle.main.bundleIdentifier else {
+              let app = Self.makeApp(frontmost) else {
+            return
+        }
+        guard !RookBundleIdentity.isInternalRookBundleId(app.bundleId) else {
+            clearCurrentAppForInternalRook()
             return
         }
         if app != current {
@@ -158,10 +179,19 @@ final class ForegroundAppMonitor {
             commit(app)
             return
         }
-        let title = AXReader.focusedWindowTitle(pid: app.pid)
-        if title != currentTitle {
-            currentTitle = title
-            onContextRefresh?(app, title)
+        emitContext(for: app)
+    }
+
+    private func clearCurrentAppForInternalRook() {
+        debounceTask?.cancel()
+        debounceTask = nil
+        titleReadTask?.cancel()
+        titleReadTask = nil
+        guard current != nil || currentTitle != nil else {
+            return
         }
+        current = nil
+        currentTitle = nil
+        onInternalRookActivation?()
     }
 }
