@@ -7,9 +7,13 @@ import RookKit
 /// reading inside another process does.
 enum AXReader {
     static func isTrusted(promptIfNeeded: Bool = false) -> Bool {
+        MacStallWatchdog.shared.beginOperation("AXReader.isTrusted")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.isTrusted") }
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         let options = [key: promptIfNeeded] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        MacStallWatchdog.shared.updateContext(["accessibilityTrusted": String(trusted)])
+        return trusted
     }
 
     /// Chromium/Electron render web content in a separate process whose
@@ -25,6 +29,9 @@ enum AXReader {
     /// Warm up an app's accessibility tree (call when it comes to the
     /// foreground) so content is ready by the time the agent reads it.
     static func primeAccessibility(pid: pid_t) {
+        MacStallWatchdog.shared.beginOperation("AXReader.primeAccessibility")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.primeAccessibility") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
         guard isTrusted() else {
             return
         }
@@ -44,7 +51,10 @@ enum AXReader {
     /// Title of the focused (or main) window of the app owning `pid`, or nil if
     /// AX isn't trusted / the app exposes no titled window.
     static func focusedWindowTitle(pid: pid_t) -> String? {
-        RookPerformance.measure(
+        MacStallWatchdog.shared.beginOperation("AXReader.focusedWindowTitle")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.focusedWindowTitle") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
             "AXFocusedWindowTitle",
             operation: "ax-focused-window-title",
             description: "pid=\(pid)",
@@ -52,7 +62,7 @@ enum AXReader {
             signposter: RookLog.environmentSignposter,
             slowThresholdMs: 100,
             hangThresholdMs: 500,
-            details: { title in
+            details: { (title: String?) in
                 if let title {
                     return "titleChars=\(title.count)"
                 }
@@ -74,7 +84,10 @@ enum AXReader {
     /// Top-level window document-like values exposed via standard AX attributes
     /// such as AXDocument / AXFilename / AXURL.
     static func focusedWindowDocumentValues(pid: pid_t) -> [String] {
-        RookPerformance.measure(
+        MacStallWatchdog.shared.beginOperation("AXReader.focusedWindowDocumentValues")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.focusedWindowDocumentValues") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
             "AXFocusedWindowDocuments",
             operation: "ax-focused-window-documents",
             description: "pid=\(pid)",
@@ -82,7 +95,7 @@ enum AXReader {
             signposter: RookLog.environmentSignposter,
             slowThresholdMs: 100,
             hangThresholdMs: 500,
-            details: { values in "values=\(values.count)" }
+            details: { (values: [String]) in "values=\(values.count)" }
         ) {
             guard let window = focusedWindow(pid: pid) else {
                 return []
@@ -123,7 +136,10 @@ enum AXReader {
     /// the browser should have been primed (it comes forward → primeAccessibility).
     /// Returns nil for non-browsers or before the URL is exposed.
     static func activeTabURL(pid: pid_t, maxNodes: Int = 600) -> String? {
-        RookPerformance.measure(
+        MacStallWatchdog.shared.beginOperation("AXReader.activeTabURL")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.activeTabURL") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
             "AXActiveTabURL",
             operation: "ax-active-tab-url",
             description: "pid=\(pid) maxNodes=\(maxNodes)",
@@ -131,7 +147,7 @@ enum AXReader {
             signposter: RookLog.environmentSignposter,
             slowThresholdMs: 150,
             hangThresholdMs: 600,
-            details: { url in url == nil ? "url=nil" : "url=resolved" }
+            details: { (url: String?) in url == nil ? "url=nil" : "url=resolved" }
         ) {
             guard let window = focusedWindow(pid: pid) else {
                 return nil
@@ -173,7 +189,10 @@ enum AXReader {
     /// text-based apps, using only the Accessibility grant (no screenshots).
     /// Node- and char-budgeted so a deep tree can't hang the caller.
     static func focusedWindowText(pid: pid_t, maxChars: Int = 12_000, maxNodes: Int = 6_000) -> String? {
-        RookPerformance.measure(
+        MacStallWatchdog.shared.beginOperation("AXReader.focusedWindowText")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.focusedWindowText") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
             "AXFocusedWindowText",
             operation: "ax-focused-window-text",
             description: "pid=\(pid) maxChars=\(maxChars) maxNodes=\(maxNodes)",
@@ -181,7 +200,7 @@ enum AXReader {
             signposter: RookLog.environmentSignposter,
             slowThresholdMs: 200,
             hangThresholdMs: 750,
-            details: { text in "textChars=\(text?.count ?? 0)" }
+            details: { (text: String?) in "textChars=\(text?.count ?? 0)" }
         ) {
             guard isTrusted() else {
                 return nil
@@ -220,7 +239,10 @@ enum AXReader {
     /// reads this list and picks one to click — no screenshot/vision needed.
     /// Coordinates are global top-left screen space, matching CGEvent input.
     static func actionableElements(pid: pid_t, maxElements: Int = 250, maxNodes: Int = 8_000) -> [ActionableElement]? {
-        RookPerformance.measure(
+        MacStallWatchdog.shared.beginOperation("AXReader.actionableElements")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.actionableElements") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
             "AXActionableElements",
             operation: "ax-actionable-elements",
             description: "pid=\(pid) maxElements=\(maxElements) maxNodes=\(maxNodes)",
@@ -228,7 +250,7 @@ enum AXReader {
             signposter: RookLog.environmentSignposter,
             slowThresholdMs: 200,
             hangThresholdMs: 750,
-            details: { elements in "elements=\(elements?.count ?? 0)" }
+            details: { (elements: [ActionableElement]?) in "elements=\(elements?.count ?? 0)" }
         ) {
             guard isTrusted() else {
                 return nil

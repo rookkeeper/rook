@@ -112,6 +112,8 @@ final class RookMacModel: ObservableObject {
         environmentListController = EnvironmentListController(api: api)
 
         RookMacModel.shared = self
+        MacStallWatchdog.shared.start()
+        MacStallWatchdog.shared.heartbeat(operation: "RookMacModel.init")
         Self.logger.info("mac model init baseURL=\(resolvedBaseURL, privacy: .public)")
         wireControllers()
         serverStateController.start()
@@ -205,6 +207,10 @@ final class RookMacModel: ObservableObject {
     private func syncServerState() {
         serverState = serverStateController.serverState
         managedServerRunning = serverStateController.managedServerRunning
+        MacStallWatchdog.shared.updateContext([
+            "serverState": String(describing: serverState),
+            "managedServerRunning": String(managedServerRunning),
+        ])
     }
 
     private func syncChatState() {
@@ -227,6 +233,10 @@ final class RookMacModel: ObservableObject {
         lastStopReason = chatSessionController.lastStopReason
         autoScrollEnabled = chatSessionController.autoScrollEnabled
         scrollTick = chatSessionController.scrollTick
+        MacStallWatchdog.shared.updateContext([
+            "sessionId": currentSession?.id ?? "none",
+            "socketConnected": String(socketConnected),
+        ])
     }
 
     private func syncEnvironmentProviderState() {
@@ -234,6 +244,10 @@ final class RookMacModel: ObservableObject {
         foregroundSiteEnvironmentId = appEnvironmentProvider.foregroundSiteEnvironmentId
         foregroundAppName = appEnvironmentProvider.foregroundAppName
         foregroundWindowTitle = appEnvironmentProvider.foregroundWindowTitle
+        MacStallWatchdog.shared.updateContext([
+            "foregroundApp": foregroundAppName ?? "none",
+            "foregroundEnvironmentId": foregroundEnvironmentId ?? "none",
+        ])
     }
 
     private func syncOfferState() {
@@ -394,6 +408,7 @@ final class RookMacModel: ObservableObject {
         appEnvironmentProvider.stop()
         serverStateController.stop()
         environmentListController.stopAutoRefresh()
+        MacStallWatchdog.shared.stop()
         Task {
             if managedServerRunning {
                 serverStateController.stopManagedServer()
@@ -550,6 +565,7 @@ final class RookMacModel: ObservableObject {
     func refreshAccessibilityStatus() {
         accessibilityTrusted = AXReader.isTrusted()
         Self.logger.info("mac model accessibility trusted=\(self.accessibilityTrusted, privacy: .public)")
+        MacStallWatchdog.shared.updateContext(["accessibilityTrusted": String(accessibilityTrusted)])
         if accessibilityTrusted {
             appEnvironmentProvider.refreshCurrentContext()
         }

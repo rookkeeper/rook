@@ -147,7 +147,10 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     static func observeFinder() -> FinderObservation {
-        RookPerformance.measure(
+        MacStallWatchdog.shared.beginOperation("FinderEnvironmentProvider.observeFinder")
+        defer { MacStallWatchdog.shared.endOperation("FinderEnvironmentProvider.observeFinder") }
+        MacStallWatchdog.shared.updateContext(["automationTarget": "Finder"])
+        return RookPerformance.measure(
             "FinderObservation",
             operation: "finder-observe",
             description: "osascript finder windows",
@@ -155,7 +158,7 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
             signposter: RookLog.environmentSignposter,
             slowThresholdMs: 150,
             hangThresholdMs: 600,
-            details: { observation in "directories=\(observation.allDirectoryPaths.count)" }
+            details: { (observation: FinderObservation) in "directories=\(observation.allDirectoryPaths.count)" }
         ) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
