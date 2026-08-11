@@ -1,6 +1,6 @@
 # Mac client stall investigation
 
-> **TODO 1 — first step completed:** PR #139 added the local Mac stall watchdog and diagnostic logging. The wider cause remains under investigation; this document stays open for follow-up steps.
+> **TODO 1 — first step completed:** PR #139 added the local Mac stall watchdog and diagnostic logging. The wider cause remains under investigation. This is the working document; do not create an `OUTCOMES.md` until the beachball investigation is actually finished.
 
 ## Context
 
@@ -52,8 +52,11 @@ Event 002 found a roughly 41-second `activeTabURL` lookup against the other Rook
 
 ### Generic AX perception audit
 
-- [ ] Document why `activeTabURL` exists, what signal it adds beyond `AXDocument`/`AXURL`, and which applications are expected to support it.
-- [ ] Separate browser-only URL discovery from generic document/path discovery and gate it to an explicit browser/Electron allowlist or capability check.
+- [ ] First test the popular Mac browsers — Safari, Chrome, Firefox, Edge, Brave, Arc, and other browsers installed locally — using only focused-window `AXDocument`, `AXFilename`, and top-level `AXURL` values.
+- [ ] Record whether those top-level signals reliably identify the current page URL and satisfy the intended `web:` environment detection; use sanitized values and do not log browsing history into this document.
+- [ ] If the top-level signals meet the requirement, remove `activeTabURL` and Chromium priming from the generic path rather than preserving a speculative browser fallback.
+- [ ] If a browser genuinely requires nested URL discovery, isolate it behind an explicit browser/Electron allowlist or capability check and document the failing browsers and exact reason.
+- [ ] Ensure generic document/path discovery remains separate from browser-only URL discovery.
 - [ ] Move Chromium accessibility-tree priming out of the generic `focusedWindow` read path; only prime targets that need it.
 - [ ] Audit synchronous AX calls for per-call timeouts, main-actor blocking, repeated tree reads, and safe off-main-actor execution.
 - [ ] Reproduce with one Rook and with two Rooks, then capture nested AX timings or stacks to distinguish a pathological Rook AX tree from a cross-process wait.
