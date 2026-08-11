@@ -80,11 +80,39 @@ A useful first pass can be low-risk instrumentation rather than a large logging 
 
 The telemetry should be bounded and privacy-conscious: durations and identifiers by default, no screen text or window contents, and a small rotating local buffer or unified log retention rather than an indefinite transcript of activity.
 
+## Event 002 — 3:03 PM recurrence: AX active-tab lookup blocked for 40 seconds
+
+### New evidence
+
+- The logical development client was PID `26655`, launched at 15:02:56.
+- At **15:04:13.079**, its structured performance log recorded:
+
+  ```text
+  operation=ax-active-tab-url elapsedMs=40760.95 pid=2925 maxNodes=600 url=nil
+  ```
+
+- The enclosing generic environment poll took **40,762.20 ms** and targeted bundle ID `com.rookery.Rook`.
+- The logical server had a corresponding health-request gap from **15:03:28.272 to 15:04:13.072** — 44.8 seconds. Server health requests completed immediately when they resumed.
+- macOS reported `Rook [26655]: slow hid response (39.8s)` at 15:04:13.
+- At the same moment, macOS reported a shorter `Rook [2925]: slow hid response (2.3s)` for the production-like Rook process.
+- The foreground trace shows the two Rook apps being activated and brought frontmost repeatedly around 15:03–15:04.
+
+### Current interpretation
+
+This is the first direct smoking gun. The logical Rook client was synchronously waiting on `AXReader.activeTabURL(pid: 2925, maxNodes: 600)` while its generic environment provider was polling. The call returned `nil` only after roughly 41 seconds. Because the provider is main-actor-bound, this explains the beachball and the missing health requests without requiring a server failure.
+
+The target PID is the important new clue: it was the **other Rook process**, not Chrome, Zed, or another ordinary user app. `ForegroundAppMonitor` currently ignores only the exact current bundle ID (`app.bundleId == Bundle.main.bundleIdentifier`). A worktree Rook therefore treats the production Rook as an external foreground app and can ask Accessibility to inspect the other Rook's window/tree. With two Rooks running, one client can therefore block itself while querying the other.
+
+This may explain the earlier impression that both Rooks paused simultaneously: they may not have independently hit the same call. One Rook was definitely blocked querying the other, while the two clients' focus changes and shared Accessibility/WindowServer activity made the symptoms look synchronized.
+
+### Remaining uncertainty
+
+The 40-second timing proves that the `activeTabURL` boundary is where the client was stuck, but the current timing wrapper does not identify which nested AX API call waited. The likely blocking operation is one of the synchronous `AXUIElementCopyAttributeValue` calls while reading the other Rook's Accessibility tree. A stack sample would still confirm the exact nested API.
+
 ## Open questions
 
-- Did both clients call into Accessibility at the same moment, or were they independently suspended by macOS?
-- Which process was frontmost and which Accessibility call was in flight at the beginning of the gap?
-- Does `AXUIElementCopyAttributeValue` block for tens of seconds in this environment?
-- Can Accessibility reads be isolated from the main actor and bounded with a timeout without weakening environment detection?
+- Should all Rook bundle IDs be treated as internal and excluded from foreground environment inspection?
+- Should the generic provider refuse to inspect another Rook even when the other instance is frontmost?
+- Can `activeTabURL` and other AX calls be moved off the main actor and bounded with a timeout?
 - Are AppleScript/TCC authorization prompts causal, incidental, or a separate event in the same system-wide stall?
-- Is the production client required for reproduction, or does one client exhibit the same behavior alone?
+- Does one Rook alone avoid this failure entirely?
