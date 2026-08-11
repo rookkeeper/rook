@@ -104,43 +104,4 @@ describe("SessionTranscriptRepository", () => {
       output: "/tmp\nrook",
     });
   });
-
-  // THIS IS FOR BACKWARDS COMPATIBILITY: verify the one-time transcript reset
-  // preserves sessions and does not recur after the migration marker is set.
-  it("clears legacy transcript rows once while preserving application data", async () => {
-    datastore = new RookDatastore(":memory:");
-    const sessions = new SqliteSessionRepository(datastore);
-    await sessions.save({
-      sessionId,
-      runtimeId: "runtime",
-      runtimeSessionId: "runtime-session",
-      title: "keep this session",
-      cwd: "/tmp",
-      startedAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    datastore.db.exec(`
-      CREATE TABLE session_transcript_events (
-        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        event_json TEXT NOT NULL
-      );
-    `);
-    datastore.db.prepare(`
-      INSERT INTO session_transcript_events (session_id, created_at, event_json)
-      VALUES (?, ?, ?)
-    `).run(sessionId, "2026-01-01T00:00:00.000Z", JSON.stringify({ kind: "agent_message_chunk", text: "old history" }));
-
-    transcripts = new SessionTranscriptRepository(datastore);
-    expect(await transcripts.list(sessionId)).toEqual([]);
-    expect(await sessions.get(sessionId)).toMatchObject({ title: "keep this session" });
-
-    await transcripts.append(sessionId, { kind: "agent_message_chunk", text: "new history" });
-    const secondRepository = new SessionTranscriptRepository(datastore);
-    expect((await secondRepository.list(sessionId)).map((record) => record.event)).toEqual([
-      { kind: "agent_message_chunk", text: "new history" },
-    ]);
-    expect(Number(datastore.db.prepare("SELECT COUNT(*) AS count FROM session_transcript_events WHERE session_id = ?").get(sessionId)?.count)).toBe(1);
-  });
 });

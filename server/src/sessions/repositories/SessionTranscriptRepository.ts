@@ -8,8 +8,6 @@ export interface TranscriptEventRecord {
   event: Record<string, unknown>;
 }
 
-const LOGICAL_TRANSCRIPT_MIGRATION = "logical-transcript-v1";
-
 /**
  * Durable logical transcript records owned by the server, not the runtime.
  *
@@ -33,12 +31,7 @@ export class SessionTranscriptRepository {
       );
       CREATE INDEX IF NOT EXISTS session_transcript_events_session_idx
         ON session_transcript_events(session_id, sequence ASC);
-      CREATE TABLE IF NOT EXISTS session_transcript_migrations (
-        migration_key TEXT PRIMARY KEY,
-        applied_at TEXT NOT NULL
-      );
     `);
-    this.clearLegacyTranscriptOnce();
   }
 
   async append(sessionId: string, event: Record<string, unknown>, createdAt = new Date().toISOString()): Promise<number> {
@@ -75,28 +68,6 @@ export class SessionTranscriptRepository {
     await this.enqueue(sessionId, () => {
       this.db.prepare(`DELETE FROM session_transcript_events WHERE session_id = ?`).run(sessionId);
     });
-  }
-
-  // THIS IS FOR BACKWARDS COMPATIBILITY: discard the pre-logical transcript
-  // format once while preserving sessions and all other application data.
-  private clearLegacyTranscriptOnce(): void {
-    const applied = this.db.prepare(`
-      SELECT migration_key FROM session_transcript_migrations WHERE migration_key = ?
-    `).get(LOGICAL_TRANSCRIPT_MIGRATION);
-    if (applied) return;
-
-    this.db.exec("BEGIN");
-    try {
-      this.db.exec("DELETE FROM session_transcript_events");
-      this.db.prepare(`
-        INSERT INTO session_transcript_migrations (migration_key, applied_at)
-        VALUES (?, ?)
-      `).run(LOGICAL_TRANSCRIPT_MIGRATION, new Date().toISOString());
-      this.db.exec("COMMIT");
-    } catch (error) {
-      this.db.exec("ROLLBACK");
-      throw error;
-    }
   }
 
   private read(sessionId: string): TranscriptEventRecord[] {

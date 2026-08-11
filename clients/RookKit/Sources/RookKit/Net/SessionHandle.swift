@@ -131,8 +131,6 @@ public final class SessionHandle {
         }
     }
 
-    // THIS IS FOR BACKWARDS COMPATIBILITY: coalesce legacy chunk-level REST
-    // transcripts while clients transition to logical server records.
     public func attach(transcript events: [JSONValue]) async throws {
         if isLoaded {
             Self.logger.info("session handle attach reused session=\(self.sessionId, privacy: .public)")
@@ -150,22 +148,15 @@ public final class SessionHandle {
         )
         do {
             resetVisibleState()
-            isReplaying = true
-            replayUserBuffer = ""
-            replayAssistantBuffer = ""
-            replayThinkingBuffer = ""
             for event in events {
                 applyTranscriptEvent(event)
             }
-            isReplaying = false
-            flushReplayBuffers()
             try await ensureSocketConnected()
             socket.selectSession(sessionId)
             isLoaded = true
             onStateChange?()
             timed.finish(details: "blocks=\(blocks.count)")
         } catch {
-            isReplaying = false
             timed.fail(error)
             throw error
         }
@@ -308,22 +299,12 @@ public final class SessionHandle {
         let kind = event["kind"]?.stringValue ?? ""
         switch kind {
         case "user_message_chunk":
-            if let text = event["text"]?.stringValue {
-                replayFlushIncompatibleSection("user")
-                replayUserBuffer += text
-            }
+            if let text = event["text"]?.stringValue { appendBlock(.user(text: text)) }
         case "agent_message_chunk":
-            if let text = event["text"]?.stringValue {
-                replayFlushIncompatibleSection("assistant")
-                replayAssistantBuffer += text
-            }
+            if let text = event["text"]?.stringValue { appendBlock(.assistantText(text: text, streaming: false)) }
         case "agent_thought_chunk":
-            if let text = event["text"]?.stringValue {
-                replayFlushIncompatibleSection("thinking")
-                replayThinkingBuffer += text
-            }
+            if let text = event["text"]?.stringValue { appendBlock(.thinking(text: text, streaming: false)) }
         case "tool_call":
-            replayFlushIncompatibleSection("tool")
             guard let toolCallId = event["toolCallId"]?.stringValue else { return }
             let state = ToolBlockState(
                 toolCallId: toolCallId,
@@ -361,7 +342,6 @@ public final class SessionHandle {
                 }
             }
         case "plan_update":
-            replayFlushIncompatibleSection("plan")
             if case .array(let entries)? = event["entries"] {
                 let planEntries = entries.enumerated().compactMap { index, item -> PlanEntry? in
                     guard let content = item["content"]?.stringValue ?? item["text"]?.stringValue else { return nil }
@@ -374,11 +354,9 @@ public final class SessionHandle {
                 contextUsage = ContextUsageState(used: Int(used), size: Int(size), cost: nil)
             }
         case "run_completed":
-            flushReplayBuffers()
             isRunning = false
             statusLine = ""
         case "run_failed":
-            flushReplayBuffers()
             isRunning = false
             statusLine = ""
             if let message = event["message"]?.stringValue { appendErrorBlock(source: "run", message: message) }
