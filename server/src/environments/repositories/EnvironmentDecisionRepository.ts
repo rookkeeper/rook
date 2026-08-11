@@ -32,7 +32,7 @@ export class EnvironmentDecisionRepository {
       CREATE TABLE IF NOT EXISTS environment_decisions (
         bundle_hash TEXT PRIMARY KEY,
         environment_id TEXT NOT NULL,
-        bundle_id TEXT,
+        bundle_id TEXT NOT NULL,
         decision TEXT NOT NULL CHECK (decision IN ('approve', 'reject')),
         updated_at TEXT NOT NULL
       )
@@ -46,7 +46,7 @@ export class EnvironmentDecisionRepository {
     return row?.decision ?? null;
   }
 
-  setDecision(bundleHash: string, environmentId: string, bundleId: string | null, decision: PermanentDecision): void {
+  setDecision(bundleHash: string, environmentId: string, bundleId: string, decision: PermanentDecision): void {
     this.db
       .prepare(`
         INSERT INTO environment_decisions (bundle_hash, environment_id, bundle_id, decision, updated_at)
