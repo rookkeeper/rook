@@ -173,7 +173,43 @@ thrash the richer foreground context, the app ignores its own activations
 (opening the panel doesn't end the episode), and cached registrations are
 re-announced if the server restarts.
 
-Provider activity is traced to `/tmp/rook.log` for debugging.
+### Client logging and beachball diagnostics
+
+The Mac app uses Apple Unified Logging through the shared `RookKit` logger. The
+subsystem is `com.rookery.Rook`; categories include `app`, `session`, `network`,
+`environment`, `bridge`, `server`, and `performance`. Fast successful timings
+are debug-level; operations that take at least 100 ms are warnings, and
+operations that take at least 500 ms are errors. This keeps normal logs small
+while making main-thread and Accessibility/Finder stalls easy to identify.
+
+Open **Rook Log** from the app to view the last ten minutes of the client
+subsystem log plus the managed server-log tail, followed by a live unified-log
+stream. The viewer is an inspection aid; the authoritative client log is
+Unified Logging, not a temporary file.
+
+You can view the logs in **Console.app** by selecting the Mac, searching for
+`subsystem:com.rookery.Rook`, and pressing **Start**. Terminal equivalents:
+
+```zsh
+log stream --style compact --predicate 'subsystem == "com.rookery.Rook"'
+log show --last 10m --style compact --predicate 'subsystem == "com.rookery.Rook"'
+sample Rook 10 -file ~/Desktop/rook-sample.txt
+```
+
+For a short diagnostic run with detailed polling and raw foreground context,
+launch from the worktree with:
+
+```zsh
+ROOK_VERBOSE_LOGGING=1 ./scripts/run-rook.sh server mac
+```
+
+Verbose mode is opt-in; it includes window titles, document paths, and URLs, so
+do not enable it for logs you plan to share without reviewing them.
+
+Capture the timestamp of the beachball and collect the unified log plus a
+`sample` while it is visible. In particular, search the `performance` and
+`environment` categories for `elapsedMs`, `ax-`, `finder-`, or
+`mac-bridge-route` entries immediately before the sample.
 
 ### Tier 1 - window-title perception
 

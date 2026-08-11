@@ -15,6 +15,8 @@ enum ServerState: Equatable {
 /// voice (Phase C), and Live Activity (Phase D) attach here later.
 @MainActor
 final class RookModel: ObservableObject {
+    private static let logger = RookLog.app
+
     // Server / control plane
     @Published var serverState: ServerState = .unknown
     @Published var serverDiagnostic = ""
@@ -120,6 +122,7 @@ final class RookModel: ObservableObject {
             baseURL: finalURL,
             authToken: authToken
         )
+        Self.logger.info("iphone model init baseURL=\(urlString, privacy: .public)")
 
         healthTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -167,27 +170,32 @@ final class RookModel: ObservableObject {
         voiceAuthorized = voice.authorized()
         voice.onTranscript = { [weak self] text in
             guard let self else { return }
+            Self.logger.info("voice transcript received chars=\(text.count, privacy: .public)")
             self.voicePartial = ""
             self.voiceModeEnabled = true   // spoke the prompt → speak the reply
             self.send(text)
         }
         voice.onListeningChanged = { [weak self] listening in
+            Self.logger.info("voice listening changed listening=\(listening, privacy: .public)")
             self?.voiceListening = listening
             if !listening { self?.voicePartial = "" }
         }
         voice.onSpeakingChanged = { [weak self] speaking in
+            Self.logger.info("voice speaking changed speaking=\(speaking, privacy: .public)")
             self?.voiceSpeaking = speaking
         }
         voice.onPartial = { [weak self] partial in
             self?.voicePartial = partial
         }
         voice.onError = { [weak self] message in
+            Self.logger.error("voice error message=\(message, privacy: .public)")
             self?.voicePartial = ""
             self?.appendBlock(.system(text: "Voice: \(message)"))
         }
     }
 
     func toggleVoiceListening() {
+        Self.logger.info("toggle voice listening authorized=\(self.voice.authorized(), privacy: .public)")
         if !voice.authorized() {
             voice.requestPermissions { [weak self] granted in
                 self?.voiceAuthorized = granted
@@ -211,7 +219,9 @@ final class RookModel: ObservableObject {
 
     /// Request mic + speech permission without starting a listen (used by Settings).
     func requestVoicePermission() {
+        Self.logger.info("request voice permission")
         voice.requestPermissions { [weak self] granted in
+            Self.logger.info("voice permission result granted=\(granted, privacy: .public)")
             self?.voiceAuthorized = granted
         }
     }
@@ -264,6 +274,7 @@ final class RookModel: ObservableObject {
     // MARK: - Location → place environment
 
     func enableLocation() {
+        Self.logger.info("enable location requested")
         locationProvider.requestAuthorization()
         refreshMonitoredPlaces()
         locationProvider.startMonitoringVisits()
@@ -277,15 +288,24 @@ final class RookModel: ObservableObject {
     /// whether matching location capabilities exist before you physically arrive.
     func refreshPlaceSkillStatus() {
         guard serverState == .online else {
+            Self.logger.info("refresh place skill status skipped serverState=\(String(describing: self.serverState), privacy: .public)")
             return
         }
         Task {
+            let timed = RookPerformance.begin(
+                "iPhoneRefreshPlaceSkillStatus",
+                operation: "iphone-refresh-place-skill-status",
+                description: "places=\(placeStore.places.count)",
+                logger: Self.logger,
+                signposter: RookLog.locationSignposter
+            )
             var status: [String: Bool] = [:]
             for place in placeStore.places {
                 let preview = try? await api.environmentPreview(environmentId: "location:\(place.id)")
                 status[place.id] = !(preview?.bundles.isEmpty ?? true)
             }
             placeSkillStatus = status
+            timed.finish(details: "statuses=\(status.count)")
         }
     }
 
@@ -294,8 +314,10 @@ final class RookModel: ObservableObject {
     /// candidates are surfaced, not auto-registered (issue #42, phase 1).
     private func identifyEnvironments(at context: ArrivalContext) {
         guard serverState == .online else {
+            Self.logger.info("identify environments skipped serverState=\(String(describing: self.serverState), privacy: .public)")
             return
         }
+        Self.logger.info("identify environments latitude=\(context.coordinate.latitude, privacy: .public) longitude=\(context.coordinate.longitude, privacy: .public) dwellSeconds=\(context.dwellSeconds ?? -1, privacy: .public)")
         let observedAt = ISO8601DateFormatter().string(from: Date())
         let request = IdentifyAvailableRequest(
             latitude: context.coordinate.latitude,
@@ -308,14 +330,23 @@ final class RookModel: ObservableObject {
             observedAt: observedAt
         )
         Task {
+            let timed = RookPerformance.begin(
+                "iPhoneIdentifyEnvironments",
+                operation: "iphone-identify-environments",
+                logger: Self.logger,
+                signposter: RookLog.locationSignposter
+            )
             // Dwell/arrival is an auto-commit: register the identified set with the agent.
             guard let candidates = try? await api.registerLocation(request) else {
+                timed.finish(details: "candidates=0 request-failed")
                 return
             }
             nearbyCandidates = candidates
             guard let top = candidates.first else {
+                timed.finish(details: "candidates=0")
                 return
             }
+            timed.finish(details: "candidates=\(candidates.count) top=\(top.environmentId)")
             let others = candidates.count > 1 ? " (+\(candidates.count - 1) more)" : ""
             appendBlock(.system(text: "You appear to be near \(top.displayName)\(others). Found \(candidates.count) nearby environment\(candidates.count == 1 ? "" : "s")."))
         }
@@ -326,6 +357,7 @@ final class RookModel: ObservableObject {
     /// (only if the server has skills for it — the iOS analog of the Mac's
     /// on-disk skill-bundle guard, done via the preview endpoint).
     private func handlePlace(_ place: Place?) {
+        Self.logger.info("handle place place=\(place?.id ?? "(none)", privacy: .public)")
         currentPlaceName = place?.name
         let envId = place.map { "location:\($0.id)" }
         guard envId != placeEnvironmentId else {
@@ -337,8 +369,18 @@ final class RookModel: ObservableObject {
             guard let place, let envId else {
                 return
             }
+            let timed = RookPerformance.begin(
+                "iPhoneHandlePlace",
+                operation: "iphone-handle-place",
+                description: envId,
+                logger: Self.logger,
+                signposter: RookLog.locationSignposter
+            )
             let preview = try? await api.environmentPreview(environmentId: envId)
             guard let preview, !preview.bundles.isEmpty else {
+                timed.finish(details: "bundles=0")
+                Self.logger.info("place preview empty envId=\(envId, privacy: .public)")
+
                 // No skills defined for this place — don't raise an empty offer.
                 if placeEnvironmentId == envId {
                     placeEnvironmentId = nil
@@ -346,6 +388,8 @@ final class RookModel: ObservableObject {
                 }
                 return
             }
+            timed.finish(details: "bundles=\(preview.bundles.count)")
+            Self.logger.info("place register envId=\(envId, privacy: .public) bundles=\(preview.bundles.count, privacy: .public)")
             let metadata: [String: JSONValue] = [
                 "slug": .string(place.id),
                 "latitude": .number(place.latitude),
@@ -361,6 +405,7 @@ final class RookModel: ObservableObject {
         guard let envId = placeEnvironmentId, let place = locationProvider.current else {
             return
         }
+        Self.logger.info("reannounce place environment envId=\(envId, privacy: .public)")
         Task {
             let metadata: [String: JSONValue] = [
                 "slug": .string(place.id),
@@ -388,6 +433,7 @@ final class RookModel: ObservableObject {
             KeychainStore.setString(trimmedToken, for: "RookAuthToken")
         }
         api = RookAPI(baseURL: url, authToken: trimmedToken)
+        Self.logger.info("set server connection baseURL=\(trimmed, privacy: .public) tokenPresent=\(!trimmedToken.isEmpty, privacy: .public)")
         currentHandle?.close()
         currentSession = nil
         Task { await refreshHealth() }
@@ -396,6 +442,12 @@ final class RookModel: ObservableObject {
     // MARK: - Server lifecycle
 
     func refreshHealth() async {
+        let timed = RookPerformance.begin(
+            "iPhoneRefreshHealth",
+            operation: "iphone-refresh-health",
+            logger: Self.logger,
+            signposter: RookLog.appSignposter
+        )
         switch await api.healthResult() {
         case .ok:
             let wasOnline = serverState == .online
@@ -407,15 +459,19 @@ final class RookModel: ObservableObject {
                 reannouncePlaceEnvironment()
                 await autoResumeRecentSessionIfNeeded()
             }
+            timed.finish(details: "state=online")
         case .unauthorized:
             serverState = .unauthorized
             serverDiagnostic = "Authorization header was rejected."
+            timed.finish(details: "state=unauthorized")
         case .httpStatus(let code):
             serverState = .offline
             serverDiagnostic = "HTTP \(code)"
+            timed.finish(details: "state=offline status=\(code)")
         case .transportError(let message):
             serverState = .offline
             serverDiagnostic = message
+            timed.finish(details: "state=offline transport=\(message)")
         }
     }
 
@@ -444,11 +500,19 @@ final class RookModel: ObservableObject {
     }
 
     func loadAgents() async {
+        let timed = RookPerformance.begin(
+            "iPhoneLoadAgents",
+            operation: "iphone-load-agents",
+            logger: Self.logger,
+            signposter: RookLog.appSignposter
+        )
         do {
             agents = try await api.agents()
             agentsError = ""
+            timed.finish(details: "agents=\(self.agents.count)")
         } catch {
             agentsError = error.localizedDescription
+            timed.fail(error)
         }
     }
 
@@ -484,12 +548,20 @@ final class RookModel: ObservableObject {
 
     func loadSessions(agentId _: String = "") async {
         sessionsLoading = true
+        let timed = RookPerformance.begin(
+            "iPhoneLoadSessions",
+            operation: "iphone-load-sessions",
+            logger: Self.logger,
+            signposter: RookLog.sessionSignposter
+        )
         defer { sessionsLoading = false }
         do {
             sessions = try await api.sessions()
             sessionsError = ""
+            timed.finish(details: "sessions=\(sessions.count)")
         } catch {
             sessionsError = error.localizedDescription
+            timed.fail(error)
         }
     }
 
@@ -510,6 +582,7 @@ final class RookModel: ObservableObject {
 
     func startNewSession(agentId: String, name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        Self.logger.info("iphone start new session runtime=\(agentId, privacy: .public) name=\(name, privacy: .public)")
         startingSession = true
         Task {
             defer { startingSession = false }
@@ -552,6 +625,7 @@ final class RookModel: ObservableObject {
     }
 
     func resumeSession(_ session: AgentSessionSummary) {
+        Self.logger.info("iphone resume session=\(session.id, privacy: .public) runtime=\(session.agent, privacy: .public) running=\(session.running, privacy: .public)")
         startingSession = true
         Task {
             defer { startingSession = false }
@@ -715,6 +789,7 @@ final class RookModel: ObservableObject {
     // MARK: - App lifecycle (scenePhase)
 
     func handleBecameActive() {
+        Self.logger.info("iphone became active")
         reannouncePlaceEnvironment()
         updateLiveActivity()
         Task { await refreshHealth() }
@@ -723,6 +798,7 @@ final class RookModel: ObservableObject {
     // MARK: - Chat
 
     func send(_ text: String) {
+        Self.logger.info("iphone send currentSession=\(self.currentSession?.id ?? "(none)", privacy: .public) chars=\(text.count, privacy: .public)")
         currentHandle?.send([.text(text)])
         updateLiveActivity()
     }

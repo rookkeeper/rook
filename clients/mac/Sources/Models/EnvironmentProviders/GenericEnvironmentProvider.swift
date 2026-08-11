@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 import RookKit
 
 private struct GenericEnvironmentObservation {
@@ -12,7 +11,7 @@ private struct GenericEnvironmentObservation {
 @MainActor
 final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     private static let pollInterval: TimeInterval = 5
-    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.rook", category: "GenericEnvironmentProvider")
+    private static let logger = RookLog.environment
     private static let fileManager = FileManager.default
     private static let projectRootFileMarkers = [
         ".git",
@@ -55,6 +54,11 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     func activate(app: ForegroundApp, title: String?) {
+        if RookLog.verboseEnabled {
+            Self.logger.debug("generic provider activate bundleId=\(app.bundleId, privacy: .public) title=\(title ?? "(null)", privacy: .public)")
+        } else {
+            Self.logger.info("generic provider activate bundleId=\(app.bundleId, privacy: .public)")
+        }
         currentApp = app
         currentTitle = title
         previousNormalizedIds = nil
@@ -63,11 +67,15 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     func update(app: ForegroundApp, title: String?) {
+        if RookLog.verboseEnabled {
+            Self.logger.debug("generic provider update bundleId=\(app.bundleId, privacy: .public) title=\(title ?? "(null)", privacy: .public)")
+        }
         currentApp = app
         currentTitle = title
     }
 
     func deactivate() {
+        Self.logger.info("generic provider deactivate bundleId=\(self.currentApp?.bundleId ?? "(none)", privacy: .public)")
         if let app = currentApp {
             let observation = Self.observation(for: app, title: currentTitle)
             registration.emitNow(candidates: observation.candidates, reason: "generic-final")
@@ -98,6 +106,15 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
 
     private func poll() {
         guard let app = currentApp else { return }
+        let timed = RookPerformance.begin(
+            "GenericEnvironmentPoll",
+            operation: "generic-environment-poll",
+            description: "bundleId=\(app.bundleId)",
+            logger: Self.logger,
+            signposter: RookLog.environmentSignposter,
+            slowThresholdMs: 150,
+            hangThresholdMs: 600
+        )
         let title = AXReader.focusedWindowTitle(pid: app.pid) ?? currentTitle
         currentTitle = title
         let observation = Self.observation(for: app, title: title)
@@ -108,9 +125,12 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
             onStateChange?()
         }
         guard let previousNormalizedIds, previousNormalizedIds == observation.normalizedIds else {
+            Self.logger.info("generic provider observation changed bundleId=\(app.bundleId, privacy: .public) candidates=\(observation.candidates.count, privacy: .public)")
+            timed.finish(details: "changed normalizedIds=\(observation.normalizedIds.count)")
             return
         }
         registration.emitNow(candidates: observation.candidates, reason: "generic")
+        timed.finish(details: "stable normalizedIds=\(observation.normalizedIds.count) candidates=\(observation.candidates.count)")
     }
 
     private static func observation(for app: ForegroundApp, title: String?) -> GenericEnvironmentObservation {
@@ -268,7 +288,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     static func warningForNonAbsoluteDirectoryCandidate(rawValue: String, app: ForegroundApp) {
-        logger.warning("Skipping non-absolute directory candidate for bundleId=\(app.bundleId, privacy: .public): \(rawValue, privacy: .public)")
+        logger.warning("generic provider skipped non-absolute directory candidate bundleId=\(app.bundleId, privacy: .public) value=\(rawValue, privacy: .public)")
     }
 }
 

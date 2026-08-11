@@ -4,6 +4,8 @@ import Foundation
 /// One logical connection can list, create, load, and prompt many sessions.
 @MainActor
 public final class AcpSocket {
+    private static let logger = RookLog.session
+
     public var onEvent: ((AcpClientEvent) -> Void)?
     public var onConnectionChange: ((Bool) -> Void)?
 
@@ -27,11 +29,14 @@ public final class AcpSocket {
 
     public func connect(request socketRequest: URLRequest) async throws -> [String: Any] {
         if let connectTask {
+            Self.logger.info("websocket connect reused pending task url=\(socketRequest.url?.absoluteString ?? "(unknown)", privacy: .public)")
             return try await connectTask.value
         }
         if task != nil {
+            Self.logger.info("websocket connect skipped existing socket url=\(socketRequest.url?.absoluteString ?? "(unknown)", privacy: .public)")
             return [:]
         }
+        Self.logger.info("websocket connect start url=\(socketRequest.url?.absoluteString ?? "(unknown)", privacy: .public)")
         let task = Task<[String: Any], Error> { @MainActor in
             let initialized = try await openAndInitialize(socketRequest: socketRequest)
             self.connectTask = nil
@@ -42,6 +47,7 @@ public final class AcpSocket {
     }
 
     public func disconnect() {
+        Self.logger.info("websocket disconnect session=\(self.currentSessionId ?? "(none)", privacy: .public) pending=\(self.pending.count, privacy: .public)")
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         connectTask = nil
@@ -69,26 +75,52 @@ public final class AcpSocket {
     }
 
     public func createSession(runtimeId: String, title: String, cwd: String) async throws -> String {
-        let result = try await request(method: "session/new", params: [
-            "cwd": cwd,
-            "mcpServers": [],
-            "_meta": [
-                "runtimeId": runtimeId,
-                "title": title,
-            ],
-        ])
-        guard let sessionId = result["sessionId"] as? String else {
-            throw SocketError.server("Server returned no sessionId")
+        let timed = RookPerformance.begin(
+            "CreateSession",
+            operation: "acp-session-new",
+            description: "runtime=\(runtimeId) title=\(title)",
+            logger: Self.logger,
+            signposter: RookLog.sessionSignposter
+        )
+        do {
+            let result = try await request(method: "session/new", params: [
+                "cwd": cwd,
+                "mcpServers": [],
+                "_meta": [
+                    "runtimeId": runtimeId,
+                    "title": title,
+                ],
+            ])
+            guard let sessionId = result["sessionId"] as? String else {
+                throw SocketError.server("Server returned no sessionId")
+            }
+            supportsImagePrompts = imagePromptCapability(from: result)
+            currentSessionId = sessionId
+            timed.finish(details: "session=\(sessionId) supportsImagePrompts=\(supportsImagePrompts)")
+            return sessionId
+        } catch {
+            timed.fail(error)
+            throw error
         }
-        supportsImagePrompts = imagePromptCapability(from: result)
-        currentSessionId = sessionId
-        return sessionId
     }
 
     public func loadSession(_ sessionId: String) async throws {
-        let result = try await request(method: "session/load", params: ["sessionId": sessionId])
-        supportsImagePrompts = imagePromptCapability(from: result)
-        currentSessionId = sessionId
+        let timed = RookPerformance.begin(
+            "LoadSession",
+            operation: "acp-session-load",
+            description: "session=\(sessionId)",
+            logger: Self.logger,
+            signposter: RookLog.sessionSignposter
+        )
+        do {
+            let result = try await request(method: "session/load", params: ["sessionId": sessionId])
+            supportsImagePrompts = imagePromptCapability(from: result)
+            currentSessionId = sessionId
+            timed.finish(details: "session=\(sessionId) supportsImagePrompts=\(supportsImagePrompts)")
+        } catch {
+            timed.fail(error)
+            throw error
+        }
     }
 
     public func sendCancel() {
@@ -100,6 +132,7 @@ public final class AcpSocket {
 
     public func sendPrompt(content: [ChatPromptContent]) {
         guard let sessionId = currentSessionId else {
+            Self.logger.error("prompt send rejected no current session")
             onEvent?(.connectionError(message: "Not connected to a session"))
             return
         }
@@ -109,6 +142,7 @@ public final class AcpSocket {
         pendingPromptIds.insert(requestId)
         let text = content.textValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty { pendingUserMessageEchoes.append(text) }
+        Self.logger.info("prompt send session=\(sessionId, privacy: .public) textChars=\(text.count, privacy: .public) images=\(content.images.count, privacy: .public)")
         let prompt: [[String: Any]] = content.compactMap { item in
             switch item {
             case .text(let value):
@@ -197,33 +231,48 @@ public final class AcpSocket {
 
     private func openAndInitialize(socketRequest: URLRequest) async throws -> [String: Any] {
         disconnect()
-        let task = URLSession.shared.webSocketTask(with: socketRequest)
-        self.task = task
-        task.resume()
-        receiveLoop(task)
-        let initialize = try await request(method: "initialize", params: [
-            "protocolVersion": 1,
-            "clientCapabilities": [
-                "_meta": [
-                    "com.rookkeeper": [
-                        "environmentOffers": true,
+        let timed = RookPerformance.begin(
+            "WebSocketInitialize",
+            operation: "acp-connect-initialize",
+            description: socketRequest.url?.absoluteString ?? "(unknown)",
+            logger: Self.logger,
+            signposter: RookLog.sessionSignposter,
+            slowThresholdMs: 250,
+            hangThresholdMs: 1_000
+        )
+        do {
+            let task = URLSession.shared.webSocketTask(with: socketRequest)
+            self.task = task
+            task.resume()
+            receiveLoop(task)
+            let initialize = try await request(method: "initialize", params: [
+                "protocolVersion": 1,
+                "clientCapabilities": [
+                    "_meta": [
+                        "com.rookkeeper": [
+                            "environmentOffers": true,
+                        ],
                     ],
                 ],
-            ],
-            "clientInfo": ["name": "rook", "title": "Rook", "version": "0.1.0"],
-        ])
-        let meta = initialize["_meta"] as? [String: Any]
-        if let agentCapabilities = initialize["agentCapabilities"] as? [String: Any],
-           let promptCapabilities = agentCapabilities["promptCapabilities"] as? [String: Any] {
-            supportsImagePrompts = promptCapabilities["image"] as? Bool ?? false
+                "clientInfo": ["name": "rook", "title": "Rook", "version": "0.1.0"],
+            ])
+            let meta = initialize["_meta"] as? [String: Any]
+            if let agentCapabilities = initialize["agentCapabilities"] as? [String: Any],
+               let promptCapabilities = agentCapabilities["promptCapabilities"] as? [String: Any] {
+                supportsImagePrompts = promptCapabilities["image"] as? Bool ?? false
+            }
+            runtimeIDs = (meta?["runtimeIds"] as? [String]) ?? []
+            defaultRuntimeID = meta?["defaultRuntimeId"] as? String
+            if let ext = meta?["com.rookkeeper"] as? [String: Any], ext["environmentOffers"] != nil {
+                environmentOfferExtensionEnabled = true
+            }
+            setConnected(true)
+            timed.finish(details: "runtimes=\(runtimeIDs.count) defaultRuntime=\(defaultRuntimeID ?? "(none)") supportsImagePrompts=\(supportsImagePrompts)")
+            return initialize
+        } catch {
+            timed.fail(error)
+            throw error
         }
-        runtimeIDs = (meta?["runtimeIds"] as? [String]) ?? []
-        defaultRuntimeID = meta?["defaultRuntimeId"] as? String
-        if let ext = meta?["com.rookkeeper"] as? [String: Any], ext["environmentOffers"] != nil {
-            environmentOfferExtensionEnabled = true
-        }
-        setConnected(true)
-        return initialize
     }
 
     private func receiveLoop(_ task: URLSessionWebSocketTask) {
@@ -249,6 +298,7 @@ public final class AcpSocket {
 
     private func handleDisconnect(task disconnectedTask: URLSessionWebSocketTask, error: Error) {
         guard task === disconnectedTask else { return }
+        Self.logger.warning("websocket disconnected session=\(self.currentSessionId ?? "(none)", privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         task = nil
         connectTask = nil
         setConnected(false)
@@ -398,10 +448,11 @@ public final class AcpSocket {
     private func setConnected(_ connected: Bool) {
         guard isConnected != connected else { return }
         isConnected = connected
+        Self.logger.info("websocket connection state connected=\(connected, privacy: .public) session=\(self.currentSessionId ?? "(none)", privacy: .public)")
         onConnectionChange?(connected)
     }
 
-    private func sendFrame(_ frame: [String: Any], over task: URLSessionWebSocketTask, completion: @escaping (Error?) -> Void = { _ in }) {
+    private func sendFrame(_ frame: [String: Any], over task: URLSessionWebSocketTask, completion: @Sendable @escaping (Error?) -> Void = { _ in }) {
         guard let data = try? JSONSerialization.data(withJSONObject: frame),
               let json = String(data: data, encoding: .utf8) else {
             completion(SocketError.encoding)
