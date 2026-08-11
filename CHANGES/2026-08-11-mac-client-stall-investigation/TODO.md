@@ -1,5 +1,7 @@
 # Mac client stall watchdog
 
+> **TODO 1 — first step only:** This change is the first increment of an ongoing stall investigation. It adds diagnostic logging and a main-thread watchdog so the next occurrence gives us better evidence; it does not claim to fix or fully explain the stall. Keep this `CHANGES/` directory open for follow-up investigation rather than creating an `OUTCOMES.md` for this step.
+
 ## Context
 
 Implement the highest-value diagnostic piece from the stall investigation: a local macOS client watchdog that can report when the main actor/main thread stops making progress. The watchdog should help distinguish a main-thread stall from a broader macOS lifecycle or system pause without adding telemetry throughout the application.
