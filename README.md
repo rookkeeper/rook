@@ -9,8 +9,6 @@ Rook is a local-first personal-agent runtime built around ACP (Agent Client Prot
 - [Configuration](docs/configuration.md)
 - [Product notes](PRODUCT/)
 - [As-built architecture notes](AS-BUILT-ARCHITECTURE/)
-- [Environment repository migration design log](CHANGES/2026-08-01-environment_repo_to_db/)
-- [Environment repository migration recap and verification guide](CHANGES/2026-08-01-environment_repo_to_db/recap.md)
 
 ## Packages
 
@@ -37,17 +35,12 @@ The launcher uses the main checkout as the production-like local profile. Runnin
 - `./scripts/tail-logs.sh` — inspect provider-payload traces in `/tmp/pi/provider-payload.jsonl` (use `--instructions` and/or `--tools` for structured output)
 - `./scripts/run-tests.sh` — run the known server, Swift package, iPhone, and macOS test/build checks
 
-## CI checks
-
-Pull requests include a guard against adding compatibility markers to executable or configuration files. A failure means the compatibility path must be removed completely from code and documentation when it was introduced during the PR and never shipped; it should not be preserved for hypothetical older versions. Keep compatibility only when it predates the PR and an explicit product or maintainer decision approves it. Configure the workflow's status check as required in GitHub branch protection to block merges when it fails.
-
 ## High-level docs map
 
 - setup, `.env`, binding, and remote-access notes: [docs/setup.md](docs/setup.md)
 - agent-profile config: [docs/configuration.md](docs/configuration.md)
 - as-built architecture index: [AS-BUILT-ARCHITECTURE/](AS-BUILT-ARCHITECTURE/)
 - server package details: [server/README.md](server/README.md)
-- shared environment workspace design/review: [CHANGES/2026-08-01-environment_repo_to_db/part_b/](CHANGES/2026-08-01-environment_repo_to_db/part_b/)
 - iPhone client details: [clients/iphone/README.md](clients/iphone/README.md)
 - macOS client details: [clients/mac/README.md](clients/mac/README.md)
 - Android client details: [clients/android/README.md](clients/android/README.md)

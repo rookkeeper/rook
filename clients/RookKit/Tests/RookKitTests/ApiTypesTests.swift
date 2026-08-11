@@ -22,13 +22,17 @@ final class ApiTypesTests: XCTestCase {
 
     // MARK: - AgentSessionSummary
 
-    func testAgentSessionSummaryBasicFields() {
+    func testAgentSessionSummaryServerFields() {
         let raw = JSONValue.object([
-            "id": .string("session-1"),
-            "agent": .string("MockAgent"),
-            "name": .string("my-session"),
+            "sessionId": .string("session-1"),
+            "title": .string("my-session"),
             "running": .bool(true),
-            "connectedClients": .number(2)
+            "connectedClients": .number(2),
+            "_meta": .object([
+                "runtimeId": .string("MockAgent"),
+                "startedAt": .string("2026-01-15T10:30:00Z"),
+                "supportsImagePrompts": .bool(true),
+            ]),
         ])
         let summary = AgentSessionSummary(raw: raw)
         XCTAssertEqual(summary.id, "session-1")
@@ -36,40 +40,14 @@ final class ApiTypesTests: XCTestCase {
         XCTAssertEqual(summary.name, "my-session")
         XCTAssertTrue(summary.running)
         XCTAssertEqual(summary.connectedClients, 2)
-    }
-
-    func testAgentSessionSummaryFallbackMeta() {
-        let raw = JSONValue.object([
-            "sessionId": .string("s2"),
-            "_meta": .object(["runtimeId": .string("PiAgent")])
-        ])
-        let summary = AgentSessionSummary(raw: raw)
-        XCTAssertEqual(summary.id, "s2")
-        XCTAssertEqual(summary.agent, "PiAgent")
-    }
-
-    func testAgentSessionSummaryTitleFallback() {
-        let raw = JSONValue.object([
-            "id": .string("s3"),
-            "title": .string("untitled")
-        ])
-        let summary = AgentSessionSummary(raw: raw)
-        XCTAssertEqual(summary.name, "untitled")
-    }
-
-    func testAgentSessionSummaryCreatedAtIso() {
-        let raw = JSONValue.object([
-            "id": .string("s1"),
-            "createdAt": .string("2026-01-15T10:30:00Z")
-        ])
-        let summary = AgentSessionSummary(raw: raw)
+        XCTAssertTrue(summary.supportsImagePrompts)
         XCTAssertNotNil(summary.createdAt)
         XCTAssertEqual(summary.startedAtISO, "2026-01-15T10:30:00Z")
     }
 
     func testAgentSessionSummaryUpdatedAtIso() {
         let raw = JSONValue.object([
-            "id": .string("s1"),
+            "sessionId": .string("s1"),
             "updatedAt": .string("2026-01-15T11:00:00Z")
         ])
         let summary = AgentSessionSummary(raw: raw)

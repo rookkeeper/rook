@@ -25,7 +25,7 @@ The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with 
 - `environments/repositories/SQLiteEnvironmentRepository`
   - stores canonical and personal capability content and bundle memberships in separate SQLite repositories
 - `environments/repositories/ProjectDirectoryEnvironmentRepository`
-  - reads project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files in place
+  - reads project-owned `.agents/skills`, `AGENTS.md`, and `.mcp.json` files in place
 - `runtime/CapabilityWorkspaceManager`
   - owns the process-wide `~/.rook/global-workspace/` SQLite materialization, environment-level manifest, watchers, and disposable per-session link projections; clears the global root at startup and retains it after shutdown
   - links writable personal content into every applicable session, links project sources directly, and materializes immutable external content read-only
@@ -108,7 +108,7 @@ See also: [database.md](./database.md)
 
 ## Local profile configuration
 
-The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration, the application database, and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain isolated. On first launch, development profiles seed `ROOK_HOME` by copying the production `~/.rook` directory, then remove the copied application database so the development profile starts without inherited session history; later launches leave the existing profile home unchanged. Runtime definitions, user configuration, personal environment-repository state, and other durable local state therefore become profile-specific. <!-- THIS IS FOR BACKWARDS COMPATIBILITY: the launcher still migrates an existing production application database from the legacy repo-local `.var/rook/rook.sqlite` path into `ROOK_HOME/rook.sqlite` so the default-path change does not strand prior session history. --> The default application database path is `ROOK_HOME/rook.sqlite`, and the launcher migrates an existing legacy production database from `.var/rook/rook.sqlite` into that location unless a launcher-specific `RUN_ROOK_DATABASE_PATH` override is provided. `run-rook.sh` computes and exports `ROOK_HOME` / `ROOK_DATABASE_PATH` for the selected profile, so ambient values are not treated as launcher inputs; use `RUN_ROOK_HOME` / `RUN_ROOK_DATABASE_PATH` when an explicit launcher override is intended. `ROOK_AGENT_RUNTIMES_PATH` remains an explicit escape hatch. The canonical environment repository remains the `environment-repository/` directory belonging to the checkout that launched the server.
+The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration, the application database, and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain isolated. On first launch, development profiles seed `ROOK_HOME` by copying the production `~/.rook` directory, then remove the copied application database so the development profile starts without inherited session history; later launches leave the existing profile home unchanged. Runtime definitions, user configuration, personal environment-repository state, and other durable local state therefore become profile-specific. The application database path is `ROOK_HOME/rook.sqlite` unless `RUN_ROOK_DATABASE_PATH` provides an explicit launcher override. `run-rook.sh` computes and exports `ROOK_HOME` / `ROOK_DATABASE_PATH` for the selected profile, so ambient values are not treated as launcher inputs; use `RUN_ROOK_HOME` / `RUN_ROOK_DATABASE_PATH` when an explicit launcher override is intended. `ROOK_AGENT_RUNTIMES_PATH` remains an explicit runtime catalog override. The canonical environment repository remains the `environment-repository/` directory belonging to the checkout that launched the server.
 
 ## Persistence shape
 
@@ -117,7 +117,7 @@ Current durable persistence is SQLite-backed and split between:
 - the application database: session records, coalesced logical transcript records (including in-progress snapshots), session-environment membership, and durable environment decisions
 - the environment repository databases: environments, reusable capabilities, and bundle memberships for canonical and personal repositories
 
-Canonical and personal environment-repository content is SQLite-only; the legacy directory repository and importer are no longer runtime or migration sources. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
+Canonical and personal environment-repository content is SQLite-only. Project-directory environments are the direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
 
 The database details live in [database.md](./database.md).
 
@@ -183,7 +183,7 @@ Related tables:
 5. server returns that public session ID and binds the same websocket to it
 
 ### Prompt execution
-1. every configured runtime starts with the base `## You are Rook` identity prompt and uses its agent workspace as process cwd; environment-specific instructions are discovered through generated `AGENTS.md` (aliased as `CLAUDE.md` for Claude runtimes)
+1. every configured runtime starts with the base `## You are Rook` identity prompt and uses its agent workspace as process cwd; environment-specific instructions are discovered through generated `AGENTS.md`
 2. client sends ACP `session/prompt` on a session-bound websocket
 3. ACP facade resolves the public session
 4. `AgentRuntimeManager` rewrites to the runtime-local session ID
@@ -198,7 +198,7 @@ Related tables:
 3. finalized environments resolve matching bundles and hash them
 4. undecided bundles are offered to subscribed sessions when that session enters the finalized environment
 5. client resolves via REST decision or ACP extension resolution
-6. approved/personal bundle content is resolved for workspace projection. The generated aggregate `AGENTS.md` exposes approved/user-owned instruction sources in environment-tagged blocks, gives authoring guidance, inventories known skill names by environment, and the workspace uses the standard `.agents/skills/` discovery directory, aliased as `.claude/skills` so Claude Code's native skill discovery finds the same content; Pi receives one-run project approval because ACP is non-interactive, and the runtime no longer receives duplicate environment prompt injection.
+6. approved/personal bundle content is resolved for workspace projection. The generated aggregate `AGENTS.md` exposes approved/user-owned instruction sources in environment-tagged blocks, gives authoring guidance, inventories known skill names by environment, and the workspace uses the standard `.agents/skills/` discovery directory; Pi receives one-run project approval because ACP is non-interactive, and the runtime no longer receives duplicate environment prompt injection.
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment

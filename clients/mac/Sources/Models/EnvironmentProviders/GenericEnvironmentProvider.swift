@@ -29,13 +29,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     ]
     private nonisolated static let projectRootDirectorySuffixes = [".xcodeproj", ".xcworkspace"]
     private nonisolated static let projectRootFileSuffixes = [".sln"]
-    private nonisolated static let skillDirectoryMarkers = [
-        ".agents/skills",
-        ".claude/skills",
-        ".codex/skills",
-        ".cursor/skills",
-        ".github/skills",
-    ]
+    private nonisolated static let skillDirectoryMarkers = [".agents/skills"]
     private nonisolated static let agentsMdMarker = "AGENTS.md"
 
     let supportedBundleIds: [String] = []

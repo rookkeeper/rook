@@ -43,8 +43,8 @@ Important files/modules inspected up front:
 - [x] Add or update focused tests for any new shared logging/performance helpers and keep existing Apple-client tests/builds passing.
 - [x] Update Apple-client docs (`clients/mac/README.md`, `clients/iphone/README.md`, and any other touched README/docs) to describe the logging approach and how to capture logs for hang investigation.
 - [x] Reduce default log noise by moving fast timing/polling details to debug level and gate raw foreground context behind `ROOK_VERBOSE_LOGGING=1`.
-- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Review the final diff for temporary scaffolding, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove unnecessary temporary scaffolding and abandoned experiments.
 - [x] Update `AS-BUILT-ARCHITECTURE/` as needed.
 - [x] Update `PRODUCT/` as needed.
 - [x] Run the appropriate Apple-client tests/builds and confirm they pass; the iPhone app build passes, while the existing `ArrivalGateTests` target contains unrelated stale `RookModel` test references and does not compile on the starting revision.
@@ -56,4 +56,4 @@ Important files/modules inspected up front:
 - [x] Shared `RookKit` session/network code emits enough logs to reconstruct connection, session, and prompt lifecycle behavior on both Apple clients.
 - [x] The mac log-viewing/documentation story reflects the new authoritative logging path.
 - [x] Tests/builds relevant to the Apple-client changes pass, with the pre-existing stale iPhone test-target issue recorded above.
-- [x] Architecture/docs reflect the final logging design, and no unnecessary compatibility shims remain.
+- [x] Architecture/docs reflect the final logging design, and no unnecessary temporary shims remain.

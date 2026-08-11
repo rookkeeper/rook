@@ -10,11 +10,11 @@ Use the current profile-scoped SQLite database, standard Agent Skills project la
 
 ## Work checklist
 
-- [ ] Make launcher profile state direct and update hermetic shell tests.
-- [ ] Narrow project environment discovery to the standard files and directories.
-- [ ] Remove workspace projection aliases and simplify workspace tests.
-- [ ] Require bundle identity for durable environment decisions.
-- [ ] Use one session deletion operation throughout the server.
-- [ ] Make client session summaries consume the server response directly.
-- [ ] Align architecture, product, README, workflow, skill, and change documentation.
-- [ ] Run focused tests, typecheck, builds, and final repository searches.
+- [x] Make launcher profile state direct and update hermetic shell tests.
+- [x] Narrow project environment discovery to the standard files and directories.
+- [x] Remove workspace projection aliases and simplify workspace tests.
+- [x] Require bundle identity for durable environment decisions.
+- [x] Use one session deletion operation throughout the server.
+- [x] Make client session summaries consume the server response directly.
+- [x] Align architecture, product, README, workflow, skill, and change documentation.
+- [x] Run focused tests, typecheck, builds, and final repository searches.

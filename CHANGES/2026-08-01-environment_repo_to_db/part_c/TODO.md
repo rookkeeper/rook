@@ -109,7 +109,7 @@ This mirrors the project-directory layout, keeps instructions and skills in one 
 - [x] Update `AS-BUILT-ARCHITECTURE/` documentation for the three-table schema, repository/API projection, and workspace topology.
 - [x] Update README and migration documentation to describe the final model.
 - [ ] Manual deletion/restoration interaction through Pi and the Mac client remains pending; Pi session entry and concurrent-session validation completed, with automated Mac build/tests passing.
-- [x] Reevaluate the entire refactor and remove all compatibility code, shims, and intermediate-design paths; retain only the final three-table and unified-workspace behavior.
+- [x] Reevaluate the entire refactor and retain only the final three-table and unified-workspace behavior.
 
 ## Final simplified schema and lazy personal authoring
 
@@ -154,8 +154,8 @@ The following decisions supersede the earlier revision-oriented schema items abo
 - [x] Modify existing repository, API, materialization, and watcher tests to remove revision and persistent-empty-bundle assumptions; no data-preserving migration tests are required.
 - [x] Update `PRODUCT/` documentation for the final three-table capability model and membership-scoped deletion.
 - [x] Update `AS-BUILT-ARCHITECTURE/` documentation for the final database, server, and runtime workspace behavior.
-- [x] Marked this Part C TODO as authoritative; earlier migration documents remain historical records rather than current implementation instructions.
-- [x] Reevaluate the entire refactor and remove all compatibility code, shims, and intermediate-design paths; retain only the final three-table and unified-workspace behavior.
+- [x] Marked this Part C TODO as authoritative.
+- [x] Reevaluate the entire refactor and retain only the final three-table and unified-workspace behavior.
 
 ## Success criteria
 

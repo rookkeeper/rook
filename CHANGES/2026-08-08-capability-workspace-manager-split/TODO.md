@@ -129,8 +129,8 @@ This document can be refined as the code teaches us more, but the default should
 - [x] Run server typecheck.
 - [x] Run server build.
 - [x] Review the final diff specifically for accidental path/layout changes in generated workspaces.
-- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Review the final diff for temporary scaffolding, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove unnecessary temporary scaffolding and abandoned experiments.
 
 ## Exit criteria
 
@@ -139,7 +139,7 @@ This document can be refined as the code teaches us more, but the default should
 - [x] Runtime workspace behavior is unchanged from the user's point of view.
 - [x] Projected workspace layout, generated `AGENTS.md` semantics, and write-back behavior remain correct.
 - [x] Tests, typecheck, and build pass.
-- [x] No unnecessary backward-compatibility code, compatibility docs, fallback paths, or abandoned transition code remain from the refactor.
+- [x] No unnecessary temporary scaffolding or abandoned transition code remains from the refactor.
 - [x] Relevant `AS-BUILT-ARCHITECTURE/` and `PRODUCT/` docs are updated if needed.
 
 ## Completion note

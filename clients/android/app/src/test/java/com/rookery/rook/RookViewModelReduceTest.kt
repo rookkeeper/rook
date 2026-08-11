@@ -116,8 +116,8 @@ class RookViewModelReduceTest {
         )
         val session = AgentSessionSummary(
             buildJsonObject {
-                put("id", "s1")
-                put("agent", "default")
+                put("sessionId", "s1")
+                put("_meta", buildJsonObject { put("runtimeId", "default") })
             }
         )
         viewModel.setCurrentSessionForTest(session)

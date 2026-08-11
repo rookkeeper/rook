@@ -33,8 +33,8 @@ The first pass does not need automatic `sample`/spindump capture or AX-call inst
 - [x] Add focused tests for stale-heartbeat detection, recovery, duplicate suppression, and configurable thresholds.
 - [x] Document how to inspect the watchdog records with macOS unified-log tools and how to correlate multiple client instances.
 - [x] Run the appropriate macOS tests/build checks and confirm they pass.
-- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Review the final diff for temporary scaffolding, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove unnecessary temporary scaffolding and abandoned experiments.
 - [x] Update `AS-BUILT-ARCHITECTURE/` as needed; no architecture change was needed.
 - [x] Update `PRODUCT/` as needed; this diagnostic-only change does not alter product behavior.
 

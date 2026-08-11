@@ -33,14 +33,14 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         self.raw = raw
     }
 
-    public var id: String { raw["id"]?.stringValue ?? raw["sessionId"]?.stringValue ?? "" }
-    public var agent: String { raw["agent"]?.stringValue ?? raw["_meta"]?["runtimeId"]?.stringValue ?? "" }
-    public var supportsImagePrompts: Bool { raw["supportsImagePrompts"]?.boolValue ?? raw["_meta"]?["supportsImagePrompts"]?.boolValue ?? false }
-    public var name: String { raw["name"]?.stringValue ?? raw["title"]?.stringValue ?? "default" }
+    public var id: String { raw["sessionId"]?.stringValue ?? "" }
+    public var agent: String { raw["_meta"]?["runtimeId"]?.stringValue ?? "" }
+    public var supportsImagePrompts: Bool { raw["_meta"]?["supportsImagePrompts"]?.boolValue ?? false }
+    public var name: String { raw["title"]?.stringValue ?? "default" }
     public var running: Bool { raw["running"]?.boolValue ?? false }
     public var connectedClients: Int { Int(raw["connectedClients"]?.numberValue ?? 0) }
     public var updatedAtISO: String? { raw["updatedAt"]?.stringValue }
-    public var startedAtISO: String? { raw["createdAt"]?.stringValue ?? raw["_meta"]?["startedAt"]?.stringValue }
+    public var startedAtISO: String? { raw["_meta"]?["startedAt"]?.stringValue }
 
     public func selectionStatus(currentSessionId: String?) -> SessionSelectionStatus {
         if running, currentSessionId == id {
@@ -69,9 +69,7 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         formatDate(dateFromISO(updatedAtISO))
     }
 
-    // THIS IS FOR BACKWARDS COMPATIBILITY
-    // Preserve unknown server fields while updating known session-list values so
-    // older/newer clients can continue round-tripping the shared summary shape.
+    // Keep the server response intact while applying local session-list updates.
     public func updating(title: String? = nil, updatedAtISO: String? = nil, running: Bool? = nil) -> AgentSessionSummary {
         var object = raw.objectValue ?? [:]
         if let title {

@@ -6,7 +6,7 @@ This chunk happens after the code moves are complete and behavior has already be
 
 - Update documentation to reflect the new as-built server organization.
 - Keep product docs unchanged unless a minimal correction is absolutely necessary.
-- Remove migration scaffolding and temporary compatibility exports.
+- Remove temporary migration scaffolding and unused exports.
 - Do final verification.
 
 ## AS-BUILT-ARCHITECTURE

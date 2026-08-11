@@ -108,12 +108,12 @@ Keep this checklist up to date while executing the work:
 At the end of the `TODO.md`, include the recurring wrap-up work as `- [ ]` items in the checklist flow (either in the main steps or in a dedicated final steps subsection):
 
 - tests/build/typecheck appropriate to the change run and pass
-- review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code
-- remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around
+- review the final diff for abandoned experiments, temporary scaffolding, and other no-longer-needed transitional code
+- remove unnecessary temporary scaffolding and abandoned experiments
 - update `AS-BUILT-ARCHITECTURE/` as needed
 - update `PRODUCT/` as needed
 
-Do not treat compatibility cleanup as optional polish. It is part of finishing the work.
+Do not treat final cleanup as optional polish. It is part of finishing the work.
 
 ### 5. Exit criteria
 

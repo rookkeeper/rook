@@ -180,7 +180,7 @@ export class AgentRuntimeManager {
   }
 
   /**
-   * Atomically applies session-specific environment launch state. The old
+   * Atomically applies session-specific environment launch state. The current
    * process remains usable until a replacement has successfully loaded the
    * exact same ACP session; loading failure never creates a fresh session.
    */
@@ -249,13 +249,6 @@ export class AgentRuntimeManager {
     this.detachSessionRuntime(sessionId);
     await this.sessions.delete(sessionId);
     return result;
-  }
-
-  // THIS IS FOR BACKWARDS COMPATIBILITY
-  // Keep ACP session/close callers on the existing manager entry point while
-  // applying the new durable deletion semantics underneath.
-  async closeSession(sessionId: string): Promise<unknown> {
-    return this.deleteSession(sessionId);
   }
 
   /** Relay a standard ACP response to an ACP request initiated by a runtime. */

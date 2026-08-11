@@ -34,7 +34,7 @@
 - [ ] Review RookIdentityPrompts
 - [ ] See if I should change the structure of the agent workspaces to more closely follow how the global workspace has been rewired, e.g. so that editable AGENTS.md and skills are in the same linked directory
 - [ ] Make sure all of the above are represented in tests.
-- [ ] See if I should shrink server/src/runtime/CapabilityWorkspaceManager.ts (or maybe we just need to remove all the acrued compatibility code)
+- [ ] See if I should shrink server/src/runtime/CapabilityWorkspaceManager.ts.
 - [ ] Need to add instructions about deleting skills and AGENTS.md b/c the agent just tried to do it and got confused - if we could make linkes look like files that would be great too
 - [ ] Make sure the environment repository boundary isn't leaky b/c I might want to rip out everything and do it differently at some point
 - [ ] Put the explanation into Rook instructions

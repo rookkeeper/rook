@@ -146,5 +146,5 @@ The launcher should support explicit overrides for unusual setups, but the defau
 - [x] Update relevant as-built architecture documents to describe the profile-aware launcher and isolated local state.
 - [x] Document how to override the production root, profile, port, Rook home, and server URL.
 - [ ] Document how to clean up an abandoned worktree’s `~/.rook-<worktree-slug>` directory safely.
-- [x] Remove temporary compatibility code and stale launcher assumptions after verification; retain only intentional profile overrides and the server's pre-existing legacy-config migration.
+- [x] Remove temporary launcher assumptions after verification; retain only intentional profile overrides.
 - [x] Confirm the final change does not modify environment-repository content or its public behavior.

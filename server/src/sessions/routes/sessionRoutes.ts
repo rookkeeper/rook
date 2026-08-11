@@ -55,9 +55,6 @@ async function ensureSessionExists(runtimeManager: AgentRuntimeManager, sessionI
   }
 }
 
-// THIS IS FOR BACKWARDS COMPATIBILITY
-// Keep the existing GET /api/sessions field names and _meta envelope while
-// adding management endpoints alongside it.
 function serializeSession(record: SessionRecord, runtimeManager: AgentRuntimeManager) {
   return {
     sessionId: record.sessionId,

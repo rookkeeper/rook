@@ -16,7 +16,7 @@ This affects the shared server session APIs plus all three native clients. It do
 
 ## Details
 
-Today the server only exposes session list + transcript REST routes, while the clients treat the session rows mostly as resume buttons. The backend already has internal delete plumbing via `AgentRuntimeManager.closeSession()` and `SqliteSessionRepository.delete()`, but there is no public session-management API for rename/delete and no explicit "mark this session as viewed" operation.
+Today the server only exposes session list + transcript REST routes, while the clients treat the session rows mostly as resume buttons. The backend already has internal delete plumbing via `AgentRuntimeManager.deleteSession()` and `SqliteSessionRepository.delete()`, but there is no public session-management API for rename/delete and no explicit "mark this session as viewed" operation.
 
 The current list order is `updated_at DESC`. That can likely remain the storage/sort mechanism for this first release if we make "viewed" an explicit touch/update event rather than inventing a new ordering model immediately. The important product rule is the behavior the user sees: creating or opening a session moves it to the top.
 
@@ -72,8 +72,8 @@ Important files likely involved:
 - [x] Add or update focused client tests for the new state-management behavior where the existing Swift/Kotlin test harnesses make that practical.
 - [x] Update relevant READMEs and product/architecture notes if the public session-management contract or session ordering semantics are now meaningfully different.
 - [x] Run tests/build/typecheck appropriate to the change run and pass.
-- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Review the final diff for temporary scaffolding, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove unnecessary temporary scaffolding and abandoned experiments.
 - [x] Update `AS-BUILT-ARCHITECTURE/` as needed.
 - [x] Update `PRODUCT/` as needed.
 

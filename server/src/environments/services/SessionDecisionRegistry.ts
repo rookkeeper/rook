@@ -6,7 +6,7 @@ import type { EnvironmentDecisionRepository } from "../repositories/EnvironmentD
  *
  * Each session gets its own map of (bundleHash → accept/ignore).
  * Permanent decisions (approve/reject) live in the EnvironmentDecisionRepository (SQLite)
- * and are consulted as a fallback via the provided store reference.
+ * and are consulted through the provided store reference when no session decision exists.
  *
  * Session decisions are cleared when:
  * - the session exits the environment (caller calls clearSessionForBundles)
@@ -29,7 +29,7 @@ export class SessionDecisionRegistry {
   }
 
   /** Store a permanent decision (clears any session-level override for this hash). */
-  setPermanent(bundleHash: string, environmentId: string, bundleId: string | null, decision: PermanentDecision): void {
+  setPermanent(bundleHash: string, environmentId: string, bundleId: string, decision: PermanentDecision): void {
     this.permanentRepository.setDecision(bundleHash, environmentId, bundleId, decision);
     this.clearAllForBundle(bundleHash);
   }

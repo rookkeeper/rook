@@ -1,6 +1,6 @@
 # Flatten `server/src/server` to `server/src` TODO
 
-Goal: remove the legacy extra `server/` path segment so the package app code lives directly under `server/src/`, while preserving behavior, APIs, schemas, side effects, and build output semantics.
+Goal: remove the extra `server/` path segment so the package app code lives directly under `server/src/`, while preserving behavior, APIs, schemas, side effects, and build output semantics.
 
 Constraints:
 - Preserve HTTP and WebSocket API behavior exactly.

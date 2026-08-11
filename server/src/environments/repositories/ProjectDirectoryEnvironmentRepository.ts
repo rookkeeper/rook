@@ -48,15 +48,8 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
 
     const errors: RepositoryReadError[] = [];
     const skills = await this.readSkills(directory, errors, environmentId);
-    const agents = await readOptionalText(path.join(directory, "AGENTS.md"));
-    // THIS IS FOR BACKWARDS COMPATIBILITY
-    // Preserve project instructions authored under the established CLAUDE.md
-    // convention when a project has not adopted AGENTS.md yet.
-    const claude = await readOptionalText(path.join(directory, "CLAUDE.md"));
+    const agentsMd = await readOptionalText(path.join(directory, "AGENTS.md"));
     const mcp = await readOptionalText(path.join(directory, ".mcp.json"));
-    // AGENTS.md is the project source when present. CLAUDE.md is a fallback
-    // source only, never a second instruction layer to concatenate.
-    const agentsMd = agents ?? claude;
     const hasContent = skills.length > 0 || Boolean(agentsMd) || Boolean(mcp);
     if (!hasContent) return { environment: environmentRecord(environmentId, directory), bundles: [], errors };
 
@@ -80,50 +73,42 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
   }
 
   private async readSkills(directory: string, errors: RepositoryReadError[], environmentId: string): Promise<BundleArtifact[]> {
-    // THIS IS FOR BACKWARDS COMPATIBILITY
-    // Preserve skill discovery from the established tool-specific project
-    // directories while the standard .agents/skills layout is adopted.
-    // All roots are merged; on a name collision the earlier root wins.
-    const roots = [".agents/skills", ".claude/skills", ".codex/skills", ".cursor/skills", ".github/skills"]
-      .map((relative) => path.join(directory, relative))
-      .filter((candidate) => existsSync(candidate));
-    const artifactsById = new Map<string, BundleArtifact>();
-    for (const root of roots) {
-      let entries;
+    const root = path.join(directory, ".agents", "skills");
+    if (!existsSync(root)) return [];
+
+    let entries;
+    try {
+      entries = await readdir(root, { withFileTypes: true });
+    } catch (error) {
+      errors.push({ code: "unreadable_path", message: String(error), repository: this.repositoryId, environmentId, path: root });
+      return [];
+    }
+
+    const artifacts: BundleArtifact[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+      const skillPath = path.join(root, entry.name);
+      if (entry.isSymbolicLink()) {
+        try {
+          if (!(await stat(skillPath)).isDirectory()) continue;
+        } catch {
+          continue;
+        }
+      }
+      const files: Record<string, string> = {};
       try {
-        entries = await readdir(root, { withFileTypes: true });
+        await collectFiles(skillPath, entry.name, files);
       } catch (error) {
-        errors.push({ code: "unreadable_path", message: String(error), repository: this.repositoryId, environmentId, path: root });
+        errors.push({ code: "unreadable_path", message: String(error), repository: this.repositoryId, environmentId, path: skillPath });
         continue;
       }
-      for (const entry of entries) {
-        if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-        if (artifactsById.has(entry.name)) continue;
-        const skillPath = path.join(root, entry.name);
-        if (entry.isSymbolicLink()) {
-          // Skill directories are commonly linked from tool-specific roots.
-          // A stale link must not make discovery of the whole project fail.
-          try {
-            if (!(await stat(skillPath)).isDirectory()) continue;
-          } catch {
-            continue;
-          }
-        }
-        const files: Record<string, string> = {};
-        try {
-          await collectFiles(skillPath, entry.name, files);
-        } catch (error) {
-          errors.push({ code: "unreadable_path", message: String(error), repository: this.repositoryId, environmentId, path: skillPath });
-          continue;
-        }
-        if (!(`${entry.name}/SKILL.md` in files)) {
-          errors.push({ code: "invalid_bundle_contents", message: `Skill ${entry.name} is missing SKILL.md`, repository: this.repositoryId, environmentId, path: skillPath });
-          continue;
-        }
-        artifactsById.set(entry.name, { id: entry.name, files, sourcePath: skillPath });
+      if (!(`${entry.name}/SKILL.md` in files)) {
+        errors.push({ code: "invalid_bundle_contents", message: `Skill ${entry.name} is missing SKILL.md`, repository: this.repositoryId, environmentId, path: skillPath });
+        continue;
       }
+      artifacts.push({ id: entry.name, files, sourcePath: skillPath });
     }
-    return [...artifactsById.values()].sort((a, b) => a.id.localeCompare(b.id));
+    return artifacts.sort((a, b) => a.id.localeCompare(b.id));
   }
 }
 
