@@ -28,6 +28,8 @@ The macOS client is a native SwiftUI menu bar app with a regular app window. It 
   - routes each focused app to exactly one provider: a specialist or the generic fallback
 - `AXReader`
   - reads Accessibility-backed window/app context
+- `MacStallWatchdog`
+  - local-only background watchdog for detecting stalled main-run-loop progress
 - `MacBridge`
   - loopback HTTP bridge for agent perception and control
 - `ServerController`
@@ -152,9 +154,31 @@ Via `RookKit`:
 ### Worktree development profile
 When launched from a Git worktree through `scripts/run-rook.sh`, the Mac app is built with a distinct development bundle identity and display name. It connects to the worktree's deterministic development port and can run beside the production-like app from the main checkout without sharing app preferences or server state.
 
+## Client logging and hang diagnostics
+
+Apple-client logging is centralized in `RookKit/Logging/RookLog.swift` and uses
+Unified Logging with subsystem `com.rookery.Rook`. The Mac app uses categories
+for app, session, network, environment, bridge, server, and performance work.
+`RookPerformance` records elapsed milliseconds and emits `OSSignposter` intervals;
+fast successful operations are debug-level, 100 ms is the slow-operation threshold,
+and 500 ms is the hang-warning threshold. `ROOK_VERBOSE_LOGGING=1` enables
+additional polling and raw foreground-context details for a short diagnostic run;
+otherwise window titles, document paths, and URLs are summarized rather than
+logged.
+
+The Mac instruments the beachball-adjacent paths: Accessibility title/document,
+web-tree, text, and actionable-element reads; Finder AppleScript observation;
+foreground/provider polling and registration; bridge routes; server supervision;
+REST health/session/environment calls; WebSocket initialization/reconnect; and
+session transcript hydration and prompt lifecycle. The in-app Rook Log viewer
+shows recent unified logs for `com.rookery.Rook`, tails them live, and includes
+the managed server log as context. Unified Logging is authoritative for client
+diagnostics.
+
 ## Notable architectural characteristics
 
 - the mac app is both a client and an environment provider
+- a local-only background watchdog records main-run-loop stalls without sending telemetry or collecting user content
 - session discovery is REST; agent interaction is one ACP WebSocket per session
 - `SessionHandle` isolates all session state — blocks, streaming buffers, reconnection — so switching never tears down a running session
 - environment registration is layered: base app identity plus exactly one context provider for the focused bundle id

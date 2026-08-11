@@ -5,6 +5,8 @@ import Foundation
 /// which handle the UI observes.
 @MainActor
 public final class SessionHandle {
+    private static let logger = RookLog.session
+
     public let sessionId: String
 
     public var onStateChange: (() -> Void)?
@@ -75,46 +77,93 @@ public final class SessionHandle {
     // MARK: - Lifecycle
 
     public func connectAndLoad(title: String, cwd: String) async throws {
-        try await ensureSocketConnected()
-        _ = try await socket.createSession(runtimeId: "", title: title, cwd: cwd)
-        isLoaded = true
+        let timed = RookPerformance.begin(
+            "ConnectAndLoadSessionHandle",
+            operation: "session-handle-connect-and-load",
+            description: "session=\(self.sessionId) title=\(title)",
+            logger: Self.logger,
+            signposter: RookLog.sessionSignposter
+        )
+        do {
+            try await ensureSocketConnected()
+            _ = try await socket.createSession(runtimeId: "", title: title, cwd: cwd)
+            isLoaded = true
+            timed.finish(details: "session=\(self.sessionId)")
+        } catch {
+            timed.fail(error)
+            throw error
+        }
     }
 
     public func load() async throws {
         if isLoaded {
+            Self.logger.info("session handle load reused session=\(self.sessionId, privacy: .public)")
             // Already connected and subscribed — just report current state.
             onStateChange?()
             return
         }
-        try await ensureSocketConnected()
-        isReplaying = true
-        replayUserBuffer = ""
-        replayAssistantBuffer = ""
-        replayThinkingBuffer = ""
-        socket.selectSession(sessionId)
-        try await socket.loadSession(sessionId)
-        isReplaying = false
-        flushReplayBuffers()
-        isRunning = false
-        isLoaded = true
+        let timed = RookPerformance.begin(
+            "LoadSessionHandle",
+            operation: "session-handle-load",
+            description: "session=\(self.sessionId)",
+            logger: Self.logger,
+            signposter: RookLog.sessionSignposter,
+            slowThresholdMs: 250,
+            hangThresholdMs: 1_000
+        )
+        do {
+            try await ensureSocketConnected()
+            isReplaying = true
+            replayUserBuffer = ""
+            replayAssistantBuffer = ""
+            replayThinkingBuffer = ""
+            socket.selectSession(sessionId)
+            try await socket.loadSession(sessionId)
+            isReplaying = false
+            flushReplayBuffers()
+            isRunning = false
+            isLoaded = true
+            timed.finish(details: "blocks=\(blocks.count)")
+        } catch {
+            isReplaying = false
+            timed.fail(error)
+            throw error
+        }
     }
 
     public func attach(transcript events: [JSONValue]) async throws {
         if isLoaded {
+            Self.logger.info("session handle attach reused session=\(self.sessionId, privacy: .public)")
             onStateChange?()
             return
         }
-        resetVisibleState()
-        for event in events {
-            applyTranscriptEvent(event)
+        let timed = RookPerformance.begin(
+            "AttachTranscript",
+            operation: "session-handle-attach-transcript",
+            description: "session=\(self.sessionId) events=\(events.count)",
+            logger: Self.logger,
+            signposter: RookLog.sessionSignposter,
+            slowThresholdMs: 250,
+            hangThresholdMs: 1_000
+        )
+        do {
+            resetVisibleState()
+            for event in events {
+                applyTranscriptEvent(event)
+            }
+            try await ensureSocketConnected()
+            socket.selectSession(sessionId)
+            isLoaded = true
+            onStateChange?()
+            timed.finish(details: "blocks=\(blocks.count)")
+        } catch {
+            timed.fail(error)
+            throw error
         }
-        try await ensureSocketConnected()
-        socket.selectSession(sessionId)
-        isLoaded = true
-        onStateChange?()
     }
 
     public func close() {
+        Self.logger.info("session handle close session=\(self.sessionId, privacy: .public)")
         reconnectTask?.cancel()
         streamingFlushTask?.cancel()
         socket.disconnect()
@@ -123,6 +172,7 @@ public final class SessionHandle {
 
     public func stopAgent() {
         guard isRunning else { return }
+        Self.logger.info("session handle cancel requested session=\(self.sessionId, privacy: .public)")
         userCancelledRun = true
         statusLine = "Stopping…"
         socket.sendCancel()
@@ -262,7 +312,7 @@ public final class SessionHandle {
                 kindLabel: event["toolKind"]?.stringValue ?? "",
                 status: transcriptStatus(event["status"]?.stringValue),
                 arguments: stringifyTranscriptJSON(event["rawInput"]),
-                output: ""
+                output: stringifyTranscriptJSON(event["output"] ?? event["rawOutput"])
             )
             appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
         case "tool_call_update":
@@ -338,10 +388,12 @@ public final class SessionHandle {
     // MARK: - Private: connection
 
     private func ensureSocketConnected() async throws {
+        Self.logger.info("session handle ensure socket session=\(self.sessionId, privacy: .public)")
         _ = try await socket.connect(request: api.webSocketRequest(sessionId: sessionId))
     }
 
     private func scheduleReconnect(delaySeconds: Double) {
+        Self.logger.warning("session handle schedule reconnect session=\(self.sessionId, privacy: .public) delaySeconds=\(delaySeconds, privacy: .public)")
         reconnectTask?.cancel()
         reconnecting = true
         reconnectTask = Task {
@@ -351,15 +403,27 @@ public final class SessionHandle {
             guard !Task.isCancelled else { return }
             if await api.health() {
                 do {
+                    let timed = RookPerformance.begin(
+                        "ReconnectSessionHandle",
+                        operation: "session-handle-reconnect",
+                        description: "session=\(self.sessionId)",
+                        logger: Self.logger,
+                        signposter: RookLog.sessionSignposter,
+                        slowThresholdMs: 250,
+                        hangThresholdMs: 1_000
+                    )
                     try await ensureSocketConnected()
                     try await socket.loadSession(sessionId)
                     guard !Task.isCancelled else { return }
                     reconnecting = false
+                    timed.finish(details: "queuedMessages=\(self.queuedMessages.count)")
                     deliverNextQueuedIfIdle()
                 } catch {
+                    Self.logger.warning("session handle reconnect failed session=\(self.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                     if !Task.isCancelled { scheduleReconnect(delaySeconds: 3) }
                 }
             } else if !Task.isCancelled {
+                Self.logger.info("session handle reconnect skipped unhealthy server session=\(self.sessionId, privacy: .public)")
                 scheduleReconnect(delaySeconds: 3)
             }
         }
@@ -368,6 +432,7 @@ public final class SessionHandle {
     // MARK: - Private: delivery
 
     private func deliver(_ content: [ChatPromptContent]) {
+        Self.logger.info("session handle deliver session=\(self.sessionId, privacy: .public) textChars=\(content.textValue.count, privacy: .public) images=\(content.images.count, privacy: .public)")
         finalizeStreamingBlocks()
         appendBlock(.userContent(content))
         isRunning = true
@@ -379,6 +444,7 @@ public final class SessionHandle {
 
     private func deliverNextQueuedIfIdle() {
         guard !isRunning, socket.isConnected, !queuedMessages.isEmpty else { return }
+        Self.logger.info("session handle deliver queued session=\(self.sessionId, privacy: .public) queuedMessages=\(self.queuedMessages.count, privacy: .public)")
         let next = queuedMessages.removeFirst()
         Task {
             try? await Task.sleep(nanoseconds: 120_000_000)
@@ -393,6 +459,7 @@ public final class SessionHandle {
     // MARK: - Private: event handling
 
     private func handleSocketConnectionChange(_ connected: Bool) {
+        Self.logger.info("session handle socket change session=\(self.sessionId, privacy: .public) connected=\(connected, privacy: .public)")
         socketConnected = connected
         if connected {
             reconnectTask?.cancel()
@@ -504,6 +571,7 @@ public final class SessionHandle {
             self.configOptions = configOptions
         case .runCompleted(let stopReason):
             if isReplaying { flushReplayBuffers(); return }
+            Self.logger.info("session handle run completed session=\(self.sessionId, privacy: .public) stopReason=\(stopReason, privacy: .public)")
             finalizeStreamingBlocks()
             if stopReason == "cancelled" { finalizeActiveTools(as: .cancelled) }
             isRunning = false
@@ -514,6 +582,7 @@ public final class SessionHandle {
             deliverNextQueuedIfIdle()
         case .runFailed(let message):
             if isReplaying { flushReplayBuffers(); return }
+            Self.logger.error("session handle run failed session=\(self.sessionId, privacy: .public) message=\(message, privacy: .public)")
             finalizeStreamingBlocks()
             isRunning = false
             statusLine = ""
@@ -538,11 +607,17 @@ public final class SessionHandle {
             onEnvironmentOfferResolved?(environmentId, bundleHash)
         case .environmentEntered(let environmentId):
             if enteredEnvironments.insert(environmentId).inserted {
+                Self.logger.info("session handle environment entered session=\(self.sessionId, privacy: .public) environment=\(environmentId, privacy: .public)")
                 onEnvironmentEntered?(environmentId)
                 appendBlock(.system(text: "Entered environment \(environmentId)."))
             }
         case .environmentExited(let environmentId, let error):
             if enteredEnvironments.remove(environmentId) != nil {
+                if let error {
+                    Self.logger.warning("session handle environment exited session=\(self.sessionId, privacy: .public) environment=\(environmentId, privacy: .public) error=\(error, privacy: .public)")
+                } else {
+                    Self.logger.info("session handle environment exited session=\(self.sessionId, privacy: .public) environment=\(environmentId, privacy: .public)")
+                }
                 onEnvironmentExited?(environmentId, error)
                 let suffix = error.map { " (\($0))" } ?? ""
                 appendBlock(.system(text: "Exited environment \(environmentId)\(suffix)."))

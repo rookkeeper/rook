@@ -36,9 +36,9 @@ final class AppEnvironmentProvider {
                         var metadata = candidate.metadata
                         metadata["registeredAt"] = .string(Self.iso8601String(from: Date()))
                         try await api.registerEnvironment(CandidateEnvironmentRecord(id: candidate.id, metadata: metadata))
-                        providerLog("register ok [\(reason)]: \(candidate.id)")
+                        providerInfo("environment register ok reason=\(reason) id=\(candidate.id)")
                     } catch {
-                        providerLog("register error [\(reason)]: \(error.localizedDescription)")
+                        providerError("environment register failed reason=\(reason) id=\(candidate.id) error=\(error.localizedDescription)")
                     }
                 }
             }
@@ -72,6 +72,7 @@ final class AppEnvironmentProvider {
     }
 
     func setServerOnline(_ online: Bool) {
+        providerInfo("app environment provider serverOnline=\(online)")
         isServerOnline = online
         baseRegistration.setServerOnline(online)
         activeProvider?.setServerOnline(online)
@@ -82,6 +83,7 @@ final class AppEnvironmentProvider {
     }
 
     private func handleForegroundApp(_ app: ForegroundApp) {
+        providerInfo("handle foreground app bundleId=\(app.bundleId) pid=\(app.pid)")
         AXReader.primeAccessibility(pid: app.pid)
         let title = AXReader.focusedWindowTitle(pid: app.pid)
         logRawContext(app: app, title: title, reason: "app-switch")
@@ -94,6 +96,7 @@ final class AppEnvironmentProvider {
     }
 
     private func handleContextRefresh(app: ForegroundApp, title: String?) {
+        providerInfo("handle context refresh bundleId=\(app.bundleId) title=\(title ?? "(null)")")
         logRawContext(app: app, title: title, reason: "context-refresh")
         foregroundAppName = app.name
         foregroundWindowTitle = title
@@ -104,6 +107,7 @@ final class AppEnvironmentProvider {
 
     private func activateProviderIfNeeded(for app: ForegroundApp, title: String?) {
         let nextProvider = specializedProvidersByBundleId[app.bundleId] ?? genericProvider
+        providerInfo("activate provider bundleId=\(app.bundleId) specialized=\(specializedProvidersByBundleId[app.bundleId] != nil)")
         if let activeProvider, activeProvider === nextProvider {
             activeProvider.update(app: app, title: title)
             return
@@ -146,18 +150,9 @@ final class AppEnvironmentProvider {
         lastLoggedURL = webURL
         lastLoggedDocumentValues = documentValues
 
-        var lines: [String] = []
-        lines.append("[RAW-CONTEXT] reason=\(reason)")
-        lines.append("  mac:          \(app.name)  bundleId=\(app.bundleId)  pid=\(app.pid)")
-        let titleText = title.map { "\"\($0)\"" } ?? "(null)"
-        lines.append("  windowTitle:  \(titleText)")
-        lines.append("  axDocument:   \(documentValues.isEmpty ? "(none)" : documentValues.joined(separator: " | "))")
-        if let webURL {
-            lines.append("  axWebURL:     \(webURL)")
-        }
-        lines.append("  trustedAX:    \(AXReader.isTrusted())")
-        for line in lines {
-            providerLog(line)
+        providerInfo("context reason=\(reason) app=\(app.name) bundleId=\(app.bundleId) pid=\(app.pid) titlePresent=\(title != nil) documents=\(documentValues.count) webURLPresent=\(webURL != nil) trustedAX=\(AXReader.isTrusted())")
+        if RookLog.verboseEnabled {
+            providerDebug("context raw reason=\(reason) app=\(app.name) bundleId=\(app.bundleId) title=\(title ?? "(null)") documents=\(documentValues.joined(separator: " | ")) webURL=\(webURL ?? "(null)")")
         }
     }
 

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		001621DBC014A732B3A6C2DE /* RookMacSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 269B251888C4528269DA7E81 /* RookMacSupport.swift */; };
+		028704B2F3E3D2CC41BDD24B /* MacStallWatchdogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EAA2CFBF261E369E89834BF /* MacStallWatchdogTests.swift */; };
 		071B3FB59CED95720606766F /* ObsidianEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0E6742B34F0BC2C1D6A93B /* ObsidianEnvironmentProvider.swift */; };
 		12BABD831E01470C5F12C1C9 /* ServerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */; };
 		159D103CE9B49E8DBB2CA0F5 /* OBSStudioEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD0CA244739F56CDABF5F1C /* OBSStudioEnvironmentProviderTests.swift */; };
@@ -34,6 +35,7 @@
 		A8B2F835A776E831E436D046 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */; };
 		ACFC98FFE07090B9A5C95D75 /* HotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 891E038256B011C6B53596BB /* HotKey.swift */; };
 		ADCD9F49893544B3240D9190 /* DiscordEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDC526470E2B392162B815AC /* DiscordEnvironmentProvider.swift */; };
+		AFADFC79CE7B6E05560C18E1 /* MacStallWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F90B401D4657132C8414DEBD /* MacStallWatchdog.swift */; };
 		B28FDE6264D3DCE11D737746 /* EnvironmentProviderSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5974426CBFD61E01CCD8FB3E /* EnvironmentProviderSupport.swift */; };
 		BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */; };
 		C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5143B8CA8023334102A62F2C /* InputSynthesizer.swift */; };
@@ -75,6 +77,7 @@
 		3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerController.swift; sourceTree = "<group>"; };
 		3FAFBA51D4CA723F49510CBA /* ForegroundAppMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundAppMonitor.swift; sourceTree = "<group>"; };
 		4AC9D0D68548AE9E330CAABA /* RookKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = RookKit; path = ../RookKit; sourceTree = SOURCE_ROOT; };
+		4EAA2CFBF261E369E89834BF /* MacStallWatchdogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacStallWatchdogTests.swift; sourceTree = "<group>"; };
 		4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5143B8CA8023334102A62F2C /* InputSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSynthesizer.swift; sourceTree = "<group>"; };
 		5974426CBFD61E01CCD8FB3E /* EnvironmentProviderSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentProviderSupport.swift; sourceTree = "<group>"; };
@@ -99,6 +102,7 @@
 		E0C3E8AE268D668490DA6072 /* OBSStudioEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBSStudioEnvironmentProvider.swift; sourceTree = "<group>"; };
 		E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacChatSessionController.swift; sourceTree = "<group>"; };
 		E9E5581B2B0E5B8573C71E69 /* FinderEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderEnvironmentProviderTests.swift; sourceTree = "<group>"; };
+		F90B401D4657132C8414DEBD /* MacStallWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacStallWatchdog.swift; sourceTree = "<group>"; };
 		F944826D4DF0C05CAB24B551 /* EnvironmentProviderSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentProviderSupportTests.swift; sourceTree = "<group>"; };
 		FA0E6742B34F0BC2C1D6A93B /* ObsidianEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObsidianEnvironmentProvider.swift; sourceTree = "<group>"; };
 		FCDBF5403D71795728D9928A /* MacBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBridge.swift; sourceTree = "<group>"; };
@@ -170,6 +174,7 @@
 				F944826D4DF0C05CAB24B551 /* EnvironmentProviderSupportTests.swift */,
 				E9E5581B2B0E5B8573C71E69 /* FinderEnvironmentProviderTests.swift */,
 				77DA2212E080B005F7111E80 /* MacImageAttachmentFactoryTests.swift */,
+				4EAA2CFBF261E369E89834BF /* MacStallWatchdogTests.swift */,
 				941EDDB77C90AA9FD6843DD6 /* ObsidianEnvironmentProviderTests.swift */,
 				1FD0CA244739F56CDABF5F1C /* OBSStudioEnvironmentProviderTests.swift */,
 				3343AE46AAED661AD40C912B /* SlackEnvironmentProviderTests.swift */,
@@ -210,6 +215,7 @@
 				5143B8CA8023334102A62F2C /* InputSynthesizer.swift */,
 				FCDBF5403D71795728D9928A /* MacBridge.swift */,
 				208361F86466FB1CF444A79B /* MacImageAttachmentFactory.swift */,
+				F90B401D4657132C8414DEBD /* MacStallWatchdog.swift */,
 				684A1389822C3C6175B654FC /* ScreenCapturer.swift */,
 				31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */,
 				3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */,
@@ -347,6 +353,7 @@
 				EBC50709AA957F9E95F341E3 /* LogViewerView.swift in Sources */,
 				86F91627A128BBD4CBF341B2 /* MacBridge.swift in Sources */,
 				EB7ED8FCC7C9597E430A20D7 /* MacImageAttachmentFactory.swift in Sources */,
+				AFADFC79CE7B6E05560C18E1 /* MacStallWatchdog.swift in Sources */,
 				A42863FF4BE5CA2C3871D94D /* OBSStudioEnvironmentProvider.swift in Sources */,
 				071B3FB59CED95720606766F /* ObsidianEnvironmentProvider.swift in Sources */,
 				BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */,
@@ -372,6 +379,7 @@
 				85C2D954A01F79270B40A48D /* EnvironmentProviderSupportTests.swift in Sources */,
 				C85887BE97842995601DE67E /* FinderEnvironmentProviderTests.swift in Sources */,
 				60A23F92DBE7E8434F6058CD /* MacImageAttachmentFactoryTests.swift in Sources */,
+				028704B2F3E3D2CC41BDD24B /* MacStallWatchdogTests.swift in Sources */,
 				159D103CE9B49E8DBB2CA0F5 /* OBSStudioEnvironmentProviderTests.swift in Sources */,
 				419704B079AFD2478AA896D9 /* ObsidianEnvironmentProviderTests.swift in Sources */,
 				C1C532DBF0E733EDBEE32EEA /* SlackEnvironmentProviderTests.swift in Sources */,

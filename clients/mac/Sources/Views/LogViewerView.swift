@@ -1,34 +1,44 @@
 import SwiftUI
+import RookKit
 
-/// A floating window that tails `/tmp/rook.log` live.
+/// A floating window that shows the unified Apple-client log stream.
 struct LogViewerView: View {
     @State private var lines: [String] = []
-    @State private var timer: Timer?
-    @State private var lastSize: UInt64 = 0
-    private let logURL = URL(fileURLWithPath: "/tmp/rook.log")
+    @State private var streamProcess: Process?
+    @State private var loading = false
+
+    private let predicate = "subsystem == \"\(RookLog.subsystem)\""
+    private let serverLogPath = ServerController.logFileURL.path
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Label("Rook Log", systemImage: "doc.text.magnifyingglass")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Rook Unified Log", systemImage: "doc.text.magnifyingglass")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("Subsystem: \(RookLog.subsystem) • Managed server log: \(serverLogPath)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
                 Spacer()
+                if loading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
                 Text("\(lines.count) lines")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Button {
-                    lines = []
-                    lastSize = 0
-                    readLog()
+                    reloadLogs()
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 11, weight: .semibold))
                 }
                 .buttonStyle(.plain)
-                .help("Clear and re-read")
+                .help("Reload recent logs and restart live stream")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -36,7 +46,6 @@ struct LogViewerView: View {
 
             Divider()
 
-            // Log content
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 1) {
@@ -62,62 +71,124 @@ struct LogViewerView: View {
             }
             .background(Color.black.opacity(0.92))
         }
-        .frame(minWidth: 560, minHeight: 320)
+        .frame(minWidth: 760, minHeight: 420)
         .onAppear {
-            readLog()
-            timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-                readLog()
-            }
+            reloadLogs()
         }
         .onDisappear {
-            timer?.invalidate()
-            timer = nil
+            stopStreaming()
         }
     }
 
-    private func readLog() {
-        guard let handle = try? FileHandle(forReadingFrom: logURL) else {
-            if lines.isEmpty {
-                lines = ["(log file not found at \(logURL.path))"]
+    private func reloadLogs() {
+        loading = true
+        stopStreaming()
+        Task {
+            let recent = await Task.detached(priority: .userInitiated) {
+                Self.loadRecentLines(predicate: predicate, serverLogPath: serverLogPath)
+            }.value
+            await MainActor.run {
+                lines = recent
+                loading = false
+                startStreaming()
             }
-            return
         }
-        defer { try? handle.close() }
+    }
 
-        let currentSize = (try? handle.seekToEnd()) ?? 0
-        if currentSize == lastSize { return }
-
-        if currentSize < lastSize {
-            // File was truncated — re-read from scratch.
-            lines = []
+    private func startStreaming() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/log")
+        process.arguments = ["stream", "--style", "compact", "--level", "debug", "--predicate", predicate]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else {
+                return
+            }
+            let newLines = text.components(separatedBy: .newlines).filter { !$0.isEmpty }
+            guard !newLines.isEmpty else { return }
+            Task { @MainActor in
+                appendLines(newLines)
+            }
         }
+        process.terminationHandler = { _ in
+            pipe.fileHandleForReading.readabilityHandler = nil
+        }
+        do {
+            try process.run()
+            streamProcess = process
+        } catch {
+            appendLines(["(failed to start log stream: \(error.localizedDescription))"])
+        }
+    }
 
-        // Only read the new tail; keep the most recent ~3000 lines.
-        let bytesToRead = min(currentSize - lastSize, 256 * 1024)
-        guard bytesToRead > 0 else { return }
-        try? handle.seek(toOffset: max(currentSize - bytesToRead, 0))
+    private func stopStreaming() {
+        streamProcess?.terminate()
+        streamProcess = nil
+    }
 
-        let data = handle.readData(ofLength: Int(bytesToRead))
-        guard let text = String(data: data, encoding: .utf8) else { return }
+    private nonisolated static func loadRecentLines(predicate: String, serverLogPath: String) -> [String] {
+        let unified = runProcess(executable: "/usr/bin/log", arguments: ["show", "--last", "10m", "--style", "compact", "--predicate", predicate])
+            .components(separatedBy: .newlines)
+            .filter { !$0.isEmpty }
+        let server = loadServerLogTail(path: serverLogPath)
+        var result: [String] = []
+        if !server.isEmpty {
+            result.append("━━ managed server log tail (\(serverLogPath)) ━━")
+            result.append(contentsOf: server)
+            result.append("━━ unified log tail (subsystem \(RookLog.subsystem)) ━━")
+        }
+        result.append(contentsOf: unified)
+        if result.isEmpty {
+            result = ["(no recent logs found for subsystem \(RookLog.subsystem))"]
+        }
+        return Array(result.suffix(3000))
+    }
 
-        let newLines = text.components(separatedBy: "\n").filter { !$0.isEmpty }
+    private nonisolated static func loadServerLogTail(path: String, maxLines: Int = 200) -> [String] {
+        guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
+            return []
+        }
+        return Array(contents.components(separatedBy: .newlines).filter { !$0.isEmpty }.suffix(maxLines))
+    }
+
+    private nonisolated static func runProcess(executable: String, arguments: [String]) -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return "(failed to run \(executable): \(error.localizedDescription))"
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    @MainActor
+    private func appendLines(_ newLines: [String]) {
         lines.append(contentsOf: newLines)
-        // Trim head so we don't grow unbounded.
         if lines.count > 3000 {
             lines.removeFirst(lines.count - 3000)
         }
-        lastSize = currentSize
     }
 
     private func lineColor(for line: String) -> Color {
-        if line.contains("[ERROR]") || line.contains("error") {
+        let lowercased = line.lowercased()
+        if lowercased.contains("error") || lowercased.contains("fault") {
             return .red.opacity(0.9)
         }
-        if line.contains("[RAW-CONTEXT]") {
-            return Color.cyan.opacity(0.85)
-        }
-        if line.contains("[WARN]") || line.contains("failed") {
+        if lowercased.contains("warning") || lowercased.contains("failed") {
             return .yellow.opacity(0.85)
+        }
+        if lowercased.contains("managed server log tail") || lowercased.contains("unified log tail") {
+            return .cyan.opacity(0.85)
         }
         return .white.opacity(0.75)
     }

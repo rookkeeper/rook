@@ -15,6 +15,7 @@ Ask the developer whether this work should go through a branch / PR flow or be p
 If they choose PR flow:
 - do not push directly to `main` / `master`
 - create a branch for the issue-sized chunk
+- before opening or updating the PR, fetch `origin`, merge `origin/main` into the feature branch, resolve conflicts, run the relevant checks, and verify the branch is clean and mergeable
 - open a PR after code/docs/tests are ready
 
 ## After opening the PR
@@ -24,7 +25,7 @@ Do not assume it should be merged immediately.
 Ask the developer whether they want you to merge it now.
 
 If they say yes:
-- prefer squash merge
+- prefer a merge commit unless the developer explicitly requests squash or rebase
 - avoid `gh pr merge --delete-branch` when the working tree is dirty
 - if local branch switching is blocked by unrelated local changes, stash those unrelated files first
 

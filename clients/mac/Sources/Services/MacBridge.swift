@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import RookKit
 
 /// Tier 2 action bridge: a loopback HTTP server the agent's shell tool can
 /// `curl` to perceive and drive the Mac. Routes:
@@ -61,15 +62,15 @@ final class MacBridge {
             listener.stateUpdateHandler = { [weak self] state in
                 if case .ready = state {
                     self?.port = port
-                    providerLog("bridge listening on 127.0.0.1:\(port)")
+                    providerInfo("bridge listening host=127.0.0.1 port=\(port)")
                 } else if case .failed(let error) = state {
-                    providerLog("bridge failed: \(error.localizedDescription)")
+                    providerError("bridge failed error=\(error.localizedDescription)")
                 }
             }
             listener.start(queue: queue)
             self.listener = listener
         } catch {
-            providerLog("bridge could not start on \(port): \(error.localizedDescription)")
+            providerError("bridge could not start port=\(port) error=\(error.localizedDescription)")
         }
     }
 
@@ -158,9 +159,19 @@ final class MacBridge {
 
     private func route(_ request: ParsedRequest) -> Data {
         let path = request.path.components(separatedBy: "?").first ?? request.path
+        let timed = RookPerformance.begin(
+            "MacBridgeRoute",
+            operation: "mac-bridge-route",
+            description: "\(request.method) \(path)",
+            logger: RookLog.bridge,
+            signposter: RookLog.bridgeSignposter,
+            slowThresholdMs: 100,
+            hangThresholdMs: 500
+        )
 
         // Liveness check — unauthenticated, leaks nothing sensitive.
         if request.method == "GET", path == "/health" {
+            timed.finish(details: "status=200")
             return response(body: jsonData(["ok": true, "service": "mac-bridge"]))
         }
 
@@ -168,15 +179,18 @@ final class MacBridge {
         // the Host header, not 127.0.0.1:<port>.
         let allowedHosts: Set<String> = ["127.0.0.1:\(port)", "localhost:\(port)"]
         guard let host = request.headers["host"], allowedHosts.contains(host) else {
+            timed.finish(details: "status=403 bad-host")
             return response(status: "403 Forbidden", body: jsonData(["error": "bad host"]))
         }
         // Browsers attach Origin to cross-origin requests; a legitimate local
         // client (curl from the agent's shell) does not.
         if request.headers["origin"] != nil {
+            timed.finish(details: "status=403 origin-not-allowed")
             return response(status: "403 Forbidden", body: jsonData(["error": "origin not allowed"]))
         }
         // Bearer token gates everything else.
         guard Self.constantTimeEquals(request.headers["authorization"], "Bearer \(token)") else {
+            timed.finish(details: "status=401 unauthorized")
             return response(status: "401 Unauthorized", body: jsonData(["error": "unauthorized"]))
         }
 
@@ -185,24 +199,30 @@ final class MacBridge {
             lock.lock()
             let data = contextJSON
             lock.unlock()
+            timed.finish(details: "status=200 bytes=\(data.count)")
             return response(body: data)
 
         case ("GET", "/window-text"):
             let text = readWindowText?() ?? nil
+            timed.finish(details: "status=200 ok=\(text != nil)")
             return response(body: jsonData(["ok": text != nil, "text": text ?? ""]))
 
         case ("GET", "/screen-text"):
             let text = readScreenText?() ?? nil
+            timed.finish(details: "status=200 ok=\(text != nil)")
             return response(body: jsonData(["ok": text != nil, "text": text ?? ""]))
 
         case ("GET", "/ax-elements"):
             let elements = readAxElements?() ?? nil
+            timed.finish(details: "status=200 ok=\(elements != nil) elements=\(elements?.count ?? 0)")
             return response(body: jsonData(["ok": elements != nil, "elements": elements ?? []]))
 
         case ("GET", "/screenshot"):
             guard let capture = captureScreenshot?() ?? nil else {
+                timed.finish(details: "status=403 screenshot-denied")
                 return response(status: "403 Forbidden", body: jsonData(["ok": false, "error": "screen recording not permitted"]))
             }
+            timed.finish(details: "status=200 screenshot")
             return response(body: jsonData(capture))
 
         case ("POST", "/input"):
@@ -210,29 +230,37 @@ final class MacBridge {
             let enabled = controlEnabled
             lock.unlock()
             guard enabled else {
+                timed.finish(details: "status=403 input-disabled")
                 return response(status: "403 Forbidden", body: jsonData(["ok": false, "error": "computer control disabled — enable it in the menu bar app"]))
             }
             guard let object = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any] else {
+                timed.finish(details: "status=400 invalid-json")
                 return response(status: "400 Bad Request", body: jsonData(["ok": false, "error": "invalid JSON"]))
             }
             let result = performInput?(object) ?? (ok: false, output: "input handler not ready")
+            timed.finish(details: "status=200 ok=\(result.ok)")
             return response(body: jsonData(["ok": result.ok, "output": result.output]))
 
         case ("POST", "/applescript"):
             guard let script = stringField("script", in: request.body) else {
+                timed.finish(details: "status=400 missing-script")
                 return response(status: "400 Bad Request", body: jsonData(["error": "missing 'script'"]))
             }
             let result = runAppleScript?(script) ?? (ok: false, output: "bridge action handler not ready")
+            timed.finish(details: "status=200 ok=\(result.ok)")
             return response(body: jsonData(["ok": result.ok, "output": result.output]))
 
         case ("POST", "/open-url"):
             guard let url = stringField("url", in: request.body) else {
+                timed.finish(details: "status=400 missing-url")
                 return response(status: "400 Bad Request", body: jsonData(["error": "missing 'url'"]))
             }
             let ok = openURL?(url) ?? false
+            timed.finish(details: "status=200 ok=\(ok)")
             return response(body: jsonData(["ok": ok]))
 
         default:
+            timed.finish(details: "status=404")
             return response(status: "404 Not Found", body: jsonData(["error": "unknown route"]))
         }
     }

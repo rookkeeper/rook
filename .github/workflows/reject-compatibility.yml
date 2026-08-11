@@ -41,7 +41,10 @@ jobs:
 
           matches="$(printf '%s\n' "$added_lines" | grep -nE "(^|[^[:alnum:]_])${forbidden}([^[:alnum:]_]|$)" || true)"
           if [[ -n "$matches" ]]; then
-            echo '::error::Newly added code contains the forbidden compatibility marker.'
+            echo '::error::Backwards-compatibility code is not allowed by default in this PR.'
+            echo 'Remove the compatibility path completely from code and documentation; do not preserve, annotate, or explain a path that was introduced and superseded within this branch.'
+            echo 'Compatibility may remain only when it predates this PR and an explicit product or maintainer decision approves keeping it.'
+            echo 'If this path was created during the PR and never shipped, delete it rather than carrying it forward for a hypothetical old version.'
             printf '%s\n' "$matches"
             exit 1
           fi

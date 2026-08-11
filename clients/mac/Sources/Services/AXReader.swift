@@ -1,14 +1,19 @@
 import ApplicationServices
 import Foundation
+import RookKit
 
 /// Tier 1 perception: reading another app's focused-window title needs the
 /// Accessibility (AX) permission. App *identity* (NSWorkspace) does not — only
 /// reading inside another process does.
 enum AXReader {
     static func isTrusted(promptIfNeeded: Bool = false) -> Bool {
+        MacStallWatchdog.shared.beginOperation("AXReader.isTrusted")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.isTrusted") }
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         let options = [key: promptIfNeeded] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        MacStallWatchdog.shared.updateContext(["accessibilityTrusted": String(trusted)])
+        return trusted
     }
 
     /// Chromium/Electron render web content in a separate process whose
@@ -24,42 +29,88 @@ enum AXReader {
     /// Warm up an app's accessibility tree (call when it comes to the
     /// foreground) so content is ready by the time the agent reads it.
     static func primeAccessibility(pid: pid_t) {
+        MacStallWatchdog.shared.beginOperation("AXReader.primeAccessibility")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.primeAccessibility") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
         guard isTrusted() else {
             return
         }
-        enableWebContentAccessibility(AXUIElementCreateApplication(pid))
+        RookPerformance.measure(
+            "AXPrimeAccessibility",
+            operation: "ax-prime-accessibility",
+            description: "pid=\(pid)",
+            logger: RookLog.environment,
+            signposter: RookLog.environmentSignposter,
+            slowThresholdMs: 100,
+            hangThresholdMs: 500
+        ) {
+            enableWebContentAccessibility(AXUIElementCreateApplication(pid))
+        }
     }
 
     /// Title of the focused (or main) window of the app owning `pid`, or nil if
     /// AX isn't trusted / the app exposes no titled window.
     static func focusedWindowTitle(pid: pid_t) -> String? {
-        guard let window = focusedWindow(pid: pid) else {
-            return nil
+        MacStallWatchdog.shared.beginOperation("AXReader.focusedWindowTitle")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.focusedWindowTitle") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
+            "AXFocusedWindowTitle",
+            operation: "ax-focused-window-title",
+            description: "pid=\(pid)",
+            logger: RookLog.environment,
+            signposter: RookLog.environmentSignposter,
+            slowThresholdMs: 100,
+            hangThresholdMs: 500,
+            details: { (title: String?) in
+                if let title {
+                    return "titleChars=\(title.count)"
+                }
+                return "title=nil"
+            }
+        ) {
+            guard let window = focusedWindow(pid: pid) else {
+                return nil
+            }
+            var titleRef: AnyObject?
+            guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success else {
+                return nil
+            }
+            let title = titleRef as? String
+            return (title?.isEmpty == false) ? title : nil
         }
-        var titleRef: AnyObject?
-        guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success else {
-            return nil
-        }
-        let title = titleRef as? String
-        return (title?.isEmpty == false) ? title : nil
     }
 
     /// Top-level window document-like values exposed via standard AX attributes
     /// such as AXDocument / AXFilename / AXURL.
     static func focusedWindowDocumentValues(pid: pid_t) -> [String] {
-        guard let window = focusedWindow(pid: pid) else {
-            return []
-        }
-        let attributes = ["AXDocument", "AXFilename", "AXURL"]
-        var results: [String] = []
-        for attribute in attributes {
-            if let value = stringAttribute(window, attribute)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !value.isEmpty,
-               !results.contains(value) {
-                results.append(value)
+        MacStallWatchdog.shared.beginOperation("AXReader.focusedWindowDocumentValues")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.focusedWindowDocumentValues") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
+            "AXFocusedWindowDocuments",
+            operation: "ax-focused-window-documents",
+            description: "pid=\(pid)",
+            logger: RookLog.environment,
+            signposter: RookLog.environmentSignposter,
+            slowThresholdMs: 100,
+            hangThresholdMs: 500,
+            details: { (values: [String]) in "values=\(values.count)" }
+        ) {
+            guard let window = focusedWindow(pid: pid) else {
+                return []
             }
+            let attributes = ["AXDocument", "AXFilename", "AXURL"]
+            var results: [String] = []
+            for attribute in attributes {
+                if let value = stringAttribute(window, attribute)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !value.isEmpty,
+                   !results.contains(value) {
+                    results.append(value)
+                }
+            }
+            return results
         }
-        return results
     }
 
     private static func focusedWindow(pid: pid_t) -> AXUIElement? {
@@ -85,26 +136,40 @@ enum AXReader {
     /// the browser should have been primed (it comes forward → primeAccessibility).
     /// Returns nil for non-browsers or before the URL is exposed.
     static func activeTabURL(pid: pid_t, maxNodes: Int = 600) -> String? {
-        guard let window = focusedWindow(pid: pid) else {
+        MacStallWatchdog.shared.beginOperation("AXReader.activeTabURL")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.activeTabURL") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
+            "AXActiveTabURL",
+            operation: "ax-active-tab-url",
+            description: "pid=\(pid) maxNodes=\(maxNodes)",
+            logger: RookLog.environment,
+            signposter: RookLog.environmentSignposter,
+            slowThresholdMs: 150,
+            hangThresholdMs: 600,
+            details: { (url: String?) in url == nil ? "url=nil" : "url=resolved" }
+        ) {
+            guard let window = focusedWindow(pid: pid) else {
+                return nil
+            }
+            // Breadth-first: the web area sits near the top of the window subtree.
+            var queue: [AXUIElement] = [window]
+            var budget = maxNodes
+            while !queue.isEmpty, budget > 0 {
+                let element = queue.removeFirst()
+                budget -= 1
+                if stringAttribute(element, kAXRoleAttribute as String) == "AXWebArea",
+                   let url = urlAttribute(element, "AXURL") {
+                    return url
+                }
+                var childrenRef: AnyObject?
+                if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+                   let children = childrenRef as? [AXUIElement] {
+                    queue.append(contentsOf: children)
+                }
+            }
             return nil
         }
-        // Breadth-first: the web area sits near the top of the window subtree.
-        var queue: [AXUIElement] = [window]
-        var budget = maxNodes
-        while !queue.isEmpty, budget > 0 {
-            let element = queue.removeFirst()
-            budget -= 1
-            if stringAttribute(element, kAXRoleAttribute as String) == "AXWebArea",
-               let url = urlAttribute(element, "AXURL") {
-                return url
-            }
-            var childrenRef: AnyObject?
-            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
-               let children = childrenRef as? [AXUIElement] {
-                queue.append(contentsOf: children)
-            }
-        }
-        return nil
     }
 
     private static func urlAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
@@ -124,26 +189,40 @@ enum AXReader {
     /// text-based apps, using only the Accessibility grant (no screenshots).
     /// Node- and char-budgeted so a deep tree can't hang the caller.
     static func focusedWindowText(pid: pid_t, maxChars: Int = 12_000, maxNodes: Int = 6_000) -> String? {
-        guard isTrusted() else {
-            return nil
-        }
-        let appElement = AXUIElementCreateApplication(pid)
-        enableWebContentAccessibility(appElement)
-        var windowRef: AnyObject?
-        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
-            if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+        MacStallWatchdog.shared.beginOperation("AXReader.focusedWindowText")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.focusedWindowText") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
+            "AXFocusedWindowText",
+            operation: "ax-focused-window-text",
+            description: "pid=\(pid) maxChars=\(maxChars) maxNodes=\(maxNodes)",
+            logger: RookLog.environment,
+            signposter: RookLog.environmentSignposter,
+            slowThresholdMs: 200,
+            hangThresholdMs: 750,
+            details: { (text: String?) in "textChars=\(text?.count ?? 0)" }
+        ) {
+            guard isTrusted() else {
                 return nil
             }
+            let appElement = AXUIElementCreateApplication(pid)
+            enableWebContentAccessibility(appElement)
+            var windowRef: AnyObject?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
+                if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+                    return nil
+                }
+            }
+            guard let windowRef else {
+                return nil
+            }
+            var pieces: [String] = []
+            var nodeBudget = maxNodes
+            var charCount = 0
+            collectText(windowRef as! AXUIElement, into: &pieces, nodeBudget: &nodeBudget, charCount: &charCount, maxChars: maxChars)
+            let text = pieces.joined(separator: "\n")
+            return text.isEmpty ? nil : text
         }
-        guard let windowRef else {
-            return nil
-        }
-        var pieces: [String] = []
-        var nodeBudget = maxNodes
-        var charCount = 0
-        collectText(windowRef as! AXUIElement, into: &pieces, nodeBudget: &nodeBudget, charCount: &charCount, maxChars: maxChars)
-        let text = pieces.joined(separator: "\n")
-        return text.isEmpty ? nil : text
     }
 
     struct ActionableElement {
@@ -160,24 +239,38 @@ enum AXReader {
     /// reads this list and picks one to click — no screenshot/vision needed.
     /// Coordinates are global top-left screen space, matching CGEvent input.
     static func actionableElements(pid: pid_t, maxElements: Int = 250, maxNodes: Int = 8_000) -> [ActionableElement]? {
-        guard isTrusted() else {
-            return nil
-        }
-        let appElement = AXUIElementCreateApplication(pid)
-        enableWebContentAccessibility(appElement)
-        var windowRef: AnyObject?
-        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
-            if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+        MacStallWatchdog.shared.beginOperation("AXReader.actionableElements")
+        defer { MacStallWatchdog.shared.endOperation("AXReader.actionableElements") }
+        MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+        return RookPerformance.measure(
+            "AXActionableElements",
+            operation: "ax-actionable-elements",
+            description: "pid=\(pid) maxElements=\(maxElements) maxNodes=\(maxNodes)",
+            logger: RookLog.environment,
+            signposter: RookLog.environmentSignposter,
+            slowThresholdMs: 200,
+            hangThresholdMs: 750,
+            details: { (elements: [ActionableElement]?) in "elements=\(elements?.count ?? 0)" }
+        ) {
+            guard isTrusted() else {
                 return nil
             }
+            let appElement = AXUIElementCreateApplication(pid)
+            enableWebContentAccessibility(appElement)
+            var windowRef: AnyObject?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
+                if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+                    return nil
+                }
+            }
+            guard let windowRef else {
+                return nil
+            }
+            var elements: [ActionableElement] = []
+            var nodeBudget = maxNodes
+            collectActionable(windowRef as! AXUIElement, into: &elements, max: maxElements, nodeBudget: &nodeBudget)
+            return elements
         }
-        guard let windowRef else {
-            return nil
-        }
-        var elements: [ActionableElement] = []
-        var nodeBudget = maxNodes
-        collectActionable(windowRef as! AXUIElement, into: &elements, max: maxElements, nodeBudget: &nodeBudget)
-        return elements
     }
 
     private static let actionableRoles: Set<String> = [
