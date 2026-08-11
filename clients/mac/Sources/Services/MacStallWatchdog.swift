@@ -70,14 +70,14 @@ final class MacStallWatchdog {
     private static let defaultThresholdNanoseconds: UInt64 = 3_000_000_000
     private static let checkIntervalNanoseconds: UInt64 = 1_000_000_000
     private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.Rook",
+        subsystem: Bundle.main.bundleIdentifier ?? "com.rookkeeper.Rook",
         category: "StallWatchdog"
     )
 
     let instanceID = String(UUID().uuidString.prefix(8)).lowercased()
 
     private let lock = NSLock()
-    private let queue = DispatchQueue(label: "com.rookery.Rook.stall-watchdog", qos: .utility)
+    private let queue = DispatchQueue(label: "com.rookkeeper.Rook.stall-watchdog", qos: .utility)
     private var tracker: StallWatchdogTracker
     private var context: [String: String] = [:]
     private var heartbeatTimer: Timer?

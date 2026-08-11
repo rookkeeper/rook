@@ -114,7 +114,7 @@ Same shared contract as other clients:
 ## Client logging
 
 The iPhone app and shared `RookKit` networking/session layer use the centralized
-`RookLog` Unified Logging subsystem `com.rookery.Rook`. The app logs health and
+`RookLog` Unified Logging subsystem `com.rookkeeper.Rook`. The app logs health and
 session lifecycle, while the location provider logs authorization, monitored
 regions, visit arrivals, and dwell-gate decisions. Shared REST, WebSocket,
 reconnect, transcript hydration, prompt, and run lifecycle operations include

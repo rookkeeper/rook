@@ -120,7 +120,7 @@ Via `RookKit`:
 10. queued messages, including image attachments, are delivered automatically once the agent goes idle
 
 ### Foreground environment detection
-1. `ForegroundAppMonitor` detects app activation or window-title change, but ignores all internal Rook bundle identities (`com.rookery.Rook` and `com.rookery.Rook.Dev.*`); when Rook becomes frontmost it clears the active external target and provider
+1. `ForegroundAppMonitor` detects app activation or window-title change, but ignores all internal Rook bundle identities (`com.rookkeeper.Rook` and `com.rookkeeper.Rook.Dev.*`); when Rook becomes frontmost it clears the active external target and provider
 2. `AppEnvironmentProvider` always emits the base `mac:<bundleId>` app environment after a short dwell delay
 3. `AppEnvironmentProvider` activates either a bundle-id-specific specialist or the generic fallback provider
 4. `GenericEnvironmentProvider` polls every 5 seconds while active, reads only focused-window Accessibility document values, inspects observed paths under `/Users/<username>`, and emits only project-like / agentic `dir:` candidates plus top-level-document `web:` candidates when the normalized environment-id set is stable across two polls
@@ -159,7 +159,7 @@ When launched from a Git worktree through `scripts/run-rook.sh`, the Mac app is 
 ## Client logging and hang diagnostics
 
 Apple-client logging is centralized in `RookKit/Logging/RookLog.swift` and uses
-Unified Logging with subsystem `com.rookery.Rook`. The Mac app uses categories
+Unified Logging with subsystem `com.rookkeeper.Rook`. The Mac app uses categories
 for app, session, network, environment, bridge, server, and performance work.
 `RookPerformance` records elapsed milliseconds and emits `OSSignposter` intervals;
 fast successful operations are debug-level, 100 ms is the slow-operation threshold,
@@ -173,7 +173,7 @@ web-tree, text, and actionable-element reads; Finder AppleScript observation;
 foreground/provider polling and registration; bridge routes; server supervision;
 REST health/session/environment calls; WebSocket initialization/reconnect; and
 session transcript hydration and prompt lifecycle. The in-app Rook Log viewer
-shows recent unified logs for `com.rookery.Rook`, tails them live, and includes
+shows recent unified logs for `com.rookkeeper.Rook`, tails them live, and includes
 the managed server log as context. Unified Logging is authoritative for client
 diagnostics.
 

@@ -37,7 +37,7 @@ adb reverse tcp:3000 tcp:3000
 
 # 3. Build and install
 ./gradlew :app:installDebug
-adb shell am start -n com.rookery.rook/.MainActivity
+adb shell am start -n com.rookkeeper.rook/.MainActivity
 ```
 
 `adb reverse` isn't persistent — it's tied to the current adb connection, so

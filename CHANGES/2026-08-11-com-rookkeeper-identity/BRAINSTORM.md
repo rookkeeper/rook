@@ -35,15 +35,15 @@ and documentation identities disagree.
 2. **Replace every textual `com.rookery` occurrence:** risks rewriting
    historical change records and unrelated package/project names such as
    `rookery-server` and `@rookery/cli`.
-3. **Migrate active product identity surfaces, preserve intentional compatibility
-   references:** changes shipped identifiers, code, launchers, tests, current
-   architecture docs, and READMEs; leaves historical CHANGES evidence and
-   non-namespace project names untouched. Retain a narrowly scoped legacy
-   Keychain read/migration path.
+3. **Migrate active product identity surfaces without compatibility code:**
+   changes shipped identifiers, code, launchers, tests, current architecture
+   docs, and READMEs; leaves historical CHANGES evidence and non-namespace
+   project names untouched. Existing old app installs, Keychain entries, and
+   environment records are intentionally not migrated.
 
 ## Direction
 
-Use option 3. Canonical shipped identities become:
+The developer chose option 3. Canonical shipped identities become:
 
 - Mac: `com.rookkeeper.Rook`, `com.rookkeeper.Rook.Dev.*`
 - iPhone: existing `com.rookkeeper.Rook*` identifiers, including URL/logging
@@ -52,6 +52,8 @@ Use option 3. Canonical shipped identities become:
   packages/directories
 - Apple shared logging and Keychain service: `com.rookkeeper.Rook`
 
-Add focused tests for Mac internal-bundle filtering and the Android package/
-launcher identity where practical. Validate generated Apple projects, Swift
-build/tests, Android unit tests, and repository-wide active references.
+Development profiles always honor the checkout's configured remote listener;
+there is no opt-in remote override. Add focused tests for Mac internal-bundle
+filtering and the Android package/launcher identity where practical. Validate
+generated Apple projects, Swift build/tests, Android unit tests, and
+repository-wide active references.
