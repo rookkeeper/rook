@@ -105,9 +105,15 @@ public final class SessionHandle {
             return
         }
         resetVisibleState()
+        isReplaying = true
+        replayUserBuffer = ""
+        replayAssistantBuffer = ""
+        replayThinkingBuffer = ""
         for event in events {
             applyTranscriptEvent(event)
         }
+        isReplaying = false
+        flushReplayBuffers()
         try await ensureSocketConnected()
         socket.selectSession(sessionId)
         isLoaded = true
@@ -249,12 +255,22 @@ public final class SessionHandle {
         let kind = event["kind"]?.stringValue ?? ""
         switch kind {
         case "user_message_chunk":
-            if let text = event["text"]?.stringValue { appendBlock(.user(text: text)) }
+            if let text = event["text"]?.stringValue {
+                replayFlushIncompatibleSection("user")
+                replayUserBuffer += text
+            }
         case "agent_message_chunk":
-            if let text = event["text"]?.stringValue { appendBlock(.assistantText(text: text, streaming: false)) }
+            if let text = event["text"]?.stringValue {
+                replayFlushIncompatibleSection("assistant")
+                replayAssistantBuffer += text
+            }
         case "agent_thought_chunk":
-            if let text = event["text"]?.stringValue { appendBlock(.thinking(text: text, streaming: false)) }
+            if let text = event["text"]?.stringValue {
+                replayFlushIncompatibleSection("thinking")
+                replayThinkingBuffer += text
+            }
         case "tool_call":
+            replayFlushIncompatibleSection("tool")
             guard let toolCallId = event["toolCallId"]?.stringValue else { return }
             let state = ToolBlockState(
                 toolCallId: toolCallId,
@@ -262,7 +278,7 @@ public final class SessionHandle {
                 kindLabel: event["toolKind"]?.stringValue ?? "",
                 status: transcriptStatus(event["status"]?.stringValue),
                 arguments: stringifyTranscriptJSON(event["rawInput"]),
-                output: ""
+                output: stringifyTranscriptJSON(event["output"] ?? event["rawOutput"])
             )
             appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
         case "tool_call_update":
@@ -292,6 +308,7 @@ public final class SessionHandle {
                 }
             }
         case "plan_update":
+            replayFlushIncompatibleSection("plan")
             if case .array(let entries)? = event["entries"] {
                 let planEntries = entries.enumerated().compactMap { index, item -> PlanEntry? in
                     guard let content = item["content"]?.stringValue ?? item["text"]?.stringValue else { return nil }
@@ -304,9 +321,11 @@ public final class SessionHandle {
                 contextUsage = ContextUsageState(used: Int(used), size: Int(size), cost: nil)
             }
         case "run_completed":
+            flushReplayBuffers()
             isRunning = false
             statusLine = ""
         case "run_failed":
+            flushReplayBuffers()
             isRunning = false
             statusLine = ""
             if let message = event["message"]?.stringValue { appendErrorBlock(source: "run", message: message) }
