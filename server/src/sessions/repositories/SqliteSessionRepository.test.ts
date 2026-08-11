@@ -24,10 +24,20 @@ describe("SqliteSessionRepository", () => {
     });
 
     expect((await repository.list()).map((session) => session.sessionId)).toEqual(["Claude:claude-1", "Pi:pi-1"]);
+
+    await repository.rename("Pi:pi-1", "Renamed");
+    expect((await repository.get("Pi:pi-1"))?.title).toBe("Renamed");
+    expect((await repository.list()).map((session) => session.sessionId)).toEqual(["Claude:claude-1", "Pi:pi-1"]);
+
     await repository.touch("Pi:pi-1", "2026-01-04T00:00:00.000Z");
     expect((await repository.list())[0]?.sessionId).toBe("Pi:pi-1");
+
     await repository.replaceEnvironmentIds("Pi:pi-1", ["web:example.com", "location:target"]);
     expect(new Set(await repository.environmentIds("Pi:pi-1"))).toEqual(new Set(["web:example.com", "location:target"]));
+
+    await repository.delete("Pi:pi-1");
+    expect(await repository.get("Pi:pi-1")).toBeUndefined();
+    expect(await repository.environmentIds("Pi:pi-1")).toEqual([]);
     repository.close();
   });
 });

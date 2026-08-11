@@ -198,7 +198,11 @@ async function handleMessage(message) {
   }
 
   if (message.method === 'session/close') {
-    write({ jsonrpc: '2.0', id: message.id, result: { ok: true } });
+    if (process.env.MOCK_ACP_SESSION_CLOSE_UNSUPPORTED === '1') {
+      write({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Method not found: session/close' } });
+    } else {
+      write({ jsonrpc: '2.0', id: message.id, result: { ok: true } });
+    }
     return;
   }
 

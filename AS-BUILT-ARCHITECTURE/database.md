@@ -10,6 +10,8 @@ Rook's durable server state is split across SQLite databases:
 
 The application database remains separate from environment repositories. This database is intentionally small: it stores session persistence and durable environment decisions. Runtime processes, active/recent environment caches, subscribers, and workspace projections remain transient. The main checkout keeps the database under `.var/rook/rook.sqlite`; worktree profiles select an isolated SQLite path through `ROOK_DATABASE_PATH`.
 
+For session recency, no extra table or column was added: the existing `sessions.updated_at` field now represents both prompt activity and explicit client-side view/touch events, so opening a session can reorder the shared recents list without synthesizing transcript content.
+
 ## Environment repository schema
 
 Each environment repository database has exactly three tables.

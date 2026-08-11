@@ -7,6 +7,9 @@ struct SessionsHomeScreen: View {
     @State private var showingPlaces = false
     @State private var newSessionName = ""
     @State private var selectedRuntimeID = ""
+    @State private var sessionToRename: AgentSessionSummary?
+    @State private var renameDraft = ""
+    @State private var sessionToDelete: AgentSessionSummary?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -44,6 +47,29 @@ struct SessionsHomeScreen: View {
         }
         .sheet(isPresented: $showingSettings) { SettingsScreen(model: model) }
         .sheet(isPresented: $showingPlaces) { PlacesScreen(model: model) }
+        .sheet(item: $sessionToRename) { session in
+            RenameSessionSheet(
+                sessionName: session.name,
+                draft: $renameDraft,
+                onCancel: { sessionToRename = nil },
+                onSave: {
+                    model.renameSession(session, title: renameDraft)
+                    sessionToRename = nil
+                }
+            )
+            .presentationDetents([.height(220)])
+        }
+        .alert("Delete Session?", isPresented: Binding(get: { sessionToDelete != nil }, set: { if !$0 { sessionToDelete = nil } }), presenting: sessionToDelete) { session in
+            Button("Delete", role: .destructive) {
+                model.deleteSession(session)
+                sessionToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                sessionToDelete = nil
+            }
+        } message: { session in
+            Text("Delete \(session.name) permanently?")
+        }
         .onAppear {
             if selectedRuntimeID.isEmpty { selectedRuntimeID = model.agents.first?.id ?? "" }
         }
@@ -123,11 +149,23 @@ struct SessionsHomeScreen: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
-                        Button { model.resumeSession(session) } label: {
-                            SessionRow(session: session, currentSessionId: model.currentSession?.id)
+                        HStack(spacing: 8) {
+                            Button { model.resumeSession(session) } label: {
+                                SessionRow(session: session, currentSessionId: model.currentSession?.id)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(model.startingSession)
+
+                            SessionActionsMenu(
+                                onRename: {
+                                    renameDraft = session.name
+                                    sessionToRename = session
+                                },
+                                onDelete: {
+                                    sessionToDelete = session
+                                }
+                            )
                         }
-                        .buttonStyle(.plain)
-                        .disabled(model.startingSession)
 
                         if index < model.sessions.count - 1 {
                             Divider().overlay(PanelPalette.border).opacity(0.5)
@@ -265,5 +303,50 @@ private struct SessionRow: View {
         case .on: return "bolt.fill"
         case .off: return "moon.zzz"
         }
+    }
+}
+
+private struct SessionActionsMenu: View {
+    var onRename: () -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        Menu {
+            Button("Rename", action: onRename)
+            Button("Delete", role: .destructive, action: onDelete)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(PanelPalette.textMuted)
+                .frame(width: 30, height: 30)
+        }
+    }
+}
+
+private struct RenameSessionSheet: View {
+    let sessionName: String
+    @Binding var draft: String
+    var onCancel: () -> Void
+    var onSave: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Rename Session")
+                .font(.headline)
+            Text("Update the title for \(sessionName).")
+                .font(.caption)
+                .foregroundStyle(PanelPalette.textMuted)
+            TextField("Session title", text: $draft)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Button("Cancel", action: onCancel)
+                Spacer()
+                Button("Save", action: onSave)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
     }
 }

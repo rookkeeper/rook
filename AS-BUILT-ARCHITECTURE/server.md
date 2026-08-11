@@ -88,6 +88,9 @@ See also: [database.md](./database.md)
 - `GET /api/health`
 - `GET /api/agent_runtimes`
 - `GET /api/sessions` — session listing over REST
+- `PATCH /api/sessions/:sessionId` — rename one session without changing recency ordering
+- `POST /api/sessions/:sessionId/touch` — mark one session as recently viewed so it sorts to the top
+- `DELETE /api/sessions/:sessionId` — delete one session plus transcript/workspace state
 - `GET /api/sessions/:sessionId/transcript` — server-owned normalized transcript for hydrators / second viewers
 - `POST /api/environments/register`
 - `POST /api/environments/decision`
@@ -132,6 +135,9 @@ Persisted in SQLite:
 
 The `GET /api/sessions` response additionally includes a `running` boolean
 (derived from whether a `SessionRuntime` is active for that session).
+`updatedAt` is used for both prompt activity and explicit view/touch operations,
+so entering a session can move it to the top of the shared recents list without
+creating a synthetic prompt.
 
 Related tables:
 - `session_environments(session_id, environment_id, entered_at)`

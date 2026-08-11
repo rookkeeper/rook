@@ -69,6 +69,20 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         formatDate(dateFromISO(updatedAtISO))
     }
 
+    public func updating(title: String? = nil, updatedAtISO: String? = nil, running: Bool? = nil) -> AgentSessionSummary {
+        var object = raw.objectValue ?? [:]
+        if let title {
+            object["title"] = .string(title)
+        }
+        if let updatedAtISO {
+            object["updatedAt"] = .string(updatedAtISO)
+        }
+        if let running {
+            object["running"] = .bool(running)
+        }
+        return AgentSessionSummary(raw: .object(object))
+    }
+
     private func dateFromISO(_ value: String?) -> Date? {
         guard let iso = value else { return nil }
         let withFraction = ISO8601DateFormatter()

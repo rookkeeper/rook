@@ -600,6 +600,84 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     // TODO: reconnect test needs runtime serialization investigation.
   });
 
+  it("renames, touches, and deletes sessions via REST session management endpoints", async () => {
+    const wsA = await connect();
+    await request(wsA, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "manage-a" } });
+    const sessionA = await request(wsA, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "manage-a" },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const wsB = await connect();
+    await request(wsB, 3, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "manage-b" } });
+    const sessionB = await request(wsB, 4, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "manage-b" },
+    });
+
+    let sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    const managedOrderBeforeTouch = sessions.sessions
+      .filter((session) => session.sessionId === sessionA.sessionId || session.sessionId === sessionB.sessionId)
+      .map((session) => session.sessionId);
+    expect(managedOrderBeforeTouch).toEqual([sessionB.sessionId, sessionA.sessionId]);
+
+    const renamed = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "renamed-a" }),
+    }).then((response) => response.json()) as Record<string, unknown>;
+    expect(renamed.title).toBe("renamed-a");
+    sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    const managedOrderAfterRename = sessions.sessions
+      .filter((session) => session.sessionId === sessionA.sessionId || session.sessionId === sessionB.sessionId)
+      .map((session) => session.sessionId);
+    expect(managedOrderAfterRename).toEqual([sessionB.sessionId, sessionA.sessionId]);
+
+    await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/touch`, { method: "POST" });
+    sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(sessions.sessions[0]?.sessionId).toBe(sessionA.sessionId);
+
+    await request(wsA, 5, "session/prompt", {
+      sessionId: sessionA.sessionId as string,
+      prompt: [{ type: "text", text: "tell me a joke" }],
+    });
+    const transcriptBeforeDelete = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/transcript`).then((response) => response.json()) as { events: Array<Record<string, unknown>> };
+    expect(transcriptBeforeDelete.events.length).toBeGreaterThan(0);
+
+    const deleted = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}`, { method: "DELETE" });
+    expect(deleted.status).toBe(200);
+    sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(sessions.sessions.some((session) => session.sessionId === sessionA.sessionId)).toBe(false);
+    expect(await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/transcript`).then((response) => response.status)).toBe(404);
+
+    wsA.close();
+    wsB.close();
+  });
+
+  it("deletes a session when its runtime does not implement session/close", async () => {
+    const previousUnsupported = process.env.MOCK_ACP_SESSION_CLOSE_UNSUPPORTED;
+    process.env.MOCK_ACP_SESSION_CLOSE_UNSUPPORTED = "1";
+    try {
+      const ws = await connect();
+      await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "delete-unsupported-close" } });
+      const session = await request(ws, 2, "session/new", {
+        cwd: "/tmp",
+        mcpServers: [],
+        _meta: { runtimeId: "MockAcpAgent", title: "delete-unsupported-close" },
+      });
+      const deleted = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${session.sessionId}`, { method: "DELETE" });
+      expect(deleted.status).toBe(200);
+      expect(await fetch(`http://127.0.0.1:${PORT}/api/sessions/${session.sessionId}`).then((response) => response.status)).toBe(404);
+      ws.close();
+    } finally {
+      if (previousUnsupported === undefined) delete process.env.MOCK_ACP_SESSION_CLOSE_UNSUPPORTED;
+      else process.env.MOCK_ACP_SESSION_CLOSE_UNSUPPORTED = previousUnsupported;
+    }
+  });
+
   it("lists sessions via REST /api/sessions", async () => {
     const wsA = await connect();
     await request(wsA, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test-a" } });

@@ -59,31 +59,31 @@ Important files likely involved:
 
 ## Steps
 
-- [ ] Confirm and document the v1 behavior boundaries in this change set: rename everywhere, delete everywhere, recent-view ordering, and no pin/manual reorder.
-- [ ] Extend the server session domain with explicit operations for rename, delete, and mark-as-viewed/touch so the product behavior is modeled intentionally rather than as a GET side effect.
-- [ ] Add public REST routes for session management (rename, delete, and viewed/touch) and keep the session list response shape aligned with the existing client models.
-- [ ] Update server-side session tests to cover rename persistence, destructive delete behavior, and recent-view ordering based on the chosen touch/view operation.
-- [ ] Update shared Apple client networking in `RookKit` to call the new session-management APIs and expose any updated session fields cleanly.
-- [ ] Update Mac session flow so creating or opening a session records it as most recently viewed, and add session row management UI for rename/delete without breaking the primary click-to-resume interaction.
-- [ ] Update iPhone session flow so creating or opening a session records it as most recently viewed, and add native-feeling rename/delete affordances that keep the card layout visually simple.
-- [ ] Update Android session flow so creating or opening a session records it as most recently viewed, and add native-feeling rename/delete affordances that keep tap-to-resume as the primary action.
-- [ ] Handle current-session edge cases consistently across clients: renaming the active session updates visible labels immediately, and deleting the active session exits chat/list state cleanly.
-- [ ] Refresh session lists/state after rename/delete/view operations so the acting client reflects the new title/order immediately; decide whether any additional passive refresh is needed for non-acting clients in v1.
-- [ ] Add or update focused client tests for the new state-management behavior where the existing Swift/Kotlin test harnesses make that practical.
-- [ ] Update relevant READMEs and product/architecture notes if the public session-management contract or session ordering semantics are now meaningfully different.
-- [ ] Run tests/build/typecheck appropriate to the change run and pass.
-- [ ] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [ ] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
-- [ ] Update `AS-BUILT-ARCHITECTURE/` as needed.
-- [ ] Update `PRODUCT/` as needed.
+- [x] Confirm and document the v1 behavior boundaries in this change set: rename everywhere, delete everywhere, recent-view ordering, and no pin/manual reorder.
+- [x] Extend the server session domain with explicit operations for rename, delete, and mark-as-viewed/touch so the product behavior is modeled intentionally rather than as a GET side effect.
+- [x] Add public REST routes for session management (rename, delete, and viewed/touch) and keep the session list response shape aligned with the existing client models.
+- [x] Update server-side session tests to cover rename persistence, destructive delete behavior, and recent-view ordering based on the chosen touch/view operation.
+- [x] Update shared Apple client networking in `RookKit` to call the new session-management APIs and expose any updated session fields cleanly.
+- [x] Update Mac session flow so creating or opening a session records it as most recently viewed, and add session row management UI for rename/delete without breaking the primary click-to-resume interaction.
+- [x] Update iPhone session flow so creating or opening a session records it as most recently viewed, and add native-feeling rename/delete affordances that keep the card layout visually simple.
+- [x] Update Android session flow so creating or opening a session records it as most recently viewed, and add native-feeling rename/delete affordances that keep tap-to-resume as the primary action.
+- [x] Handle current-session edge cases consistently across clients: renaming the active session updates visible labels immediately, and deleting the active session exits chat/list state cleanly.
+- [x] Refresh session lists/state after rename/delete/view operations so the acting client reflects the new title/order immediately; decide whether any additional passive refresh is needed for non-acting clients in v1.
+- [x] Add or update focused client tests for the new state-management behavior where the existing Swift/Kotlin test harnesses make that practical.
+- [x] Update relevant READMEs and product/architecture notes if the public session-management contract or session ordering semantics are now meaningfully different.
+- [x] Run tests/build/typecheck appropriate to the change run and pass.
+- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Update `AS-BUILT-ARCHITECTURE/` as needed.
+- [x] Update `PRODUCT/` as needed.
 
 ## Exit criteria
 
-- [ ] Mac, iPhone, and Android users can rename any session from the session list without the rows becoming permanently busy/editable.
-- [ ] Mac, iPhone, and Android users can delete any session, including the currently open one, with clean navigation/state handling.
-- [ ] Newly created sessions appear at the top of the list.
-- [ ] Opening/resuming a session moves it to the top even when no new prompt is sent.
-- [ ] Session ordering behavior is consistent because it is stored on the server and returned through the shared session list API.
-- [ ] Server tests cover rename/delete/recent-view ordering behavior.
-- [ ] Client behavior is covered by focused tests or clearly justified manual verification where automated coverage is impractical.
-- [ ] Architecture/product docs and README surfaces match the final session-management behavior.
+- [x] Mac, iPhone, and Android users can rename any session from the session list without the rows becoming permanently busy/editable.
+- [x] Mac, iPhone, and Android users can delete any session, including the currently open one, with clean navigation/state handling.
+- [x] Newly created sessions appear at the top of the list.
+- [x] Opening/resuming a session moves it to the top even when no new prompt is sent.
+- [x] Session ordering behavior is consistent because it is stored on the server and returned through the shared session list API.
+- [x] Server tests cover rename/delete/recent-view ordering behavior.
+- [x] Client behavior is covered by focused tests or clearly justified manual verification where automated coverage is impractical.
+- [x] Architecture/product docs and README surfaces match the final session-management behavior.
