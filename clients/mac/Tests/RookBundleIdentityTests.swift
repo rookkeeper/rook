@@ -7,11 +7,6 @@ final class RookBundleIdentityTests: XCTestCase {
         XCTAssertTrue(RookBundleIdentity.isInternalRookBundleId("com.rookkeeper.Rook.Dev.browser.environment.providers", currentBundleId: "com.example.Test"))
     }
 
-    func testRecognizesLegacyProductionAndDevelopmentBundleIds() {
-        XCTAssertTrue(RookBundleIdentity.isInternalRookBundleId("com.rookery.Rook", currentBundleId: "com.example.Test"))
-        XCTAssertTrue(RookBundleIdentity.isInternalRookBundleId("com.rookery.Rook.Dev.old-worktree", currentBundleId: "com.example.Test"))
-    }
-
     func testRecognizesTheCurrentBundleIdEvenIfItIsCustom() {
         XCTAssertTrue(RookBundleIdentity.isInternalRookBundleId("com.example.Test", currentBundleId: "com.example.Test"))
     }

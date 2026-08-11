@@ -5,14 +5,9 @@ import Foundation
 enum RookBundleIdentity {
     static let productionBundleId = "com.rookkeeper.Rook"
     static let developmentBundleIdPrefix = "com.rookkeeper.Rook.Dev."
-    private static let legacyProductionBundleId = "com.rookery.Rook"
-    private static let legacyDevelopmentBundleIdPrefix = "com.rookery.Rook.Dev."
 
     static func isInternalRookBundleId(_ bundleId: String, currentBundleId: String? = Bundle.main.bundleIdentifier) -> Bool {
-        if bundleId == productionBundleId
-            || bundleId.hasPrefix(developmentBundleIdPrefix)
-            || bundleId == legacyProductionBundleId
-            || bundleId.hasPrefix(legacyDevelopmentBundleIdPrefix) {
+        if bundleId == productionBundleId || bundleId.hasPrefix(developmentBundleIdPrefix) {
             return true
         }
         return bundleId == currentBundleId

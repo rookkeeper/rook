@@ -64,7 +64,6 @@ reset_environment() {
   unset ROOK_DATABASE_PATH ROOK_AGENT_RUNTIMES_PATH ROOK_RUN_ROOT RUN_ROOK_BUILD_ROOT PORT
   unset RUN_ROOK_HOME RUN_ROOK_DATABASE_PATH
   unset ROOK_BIND_IP ROOK_TAILSCALE_IP ROOK_REMOTE_HOSTNAME ROOK_SERVER_HOST
-  unset ROOK_DEV_ALLOW_REMOTE
   SERVER_BIND_HOST="127.0.0.1"
 }
 
@@ -103,7 +102,7 @@ assert_eq "$RUN_ROOT" "$TEST_ROOT/one/shared-name/.var/run-rook"
 assert_empty "${ROOK_BIND_IP:-}"
 assert_empty "${ROOK_TAILSCALE_IP:-}"
 assert_empty "${ROOK_REMOTE_HOSTNAME:-}"
-assert_eq "$ROOK_SERVER_HOST" "127.0.0.1"
+assert_empty "${ROOK_SERVER_HOST:-}"
 assert_empty "${ROOK_AGENT_RUNTIMES_PATH:-}"
 initialize_development_home
 assert_file "$ROOK_HOME/config/agent-runtimes.json"
@@ -134,8 +133,8 @@ configure_run_profile
 assert_eq "$SERVER_PORT" "8123"
 assert_eq "$ROOK_AGENT_RUNTIMES_PATH" "$TEST_ROOT/custom-runtimes.json"
 assert_eq "$PORT" "8123"
-assert_empty "$ROOK_BIND_IP"
-assert_empty "$ROOK_REMOTE_HOSTNAME"
+assert_eq "$ROOK_BIND_IP" "10.0.0.2"
+assert_eq "$ROOK_REMOTE_HOSTNAME" "worktree.example"
 
 reset_environment
 REPO_ROOT="$TEST_ROOT/one/shared-name"

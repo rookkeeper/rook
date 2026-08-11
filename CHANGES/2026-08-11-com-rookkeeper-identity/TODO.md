@@ -12,9 +12,11 @@ logging, and documentation surfaces consistent.
 Change active product identity surfaces only; do not rewrite historical
 CHANGES records or unrelated names containing “rookery.” Use stable
 `com.rookkeeper` identities for Mac and Android, preserve the existing iPhone
-identifiers, and provide a one-time legacy Keychain read/migration so existing
-Apple auth tokens survive the service rename. Treat already-persisted old
-environment IDs as historical data rather than silently rewriting them.
+identifiers, and remove the temporary `ROOK_DEV_ALLOW_REMOTE` gate so
+worktrees honor their configured remote listener by default. Do not retain
+migration or compatibility code for the old bundle IDs, Keychain service, or
+persisted environment IDs; users of the old app identity must transition to
+the new identity directly.
 
 ## Work checklist
 
@@ -25,12 +27,12 @@ environment IDs as historical data rather than silently rewriting them.
       logging docs, and current architecture docs.
 - [x] Rename Android application ID, namespace, Kotlin packages/directories,
       launcher force-stop/start commands, and Android docs.
-- [x] Add or update focused regression tests for identity filtering and
-      compatibility behavior.
+- [x] Add or update focused regression tests for identity filtering and the
+      new identity behavior.
 - [x] Update current as-built architecture and package documentation while
       preserving historical change records.
 - [x] Run Swift, Android, shell, and repository-wide identity validation.
-      Swift, Xcode, shell, server typecheck, server tests, and static identity
-      checks passed. Android validation remains blocked because this machine
-      has no Java runtime.
+      Swift, Xcode, shell, server typecheck, server tests, static identity
+      checks, and a no-override server/Mac/iPhone launch passed. Android
+      remains blocked because this machine has no Java runtime.
 - [ ] Inspect the final diff and commit history, then synchronize with main.

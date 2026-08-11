@@ -120,7 +120,7 @@ Via `RookKit`:
 10. queued messages, including image attachments, are delivered automatically once the agent goes idle
 
 ### Foreground environment detection
-1. `ForegroundAppMonitor` detects app activation or window-title change, but ignores all internal Rook bundle identities (`com.rookkeeper.Rook`, `com.rookkeeper.Rook.Dev.*`, and the legacy `com.rookery.Rook*` identities); when Rook becomes frontmost it clears the active external target and provider
+1. `ForegroundAppMonitor` detects app activation or window-title change, but ignores all internal Rook bundle identities (`com.rookkeeper.Rook` and `com.rookkeeper.Rook.Dev.*`); when Rook becomes frontmost it clears the active external target and provider
 2. `AppEnvironmentProvider` always emits the base `mac:<bundleId>` app environment after a short dwell delay
 3. `AppEnvironmentProvider` activates either a bundle-id-specific specialist or the generic fallback provider
 4. `GenericEnvironmentProvider` polls every 5 seconds while active, reads only focused-window Accessibility document values, inspects observed paths under `/Users/<username>`, and emits only project-like / agentic `dir:` candidates plus top-level-document `web:` candidates when the normalized environment-id set is stable across two polls

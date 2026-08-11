@@ -3,22 +3,9 @@ import Security
 
 public enum KeychainStore {
     private static let service = "com.rookkeeper.Rook"
-    private static let legacyService = "com.rookery.Rook"
 
     public static func string(for account: String) -> String? {
-        if let value = readString(for: account, service: service) {
-            return value
-        }
-
-        guard let legacyValue = readString(for: account, service: legacyService) else {
-            return nil
-        }
-
-        // Preserve existing auth tokens across the bundle/service migration.
-        if setString(legacyValue, for: account) {
-            deleteString(for: account, service: legacyService)
-        }
-        return legacyValue
+        readString(for: account, service: service)
     }
 
     @discardableResult
@@ -55,9 +42,7 @@ public enum KeychainStore {
 
     @discardableResult
     public static func removeString(for account: String) -> Bool {
-        let currentStatus = deleteString(for: account, service: service)
-        let legacyStatus = deleteString(for: account, service: legacyService)
-        return currentStatus && legacyStatus
+        deleteString(for: account, service: service)
     }
 
     private static func readString(for account: String, service: String) -> String? {

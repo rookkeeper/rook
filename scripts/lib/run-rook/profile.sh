@@ -104,7 +104,6 @@ configure_run_profile() {
   CURRENT_SERVER_LOG="$RUN_ROOT/server.log"
   CURRENT_SERVER_PIDFILE="$RUN_ROOT/server.pid"
   ROOK_HOME="${RUN_ROOK_HOME:-$RUN_ROOK_HOME_DEFAULT}"
-  ROOK_DEV_ALLOW_REMOTE="${ROOK_DEV_ALLOW_REMOTE:-0}"
   RUN_ROOK_DATABASE_PATH_EXPLICIT=0
   if [[ -n "${RUN_ROOK_DATABASE_PATH:-}" ]]; then
     RUN_ROOK_DATABASE_PATH_EXPLICIT=1
@@ -120,15 +119,6 @@ configure_run_profile() {
   # worktree cannot silently inherit production's PORT=7665.
   export PORT="$SERVER_PORT"
 
-  if [[ "$RUN_ROOK_PROFILE" == "development" && "$ROOK_DEV_ALLOW_REMOTE" != "1" ]]; then
-    # Keep these variables defined but empty. dotenv will not overwrite an
-    # existing environment variable, whereas an unset variable would be
-    # repopulated from the worktree's copied .env file.
-    export ROOK_BIND_IP=""
-    export ROOK_TAILSCALE_IP=""
-    export ROOK_REMOTE_HOSTNAME=""
-    export ROOK_SERVER_HOST="$SERVER_BIND_HOST"
-  fi
 }
 
 initialize_development_home() {
