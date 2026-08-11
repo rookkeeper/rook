@@ -699,9 +699,6 @@ private struct SessionHomeRow: View {
                         .fill(statusTint.opacity(0.25))
                 )
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 6)
