@@ -1,4 +1,4 @@
-# Change lifecycle worksteps
+# Development lifecycle worksteps
 
 - [ ] Orient to the project
 - [ ] Create the change directory and lifecycle record

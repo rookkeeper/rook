@@ -1,14 +1,13 @@
 ---
-name: change-lifecycle
+name: development-lifecycle
 description: >-
-  Plan, implement, validate, review, merge, and clean up substantial Rook changes
-  as one adaptable lifecycle. Use when work needs a CHANGES record, a worktree,
-  product or architecture documentation, a pull request, or post-merge cleanup.
+  Plan, implement, validate, review, merge, and clean up substantial Rook development work
+  as one adaptable lifecycle.
 ---
 
-# Rook change lifecycle
+# Rook development lifecycle
 
-This is the main lifecycle for carrying a substantial Rook change from an idea to
+This is the main lifecycle for carrying substantial Rook development work from an idea to
 its completion. It combines the planning, implementation-worktree, product and
 architecture review, pull-request, merge, and cleanup practices that otherwise
 live in separate instructions.
@@ -32,7 +31,7 @@ Each lifecycle phase below ends by requiring its checkbox to be updated in
 `WORKSTEPS.md`. The detailed work checklist belongs in `TODO.md`, not in
 `WORKSTEPS.md`.
 
-## Lifecycle
+## Development lifecycle
 
 ### Orient to the project
 
@@ -48,14 +47,16 @@ Create `CHANGES/YYYY-MM-DD-topic-slug/` for the work. Copy
 `WORKSTEPS.md`. This is the record of the lifecycle phases, not the detailed
 implementation plan. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
 
-### Brainstorm to work (optional when simple or obvious)
+### Brainstorm to work
 
-When the problem or solution needs exploration, create `BRAINSTORM.md` in the
-change directory from [`references/BRAINSTORM.md`](references/BRAINSTORM.md).
-Use it to investigate the problem, understand the relevant code and docs,
-compare options, record risks and open questions, and make the work legible to
-the user and future agents. Bypass this phase when the work is simple or the
-correct shape is already obvious. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
+Brainstorming is an advised starting point, not a fixed form: every task has
+different needs. When the problem or solution needs exploration, create
+`BRAINSTORM.md` in the change directory from
+[`references/BRAINSTORM.md`](references/BRAINSTORM.md). Use it to investigate
+the problem, understand the relevant code and docs, compare options, record
+risks and open questions, and make the work legible to the user and future
+agents. Keep, remove, or add sections as the task requires. Bypass this phase
+when the work is simple or obvious. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
 
 ### Record the decision and TODO
 
