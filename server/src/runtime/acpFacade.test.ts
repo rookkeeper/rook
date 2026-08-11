@@ -706,8 +706,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
 
     const sessionA = body.sessions.find((s) => s.title === "rest-test-a")!;
     expect(sessionA.running).toBe(true);
-    expect(sessionA._meta).toBeDefined();
-    expect((sessionA._meta as Record<string, unknown>).runtimeId).toBe("MockAcpAgent");
+    expect(sessionA.runtimeId).toBe("MockAcpAgent");
 
     wsA.close();
     wsB.close();

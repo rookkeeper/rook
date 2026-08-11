@@ -15,9 +15,9 @@ export async function runSessionsCommand(args) {
     console.log("No sessions.");
   } else {
     for (const session of shown) {
-      const id = session.sessionId || session.id || "?";
-      const title = session.title || session.name || "(untitled)";
-      const runtimeId = session._meta?.runtimeId || session.agent || "?";
+      const id = session.sessionId || "?";
+      const title = session.title || "(untitled)";
+      const runtimeId = session.runtimeId || "?";
       const updated = session.updatedAt || "?";
       console.log(`${id}  ${runtimeId}  ${title}  ${updated}`);
     }

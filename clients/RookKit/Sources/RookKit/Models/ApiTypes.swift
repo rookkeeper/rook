@@ -33,14 +33,14 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         self.raw = raw
     }
 
-    public var id: String { raw["id"]?.stringValue ?? raw["sessionId"]?.stringValue ?? "" }
-    public var agent: String { raw["agent"]?.stringValue ?? raw["_meta"]?["runtimeId"]?.stringValue ?? "" }
-    public var supportsImagePrompts: Bool { raw["supportsImagePrompts"]?.boolValue ?? raw["_meta"]?["supportsImagePrompts"]?.boolValue ?? false }
-    public var name: String { raw["name"]?.stringValue ?? raw["title"]?.stringValue ?? "default" }
+    public var id: String { raw["sessionId"]?.stringValue ?? "" }
+    public var agent: String { raw["runtimeId"]?.stringValue ?? "" }
+    public var supportsImagePrompts: Bool { raw["supportsImagePrompts"]?.boolValue ?? false }
+    public var name: String { raw["title"]?.stringValue ?? "session" }
     public var running: Bool { raw["running"]?.boolValue ?? false }
     public var connectedClients: Int { Int(raw["connectedClients"]?.numberValue ?? 0) }
     public var updatedAtISO: String? { raw["updatedAt"]?.stringValue }
-    public var startedAtISO: String? { raw["createdAt"]?.stringValue ?? raw["_meta"]?["startedAt"]?.stringValue }
+    public var startedAtISO: String? { raw["startedAt"]?.stringValue }
 
     public func selectionStatus(currentSessionId: String?) -> SessionSelectionStatus {
         if running, currentSessionId == id {
@@ -69,20 +69,19 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         formatDate(dateFromISO(updatedAtISO))
     }
 
-    // THIS IS FOR BACKWARDS COMPATIBILITY
-    // Preserve unknown server fields while updating known session-list values so
-    // older/newer clients can continue round-tripping the shared summary shape.
     public func updating(title: String? = nil, updatedAtISO: String? = nil, running: Bool? = nil) -> AgentSessionSummary {
-        var object = raw.objectValue ?? [:]
-        if let title {
-            object["title"] = .string(title)
-        }
-        if let updatedAtISO {
-            object["updatedAt"] = .string(updatedAtISO)
-        }
-        if let running {
-            object["running"] = .bool(running)
-        }
+        var object: [String: JSONValue] = [
+            "sessionId": .string(id),
+            "title": .string(title ?? name),
+            "running": .bool(running ?? self.running),
+        ]
+        if let runtimeId = raw["runtimeId"]?.stringValue { object["runtimeId"] = .string(runtimeId) }
+        if let cwd = raw["cwd"]?.stringValue { object["cwd"] = .string(cwd) }
+        if let startedAt = raw["startedAt"]?.stringValue { object["startedAt"] = .string(startedAt) }
+        if let supportsImagePrompts = raw["supportsImagePrompts"]?.boolValue { object["supportsImagePrompts"] = .bool(supportsImagePrompts) }
+        if let connectedClients = raw["connectedClients"]?.numberValue { object["connectedClients"] = .number(connectedClients) }
+        if let updatedAtISO { object["updatedAt"] = .string(updatedAtISO) }
+        else if let updatedAt = raw["updatedAt"]?.stringValue { object["updatedAt"] = .string(updatedAt) }
         return AgentSessionSummary(raw: .object(object))
     }
 

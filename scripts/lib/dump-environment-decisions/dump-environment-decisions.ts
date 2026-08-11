@@ -14,13 +14,11 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
-// Resolve REPO_ROOT the same way the server does (walk up from this script).
-const scriptDir = path.dirname(new URL(import.meta.url).pathname);
-const repoRoot = path.resolve(scriptDir, "..", "..", "..");
-
-const dbPath = path.join(repoRoot, ".var", "rook", "environment-decisions.sqlite");
+const dbPath = process.env.ROOK_DATABASE_PATH
+  ?? path.join(process.env.ROOK_HOME ?? path.join(os.homedir(), ".rook"), "rook.sqlite");
 
 if (!existsSync(dbPath)) {
   console.log("No environment decisions database found at:");

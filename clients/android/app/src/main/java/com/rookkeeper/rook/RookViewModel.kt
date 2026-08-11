@@ -314,11 +314,9 @@ class RookViewModel(
                         put("sessionId", sessionId)
                         put("title", title)
                         put("updatedAt", java.time.Instant.now().toString())
+                        put("runtimeId", agentId)
+                        put("startedAt", java.time.Instant.now().toString())
                         put("running", true)
-                        putJsonObject("_meta") {
-                            put("runtimeId", agentId)
-                            put("startedAt", java.time.Instant.now().toString())
-                        }
                     }
                 )
                 enterChat(session, resumed = false)

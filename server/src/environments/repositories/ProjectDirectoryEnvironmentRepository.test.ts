@@ -35,7 +35,7 @@ describe("ProjectDirectoryEnvironmentRepository", () => {
   it("ignores dangling skill symlinks while reading valid project skills", async () => {
     const project = await mkdtemp(path.join(os.tmpdir(), "rook-project-env-"));
     tempDirs.push(project);
-    const skillsRoot = path.join(project, ".claude", "skills");
+    const skillsRoot = path.join(project, ".agents", "skills");
     const skill = path.join(skillsRoot, "deploy");
     await mkdir(skill, { recursive: true });
     await writeFile(path.join(skill, "SKILL.md"), "Deploy carefully.");
@@ -49,36 +49,28 @@ describe("ProjectDirectoryEnvironmentRepository", () => {
     expect(result.bundles[0]?.skills.map((artifact) => artifact.id)).toEqual(["deploy"]);
   });
 
-  it("merges skills across discovery roots, earlier roots winning name collisions", async () => {
+  it("reads skills only from the standard project skills directory", async () => {
     const project = await mkdtemp(path.join(os.tmpdir(), "rook-project-env-"));
     tempDirs.push(project);
-    const agentsDeploy = path.join(project, ".agents", "skills", "deploy");
-    await mkdir(agentsDeploy, { recursive: true });
-    await writeFile(path.join(agentsDeploy, "SKILL.md"), "Deploy from .agents.");
-    const claudeDeploy = path.join(project, ".claude", "skills", "deploy");
-    await mkdir(claudeDeploy, { recursive: true });
-    await writeFile(path.join(claudeDeploy, "SKILL.md"), "Deploy from .claude.");
-    const claudeReview = path.join(project, ".claude", "skills", "review");
-    await mkdir(claudeReview, { recursive: true });
-    await writeFile(path.join(claudeReview, "SKILL.md"), "Review carefully.");
+    const skill = path.join(project, ".agents", "skills", "deploy");
+    await mkdir(skill, { recursive: true });
+    await writeFile(path.join(skill, "SKILL.md"), "Deploy carefully.");
+    const ignored = path.join(project, ".claude", "skills", "ignored");
+    await mkdir(ignored, { recursive: true });
+    await writeFile(path.join(ignored, "SKILL.md"), "Not discovered.");
 
     const repository = new ProjectDirectoryEnvironmentRepository();
     const result = await repository.getBundles(`dir:${project}`);
 
-    expect(result.bundles[0]?.skills.map((artifact) => artifact.id)).toEqual(["deploy", "review"]);
-    expect(result.bundles[0]?.skills[0]?.sourcePath).toBe(agentsDeploy);
-    expect(result.bundles[0]?.skills[1]?.sourcePath).toBe(claudeReview);
+    expect(result.bundles[0]?.skills.map((artifact) => artifact.id)).toEqual(["deploy"]);
   });
 
-  it("uses CLAUDE.md only when AGENTS.md is absent", async () => {
+  it("reads project instructions from AGENTS.md", async () => {
     const project = await mkdtemp(path.join(os.tmpdir(), "rook-project-env-"));
     tempDirs.push(project);
-    await writeFile(path.join(project, "CLAUDE.md"), "Claude fallback instructions.");
+    await writeFile(path.join(project, "AGENTS.md"), "Project instructions.");
 
     const repository = new ProjectDirectoryEnvironmentRepository();
-    expect((await repository.getBundles(`dir:${project}`)).bundles[0]?.agentsMd).toBe("Claude fallback instructions.");
-
-    await writeFile(path.join(project, "AGENTS.md"), "Preferred AGENTS instructions.");
-    expect((await repository.getBundles(`dir:${project}`)).bundles[0]?.agentsMd).toBe("Preferred AGENTS instructions.");
+    expect((await repository.getBundles(`dir:${project}`)).bundles[0]?.agentsMd).toBe("Project instructions.");
   });
 });

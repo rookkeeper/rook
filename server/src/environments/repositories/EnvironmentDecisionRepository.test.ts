@@ -33,15 +33,6 @@ describe("EnvironmentDecisionRepository", () => {
     store.close();
   });
 
-  it("allows null bundle_id for legacy environment-level decisions", () => {
-    const store = new EnvironmentDecisionRepository(":memory:");
-
-    store.setDecision("hash-legacy", "web:example.com", null, "reject");
-
-    expect(store.getDecision("hash-legacy")).toBe("reject");
-    store.close();
-  });
-
   it("clears a decision by bundle hash", () => {
     const store = new EnvironmentDecisionRepository(":memory:");
 

@@ -152,4 +152,35 @@ else
 fi
 assert_eq "$wait_status" "2"
 
+# Device resolution must ignore paired but unavailable CoreDevice inventory entries.
+PHONE_FIXTURE="$TEST_ROOT/devices.json"
+cat >"$PHONE_FIXTURE" <<'EOF'
+{
+  "result": {
+    "devices": [
+      {
+        "hardwareProperties": {"platform": "iOS", "reality": "physical", "udid": "stale-iphone"},
+        "connectionProperties": {"pairingState": "paired", "tunnelState": "unavailable"},
+        "deviceProperties": {"name": "Stale iPhone", "ddiServicesAvailable": false}
+      },
+      {
+        "hardwareProperties": {"platform": "iOS", "reality": "physical", "udid": "connected-iphone"},
+        "connectionProperties": {"pairingState": "paired", "transportType": "usb"},
+        "deviceProperties": {"name": "Connected iPhone", "ddiServicesAvailable": false}
+      }
+    ]
+  }
+}
+EOF
+xcrun() {
+  if [[ "$1" == "devicectl" && "$2" == "list" && "$3" == "devices" ]]; then
+    cp "$PHONE_FIXTURE" "$5"
+    return 0
+  fi
+  return 1
+}
+DEVICE_FILTER=""
+phone_result="$(resolve_phone)"
+assert_eq "$phone_result" $'Connected iPhone\tconnected-iphone'
+
 printf 'PASS: run-rook lifecycle tests\n'

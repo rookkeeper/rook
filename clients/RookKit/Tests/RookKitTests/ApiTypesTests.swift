@@ -24,9 +24,9 @@ final class ApiTypesTests: XCTestCase {
 
     func testAgentSessionSummaryBasicFields() {
         let raw = JSONValue.object([
-            "id": .string("session-1"),
-            "agent": .string("MockAgent"),
-            "name": .string("my-session"),
+            "sessionId": .string("session-1"),
+            "runtimeId": .string("MockAgent"),
+            "title": .string("my-session"),
             "running": .bool(true),
             "connectedClients": .number(2)
         ])
@@ -38,29 +38,25 @@ final class ApiTypesTests: XCTestCase {
         XCTAssertEqual(summary.connectedClients, 2)
     }
 
-    func testAgentSessionSummaryFallbackMeta() {
+    func testAgentSessionSummaryFieldsAreCanonical() {
         let raw = JSONValue.object([
             "sessionId": .string("s2"),
-            "_meta": .object(["runtimeId": .string("PiAgent")])
+            "runtimeId": .string("PiAgent"),
+            "title": .string("untitled"),
+            "startedAt": .string("2026-01-15T10:30:00Z")
         ])
         let summary = AgentSessionSummary(raw: raw)
         XCTAssertEqual(summary.id, "s2")
         XCTAssertEqual(summary.agent, "PiAgent")
-    }
-
-    func testAgentSessionSummaryTitleFallback() {
-        let raw = JSONValue.object([
-            "id": .string("s3"),
-            "title": .string("untitled")
-        ])
-        let summary = AgentSessionSummary(raw: raw)
         XCTAssertEqual(summary.name, "untitled")
+        XCTAssertNotNil(summary.createdAt)
+        XCTAssertEqual(summary.startedAtISO, "2026-01-15T10:30:00Z")
     }
 
     func testAgentSessionSummaryCreatedAtIso() {
         let raw = JSONValue.object([
-            "id": .string("s1"),
-            "createdAt": .string("2026-01-15T10:30:00Z")
+            "sessionId": .string("s1"),
+            "startedAt": .string("2026-01-15T10:30:00Z")
         ])
         let summary = AgentSessionSummary(raw: raw)
         XCTAssertNotNil(summary.createdAt)
@@ -69,25 +65,27 @@ final class ApiTypesTests: XCTestCase {
 
     func testAgentSessionSummaryUpdatedAtIso() {
         let raw = JSONValue.object([
-            "id": .string("s1"),
+            "sessionId": .string("s1"),
             "updatedAt": .string("2026-01-15T11:00:00Z")
         ])
         let summary = AgentSessionSummary(raw: raw)
         XCTAssertEqual(summary.updatedAtISO, "2026-01-15T11:00:00Z")
     }
 
-    func testAgentSessionSummaryUpdatingPreservesUnknownFields() {
+    func testAgentSessionSummaryUpdatingUsesCanonicalFields() {
         let raw = JSONValue.object([
             "sessionId": .string("s1"),
+            "runtimeId": .string("PiAgent"),
             "title": .string("before"),
             "updatedAt": .string("2026-01-15T11:00:00Z"),
-            "extra": .string("keep-me")
+            "running": .bool(false)
         ])
         let summary = AgentSessionSummary(raw: raw).updating(title: "after", updatedAtISO: "2026-01-15T12:00:00Z", running: true)
         XCTAssertEqual(summary.name, "after")
         XCTAssertEqual(summary.updatedAtISO, "2026-01-15T12:00:00Z")
         XCTAssertEqual(summary.running, true)
-        XCTAssertEqual(summary.raw["extra"]?.stringValue, "keep-me")
+        XCTAssertNil(summary.raw["extra"])
+        XCTAssertEqual(summary.raw["runtimeId"]?.stringValue, "PiAgent")
     }
 
     // MARK: - EnvironmentCandidate Codable

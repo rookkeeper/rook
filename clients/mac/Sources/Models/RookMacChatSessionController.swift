@@ -121,11 +121,9 @@ final class ChatSessionController {
                     "sessionId": .string(sessionId),
                     "title": .string(title),
                     "updatedAt": .string(ISO8601DateFormatter().string(from: Date())),
+                    "runtimeId": .string(agentId),
+                    "startedAt": .string(ISO8601DateFormatter().string(from: Date())),
                     "running": .bool(true),
-                    "_meta": .object([
-                        "runtimeId": .string(agentId),
-                        "startedAt": .string(ISO8601DateFormatter().string(from: Date())),
-                    ]),
                 ]))
                 let handle = SessionHandle(sessionId: sessionId, api: api, socket: socket, isLoaded: true)
                 handles[sessionId] = handle
