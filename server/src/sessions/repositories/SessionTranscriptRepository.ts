@@ -77,8 +77,6 @@ export class SessionTranscriptRepository {
     });
   }
 
-  // THIS IS FOR BACKWARDS COMPATIBILITY: discard the pre-logical transcript
-  // format once while preserving sessions and all other application data.
   private clearLegacyTranscriptOnce(): void {
     const applied = this.db.prepare(`
       SELECT migration_key FROM session_transcript_migrations WHERE migration_key = ?
