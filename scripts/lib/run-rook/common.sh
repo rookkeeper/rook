@@ -41,6 +41,9 @@ wait_for_health() {
     if health_ok; then
       return 0
     fi
+    if ! server_pidfile_is_alive; then
+      return 2
+    fi
     sleep 1
   done
   return 1
@@ -131,9 +134,14 @@ start_server() {
     fi
     ensure_server_deps
     start_server_in_background
-    if ! wait_for_health 90; then
+    local health_wait_status=0
+    wait_for_health 90 || health_wait_status=$?
+    if (( health_wait_status != 0 )); then
       tail -n 80 "$SERVER_LOG" >&2 || true
-      die "server did not become healthy"
+      if (( health_wait_status == 2 )); then
+        die "${SERVER_KIND} server exited before becoming healthy"
+      fi
+      die "${SERVER_KIND} server did not become healthy within 90 seconds"
     fi
     log "${SERVER_KIND} server is healthy"
   fi
