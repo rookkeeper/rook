@@ -20,6 +20,8 @@ enum ServerState: Equatable {
 
 @MainActor
 final class RookMacModel: ObservableObject {
+    private static let logger = RookLog.app
+
     static weak var shared: RookMacModel?
 
     @Published var panelMode: PanelMode = .home
@@ -112,6 +114,7 @@ final class RookMacModel: ObservableObject {
         RookMacModel.shared = self
         MacStallWatchdog.shared.start()
         MacStallWatchdog.shared.heartbeat(operation: "RookMacModel.init")
+        Self.logger.info("mac model init baseURL=\(resolvedBaseURL, privacy: .public)")
         wireControllers()
         serverStateController.start()
         appEnvironmentProvider.start()
@@ -293,7 +296,7 @@ final class RookMacModel: ObservableObject {
     var serverPrimaryLine: String {
         switch serverState {
         case .online:
-            return agents.isEmpty ? "Server online" : "Server online · \(agents.count) agents"
+            return agents.isEmpty ? "Server online" : "Server online · \(self.agents.count) agents"
         case .starting:
             return "Server starting…"
         case .offline:
@@ -322,12 +325,19 @@ final class RookMacModel: ObservableObject {
     // MARK: - Server lifecycle
 
     func refreshNow() async {
+        let timed = RookPerformance.begin(
+            "MacRefreshNow",
+            operation: "mac-refresh-now",
+            logger: Self.logger,
+            signposter: RookLog.appSignposter
+        )
         refreshAccessibilityStatus()
         await serverStateController.refreshNow()
         syncServerState()
         if serverState == .online {
             await loadAgents()
         }
+        timed.finish(details: "serverState=\(String(describing: serverState)) agents=\(self.agents.count)")
     }
 
     func refreshNow() {
@@ -337,27 +347,38 @@ final class RookMacModel: ObservableObject {
     }
 
     func startServer() {
+        Self.logger.info("mac model start server requested")
         serverStateController.startManagedServer()
         syncServerState()
     }
 
     func stopServer() {
+        Self.logger.info("mac model stop server requested")
         serverStateController.stopManagedServer()
         syncServerState()
     }
 
     func loadAgents() async {
+        let timed = RookPerformance.begin(
+            "MacLoadAgents",
+            operation: "mac-load-agents",
+            logger: Self.logger,
+            signposter: RookLog.appSignposter
+        )
         do {
             agents = try await api.agents()
             agentsError = ""
+            timed.finish(details: "agents=\(self.agents.count)")
         } catch {
             agentsError = error.localizedDescription
+            timed.fail(error)
         }
     }
 
     private var logViewerWindow: NSPanel?
 
     func openServerLog() {
+        Self.logger.info("mac model open unified log viewer")
         if let existing = logViewerWindow {
             existing.makeKeyAndOrderFront(nil)
             return
@@ -382,6 +403,7 @@ final class RookMacModel: ObservableObject {
     }
 
     func quitApp() {
+        Self.logger.info("mac model quit app")
         chatSessionController.stop()
         appEnvironmentProvider.stop()
         serverStateController.stop()
@@ -427,12 +449,14 @@ final class RookMacModel: ObservableObject {
     }
 
     func startNewSession(agentId: String, name: String) {
+        Self.logger.info("mac model start new session runtime=\(agentId, privacy: .public) name=\(name, privacy: .public)")
         chatSessionController.startNewSession(agentId: agentId, name: name) { [weak self] in
             self?.panelMode = .chat
         }
     }
 
     func resumeSession(_ session: AgentSessionSummary) {
+        Self.logger.info("mac model resume session=\(session.id, privacy: .public) runtime=\(session.agent, privacy: .public)")
         chatSessionController.resumeSession(session) { [weak self] in
             self?.panelMode = .chat
         }
@@ -451,6 +475,7 @@ final class RookMacModel: ObservableObject {
     }
 
     func send(_ content: [ChatPromptContent]) {
+        Self.logger.info("mac model send currentSession=\(self.currentSession?.id ?? "(none)", privacy: .public) textChars=\(content.textValue.count, privacy: .public) images=\(content.images.count, privacy: .public)")
         chatSessionController.send(content)
     }
 
@@ -539,6 +564,7 @@ final class RookMacModel: ObservableObject {
 
     func refreshAccessibilityStatus() {
         accessibilityTrusted = AXReader.isTrusted()
+        Self.logger.info("mac model accessibility trusted=\(self.accessibilityTrusted, privacy: .public)")
         MacStallWatchdog.shared.updateContext(["accessibilityTrusted": String(accessibilityTrusted)])
         if accessibilityTrusted {
             appEnvironmentProvider.refreshCurrentContext()
