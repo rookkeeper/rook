@@ -99,6 +99,8 @@ export class CapabilityWorkspaceManager {
       removeTree(internalInstructionsRoot),
       removeTree(mcpRoot),
       removeTree(agentsPath),
+      removeTree(path.join(root, ".claude")),
+      removeTree(path.join(root, "CLAUDE.md")),
     ]);
     await Promise.all([
       mkdir(skillsRoot, { recursive: true }),
@@ -214,6 +216,12 @@ export class CapabilityWorkspaceManager {
     });
     await writeFile(agentsPath, await renderAggregateAgents(root, agentInstructionSources, inlineFacts, skillNamesByEnvironment, skillAuthoringPaths), "utf8");
     await chmod(agentsPath, 0o444);
+    // Claude Code discovers project skills only under .claude/skills and
+    // auto-loads CLAUDE.md rather than AGENTS.md, so alias the projection
+    // under those names for Claude runtimes. Relative targets keep the links
+    // valid if the workspace root moves.
+    await replaceWithSymlink(path.join(root, ".claude", "skills"), path.join("..", ".agents", "skills"));
+    await replaceWithSymlink(path.join(root, "CLAUDE.md"), "AGENTS.md");
     await this.writeManifest();
     return { root, agentsPath, skillsRoot, editablePerEnvironmentRoot, mcpRoot, skillPaths };
   }
