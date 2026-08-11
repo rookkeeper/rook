@@ -982,6 +982,7 @@ private struct SessionActionsMenu: View {
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Color.white.opacity(0.06)))
         }
+        .menuIndicator(.hidden)
         .menuStyle(.borderlessButton)
         .fixedSize()
     }
