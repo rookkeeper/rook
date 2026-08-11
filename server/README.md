@@ -85,7 +85,7 @@ For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTU
 - `GET /api/health` — service health
 - `GET /api/agent_runtimes` — configured runtime catalog (only explicitly declared entries)
 - `GET /api/sessions` — session list + running state
-- `GET /api/sessions/:sessionId/transcript` — normalized server-owned transcript hydration
+- `GET /api/sessions/:sessionId/transcript` — coalesced logical server-owned transcript hydration
 - `POST /api/session/environments` — enter/leave environments for a session
 - `POST /api/environments/register` — mark an environment available
 - `POST /api/environments/decision` — record accept/approve/ignore/reject
@@ -121,7 +121,7 @@ It implements:
 - Sessions are a unified cross-runtime list ordered by `updatedAt` desc
 - `updatedAt` now represents both prompt activity and explicit client-side "viewed" touches, so opening/resuming a session moves it to the top
 - Session-to-environment membership persists in `session_environments`
-- Transcript history persists in `session_transcript_events` so later viewers can hydrate from server state instead of forcing runtime replay
+- Logical transcript history persists in `session_transcript_events` so later viewers can hydrate from server state instead of forcing runtime replay; ACP chunks are merged and in-progress records are updated in place.
 
 ### Runtime management
 

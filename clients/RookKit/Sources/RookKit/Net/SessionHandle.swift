@@ -312,7 +312,7 @@ public final class SessionHandle {
                 kindLabel: event["toolKind"]?.stringValue ?? "",
                 status: transcriptStatus(event["status"]?.stringValue),
                 arguments: stringifyTranscriptJSON(event["rawInput"]),
-                output: ""
+                output: stringifyTranscriptJSON(event["output"] ?? event["rawOutput"])
             )
             appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
         case "tool_call_update":

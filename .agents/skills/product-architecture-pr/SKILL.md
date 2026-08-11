@@ -29,6 +29,7 @@ Read [`references/pr-workflow.md`](./references/pr-workflow.md) when deciding wh
 - Do not include an "approaches considered" section by default. Only mention alternatives when there was a real tradeoff the reviewer should understand.
 - **After creating a PR, ask the developer whether they want it merged now.** Do not assume that opening the PR implies immediate merge.
 - **Prefer a merge commit when merging a PR.** Preserve the individual branch commits unless the developer explicitly asks for squash or rebase. Do not treat squash merging as the default.
+- **Always sync the feature branch with the base before submitting a PR.** Fetch `origin`, merge `origin/main` into the feature branch, resolve conflicts while preserving both changes, run the relevant checks, and verify the branch is clean and mergeable before pushing/opening or updating the PR. Do not submit a branch behind `main`.
 - **Resolve PR merge conflicts proactively.** If a PR is conflicting or behind its base, fetch the base branch, merge it into the feature branch, resolve conflicts while preserving both changes, run the relevant checks, commit the merge, and push the updated branch. Do not force-push or hide conflict resolution through a squash.
 
 ## Workflow
@@ -44,7 +45,8 @@ Copy and track:
 - [ ] 5. Update PRODUCT/ (and READMEs if structural)
 - [ ] 6. Draft PR title + body (template below)
 - [ ] 7. Validate required sections; ask developer if gaps
-- [ ] 8. If using branch/PR flow, push branch and open PR with gh
+- [ ] 8. Fetch and merge `origin/main`, resolve conflicts, run checks, and verify a clean/mergeable branch
+- [ ] 9. If using branch/PR flow, push branch and open PR with gh
 ```
 
 ### 1. Read all PRODUCT/ docs
@@ -132,9 +134,11 @@ Follow repo git safety rules (no force-push to main, no `--no-verify` unless ask
 If the developer said to use branch/PR flow:
 1. `git status`, `git diff`, `git log` — confirm scope
 2. Commit doc + code on a feature branch (not `main`)
-3. `git push -u origin HEAD`
-4. `gh pr create` with title and body from template
-5. Return the PR URL
+3. Fetch `origin` and merge `origin/main` into the feature branch; resolve all conflicts deliberately
+4. Run the relevant tests/builds and verify the branch is clean and mergeable
+5. `git push -u origin HEAD`
+6. `gh pr create` with title and body from template
+7. Return the PR URL
 6. Ask whether they want it merged now
 7. If yes, use an allowed **merge commit** method for the repo unless the developer requests rebase or squash, and follow the non-destructive local-sync guidance in [`references/pr-workflow.md`](./references/pr-workflow.md)
 

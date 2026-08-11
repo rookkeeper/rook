@@ -11,7 +11,7 @@
   - owns request/response bookkeeping and event reduction
 - `Net/SessionHandle.swift`
   - shared per-session state container used by both Apple clients
-  - owns one `AcpSocket`, transcript hydration, replay avoidance, reconnection, and live event reduction
+  - owns one `AcpSocket`, logical transcript hydration, replay avoidance, reconnection, and live event reduction
 - `Net/RookAPI.swift`
   - REST client for health, runtimes, environments, and location identification
 - `Models/ApiTypes.swift`
@@ -52,7 +52,7 @@
 - `agents()`
 - `sessions()` — session list over REST
 - `renameSession(sessionId:title:)`, `touchSession(sessionId:)`, `deleteSession(sessionId:)` — session management over REST
-- `sessionTranscript(sessionId:)` — normalized transcript hydration for second viewers / running sessions
+- `sessionTranscript(sessionId:)` — coalesced logical transcript hydration for second viewers / running sessions
 - `environmentPreview(environmentId:)`
 - `registerEnvironment(candidate)`
 - bundle/environment preview payloads preserve repository identity and derived bundle hashes for review and revalidation UI
@@ -110,7 +110,7 @@
 4. the prompt response marks the run complete or failed
 
 ### Shared rendering flow
-1. `SessionHandle` (or app-specific reducers around it) constructs `ChatBlock`s from transcript hydration + live ACP events
+1. `SessionHandle` (or app-specific reducers around it) constructs `ChatBlock`s from coalesced transcript hydration + live ACP events
 2. RookKit design views render the block list consistently across macOS and iOS
 3. markdown/tool payload helpers normalize output for display
 4. `EnvironmentListPresentation` applies shared list-refresh behavior for environment metadata
