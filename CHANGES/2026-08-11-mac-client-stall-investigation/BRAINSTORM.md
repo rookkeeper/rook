@@ -99,15 +99,21 @@ The telemetry should be bounded and privacy-conscious: durations and identifiers
 
 ### Current interpretation
 
-This is the first direct smoking gun. The logical Rook client was synchronously waiting on `AXReader.activeTabURL(pid: 2925, maxNodes: 600)` while its generic environment provider was polling. The call returned `nil` only after roughly 41 seconds. Because the provider is main-actor-bound, this explains the beachball and the missing health requests without requiring a server failure.
+This is the first direct locator, not the root-cause smoking gun. The logical Rook client was synchronously waiting on `AXReader.activeTabURL(pid: 2925, maxNodes: 600)` while its generic environment provider was polling. The call returned `nil` only after roughly 41 seconds. Because the provider is main-actor-bound, this explains the beachball and the missing health requests without requiring a server failure.
 
 The target PID is the important new clue: it was the **other Rook process**, not Chrome, Zed, or another ordinary user app. `ForegroundAppMonitor` currently ignores only the exact current bundle ID (`app.bundleId == Bundle.main.bundleIdentifier`). A worktree Rook therefore treats the production Rook as an external foreground app and can ask Accessibility to inspect the other Rook's window/tree. With two Rooks running, one client can therefore block itself while querying the other.
+
+Why that query takes 41 seconds is still unresolved. The leading possibilities are:
+
+- the target Rook's SwiftUI/AppKit Accessibility server needs its own main thread to answer, creating a cross-process wait or circular AX interaction while both Rooks monitor one another;
+- Rook's Accessibility tree is unusually expensive or pathological for the breadth-first `maxNodes: 600` traversal; or
+- `AXManualAccessibility`/WindowServer has a special interaction with this non-browser target, and the first synchronous AX request waits for a service-level timeout.
 
 This may explain the earlier impression that both Rooks paused simultaneously: they may not have independently hit the same call. One Rook was definitely blocked querying the other, while the two clients' focus changes and shared Accessibility/WindowServer activity made the symptoms look synchronized.
 
 ### Remaining uncertainty
 
-The 40-second timing proves that the `activeTabURL` boundary is where the client was stuck, but the current timing wrapper does not identify which nested AX API call waited. The likely blocking operation is one of the synchronous `AXUIElementCopyAttributeValue` calls while reading the other Rook's Accessibility tree. A stack sample would still confirm the exact nested API.
+The 40-second timing proves where the client was stuck, but not which nested AX API caused the wait or why the Rook target was different from normal applications. The likely blocking operation is one of the synchronous `AXUIElementCopyAttributeValue` calls while reading the other Rook's Accessibility tree. A stack sample of both Rook processes during the stall, plus a one-Rook-versus-two-Rook reproduction, would distinguish the cross-process wait hypothesis from an intrinsically pathological Rook AX tree.
 
 ## Open questions
 
