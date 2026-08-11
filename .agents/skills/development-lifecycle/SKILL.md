@@ -42,10 +42,11 @@ implementation. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEP
 
 ### Create the change directory and lifecycle record
 
-Create `CHANGES/YYYY-MM-DD-topic-slug/` for the work. Copy
-[`references/WORKSTEPS.md`](references/WORKSTEPS.md) into that directory as
-`WORKSTEPS.md`. This is the record of the lifecycle phases, not the detailed
-implementation plan. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
+Create `CHANGES/YYYY-MM-DD-topic-slug/` in the **main checkout**, not in a
+worktree. Copy [`references/WORKSTEPS.md`](references/WORKSTEPS.md) into that
+directory as `WORKSTEPS.md`. This makes the plan visible in the primary
+checkout while it is being discussed. This is the record of the lifecycle
+phases, not the detailed implementation plan. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
 
 ### Brainstorm to work
 
@@ -69,15 +70,21 @@ Create `TODO.md` in the change directory from
 3. **Work checklist** — actionable `- [ ]` bullets describing the work, which
    can be grouped into major categories when useful.
 
-Keep `TODO.md` current as the implementation changes the plan. When complete,
-check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
+Keep `TODO.md` current as the implementation changes the plan. Once the
+brainstorm and TODO are agreed, commit the change directory to the **main
+checkout** before creating the implementation workspace. This is the planning
+checkpoint: do not start implementation until that commit exists. When
+complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
 
 ### Prepare the implementation workspace
 
-For substantial work, create a dedicated worktree and feature branch under
-`../_worktrees/`, copy `.env` into it, and do the implementation there rather
-than in `main`. Preserve the change record before implementation begins. When
-complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
+After the planning commit exists on main, create a dedicated worktree and
+feature branch from that main commit under `../_worktrees/`, copy `.env` into
+it, and do the implementation there rather than in `main`. The committed
+change directory will therefore also be present in the worktree, but its
+primary planning record remains visible in main. Subsequent TODO and
+WORKSTEPS updates belong to the implementation branch and are merged with the
+code. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
 
 ### Implement and test
 
