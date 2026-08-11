@@ -74,8 +74,7 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
 
     private func poll() {
         guard let currentApp else { return }
-        let title = AXReader.focusedWindowTitle(pid: currentApp.pid) ?? currentTitle
-        currentTitle = title
+        let title = currentTitle
         let observation = observe()
         currentAppEnvironmentId = Self.currentEnvironmentId(from: observation)
         let candidates = Self.candidates(for: currentApp, title: title, observation: observation)

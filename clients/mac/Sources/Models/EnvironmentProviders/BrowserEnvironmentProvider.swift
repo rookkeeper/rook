@@ -15,6 +15,7 @@ final class BrowserEnvironmentProvider: SpecializedEnvironmentProvider {
 
     private let registration: EnvironmentRegistrationController
     private var pollTimer: Timer?
+    private var urlReadTask: Task<Void, Never>?
     private var currentApp: ForegroundApp?
     private var currentTitle: String?
 
@@ -34,11 +35,14 @@ final class BrowserEnvironmentProvider: SpecializedEnvironmentProvider {
         currentApp = app
         currentTitle = title
         currentAppEnvironmentId = Self.appEnvironmentId(bundleId: app.bundleId)
+        urlReadTask?.cancel()
     }
 
     func deactivate() {
         pollTimer?.invalidate()
         pollTimer = nil
+        urlReadTask?.cancel()
+        urlReadTask = nil
         currentApp = nil
         currentTitle = nil
         currentAppEnvironmentId = nil
@@ -62,13 +66,20 @@ final class BrowserEnvironmentProvider: SpecializedEnvironmentProvider {
 
     private func poll() {
         guard let currentApp else { return }
-        let title = AXReader.focusedWindowTitle(pid: currentApp.pid) ?? currentTitle
-        currentTitle = title
         currentAppEnvironmentId = Self.appEnvironmentId(bundleId: currentApp.bundleId)
+        let app = currentApp
+        urlReadTask?.cancel()
+        urlReadTask = Task.detached { [weak self] in
+            let url = AXReader.activeTabURL(pid: app.pid)
+            guard !Task.isCancelled else { return }
+            await self?.apply(url: url, for: app)
+        }
+    }
 
-        let url = AXReader.activeTabURL(pid: currentApp.pid)
+    private func apply(url: String?, for app: ForegroundApp) {
+        guard currentApp == app else { return }
         currentSiteEnvironmentId = Self.siteEnvironmentId(from: url)
-        registration.emitNow(candidates: Self.candidates(for: currentApp, title: title, url: url), reason: "browser")
+        registration.emitNow(candidates: Self.candidates(for: app, title: currentTitle, url: url), reason: "browser")
         onStateChange?()
     }
 

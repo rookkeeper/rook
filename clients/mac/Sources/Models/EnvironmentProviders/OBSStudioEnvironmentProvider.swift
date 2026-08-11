@@ -60,8 +60,7 @@ final class OBSStudioEnvironmentProvider: SpecializedEnvironmentProvider {
 
     private func poll() {
         guard let currentApp else { return }
-        let title = AXReader.focusedWindowTitle(pid: currentApp.pid) ?? currentTitle
-        currentTitle = title
+        let title = currentTitle
         currentAppEnvironmentId = Self.currentEnvironmentId(bundleId: currentApp.bundleId, title: title)
         let candidates = Self.candidates(for: currentApp, title: title)
         registration.emitNow(candidates: candidates, reason: "obs-studio")

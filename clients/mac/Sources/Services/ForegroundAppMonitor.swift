@@ -15,7 +15,7 @@ func providerLog(_ message: String) {
     }
 }
 
-struct ForegroundApp: Equatable {
+struct ForegroundApp: Equatable, Sendable {
     let bundleId: String
     let name: String
     let pid: pid_t
@@ -45,6 +45,7 @@ final class ForegroundAppMonitor {
 
     private var observer: NSObjectProtocol?
     private var debounceTask: Task<Void, Never>?
+    private var titleReadTask: Task<Void, Never>?
     private var pollTimer: Timer?
     private let debounceNanoseconds: UInt64 = 700_000_000
 
@@ -84,6 +85,7 @@ final class ForegroundAppMonitor {
         }
         observer = nil
         debounceTask?.cancel()
+        titleReadTask?.cancel()
         pollTimer?.invalidate()
         pollTimer = nil
     }
@@ -124,12 +126,27 @@ final class ForegroundAppMonitor {
 
     private func commit(_ app: ForegroundApp) {
         current = app
+        currentTitle = nil
         onForegroundChange?(app)
         emitContext(for: app)
     }
 
     private func emitContext(for app: ForegroundApp) {
-        let title = AXReader.focusedWindowTitle(pid: app.pid)
+        titleReadTask?.cancel()
+        titleReadTask = Task.detached { [weak self] in
+            let title = AXReader.focusedWindowTitle(pid: app.pid)
+            guard !Task.isCancelled else { return }
+            await self?.deliverContext(for: app, title: title)
+        }
+    }
+
+    private func deliverContext(for app: ForegroundApp, title: String?) {
+        guard current == app else {
+            return
+        }
+        guard currentTitle != title else {
+            return
+        }
         currentTitle = title
         onContextRefresh?(app, title)
     }
@@ -150,16 +167,14 @@ final class ForegroundAppMonitor {
             commit(app)
             return
         }
-        let title = AXReader.focusedWindowTitle(pid: app.pid)
-        if title != currentTitle {
-            currentTitle = title
-            onContextRefresh?(app, title)
-        }
+        emitContext(for: app)
     }
 
     private func clearCurrentAppForInternalRook() {
         debounceTask?.cancel()
         debounceTask = nil
+        titleReadTask?.cancel()
+        titleReadTask = nil
         guard current != nil || currentTitle != nil else {
             return
         }

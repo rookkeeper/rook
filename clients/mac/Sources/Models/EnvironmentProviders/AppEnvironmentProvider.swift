@@ -19,6 +19,7 @@ final class AppEnvironmentProvider {
     private var lastLoggedDocumentValues: [String] = []
     private var lastLoggedBundleId: String?
     private var hasLoggedContext = false
+    private var rawContextReadTask: Task<Void, Never>?
 
     private(set) var foregroundEnvironmentId: String?
     private(set) var foregroundSiteEnvironmentId: String?
@@ -69,6 +70,8 @@ final class AppEnvironmentProvider {
 
     func stop() {
         monitor.stop()
+        rawContextReadTask?.cancel()
+        rawContextReadTask = nil
         baseRegistration.clear()
         activeProvider?.deactivate()
     }
@@ -84,8 +87,7 @@ final class AppEnvironmentProvider {
     }
 
     private func handleForegroundApp(_ app: ForegroundApp) {
-        let title = AXReader.focusedWindowTitle(pid: app.pid)
-        logRawContext(app: app, title: title, reason: "app-switch")
+        let title: String? = nil
         foregroundAppName = app.name
         foregroundWindowTitle = title
         currentApp = app
@@ -104,6 +106,8 @@ final class AppEnvironmentProvider {
     }
 
     private func handleInternalRookActivation() {
+        rawContextReadTask?.cancel()
+        rawContextReadTask = nil
         activeProvider?.deactivate()
         activeProvider = nil
         baseRegistration.clear()
@@ -144,7 +148,26 @@ final class AppEnvironmentProvider {
     }
 
     private func logRawContext(app: ForegroundApp, title: String?, reason: String) {
-        let documentValues = AXReader.focusedWindowDocumentValues(pid: app.pid)
+        rawContextReadTask?.cancel()
+        rawContextReadTask = Task.detached { [weak self] in
+            let documentValues = AXReader.focusedWindowDocumentValues(pid: app.pid)
+            guard !Task.isCancelled else { return }
+            await self?.recordRawContext(
+                app: app,
+                title: title,
+                reason: reason,
+                documentValues: documentValues
+            )
+        }
+    }
+
+    private func recordRawContext(
+        app: ForegroundApp,
+        title: String?,
+        reason: String,
+        documentValues: [String]
+    ) {
+        guard currentApp == app else { return }
         let appChanged = app.bundleId != lastLoggedBundleId
         let titleChanged = title != lastLoggedTitle
         let documentChanged = documentValues != lastLoggedDocumentValues

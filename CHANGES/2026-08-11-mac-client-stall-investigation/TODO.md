@@ -49,7 +49,7 @@ The Safari/Firefox specialist is containment, not yet the root-cause fix. The re
 1. [x] Exclude every internal Rook bundle ID and stop any active provider when Rook becomes frontmost. This directly removes the known cross-Rook trigger.
 2. [x] Add per-operation AX timing for focused-window lookup, document attributes, child traversal, and URL lookup, logging only operation names, PIDs, bundle IDs, node counts, and durations.
 3. [x] Add bounded AX messaging timeouts and a bounded URL-tree traversal deadline.
-4. [ ] Move synchronous AX work off the main actor where the API permits, so a pathological target cannot freeze the client UI.
+4. [x] Move environment-provider AX work off the main actor: foreground title reads, generic document observation, and browser URL traversal now run in detached tasks. Bridge text/action perception remains a separate path.
 5. [ ] Reproduce with one Rook and two Rook instances, comparing the timings and watchdog records.
 6. [ ] Capture process samples during any remaining stall to identify whether the wait is inside an AX IPC call, a SwiftUI/AppKit operation, or another main-actor dependency.
 

@@ -13,8 +13,8 @@ private struct GenericEnvironmentObservation {
 final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     private static let pollInterval: TimeInterval = 5
     private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.rook", category: "GenericEnvironmentProvider")
-    private static let fileManager = FileManager.default
-    private static let projectRootFileMarkers = [
+    private nonisolated(unsafe) static let fileManager = FileManager.default
+    private nonisolated static let projectRootFileMarkers = [
         ".git",
         "Cargo.toml",
         "go.mod",
@@ -28,16 +28,16 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         "MODULE.bazel",
         "CMakeLists.txt",
     ]
-    private static let projectRootDirectorySuffixes = [".xcodeproj", ".xcworkspace"]
-    private static let projectRootFileSuffixes = [".sln"]
-    private static let skillDirectoryMarkers = [
+    private nonisolated static let projectRootDirectorySuffixes = [".xcodeproj", ".xcworkspace"]
+    private nonisolated static let projectRootFileSuffixes = [".sln"]
+    private nonisolated static let skillDirectoryMarkers = [
         ".agents/skills",
         ".claude/skills",
         ".codex/skills",
         ".cursor/skills",
         ".github/skills",
     ]
-    private static let agentsMdMarker = "AGENTS.md"
+    private nonisolated static let agentsMdMarker = "AGENTS.md"
 
     let supportedBundleIds: [String] = []
     var onStateChange: (() -> Void)?
@@ -46,6 +46,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
 
     private let registration: EnvironmentRegistrationController
     private var pollTimer: Timer?
+    private var observationTask: Task<Void, Never>?
     private var currentApp: ForegroundApp?
     private var currentTitle: String?
     private var previousNormalizedIds: [String]?
@@ -74,6 +75,8 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         }
         pollTimer?.invalidate()
         pollTimer = nil
+        observationTask?.cancel()
+        observationTask = nil
         currentApp = nil
         currentTitle = nil
         previousNormalizedIds = nil
@@ -98,9 +101,17 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
 
     private func poll() {
         guard let app = currentApp else { return }
-        let title = AXReader.focusedWindowTitle(pid: app.pid) ?? currentTitle
-        currentTitle = title
-        let observation = Self.observation(for: app, title: title)
+        let title = currentTitle
+        observationTask?.cancel()
+        observationTask = Task.detached { [weak self] in
+            let observation = Self.observation(for: app, title: title)
+            guard !Task.isCancelled else { return }
+            await self?.apply(observation, for: app)
+        }
+    }
+
+    private func apply(_ observation: GenericEnvironmentObservation, for app: ForegroundApp) {
+        guard currentApp == app else { return }
         defer {
             previousNormalizedIds = observation.normalizedIds
             currentAppEnvironmentId = observation.deepestDirEnvironmentId
@@ -113,7 +124,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         registration.emitNow(candidates: observation.candidates, reason: "generic")
     }
 
-    private static func observation(for app: ForegroundApp, title: String?) -> GenericEnvironmentObservation {
+    nonisolated private static func observation(for app: ForegroundApp, title: String?) -> GenericEnvironmentObservation {
         let documentValues = AXReader.focusedWindowDocumentValues(pid: app.pid)
         var candidatesById: [String: EnvironmentCandidate] = [:]
         var deepestWebEnvironmentId: String?
@@ -150,7 +161,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         )
     }
 
-    private static func directoryCandidates(fromObservedPath observedPath: String, app: ForegroundApp, title: String?, rawValue: String) -> [EnvironmentCandidate] {
+    nonisolated private static func directoryCandidates(fromObservedPath observedPath: String, app: ForegroundApp, title: String?, rawValue: String) -> [EnvironmentCandidate] {
         let directories = candidateDirectories(forObservedPath: observedPath)
         return directories.compactMap { directoryPath in
             let detection = detectDirectorySignals(at: directoryPath)
@@ -173,7 +184,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         }
     }
 
-    private static func webCandidates(from rawURL: String, app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
+    nonisolated private static func webCandidates(from rawURL: String, app: ForegroundApp, title: String?) -> [EnvironmentCandidate] {
         let ids = webEnvironmentIds(from: rawURL)
         guard !ids.isEmpty else { return [] }
         return ids.map { environmentId in
@@ -185,7 +196,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         }
     }
 
-    private static func candidateDirectories(forObservedPath observedPath: String) -> [String] {
+    nonisolated private static func candidateDirectories(forObservedPath observedPath: String) -> [String] {
         let homeDir = URL(fileURLWithPath: NSHomeDirectory()).standardizedFileURL.path
         guard observedPath.hasPrefix(homeDir + "/") else { return [] }
 
@@ -202,7 +213,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         return result.reversed()
     }
 
-    private static func detectDirectorySignals(at directoryPath: String) -> DirectorySignalDetection {
+    nonisolated private static func detectDirectorySignals(at directoryPath: String) -> DirectorySignalDetection {
         let entries = (try? fileManager.contentsOfDirectory(atPath: directoryPath)) ?? []
         let entrySet = Set(entries)
 
@@ -228,7 +239,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         )
     }
 
-    static func normalizedAbsolutePath(from rawValue: String) -> String? {
+    nonisolated static func normalizedAbsolutePath(from rawValue: String) -> String? {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         if let url = URL(string: trimmed), url.isFileURL {
@@ -240,7 +251,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         return URL(fileURLWithPath: trimmed).standardizedFileURL.path
     }
 
-    static func webEnvironmentIds(from rawURL: String) -> [String] {
+    nonisolated static func webEnvironmentIds(from rawURL: String) -> [String] {
         guard let components = URLComponents(string: rawURL),
               let scheme = components.scheme?.lowercased(),
               scheme == "http" || scheme == "https",
@@ -250,7 +261,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         return ["web:\(host)"]
     }
 
-    private static func webDisplayName(for environmentId: String) -> String {
+    nonisolated private static func webDisplayName(for environmentId: String) -> String {
         let path = environmentId.replacingOccurrences(of: "web:", with: "")
         let parts = path.split(separator: "/").map(String.init)
         guard let first = parts.first else { return environmentId }
@@ -258,7 +269,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         return ([first] + parts.dropFirst()).joined(separator: " / ")
     }
 
-    static func warningForNonAbsoluteDirectoryCandidate(rawValue: String, app: ForegroundApp) {
+    nonisolated static func warningForNonAbsoluteDirectoryCandidate(rawValue: String, app: ForegroundApp) {
         logger.warning("Skipping non-absolute directory candidate for bundleId=\(app.bundleId, privacy: .public): \(rawValue, privacy: .public)")
     }
 }
