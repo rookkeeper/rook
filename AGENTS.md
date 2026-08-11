@@ -1,38 +1,66 @@
 # Global Instructions
 
-This is a mono-repo for the Rook personal agent. The agent knows its user AND the agent can be made to interact with the environment around it.
+This is a mono-repo for the Rook personal agent. The agent knows its user and can interact with the surrounding environment.
 
-# Orientation
+# Development work
 
-Before doing anything else in this repo — investigating bugs, planning features, or making changes — read `AS-BUILT-ARCHITECTURE/` to get the lay of the land. It covers the server, each client, the shared Swift package, the database, and the common system shape (ACP over WebSocket client↔server, ACP over stdio server↔runtime, one subprocess per session). Knowing the architecture first will save you from making wrong assumptions about how the system fits together.
+For software development tasks, follow [the development lifecycle skill](.agents/skills/development-lifecycle/SKILL.md). It is the canonical process for planning work in `CHANGES/`, creating workspaces, implementing and testing changes, maintaining product and architecture documentation, opening and merging PRs, and cleaning up afterward.
 
-Product/design notes: `PRODUCT/`. When making PRs, make sure to reference anything in this directory and describe how the PR interacts with the current PRODUCT design philosophy and approach. Does it implement a missing feature that product docs is asking for? Does it create a new concept (which you definitely need to add to documentation as part of the PR)? Does it change part of the design philosophy and approach or negate it (In this case, also update the docs as part of the PR)?
+Keep tests in sync with code changes. Changes to `scripts/lib/run-rook/` must update the shell tests in that directory and run `npm run test:launcher`.
 
-When big architecture, schema, layering, or cross-package structure changes happen, update the relevant files in `AS-BUILT-ARCHITECTURE/`. If you notice the structure is being modified from what these documents describe, make sure to eventually update them too.
+Keep run-rook tests hermetic: use temporary Git repositories/worktrees and fake processes/listeners. Never modify the real `~/.rook` state or stop a developer's running Rook instance.
 
-When making changes:
-- Keep tests in sync with code changes. Changes to `scripts/lib/run-rook/` should update the shell tests in that directory and run `npm run test:launcher`.
-- Keep run-rook tests hermetic: use temporary Git repositories/worktrees and fake processes/listeners; never modify the real `~/.rook` state or stop a developer's running Rook instance.
-- I will often ask about GitHub issues, pull requests, and related work. Typically use the GitHub CLI (`gh`) to access, inspect, search, create, and manage those things.
-- When I ask you to create a GitHub issue, write it like a person speaking naturally. Do not turn it into a formal template or over-structure it unless I ask for that.
-- When issue labeling is relevant, use the repor's current GitHub labels via `gh`. Current preferred labels are: `bug`, `documentation`, `good first issue`, `mac-client`, `iphone-client`, `android-client`, `server`, `environment-repository`, `ui/ux`, and `datamodel`.
-- When linking to repo files in chat, prefer markdown links using Zed deep links in the form `[label](zed://file/absolute/path/to/file:line)` when a line number is useful, or `[label](zed://file/absolute/path/to/file)` otherwise.
-- When we're working on an issue, it's usually a big enough chunk of work to create a git worktree in `../_worktrees/`. Name it after the issue and topic (for example, `issue-46-tabs`) and use that worktree for the implementation work. After creating the worktree, copy `.env` from the main repo into it (`cp ../rook/.env ../_worktrees/issue-46-tabs/.env`) — it's gitignored so the worktree starts without it, and `run-rook.sh` needs it for remote phone/server config.
-- When you make obvious structural or workflow changes, update the relevant READMEs: root `README.md` and the README in whichever major package you touched (`server/`, `clients/mac/`, `clients/iphone/`, `clients/RookKit/`). Also update relevant docs in PRODUCT
-- Once you're complete with a large chunk of work, use the mac `say` command to tell me what you've done. Use no more than 7 words. You can background it (e.g. `say '…' &`) so it does not block the shell. Make sure to always end the `say` expression with a sentence-ending punctuation.
-- Never push to remote or run `git push` unless I explicitly tell you to. Commit locally all you want.
+When big architecture, schema, layering, or cross-package structure changes happen, update the relevant files in `AS-BUILT-ARCHITECTURE/`. If those documents no longer describe the repository, bring them up to date.
+
+When you make obvious structural or workflow changes, update the relevant READMEs: root `README.md` and the README in whichever major package you touched (`server/`, `clients/mac/`, `clients/iphone/`, `clients/RookKit/`). Also update relevant docs in PRODUCT
+
+# GitHub issues
+
+I will often ask about GitHub issues, pull requests, and related work. Typically use the GitHub CLI (`gh`) to access, inspect, search, create, and manage those things.
+
+When asked to create a GitHub issue, write it like a person speaking naturally. Do not turn it into a formal template or over-structure it unless asked.
+
+When issue labeling is relevant, use the repo's current GitHub labels via `gh`. Preferred labels include: `bug`, `documentation`, `good first issue`, `mac-client`, `iphone-client`, `android-client`, `server`, `environment-repository`, `ui/ux`, and `datamodel`.
+
+# Communication and Git safety
+
+When linking to repo files in chat, prefer Zed deep links in the form `[label](zed://file/absolute/path/to/file:line)` when a line number is useful, or `[label](zed://file/absolute/path/to/file)` otherwise.
+
+Once you're complete with a large chunk of work, use the mac `say` command to tell me what you've done. Use no more than 7 words, run it in the background when possible, and end the `say` expression with a sentence-ending punctuation.
+
+Never push to remote or run `git push` unless I explicitly tell you to. Commit locally all you want.
 
 # Debugging
 
-For debugging patterns, CLI commands, scripts, mock agent usage, and Codex computer-use workflows, read: `.agents/skills/debugging-rook/SKILL.md`.
+For debugging patterns, CLI commands, scripts, mock agent usage, and Codex computer-use workflows, read `.agents/skills/debugging-rook/SKILL.md`.
 
-Quick launch:
+# Quick launch
+
+Run commands from the checkout you want to use. The script selects the appropriate production or isolated development profile:
 
 ```bash
-./scripts/run-rook.sh mac server
+# Start the backend server.
+./scripts/run-rook.sh server
+
+# Start the backend and build/launch the Mac client.
+./scripts/run-rook.sh server mac
+
+# Start the backend and build/launch the iPhone simulator.
+./scripts/run-rook.sh server sim
+
+# Start the backend and build/launch a connected physical iPhone.
+./scripts/run-rook.sh server iphone
+
+# Stop the current profile's managed server and clients.
+./scripts/run-rook.sh stop
+
+# Stop managed resources for every profile only when broad cleanup is intended.
+./scripts/run-rook.sh stop --all
 ```
 
-Run a quick diagnostic:
+The server runs on the selected profile's local port. Worktree development profiles use isolated state and ports; copy `.env` into a worktree when remote phone/server configuration is needed, as described by the development lifecycle skill.
+
+Run a quick diagnostic against the active profile:
 
 ```bash
 source .env
