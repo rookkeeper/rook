@@ -103,6 +103,10 @@ final class ForegroundAppMonitor {
     }
 
     private func handleActivation(_ app: ForegroundApp) {
+        MacStallWatchdog.shared.updateContext([
+            "foregroundBundleId": app.bundleId,
+            "foregroundPid": String(app.pid),
+        ])
         providerLog("activation: \(app.name) [\(app.bundleId)]")
         // Our own panel/window gaining focus must not end the current episode.
         if app.bundleId == Bundle.main.bundleIdentifier {

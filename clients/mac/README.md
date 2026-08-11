@@ -38,6 +38,11 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
 - **Server supervision** - health polling; if the server is down the panel can
   launch `npm run dev` for the repo and tail its log
   (`~/Library/Logs/Rook/server.log`).
+- **Main-thread stall watchdog** - a local background watchdog records a
+  unified-log warning when the Mac app's main run loop stops advancing for
+  several seconds. Records include a client instance ID, the last known
+  diagnostic operation, safe process/lifecycle context, and recovery duration;
+  they do not include window contents or transcript text.
 - **Mac environment provider** - the app immediately registers newly seen
   user-visible environments, keeps them alive with periodic re-registration,
   and forgets them locally after 4m45s without renewed user-visible focus. Generic path-derived registration is now conservative: it only emits project-like or agentic `dir:/...` environments under `/Users/<username>` rather than every observed path segment.
@@ -173,7 +178,16 @@ thrash the richer foreground context, the app ignores its own activations
 (opening the panel doesn't end the episode), and cached registrations are
 re-announced if the server restarts.
 
-Provider activity is traced to `/tmp/rook.log` for debugging.
+Provider activity is traced to `/tmp/rook.log` for debugging. Main-thread stall
+watchdog records use macOS unified logging and can be inspected with:
+
+```zsh
+log show --last 1h --style compact \\
+  --predicate 'category == "StallWatchdog"'
+```
+
+Each client process gets a short instance ID, so records from simultaneous Rook
+clients can be compared without conflating their timelines.
 
 ### Tier 1 - window-title perception
 

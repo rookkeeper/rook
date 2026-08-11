@@ -24,22 +24,22 @@ The first pass does not need automatic `sample`/spindump capture or AX-call inst
 
 ## Steps
 
-- [ ] Add a Mac-local diagnostics/watchdog component with a unique client-instance identifier and a monotonic heartbeat.
-- [ ] Run the watchdog from a background queue and emit one unified-log warning per detected stale-heartbeat episode.
-- [ ] Record safe contextual metadata and the last registered operation label without collecting user-facing content.
-- [ ] Integrate heartbeat updates with the Mac app's main-actor lifecycle and diagnostics-relevant operations.
-- [ ] Add focused tests for stale-heartbeat detection, recovery, duplicate suppression, and configurable thresholds.
-- [ ] Document how to inspect the watchdog records with macOS unified-log tools and how to correlate multiple client instances.
-- [ ] Run the appropriate macOS tests/build checks and confirm they pass.
-- [ ] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [ ] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
-- [ ] Update `AS-BUILT-ARCHITECTURE/` as needed.
-- [ ] Update `PRODUCT/` as needed.
+- [x] Add a Mac-local diagnostics/watchdog component with a unique client-instance identifier and a monotonic heartbeat.
+- [x] Run the watchdog from a background queue and emit one unified-log warning per detected stale-heartbeat episode.
+- [x] Record safe contextual metadata and the last registered operation label without collecting user-facing content.
+- [x] Integrate heartbeat updates with the Mac app's main-actor lifecycle and diagnostics-relevant operations.
+- [x] Add focused tests for stale-heartbeat detection, recovery, duplicate suppression, and configurable thresholds.
+- [x] Document how to inspect the watchdog records with macOS unified-log tools and how to correlate multiple client instances.
+- [x] Run the appropriate macOS tests/build checks and confirm they pass.
+- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Update `AS-BUILT-ARCHITECTURE/` as needed; no architecture change was needed.
+- [x] Update `PRODUCT/` as needed; this diagnostic-only change does not alter product behavior.
 
 ## Exit criteria
 
 - [ ] A blocked Mac main actor produces a useful local unified-log warning without requiring the main actor to run.
 - [ ] A healthy client does not emit repeated false warnings during normal timer jitter.
-- [ ] Two running clients have distinguishable diagnostic instance IDs.
-- [ ] Tests cover the watchdog's state transitions and the relevant Mac build/test checks pass.
-- [ ] The implementation does not collect private window or transcript content and does not alter server behavior.
+- [x] Two running clients have distinguishable diagnostic instance IDs.
+- [x] Tests cover the watchdog's state transitions and the relevant Mac build/test checks pass.
+- [x] The implementation does not collect private window or transcript content and does not alter server behavior.

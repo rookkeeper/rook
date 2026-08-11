@@ -136,9 +136,12 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     static func observeFinder() -> FinderObservation {
+        MacStallWatchdog.shared.beginOperation("FinderEnvironmentProvider.observeFinder")
+        defer { MacStallWatchdog.shared.endOperation("FinderEnvironmentProvider.observeFinder") }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", finderObservationScript]
+        MacStallWatchdog.shared.updateContext(["automationTarget": "Finder"])
 
         let stdout = Pipe()
         let stderr = Pipe()

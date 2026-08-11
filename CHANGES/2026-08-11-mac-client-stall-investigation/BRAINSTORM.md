@@ -80,6 +80,10 @@ A useful first pass can be low-risk instrumentation rather than a large logging 
 
 The telemetry should be bounded and privacy-conscious: durations and identifiers by default, no screen text or window contents, and a small rotating local buffer or unified log retention rather than an indefinite transcript of activity.
 
+### First implementation selected
+
+The first implementation is the main-thread heartbeat watchdog. It runs a heartbeat timer on the Mac app's main run loop and checks it from a background queue. A stale heartbeat emits one unified-log warning per stall episode, including a short client instance ID, the last tracked operation, and safe lifecycle/foreground/server context. Accessibility and Finder boundaries register their current operation so a future warning can identify whether one of those calls was in flight. Recovery is logged once the main run loop advances again.
+
 ## Open questions
 
 - Did both clients call into Accessibility at the same moment, or were they independently suspended by macOS?

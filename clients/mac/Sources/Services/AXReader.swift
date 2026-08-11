@@ -5,10 +5,20 @@ import Foundation
 /// Accessibility (AX) permission. App *identity* (NSWorkspace) does not — only
 /// reading inside another process does.
 enum AXReader {
+    private static func withDiagnosticOperation<T>(_ operation: String, _ body: () -> T) -> T {
+        MacStallWatchdog.shared.beginOperation(operation)
+        defer { MacStallWatchdog.shared.endOperation(operation) }
+        return body()
+    }
+
     static func isTrusted(promptIfNeeded: Bool = false) -> Bool {
-        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let options = [key: promptIfNeeded] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
+        withDiagnosticOperation("AXReader.isTrusted") {
+            let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+            let options = [key: promptIfNeeded] as CFDictionary
+            let trusted = AXIsProcessTrustedWithOptions(options)
+            MacStallWatchdog.shared.updateContext(["accessibilityTrusted": String(trusted)])
+            return trusted
+        }
     }
 
     /// Chromium/Electron render web content in a separate process whose
@@ -24,42 +34,51 @@ enum AXReader {
     /// Warm up an app's accessibility tree (call when it comes to the
     /// foreground) so content is ready by the time the agent reads it.
     static func primeAccessibility(pid: pid_t) {
-        guard isTrusted() else {
-            return
+        withDiagnosticOperation("AXReader.primeAccessibility") {
+            guard isTrusted() else {
+                return
+            }
+            MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+            enableWebContentAccessibility(AXUIElementCreateApplication(pid))
         }
-        enableWebContentAccessibility(AXUIElementCreateApplication(pid))
     }
 
     /// Title of the focused (or main) window of the app owning `pid`, or nil if
     /// AX isn't trusted / the app exposes no titled window.
     static func focusedWindowTitle(pid: pid_t) -> String? {
-        guard let window = focusedWindow(pid: pid) else {
-            return nil
+        withDiagnosticOperation("AXReader.focusedWindowTitle") {
+            MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+            guard let window = focusedWindow(pid: pid) else {
+                return nil
+            }
+            var titleRef: AnyObject?
+            guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success else {
+                return nil
+            }
+            let title = titleRef as? String
+            return (title?.isEmpty == false) ? title : nil
         }
-        var titleRef: AnyObject?
-        guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success else {
-            return nil
-        }
-        let title = titleRef as? String
-        return (title?.isEmpty == false) ? title : nil
     }
 
     /// Top-level window document-like values exposed via standard AX attributes
     /// such as AXDocument / AXFilename / AXURL.
     static func focusedWindowDocumentValues(pid: pid_t) -> [String] {
-        guard let window = focusedWindow(pid: pid) else {
-            return []
-        }
-        let attributes = ["AXDocument", "AXFilename", "AXURL"]
-        var results: [String] = []
-        for attribute in attributes {
-            if let value = stringAttribute(window, attribute)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !value.isEmpty,
-               !results.contains(value) {
-                results.append(value)
+        withDiagnosticOperation("AXReader.focusedWindowDocumentValues") {
+            MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+            guard let window = focusedWindow(pid: pid) else {
+                return []
             }
+            let attributes = ["AXDocument", "AXFilename", "AXURL"]
+            var results: [String] = []
+            for attribute in attributes {
+                if let value = stringAttribute(window, attribute)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !value.isEmpty,
+                   !results.contains(value) {
+                    results.append(value)
+                }
+            }
+            return results
         }
-        return results
     }
 
     private static func focusedWindow(pid: pid_t) -> AXUIElement? {
@@ -85,26 +104,29 @@ enum AXReader {
     /// the browser should have been primed (it comes forward → primeAccessibility).
     /// Returns nil for non-browsers or before the URL is exposed.
     static func activeTabURL(pid: pid_t, maxNodes: Int = 600) -> String? {
-        guard let window = focusedWindow(pid: pid) else {
+        withDiagnosticOperation("AXReader.activeTabURL") {
+            MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+            guard let window = focusedWindow(pid: pid) else {
+                return nil
+            }
+            // Breadth-first: the web area sits near the top of the window subtree.
+            var queue: [AXUIElement] = [window]
+            var budget = maxNodes
+            while !queue.isEmpty, budget > 0 {
+                let element = queue.removeFirst()
+                budget -= 1
+                if stringAttribute(element, kAXRoleAttribute as String) == "AXWebArea",
+                   let url = urlAttribute(element, "AXURL") {
+                    return url
+                }
+                var childrenRef: AnyObject?
+                if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+                   let children = childrenRef as? [AXUIElement] {
+                    queue.append(contentsOf: children)
+                }
+            }
             return nil
         }
-        // Breadth-first: the web area sits near the top of the window subtree.
-        var queue: [AXUIElement] = [window]
-        var budget = maxNodes
-        while !queue.isEmpty, budget > 0 {
-            let element = queue.removeFirst()
-            budget -= 1
-            if stringAttribute(element, kAXRoleAttribute as String) == "AXWebArea",
-               let url = urlAttribute(element, "AXURL") {
-                return url
-            }
-            var childrenRef: AnyObject?
-            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
-               let children = childrenRef as? [AXUIElement] {
-                queue.append(contentsOf: children)
-            }
-        }
-        return nil
     }
 
     private static func urlAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
@@ -124,26 +146,29 @@ enum AXReader {
     /// text-based apps, using only the Accessibility grant (no screenshots).
     /// Node- and char-budgeted so a deep tree can't hang the caller.
     static func focusedWindowText(pid: pid_t, maxChars: Int = 12_000, maxNodes: Int = 6_000) -> String? {
-        guard isTrusted() else {
-            return nil
-        }
-        let appElement = AXUIElementCreateApplication(pid)
-        enableWebContentAccessibility(appElement)
-        var windowRef: AnyObject?
-        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
-            if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+        withDiagnosticOperation("AXReader.focusedWindowText") {
+            MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+            guard isTrusted() else {
                 return nil
             }
+            let appElement = AXUIElementCreateApplication(pid)
+            enableWebContentAccessibility(appElement)
+            var windowRef: AnyObject?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
+                if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+                    return nil
+                }
+            }
+            guard let windowRef else {
+                return nil
+            }
+            var pieces: [String] = []
+            var nodeBudget = maxNodes
+            var charCount = 0
+            collectText(windowRef as! AXUIElement, into: &pieces, nodeBudget: &nodeBudget, charCount: &charCount, maxChars: maxChars)
+            let text = pieces.joined(separator: "\n")
+            return text.isEmpty ? nil : text
         }
-        guard let windowRef else {
-            return nil
-        }
-        var pieces: [String] = []
-        var nodeBudget = maxNodes
-        var charCount = 0
-        collectText(windowRef as! AXUIElement, into: &pieces, nodeBudget: &nodeBudget, charCount: &charCount, maxChars: maxChars)
-        let text = pieces.joined(separator: "\n")
-        return text.isEmpty ? nil : text
     }
 
     struct ActionableElement {
@@ -160,24 +185,27 @@ enum AXReader {
     /// reads this list and picks one to click — no screenshot/vision needed.
     /// Coordinates are global top-left screen space, matching CGEvent input.
     static func actionableElements(pid: pid_t, maxElements: Int = 250, maxNodes: Int = 8_000) -> [ActionableElement]? {
-        guard isTrusted() else {
-            return nil
-        }
-        let appElement = AXUIElementCreateApplication(pid)
-        enableWebContentAccessibility(appElement)
-        var windowRef: AnyObject?
-        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
-            if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+        withDiagnosticOperation("AXReader.actionableElements") {
+            MacStallWatchdog.shared.updateContext(["accessibilityTargetPid": String(pid)])
+            guard isTrusted() else {
                 return nil
             }
+            let appElement = AXUIElementCreateApplication(pid)
+            enableWebContentAccessibility(appElement)
+            var windowRef: AnyObject?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
+                if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+                    return nil
+                }
+            }
+            guard let windowRef else {
+                return nil
+            }
+            var elements: [ActionableElement] = []
+            var nodeBudget = maxNodes
+            collectActionable(windowRef as! AXUIElement, into: &elements, max: maxElements, nodeBudget: &nodeBudget)
+            return elements
         }
-        guard let windowRef else {
-            return nil
-        }
-        var elements: [ActionableElement] = []
-        var nodeBudget = maxNodes
-        collectActionable(windowRef as! AXUIElement, into: &elements, max: maxElements, nodeBudget: &nodeBudget)
-        return elements
     }
 
     private static let actionableRoles: Set<String> = [
