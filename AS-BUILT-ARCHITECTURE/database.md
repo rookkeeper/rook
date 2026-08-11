@@ -16,7 +16,7 @@ For session recency, no extra table or column was added: the existing `sessions.
 
 `session_transcript_events` stores logical transcript records rather than one row per ACP transport chunk. Contiguous user, assistant, and thought chunks are merged; tool-call updates are merged by `toolCallId` into the tool record's arguments, status, and accumulated output; plan and usage records are replaced by their latest update within a section. The current in-progress record is updated in place so a second client can hydrate a running session without waiting for the turn to finish.
 
-The REST transcript response retains the normalized event shape consumed by clients, but its events are already coalesced. On the first server startup after this format change, the transcript-only migration clears legacy chunk-level rows once; sessions and all non-transcript application data remain intact. A migration marker prevents the reset from recurring.
+The REST transcript response retains the normalized event shape consumed by clients, but its events are already coalesced. <!-- THIS IS FOR BACKWARDS COMPATIBILITY: the first server startup after this format change clears legacy chunk-level transcript rows once while preserving sessions and all non-transcript application data. --> A migration marker prevents the reset from recurring.
 
 ## Environment repository schema
 

@@ -121,7 +121,7 @@ It implements:
 - Sessions are a unified cross-runtime list ordered by `updatedAt` desc
 - `updatedAt` now represents both prompt activity and explicit client-side "viewed" touches, so opening/resuming a session moves it to the top
 - Session-to-environment membership persists in `session_environments`
-- Logical transcript history persists in `session_transcript_events` so later viewers can hydrate from server state instead of forcing runtime replay; ACP chunks are merged and in-progress records are updated in place. A one-time transcript-only migration discards legacy chunk rows while preserving sessions and other application data.
+- Logical transcript history persists in `session_transcript_events` so later viewers can hydrate from server state instead of forcing runtime replay; ACP chunks are merged and in-progress records are updated in place. <!-- THIS IS FOR BACKWARDS COMPATIBILITY: a one-time transcript-only migration discards legacy chunk rows while preserving sessions and other application data. -->
 
 ### Runtime management
 

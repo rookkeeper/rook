@@ -99,6 +99,8 @@ public final class SessionHandle {
         isLoaded = true
     }
 
+    // THIS IS FOR BACKWARDS COMPATIBILITY: coalesce legacy chunk-level REST
+    // transcripts while clients transition to logical server records.
     public func attach(transcript events: [JSONValue]) async throws {
         if isLoaded {
             onStateChange?()

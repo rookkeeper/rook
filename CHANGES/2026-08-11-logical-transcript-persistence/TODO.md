@@ -27,7 +27,7 @@ Desired durable transcript shape:
 - preserve ordering between user, thought, assistant, tool, plan, and run-boundary records
 - keep the current in-progress logical record available to a second client; do not wait until the whole run finishes if that would make running-session hydration stale
 
-The server must distinguish output snapshots from output deltas when merging tool updates, and must serialize per-session transcript updates so concurrent runtime notifications cannot reorder or overwrite one another. Existing chunked rows will be discarded by a one-time transcript-only migration; sessions and all non-transcript application data must remain intact.
+The server must distinguish output snapshots from output deltas when merging tool updates, and must serialize per-session transcript updates so concurrent runtime notifications cannot reorder or overwrite one another. <!-- THIS IS FOR BACKWARDS COMPATIBILITY: existing chunked rows will be discarded by a one-time transcript-only migration; sessions and all non-transcript application data must remain intact. -->
 
 The Apple-side REST hydration fix is already present in the working tree: `SessionHandle.attach(transcript:)` uses the replay buffers used by `session/load` instead of appending one block per chunk. Carry that change into the implementation worktree and add focused regression coverage if practical.
 
