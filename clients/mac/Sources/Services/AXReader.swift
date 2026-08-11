@@ -86,7 +86,7 @@ enum AXReader {
     }
 
     private static func focusedWindow(pid: pid_t) -> AXUIElement? {
-        guard isTrusted() else {
+        guard !isInternalRookTarget(pid), isTrusted() else {
             return nil
         }
         let context = DiagnosticsContext(pid: pid)
@@ -185,7 +185,7 @@ enum AXReader {
     /// text-based apps, using only the Accessibility grant (no screenshots).
     /// Node- and char-budgeted so a deep tree can't hang the caller.
     static func focusedWindowText(pid: pid_t, maxChars: Int = 12_000, maxNodes: Int = 6_000) -> String? {
-        guard isTrusted() else {
+        guard !isInternalRookTarget(pid), isTrusted() else {
             return nil
         }
         let appElement = AXUIElementCreateApplication(pid)
@@ -221,7 +221,7 @@ enum AXReader {
     /// reads this list and picks one to click — no screenshot/vision needed.
     /// Coordinates are global top-left screen space, matching CGEvent input.
     static func actionableElements(pid: pid_t, maxElements: Int = 250, maxNodes: Int = 8_000) -> [ActionableElement]? {
-        guard isTrusted() else {
+        guard !isInternalRookTarget(pid), isTrusted() else {
             return nil
         }
         let appElement = AXUIElementCreateApplication(pid)
@@ -308,6 +308,13 @@ enum AXReader {
         for child in children {
             collectActionable(child, into: &elements, max: max, nodeBudget: &nodeBudget)
         }
+    }
+
+    private static func isInternalRookTarget(_ pid: pid_t) -> Bool {
+        guard let bundleId = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier else {
+            return false
+        }
+        return RookBundleIdentity.isInternalRookBundleId(bundleId)
     }
 
     private static func copyAttributeValue(
