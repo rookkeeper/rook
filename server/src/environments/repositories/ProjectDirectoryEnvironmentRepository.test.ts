@@ -49,6 +49,27 @@ describe("ProjectDirectoryEnvironmentRepository", () => {
     expect(result.bundles[0]?.skills.map((artifact) => artifact.id)).toEqual(["deploy"]);
   });
 
+  it("merges skills across discovery roots, earlier roots winning name collisions", async () => {
+    const project = await mkdtemp(path.join(os.tmpdir(), "rook-project-env-"));
+    tempDirs.push(project);
+    const agentsDeploy = path.join(project, ".agents", "skills", "deploy");
+    await mkdir(agentsDeploy, { recursive: true });
+    await writeFile(path.join(agentsDeploy, "SKILL.md"), "Deploy from .agents.");
+    const claudeDeploy = path.join(project, ".claude", "skills", "deploy");
+    await mkdir(claudeDeploy, { recursive: true });
+    await writeFile(path.join(claudeDeploy, "SKILL.md"), "Deploy from .claude.");
+    const claudeReview = path.join(project, ".claude", "skills", "review");
+    await mkdir(claudeReview, { recursive: true });
+    await writeFile(path.join(claudeReview, "SKILL.md"), "Review carefully.");
+
+    const repository = new ProjectDirectoryEnvironmentRepository();
+    const result = await repository.getBundles(`dir:${project}`);
+
+    expect(result.bundles[0]?.skills.map((artifact) => artifact.id)).toEqual(["deploy", "review"]);
+    expect(result.bundles[0]?.skills[0]?.sourcePath).toBe(agentsDeploy);
+    expect(result.bundles[0]?.skills[1]?.sourcePath).toBe(claudeReview);
+  });
+
   it("uses CLAUDE.md only when AGENTS.md is absent", async () => {
     const project = await mkdtemp(path.join(os.tmpdir(), "rook-project-env-"));
     tempDirs.push(project);

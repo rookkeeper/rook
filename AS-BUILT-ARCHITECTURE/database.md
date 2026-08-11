@@ -77,11 +77,14 @@ Each session receives disposable links:
 ```text
 ~/.rook/agent-workspaces/<session-id>/
 ├── AGENTS.md
-└── .agents/
-    ├── editable-per-environment/<environment> -> shared environment directory
-    └── skills/<visible-name>                  -> shared skill source
+├── CLAUDE.md -> AGENTS.md
+├── .agents/
+│   ├── editable-per-environment/<environment> -> shared environment directory
+│   └── skills/<visible-name>                  -> shared skill source
+└── .claude/
+    └── skills -> ../.agents/skills
 ```
 
-`AGENTS.md` at the workspace root is a generated read-only aggregate. The individual instruction and skill sources are the editable paths. Canonical/external content is materialized read-only, while project-directory content links directly to project files.
+`AGENTS.md` at the workspace root is a generated read-only aggregate. The `CLAUDE.md` and `.claude/skills` entries are relative symlink aliases for Claude Code runtimes, which auto-load `CLAUDE.md` and discover project skills only under `.claude/skills`. The individual instruction and skill sources are the editable paths. Canonical/external content is materialized read-only, while project-directory content links directly to project files.
 
 The global watcher debounces settled shared-source changes, persists current file maps, recognizes missing writable source entries as membership deletion, and refreshes active session projections. Rebuild, startup cleanup, and session disposal are excluded from deletion inference.
