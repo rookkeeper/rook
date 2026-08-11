@@ -84,7 +84,7 @@ Hits `GET /api/diagnostics/environments` on the running server and pretty-prints
 
 ### `dump-environment-decisions.sh` — dump the environment-decisions SQLite database
 
-Reads `.var/rook/environment-decisions.sqlite` and prints the `environment_decisions` table to the terminal.
+Reads the active `ROOK_DATABASE_PATH` (or `ROOK_HOME/rook.sqlite`) and prints the `environment_decisions` table to the terminal.
 
 ```bash
 ./scripts/dump-environment-decisions.sh
