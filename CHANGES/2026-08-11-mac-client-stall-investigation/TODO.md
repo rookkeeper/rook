@@ -52,9 +52,20 @@ Event 002 found a roughly 41-second `activeTabURL` lookup against the other Rook
 
 ### Generic AX perception audit
 
-- [ ] First test the popular Mac browsers — Safari, Chrome, Firefox, Edge, Brave, Arc, and other browsers installed locally — using only focused-window `AXDocument`, `AXFilename`, and top-level `AXURL` values.
-- [ ] Record whether those top-level signals reliably identify the current page URL and satisfy the intended `web:` environment detection; use sanitized values and do not log browsing history into this document.
+- [x] First test the popular Mac browsers — Safari, Chrome, Firefox, Edge, Brave, Arc, and other browsers installed locally — using only focused-window `AXDocument`, `AXFilename`, and top-level `AXURL` values.
+- [x] Record whether those top-level signals reliably identify the current page URL and satisfy the intended `web:` environment detection; use sanitized values and do not log browsing history into this document.
 - [ ] If the top-level signals meet the requirement, remove `activeTabURL` and Chromium priming from the generic path rather than preserving a speculative browser fallback.
+
+#### Manual browser-family probe — August 11, 2026
+
+Using Safari, Chrome, Firefox, and Slack with `https://example.com/` as the browser test page:
+
+- **Safari/WebKit:** top-level `AXDocument`, `AXFilename`, and `AXURL` did not provide the page URL; nested `AXWebArea` did.
+- **Chrome/Chromium:** top-level `AXDocument` provided the page URL; nested `AXWebArea` returned the same URL. `activeTabURL` appears redundant for Chrome in this run.
+- **Firefox/Gecko:** top-level attributes did not provide the page URL; nested `AXWebArea` did.
+- **Slack/Electron:** top-level values were empty/non-useful; nested `AXWebArea` exposed Slack's internal web URL. Slack already has a specialist detector, so this does not by itself justify generic browser URL discovery for Electron apps.
+
+The initial result is therefore not “delete `activeTabURL` everywhere.” It is: top-level signals are sufficient for Chrome but not Safari or Firefox, so nested URL discovery is still needed if generic `web:` detection must support those browsers. The next design decision is whether to keep it only for an explicit browser allowlist and exclude Electron/non-browser apps entirely.
 - [ ] If a browser genuinely requires nested URL discovery, isolate it behind an explicit browser/Electron allowlist or capability check and document the failing browsers and exact reason.
 - [ ] Ensure generic document/path discovery remains separate from browser-only URL discovery.
 - [ ] Move Chromium accessibility-tree priming out of the generic `focusedWindow` read path; only prime targets that need it.
