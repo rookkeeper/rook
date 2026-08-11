@@ -29,8 +29,8 @@ environment IDs as historical data rather than silently rewriting them.
       compatibility behavior.
 - [x] Update current as-built architecture and package documentation while
       preserving historical change records.
-- [ ] Run Swift, Android, shell, and repository-wide identity validation.
-      Android validation is currently blocked because this machine has no Java
-      runtime; server typecheck is blocked because worktree dependencies are
-      not installed.
+- [x] Run Swift, Android, shell, and repository-wide identity validation.
+      Swift, Xcode, shell, server typecheck, server tests, and static identity
+      checks passed. Android validation remains blocked because this machine
+      has no Java runtime.
 - [ ] Inspect the final diff and commit history, then synchronize with main.
