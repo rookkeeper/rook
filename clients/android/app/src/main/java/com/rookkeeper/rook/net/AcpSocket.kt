@@ -1,0 +1,670 @@
+// JSON-RPC 2.0 websocket client for /api/ws. Sends ACP requests over the websocket
+// and reduces standard ACP notifications into flat AcpClientEvents. Prompt completion
+// comes from the JSON-RPC response for the corresponding session/prompt request id.
+package com.rookkeeper.rook.net
+
+import com.rookkeeper.rook.model.AcpClientEvent
+import com.rookkeeper.rook.model.AcpConfigOption
+import com.rookkeeper.rook.model.AcpConfigOptionValue
+import com.rookkeeper.rook.model.AcpModesState
+import com.rookkeeper.rook.model.AcpPermissionOption
+import com.rookkeeper.rook.model.AcpPermissionToolCall
+import com.rookkeeper.rook.model.AcpSessionMode
+import com.rookkeeper.rook.model.AcpUsageCost
+import com.rookkeeper.rook.model.EnvironmentOffer
+import com.rookkeeper.rook.model.PlanEntry
+import com.rookkeeper.rook.model.boolValue
+import com.rookkeeper.rook.model.get
+import com.rookkeeper.rook.model.numberValue
+import com.rookkeeper.rook.model.stringValue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okio.ByteString
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+
+sealed class SocketRequestException(message: String) : Exception(message) {
+    class NotConnected : SocketRequestException("Not connected to the session")
+    class Encoding : SocketRequestException("Failed to encode websocket request")
+    class Server(message: String) : SocketRequestException(message)
+}
+
+class AcpSocket(
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+) {
+    private val client = OkHttpClient.Builder()
+        .pingInterval(30, TimeUnit.SECONDS)
+        .build()
+    private val json = Json { ignoreUnknownKeys = true }
+    private val prettyJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
+
+    private val _events = MutableSharedFlow<AcpClientEvent>(extraBufferCapacity = 64)
+    val events: SharedFlow<AcpClientEvent> = _events.asSharedFlow()
+
+    private val _isConnected = MutableStateFlow(false)
+    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    private var webSocket: WebSocket? = null
+    private var sessionId: String? = null
+    private var runtimeIds: List<String> = emptyList()
+    private var defaultRuntimeId: String? = null
+    private var environmentOffersEnabled = false
+    private var generation = 0
+    private var requestCounter = 0
+    private val pendingPromptIds = mutableSetOf<String>()
+    private val pendingRequests = mutableMapOf<String, CompletableDeferred<JsonObject>>()
+    private val pendingUserMessageEchoes = ArrayDeque<String>()
+    private val lastToolInputSnapshots = mutableMapOf<String, String>()
+    private val lastToolOutputSnapshots = mutableMapOf<String, String>()
+
+    suspend fun connect(webSocketUrl: String): JsonObject {
+        if (webSocket != null) return buildJsonObject { }
+        teardown()
+        generation += 1
+        val currentGeneration = generation
+        val request = Request.Builder().url(webSocketUrl).build()
+        webSocket = client.newWebSocket(request, Listener(currentGeneration))
+        setConnected(true)
+        val initialize = sendSocketRequest(
+            "initialize",
+            buildJsonObject {
+                put("protocolVersion", 1)
+                putJsonObject("clientCapabilities") {
+                    putJsonObject("_meta") {
+                        putJsonObject("com.rookkeeper") { put("environmentOffers", true) }
+                    }
+                }
+                putJsonObject("clientInfo") {
+                    put("name", "rook")
+                    put("title", "Rook")
+                    put("version", "0.1.0")
+                }
+            },
+            includeSessionId = false
+        )
+        runtimeIds = initialize["_meta"]?.jsonObject?.get("runtimeIds")?.jsonArray?.mapNotNull { it.stringValue } ?: emptyList()
+        defaultRuntimeId = initialize["_meta"]?.jsonObject?.get("defaultRuntimeId")?.stringValue
+        environmentOffersEnabled = initialize["_meta"]?.jsonObject?.get("com.rookkeeper") != null
+        return initialize
+    }
+
+    fun selectSession(sessionId: String?) {
+        this.sessionId = sessionId
+    }
+
+    fun disconnect() {
+        teardown()
+    }
+
+    /** Cancel the in-flight turn (ACP `session/cancel` notification). */
+    fun sendCancel() {
+        val ws = webSocket ?: return
+        val sid = sessionId ?: return
+        sendFrame(
+            ws,
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("method", "session/cancel")
+                putJsonObject("params") { put("sessionId", sid) }
+            }
+        )
+    }
+
+    fun sendPrompt(text: String) {
+        val ws = webSocket
+        val sid = sessionId
+        if (ws == null || sid == null) {
+            emit(AcpClientEvent.ConnectionError("Not connected to the session"))
+            return
+        }
+        val requestId = trackPrompt(text)
+        val sent = sendFrame(
+            ws,
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("id", requestId)
+                put("method", "session/prompt")
+                putJsonObject("params") {
+                    put("sessionId", sid)
+                    putJsonArray("prompt") {
+                        addJsonObject {
+                            put("type", "text")
+                            put("text", text)
+                        }
+                    }
+                }
+            }
+        )
+        if (!sent) {
+            handleTransportFailure(IOException("Failed to send prompt"))
+        }
+    }
+
+    internal fun trackPrompt(text: String): String {
+        requestCounter += 1
+        val requestId = "prompt-$requestCounter"
+        pendingPromptIds.add(requestId)
+        pendingUserMessageEchoes.addLast(text)
+        return requestId
+    }
+
+    suspend fun createSession(runtimeId: String, title: String, cwd: String): String {
+        val result = sendSocketRequest(
+            "session/new",
+            buildJsonObject {
+                put("cwd", cwd)
+                putJsonArray("mcpServers") {}
+                putJsonObject("_meta") {
+                    put("runtimeId", runtimeId)
+                    put("title", title)
+                }
+            },
+            includeSessionId = false
+        )
+        val created = result["sessionId"]?.stringValue ?: throw SocketRequestException.Server("Server returned no sessionId")
+        sessionId = created
+        return created
+    }
+
+    suspend fun loadSession(sessionId: String) {
+        sendSocketRequest("session/load", buildJsonObject { put("sessionId", sessionId) }, includeSessionId = false)
+        this.sessionId = sessionId
+    }
+
+    suspend fun resolveEnvironmentOffer(environmentId: String, bundleHash: String, decision: String) {
+        if (!environmentOffersEnabled) return
+        sendSocketRequest(
+            "_com.rookkeeper/environment_offer_resolve",
+            buildJsonObject {
+                put("sessionId", sessionId ?: throw SocketRequestException.NotConnected())
+                put("environmentId", environmentId)
+                put("bundleHash", bundleHash)
+                put("decision", decision)
+            },
+            includeSessionId = false
+        )
+    }
+
+    suspend fun setMode(modeId: String) {
+        val result = sendSocketRequest("session/set_mode", buildJsonObject { put("modeId", modeId) })
+        val modes = parseModesState(result["modes"])
+        if (modes != null) {
+            emit(AcpClientEvent.ModesState(modes.currentModeId, modes.availableModes))
+        } else {
+            emit(AcpClientEvent.CurrentModeUpdate(modeId))
+        }
+    }
+
+    suspend fun setConfigOption(configId: String, value: String) {
+        val result = sendSocketRequest(
+            "session/set_config_option",
+            buildJsonObject {
+                put("configId", configId)
+                put("value", value)
+            }
+        )
+        val configOptions = parseConfigOptions(result["configOptions"])
+        if (configOptions != null) {
+            emit(AcpClientEvent.ConfigOptionUpdate(configOptions))
+        }
+    }
+
+    fun respondToPermissionRequest(requestId: String, optionId: String?) {
+        val ws = webSocket ?: throw SocketRequestException.NotConnected()
+        val outcome = if (optionId != null) {
+            buildJsonObject {
+                put("outcome", "selected")
+                put("optionId", optionId)
+            }
+        } else {
+            buildJsonObject { put("outcome", "cancelled") }
+        }
+        sendFrame(
+            ws,
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("id", requestId)
+                putJsonObject("result") { put("outcome", outcome) }
+            }
+        )
+    }
+
+    // MARK: - Receive
+
+    private inner class Listener(private val listenerGeneration: Int) : WebSocketListener() {
+        override fun onMessage(webSocket: WebSocket, text: String) = dispatch { handleMessage(text) }
+        override fun onMessage(webSocket: WebSocket, bytes: ByteString) = dispatch { handleMessage(bytes.utf8()) }
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = dispatch { handleTransportFailure(t) }
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) =
+            dispatch { handleTransportFailure(IOException("Socket closed: $reason")) }
+
+        private fun dispatch(block: () -> Unit) {
+            scope.launch {
+                if (generation == listenerGeneration) block()
+            }
+        }
+    }
+
+    private fun handleTransportFailure(error: Throwable) {
+        if (!_isConnected.value) return
+        pendingPromptIds.clear()
+        val continuations = pendingRequests.toMap()
+        pendingRequests.clear()
+        webSocket = null
+        setConnected(false)
+        continuations.values.forEach { it.completeExceptionally(error) }
+    }
+
+    private fun setConnected(connected: Boolean) {
+        _isConnected.value = connected
+    }
+
+    private fun handleMessage(text: String) {
+        val frame = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return
+        handleFrame(frame)
+    }
+
+    internal fun handleFrame(frame: JsonObject) {
+        val method = frame["method"]?.stringValue
+
+        if (method == "session/request_permission") {
+            val idElement = frame["id"]
+            val params = frame["params"] as? JsonObject
+            val toolCall = params?.get("toolCall")?.let(::parsePermissionToolCall)
+            val options = params?.get("options")?.let(::parsePermissionOptions)
+            if (idElement != null && toolCall != null && options != null) {
+                emit(AcpClientEvent.PermissionRequest(idString(idElement), toolCall, options))
+                return
+            }
+        }
+
+        if (method == "session/update") {
+            val params = frame["params"] as? JsonObject
+            val update = params?.get("update") as? JsonObject
+            if (update != null) {
+                handleUpdate(update)
+                return
+            }
+        }
+
+        if (method == "_com.rookkeeper/environment_offer") {
+            val params = frame["params"] as? JsonObject
+            val environmentId = params?.get("environmentId")?.stringValue
+            val bundleId = params?.get("bundleId")?.stringValue
+            val bundleHash = params?.get("bundleHash")?.stringValue
+            if (params != null && environmentId != null && bundleId != null && bundleHash != null) {
+                emit(AcpClientEvent.EnvironmentOffered(EnvironmentOffer(environmentId, params["displayName"]?.stringValue, bundleId, bundleHash, stringList(params["skills"]), stringList(params["mcpServers"]), stringList(params["apps"]))))
+                return
+            }
+        }
+
+        if (method == "_com.rookkeeper/environment_offer_resolved") {
+            val params = frame["params"] as? JsonObject
+            val environmentId = params?.get("environmentId")?.stringValue
+            val bundleHash = params?.get("bundleHash")?.stringValue
+            if (environmentId != null && bundleHash != null) {
+                emit(AcpClientEvent.EnvironmentOfferResolved(environmentId, bundleHash))
+                return
+            }
+        }
+
+        val idElement = frame["id"]
+        if (idElement != null) {
+            val requestIdString = idString(idElement)
+            val pending = pendingRequests.remove(requestIdString)
+            if (pending != null) {
+                val result = frame["result"] as? JsonObject
+                val error = frame["error"] as? JsonObject
+                when {
+                    result != null -> pending.complete(result)
+                    error != null -> pending.completeExceptionally(
+                        SocketRequestException.Server(error["message"]?.stringValue ?: "Request failed")
+                    )
+                    else -> pending.complete(JsonObject(emptyMap()))
+                }
+                return
+            }
+
+            if (pendingPromptIds.remove(requestIdString)) {
+                val result = frame["result"] as? JsonObject
+                if (result != null) {
+                    emit(AcpClientEvent.RunCompleted(result["stopReason"]?.stringValue ?: "end_turn"))
+                } else {
+                    val error = frame["error"] as? JsonObject
+                    emit(AcpClientEvent.RunFailed(error?.get("message")?.stringValue ?: "Run failed"))
+                }
+                return
+            }
+        }
+
+        val error = frame["error"] as? JsonObject
+        if (error != null) {
+            emit(AcpClientEvent.ConnectionError(error["message"]?.stringValue ?: "Server error"))
+        }
+    }
+
+    private fun handleUpdate(update: JsonObject) {
+        val kind = update["sessionUpdate"]?.stringValue ?: return
+        when (kind) {
+            "user_message_chunk" -> {
+                val text = contentText(update["content"])
+                if (text != null) {
+                    if (pendingUserMessageEchoes.firstOrNull() == text) {
+                        pendingUserMessageEchoes.removeFirst()
+                    } else {
+                        emit(AcpClientEvent.UserMessageChunk(text))
+                    }
+                }
+            }
+            "agent_message_chunk" ->
+                contentText(update["content"])?.let { emit(AcpClientEvent.AgentMessageChunk(it)) }
+            "agent_thought_chunk" ->
+                contentText(update["content"])?.let { emit(AcpClientEvent.AgentThoughtChunk(it)) }
+            "tool_call" -> {
+                val toolCallId = update["toolCallId"]?.stringValue ?: return
+                val meta = rookeryMeta(update)
+                val rawInput = stringifyToolPayload(update["rawInput"])
+                    ?: stringifyToolPayload(meta?.get("rawInput"))
+                    ?: terminalCommandInput(update)
+                if (rawInput != null) lastToolInputSnapshots[toolCallId] = rawInput
+                emit(
+                    AcpClientEvent.ToolCallStarted(
+                        toolCallId = toolCallId,
+                        title = update["title"]?.stringValue ?: "Tool",
+                        kind = update["kind"]?.stringValue ?: "",
+                        status = update["status"]?.stringValue ?: "pending",
+                        rawInput = rawInput
+                    )
+                )
+            }
+            "tool_call_update" -> {
+                val toolCallId = update["toolCallId"]?.stringValue ?: return
+                val meta = rookeryMeta(update)
+                val inputText = stringifyToolPayload(update["rawInput"]) ?: terminalCommandInput(update)
+                if (inputText != null) {
+                    lastToolInputSnapshots[toolCallId] = inputText
+                    emit(AcpClientEvent.ToolInputSnapshot(toolCallId, meta?.get("toolName")?.stringValue, inputText))
+                }
+                val validStatuses = setOf("pending", "in_progress", "completed", "failed", "cancelled")
+                val statusRaw = update["status"]?.stringValue
+                val status = if (statusRaw != null && validStatuses.contains(statusRaw)) statusRaw else "in_progress"
+                val outputDelta = terminalOutputDelta(update)
+                if (outputDelta != null) {
+                    emit(AcpClientEvent.ToolOutputDelta(toolCallId, meta?.get("toolName")?.stringValue, outputDelta))
+                } else {
+                    val outputSnapshot = contentItemsText(update["content"]) ?: stringifyToolPayload(update["rawOutput"])
+                    if (outputSnapshot != null) {
+                        lastToolOutputSnapshots[toolCallId] = outputSnapshot
+                        emit(AcpClientEvent.ToolOutputSnapshot(toolCallId, meta?.get("toolName")?.stringValue, outputSnapshot))
+                    }
+                }
+                emit(
+                    AcpClientEvent.ToolCallUpdate(
+                        toolCallId = toolCallId,
+                        status = status,
+                        toolName = meta?.get("toolName")?.stringValue,
+                        output = null
+                    )
+                )
+            }
+            "plan" -> {
+                val rawEntries = update["entries"] as? JsonArray ?: return
+                val entries = rawEntries.mapIndexed { index, entryElement ->
+                    val entry = entryElement as? JsonObject
+                    PlanEntry(
+                        id = index,
+                        content = entry?.get("content")?.stringValue ?: "",
+                        priority = entry?.get("priority")?.stringValue ?: "medium",
+                        status = entry?.get("status")?.stringValue ?: "pending"
+                    )
+                }
+                emit(AcpClientEvent.PlanUpdate(entries))
+            }
+            "usage_update" -> {
+                val used = intValue(update["used"]) ?: return
+                val size = intValue(update["size"]) ?: return
+                emit(AcpClientEvent.UsageUpdate(used, size, parseUsageCost(update["cost"])))
+            }
+            "current_mode_update" ->
+                update["modeId"]?.stringValue?.let { emit(AcpClientEvent.CurrentModeUpdate(it)) }
+            "config_option_update" ->
+                parseConfigOptions(update["configOptions"])?.let { emit(AcpClientEvent.ConfigOptionUpdate(it)) }
+            else -> Unit
+        }
+    }
+
+    private fun handleEnvironmentEvent(update: JsonObject) {
+        val kind = update["kind"]?.stringValue ?: return
+        val payload = update["payload"] as? JsonObject ?: JsonObject(emptyMap())
+        val environmentId = payload["environmentId"]?.stringValue ?: return
+        when (kind) {
+            "environment_offer_available" -> {
+                val bundleId = payload["bundleId"]?.stringValue ?: return
+                val bundleHash = payload["bundleHash"]?.stringValue ?: return
+                emit(
+                    AcpClientEvent.EnvironmentOffered(
+                        EnvironmentOffer(
+                            environmentId = environmentId,
+                            displayName = payload["displayName"]?.stringValue,
+                            bundleId = bundleId,
+                            bundleHash = bundleHash,
+                            skills = stringList(payload["skills"]),
+                            mcpServers = stringList(payload["mcpServers"]),
+                            apps = stringList(payload["apps"])
+                        )
+                    )
+                )
+            }
+            "environment_offer_resolved" -> {
+                val bundleHash = payload["bundleHash"]?.stringValue ?: return
+                emit(AcpClientEvent.EnvironmentOfferResolved(environmentId, bundleHash))
+            }
+            "environment_entered" -> emit(AcpClientEvent.EnvironmentEntered(environmentId))
+            "environment_exited" -> emit(AcpClientEvent.EnvironmentExited(environmentId, payload["error"]?.stringValue))
+            else -> {}
+        }
+    }
+
+    // MARK: - Helpers
+
+    private fun teardown() {
+        generation += 1
+        pendingPromptIds.clear()
+        val continuations = pendingRequests.toMap()
+        pendingRequests.clear()
+        pendingUserMessageEchoes.clear()
+        lastToolInputSnapshots.clear()
+        lastToolOutputSnapshots.clear()
+        webSocket?.close(1000, null)
+        webSocket = null
+        sessionId = null
+        runtimeIds = emptyList()
+        defaultRuntimeId = null
+        environmentOffersEnabled = false
+        _isConnected.value = false
+        continuations.values.forEach { it.completeExceptionally(SocketRequestException.NotConnected()) }
+    }
+
+    private suspend fun sendSocketRequest(method: String, params: JsonObject, includeSessionId: Boolean = true): JsonObject {
+        val ws = webSocket ?: throw SocketRequestException.NotConnected()
+        requestCounter += 1
+        val requestId = "rpc-$requestCounter"
+        val mergedParams = if (includeSessionId) {
+            val sid = sessionId ?: throw SocketRequestException.NotConnected()
+            JsonObject(params + ("sessionId" to JsonPrimitive(sid)))
+        } else {
+            params
+        }
+        val deferred = CompletableDeferred<JsonObject>()
+        pendingRequests[requestId] = deferred
+        val sent = sendFrame(
+            ws,
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("id", requestId)
+                put("method", method)
+                put("params", mergedParams)
+            }
+        )
+        if (!sent) {
+            pendingRequests.remove(requestId)
+            throw SocketRequestException.Encoding()
+        }
+        return deferred.await()
+    }
+
+    private fun sendFrame(ws: WebSocket, frame: JsonObject): Boolean {
+        val text = json.encodeToString(JsonElement.serializer(), frame)
+        return ws.send(text)
+    }
+
+    private fun emit(event: AcpClientEvent) {
+        _events.tryEmit(event)
+    }
+
+    private fun idString(element: JsonElement): String =
+        (element as? JsonPrimitive)?.content ?: element.toString()
+
+    private fun rookeryMeta(update: JsonObject): JsonObject? =
+        (update["_meta"] as? JsonObject)?.get("rookery") as? JsonObject
+
+    private fun terminalCommandInput(update: JsonObject): String? {
+        val meta = update["_meta"] as? JsonObject ?: return null
+        val terminalInfo = meta["terminal_info"] as? JsonObject ?: return null
+        if (terminalInfo["terminal_id"] == null) return null
+        val title = update["title"]?.stringValue ?: return null
+        return stringifyToolPayload(buildJsonObject { put("command", title) })
+    }
+
+    private fun terminalOutputDelta(update: JsonObject): String? {
+        val meta = update["_meta"] as? JsonObject ?: return null
+        val terminalOutput = meta["terminal_output"] as? JsonObject ?: return null
+        return terminalOutput["data"]?.stringValue
+    }
+
+    private fun contentText(value: JsonElement?): String? {
+        val content = value as? JsonObject ?: return null
+        return content["text"]?.stringValue
+    }
+
+    private fun contentItemsText(value: JsonElement?): String? {
+        val items = value as? JsonArray ?: return null
+        val texts = items.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
+            val nested = obj["content"] as? JsonObject
+            nested?.get("text")?.stringValue ?: obj["text"]?.stringValue
+        }.filter { it.isNotEmpty() }
+        if (texts.isEmpty()) return null
+        return texts.joinToString("\n")
+    }
+
+    private fun stringifyToolPayload(value: JsonElement?): String? {
+        if (value == null || value is JsonNull) return null
+        if (value is JsonPrimitive) return value.content
+        if (value is JsonObject && value.isEmpty()) return null
+        val text = prettyJson.encodeToString(JsonElement.serializer(), value)
+        val trimmed = text.trim()
+        return if (trimmed == "{}") null else trimmed
+    }
+
+    private fun parseUsageCost(value: JsonElement?): AcpUsageCost? {
+        val dict = value as? JsonObject ?: return null
+        val amount = dict["amount"]?.numberValue ?: return null
+        val currency = dict["currency"]?.stringValue ?: return null
+        return AcpUsageCost(amount, currency)
+    }
+
+    private fun parseModesState(value: JsonElement?): AcpModesState? {
+        val dict = value as? JsonObject ?: return null
+        val currentModeId = dict["currentModeId"]?.stringValue ?: return null
+        val availableModesValue = dict["availableModes"] as? JsonArray ?: return null
+        val availableModes = availableModesValue.mapNotNull { (it as? JsonObject)?.let(::parseSessionMode) }
+        return AcpModesState(currentModeId, availableModes)
+    }
+
+    private fun parseSessionMode(value: JsonObject): AcpSessionMode? {
+        val id = value["id"]?.stringValue ?: return null
+        val name = value["name"]?.stringValue ?: return null
+        return AcpSessionMode(id, name, value["description"]?.stringValue)
+    }
+
+    private fun parseConfigOptions(value: JsonElement?): List<AcpConfigOption>? {
+        val items = value as? JsonArray ?: return null
+        return items.mapNotNull { (it as? JsonObject)?.let(::parseConfigOption) }
+    }
+
+    private fun parseConfigOption(value: JsonObject): AcpConfigOption? {
+        val id = value["id"]?.stringValue ?: return null
+        val name = value["name"]?.stringValue ?: return null
+        val type = value["type"]?.stringValue ?: return null
+        val currentValue = value["currentValue"]?.stringValue ?: return null
+        val optionsValue = value["options"] as? JsonArray ?: return null
+        val options = optionsValue.mapNotNull { (it as? JsonObject)?.let(::parseConfigOptionValue) }
+        return AcpConfigOption(
+            id = id,
+            name = name,
+            description = value["description"]?.stringValue,
+            category = value["category"]?.stringValue,
+            type = type,
+            currentValue = currentValue,
+            options = options
+        )
+    }
+
+    private fun parseConfigOptionValue(value: JsonObject): AcpConfigOptionValue? {
+        val rawValue = value["value"]?.stringValue ?: return null
+        val name = value["name"]?.stringValue ?: return null
+        return AcpConfigOptionValue(rawValue, name, value["description"]?.stringValue)
+    }
+
+    private fun parsePermissionToolCall(value: JsonElement?): AcpPermissionToolCall? {
+        val dict = value as? JsonObject ?: return null
+        val toolCallId = dict["toolCallId"]?.stringValue ?: return null
+        val title = dict["title"]?.stringValue ?: return null
+        val kind = dict["kind"]?.stringValue ?: return null
+        val status = dict["status"]?.stringValue ?: return null
+        return AcpPermissionToolCall(toolCallId, title, kind, status)
+    }
+
+    private fun parsePermissionOptions(value: JsonElement?): List<AcpPermissionOption>? {
+        val items = value as? JsonArray ?: return null
+        return items.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
+            val optionId = obj["optionId"]?.stringValue ?: return@mapNotNull null
+            val name = obj["name"]?.stringValue ?: return@mapNotNull null
+            val kind = obj["kind"]?.stringValue ?: return@mapNotNull null
+            AcpPermissionOption(optionId, name, kind)
+        }
+    }
+
+    private fun intValue(value: JsonElement?): Int? = value?.numberValue?.toInt()
+
+    private fun stringList(value: JsonElement?): List<String> =
+        (value as? JsonArray)?.mapNotNull { it.stringValue } ?: emptyList()
+}

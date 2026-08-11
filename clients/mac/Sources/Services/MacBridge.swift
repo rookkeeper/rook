@@ -22,7 +22,7 @@ final class MacBridge {
     var captureScreenshot: (() -> [String: Any]?)?
     var performInput: (([String: Any]) -> (ok: Bool, output: String))?
 
-    private let queue = DispatchQueue(label: "com.rookery.mac-bridge")
+    private let queue = DispatchQueue(label: "com.rookkeeper.mac-bridge")
     private var listener: NWListener?
     private let lock = NSLock()
     private var contextJSON = Data("{}".utf8)

@@ -250,14 +250,14 @@ If you want shell equivalents:
 
 ```zsh
 xcrun simctl openurl booted https://example.com   # foreground Safari, backgrounds Rook
-xcrun simctl launch booted com.rookery.Rook       # bring Rook back
+xcrun simctl launch booted com.rookkeeper.Rook       # bring Rook back
 xcrun simctl io booted screenshot /tmp/rook.png   # screenshot the simulator
 ```
 
 ## Client logging
 
 The iPhone app and shared `RookKit` networking/session layer use Apple Unified
-Logging with subsystem `com.rookery.Rook`. Categories include `app`, `session`,
+Logging with subsystem `com.rookkeeper.Rook`. Categories include `app`, `session`,
 `network`, `location`, `voice`, and `performance`. REST requests, WebSocket
 connect/disconnect/reconnect, session hydration, prompt lifecycle, location
 authorization/arrival gates, and voice transitions are logged without prompt
@@ -271,7 +271,7 @@ simulator, this is also useful:
 
 ```zsh
 xcrun simctl spawn booted log show --last 10m --style compact \\
-  --predicate 'subsystem == "com.rookery.Rook"'
+  --predicate 'subsystem == "com.rookkeeper.Rook"'
 ```
 
 ## Capabilities & Info.plist
