@@ -186,7 +186,7 @@ stop_android_app() {
   log "stopping existing Rook android app"
   while IFS= read -r s; do
     [[ -n "$s" ]] || continue
-    adb -s "$s" shell am force-stop com.rookery.rook >/dev/null 2>&1 || true
+    adb -s "$s" shell am force-stop com.rookkeeper.rook >/dev/null 2>&1 || true
   done <<< "$serials"
 }
 
@@ -222,7 +222,7 @@ PY
     serials="$(adb devices 2>/dev/null | tail -n +2 | awk '$2=="device"{print $1}')"
     while IFS= read -r s; do
       [[ -n "$s" ]] || continue
-      adb -s "$s" shell am force-stop com.rookery.rook >/dev/null 2>&1 || true
+      adb -s "$s" shell am force-stop com.rookkeeper.rook >/dev/null 2>&1 || true
     done <<< "$serials"
   fi
 

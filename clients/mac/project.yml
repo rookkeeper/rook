@@ -1,6 +1,6 @@
 name: Rook
 options:
-  bundleIdPrefix: com.rookery
+  bundleIdPrefix: com.rookkeeper
   deploymentTarget:
     macOS: "14.0"
 settings:
@@ -23,7 +23,7 @@ targets:
       - package: RookKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.rookery.Rook
+        PRODUCT_BUNDLE_IDENTIFIER: com.rookkeeper.Rook
         PRODUCT_NAME: Rook
         ROOK_APP_DISPLAY_NAME: Rook
         INFOPLIST_FILE: Sources/Info.plist
@@ -41,7 +41,7 @@ targets:
       - package: RookKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.rookery.RookTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rookkeeper.RookTests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Rook.app/Contents/MacOS/Rook"
         BUNDLE_LOADER: "$(TEST_HOST)"
 schemes:

@@ -8,7 +8,7 @@ import RookKit
 /// Accessibility (AX) permission. App *identity* (NSWorkspace) does not — only
 /// reading inside another process does.
 enum AXReader {
-    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.Rook", category: "AXReader")
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookkeeper.Rook", category: "AXReader")
     private static let messagingTimeout: Float = 0.5
     private static let activeTabTraversalDeadlineNanoseconds: UInt64 = 2_000_000_000
     private static let slowCallThresholdMilliseconds = 100.0

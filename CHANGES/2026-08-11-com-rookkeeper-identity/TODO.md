@@ -18,16 +18,19 @@ environment IDs as historical data rather than silently rewriting them.
 
 ## Work checklist
 
-- [ ] Change Mac bundle IDs, development identities, internal-bundle filters,
+- [x] Change Mac bundle IDs, development identities, internal-bundle filters,
       generated Xcode settings, launcher values, logging, Keychain service, and
       active Mac docs.
-- [ ] Change iPhone URL metadata, shared logging references, simulator and
+- [x] Change iPhone URL metadata, shared logging references, simulator and
       logging docs, and current architecture docs.
-- [ ] Rename Android application ID, namespace, Kotlin packages/directories,
+- [x] Rename Android application ID, namespace, Kotlin packages/directories,
       launcher force-stop/start commands, and Android docs.
-- [ ] Add or update focused regression tests for identity filtering and
+- [x] Add or update focused regression tests for identity filtering and
       compatibility behavior.
-- [ ] Update current as-built architecture and package documentation while
+- [x] Update current as-built architecture and package documentation while
       preserving historical change records.
 - [ ] Run Swift, Android, shell, and repository-wide identity validation.
+      Android validation is currently blocked because this machine has no Java
+      runtime; server typecheck is blocked because worktree dependencies are
+      not installed.
 - [ ] Inspect the final diff and commit history, then synchronize with main.

@@ -95,7 +95,7 @@ Downloading a Premium voice (macOS Sequoia / 15):
 
 Premium voices are the neural, Siri-quality tier - a large step up from the
 default Samantha. Pin a specific one with `defaults write
-com.rookery.Rook VoiceIdentifier <voice-id>`. For studio-quality
+com.rookkeeper.Rook VoiceIdentifier <voice-id>`. For studio-quality
 voices, swap `VoiceController`'s synthesizer for a cloud TTS (ElevenLabs,
 Cartesia, OpenAI).
 
@@ -186,7 +186,7 @@ restarts.
 ### Client logging and beachball diagnostics
 
 The Mac app uses Apple Unified Logging through the shared `RookKit` logger. The
-subsystem is `com.rookery.Rook`; categories include `app`, `session`, `network`,
+subsystem is `com.rookkeeper.Rook`; categories include `app`, `session`, `network`,
 `environment`, `bridge`, `server`, and `performance`. Fast successful timings
 are debug-level; operations that take at least 100 ms are warnings, and
 operations that take at least 500 ms are errors. This keeps normal logs small
@@ -198,11 +198,11 @@ stream. The viewer is an inspection aid; the authoritative client log is
 Unified Logging, not a temporary file.
 
 You can view the logs in **Console.app** by selecting the Mac, searching for
-`subsystem:com.rookery.Rook`, and pressing **Start**. Terminal equivalents:
+`subsystem:com.rookkeeper.Rook`, and pressing **Start**. Terminal equivalents:
 
 ```zsh
-log stream --style compact --predicate 'subsystem == "com.rookery.Rook"'
-log show --last 10m --style compact --predicate 'subsystem == "com.rookery.Rook"'
+log stream --style compact --predicate 'subsystem == "com.rookkeeper.Rook"'
+log show --last 10m --style compact --predicate 'subsystem == "com.rookkeeper.Rook"'
 sample Rook 10 -file ~/Desktop/rook-sample.txt
 ```
 
@@ -250,7 +250,7 @@ bridge without re-registering.
 ### Tier 2 - the Mac bridge
 
 The app runs a loopback HTTP server (default `http://127.0.0.1:8765`, override
-with `defaults write com.rookery.Rook MacBridgePort <n>`) that
+with `defaults write com.rookkeeper.Rook MacBridgePort <n>`) that
 the agent's shell tool can `curl` to perceive and drive the Mac:
 
 | Route | Body | Returns |
@@ -360,7 +360,7 @@ The repo root (used by the panel's Start Server button) is derived from this
 package's source location; override it with:
 
 ```zsh
-defaults write com.rookery.Rook RookeryRepoRoot /path/to/rookery
+defaults write com.rookkeeper.Rook RookeryRepoRoot /path/to/rookery
 ```
 
 Shared Rook config lives in `ROOK_HOME/config/` (`~/.rook/config/` for production and `~/.rook-<worktree-slug>/config/` for a worktree).
@@ -375,11 +375,11 @@ relaunch. Diagnose and fix:
 
 ```zsh
 # Is a position stored, and where? (~870+ on a 1512pt display = hidden zone)
-defaults read com.rookery.Rook "NSStatusItem Preferred Position Item-0"
+defaults read com.rookkeeper.Rook "NSStatusItem Preferred Position Item-0"
 
 # Fix: quit the app, then pin the item into the visible right-hand cluster
 pkill -f Rook
-defaults write com.rookery.Rook \
+defaults write com.rookkeeper.Rook \
   "NSStatusItem Preferred Position Item-0" -float 400
 open "$APP_PATH"
 ```
@@ -393,8 +393,8 @@ jordanbaird-ice`, or Bartender) avoids the overflow cull entirely.
 window back after closing it):
 
 ```zsh
-defaults write com.rookery.Rook ShowPanelWindow -bool true   # on
-defaults write com.rookery.Rook ShowPanelWindow -bool false  # off
+defaults write com.rookkeeper.Rook ShowPanelWindow -bool true   # on
+defaults write com.rookkeeper.Rook ShowPanelWindow -bool false  # off
 ```
 
 ## Notes on the wire protocol

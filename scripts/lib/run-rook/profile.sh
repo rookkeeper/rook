@@ -81,14 +81,14 @@ configure_run_profile() {
   fi
 
   RUN_ROOK_PROFILE_SLUG="production"
-  RUN_ROOK_APP_BUNDLE_ID="com.rookery.Rook"
+  RUN_ROOK_APP_BUNDLE_ID="com.rookkeeper.Rook"
   RUN_ROOK_APP_DISPLAY_NAME="Rook"
   RUN_ROOK_DEFAULT_PORT="7665"
   RUN_ROOK_HOME_DEFAULT="$HOME/.rook"
 
   if [[ "$RUN_ROOK_PROFILE" == "development" ]]; then
     RUN_ROOK_PROFILE_SLUG="$(worktree_profile_slug "$REPO_ROOT")"
-    RUN_ROOK_APP_BUNDLE_ID="com.rookery.Rook.Dev.${RUN_ROOK_PROFILE_SLUG//-/.}"
+    RUN_ROOK_APP_BUNDLE_ID="com.rookkeeper.Rook.Dev.${RUN_ROOK_PROFILE_SLUG//-/.}"
     RUN_ROOK_APP_DISPLAY_NAME="Rook Dev (${RUN_ROOK_PROFILE_SLUG})"
     RUN_ROOK_DEFAULT_PORT="$(deterministic_dev_port "$RUN_ROOK_PROFILE_SLUG")"
     RUN_ROOK_HOME_DEFAULT="$HOME/.rook-${RUN_ROOK_PROFILE_SLUG}"

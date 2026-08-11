@@ -423,7 +423,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.RookTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookkeeper.RookTests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Rook.app/Contents/MacOS/Rook";
 			};
@@ -442,7 +442,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookkeeper.Rook;
 				PRODUCT_NAME = Rook;
 				ROOK_APP_DISPLAY_NAME = Rook;
 				SDKROOT = macosx;
@@ -459,7 +459,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.RookTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookkeeper.RookTests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Rook.app/Contents/MacOS/Rook";
 			};
@@ -603,7 +603,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rookery.Rook;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rookkeeper.Rook;
 				PRODUCT_NAME = Rook;
 				ROOK_APP_DISPLAY_NAME = Rook;
 				SDKROOT = macosx;

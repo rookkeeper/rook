@@ -15,7 +15,7 @@ public enum RookLogCategory: String {
 }
 
 public enum RookLog {
-    public static let subsystem = "com.rookery.Rook"
+    public static let subsystem = "com.rookkeeper.Rook"
     public static let verboseEnabled = ProcessInfo.processInfo.environment["ROOK_VERBOSE_LOGGING"] == "1"
 
     public static let app = logger(.app)

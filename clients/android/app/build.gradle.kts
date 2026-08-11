@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.rookery.rook"
+    namespace = "com.rookkeeper.rook"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.rookery.rook"
+        applicationId = "com.rookkeeper.rook"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

@@ -118,10 +118,12 @@
 
 ## Logging and performance instrumentation
 
-`Logging/RookLog.swift` provides the shared `com.rookery.Rook` Unified Logging
+`Logging/RookLog.swift` provides the shared `com.rookkeeper.Rook` Unified Logging
 subsystem, stable categories, `OSSignposter` intervals, and reusable timed
-operations. Fast successful timings are debug-level; slow and failed operations
-remain warning/error-level. `RookAPI`, `AcpSocket`, and `SessionHandle` use it to record REST
+operations. `KeychainStore` uses the `com.rookkeeper.Rook` service and migrates
+an existing token from the legacy `com.rookery.Rook` service on first read.
+Fast successful timings are debug-level; slow and failed operations remain
+warning/error-level. `RookAPI`, `AcpSocket`, and `SessionHandle` use it to record REST
 request status/latency, WebSocket lifecycle, session creation/loading,
 transcript attachment, reconnect attempts, queued delivery, and run outcomes.
 The Mac and iPhone app-specific models add their platform-specific lifecycle,
