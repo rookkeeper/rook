@@ -28,6 +28,8 @@ The macOS client is a native SwiftUI menu bar app with a regular app window. It 
   - routes each focused app to exactly one provider: a specialist or the generic fallback
 - `AXReader`
   - reads Accessibility-backed window/app context
+- `MacStallWatchdog`
+  - local-only background watchdog for detecting stalled main-run-loop progress
 - `MacBridge`
   - loopback HTTP bridge for agent perception and control
 - `ServerController`
@@ -155,6 +157,7 @@ When launched from a Git worktree through `scripts/run-rook.sh`, the Mac app is 
 ## Notable architectural characteristics
 
 - the mac app is both a client and an environment provider
+- a local-only background watchdog records main-run-loop stalls without sending telemetry or collecting user content
 - session discovery is REST; agent interaction is one ACP WebSocket per session
 - `SessionHandle` isolates all session state — blocks, streaming buffers, reconnection — so switching never tears down a running session
 - environment registration is layered: base app identity plus exactly one context provider for the focused bundle id
