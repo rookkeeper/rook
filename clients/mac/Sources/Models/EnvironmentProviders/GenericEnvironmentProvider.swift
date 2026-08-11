@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 import RookKit
 
 private struct GenericEnvironmentObservation {
@@ -12,7 +11,7 @@ private struct GenericEnvironmentObservation {
 @MainActor
 final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     private static let pollInterval: TimeInterval = 5
-    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.rook", category: "GenericEnvironmentProvider")
+    private nonisolated static let logger = RookLog.environment
     private nonisolated(unsafe) static let fileManager = FileManager.default
     private nonisolated static let projectRootFileMarkers = [
         ".git",
@@ -56,6 +55,11 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     func activate(app: ForegroundApp, title: String?) {
+        if RookLog.verboseEnabled {
+            Self.logger.debug("generic provider activate bundleId=\(app.bundleId, privacy: .public) title=\(title ?? "(null)", privacy: .public)")
+        } else {
+            Self.logger.info("generic provider activate bundleId=\(app.bundleId, privacy: .public)")
+        }
         currentApp = app
         currentTitle = title
         previousNormalizedIds = nil
@@ -64,15 +68,15 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     func update(app: ForegroundApp, title: String?) {
+        if RookLog.verboseEnabled {
+            Self.logger.debug("generic provider update bundleId=\(app.bundleId, privacy: .public) title=\(title ?? "(null)", privacy: .public)")
+        }
         currentApp = app
         currentTitle = title
     }
 
     func deactivate() {
-        if let app = currentApp {
-            let observation = Self.observation(for: app, title: currentTitle)
-            registration.emitNow(candidates: observation.candidates, reason: "generic-final")
-        }
+        Self.logger.info("generic provider deactivate bundleId=\(self.currentApp?.bundleId ?? "(none)", privacy: .public)")
         pollTimer?.invalidate()
         pollTimer = nil
         observationTask?.cancel()
@@ -104,7 +108,20 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
         let title = currentTitle
         observationTask?.cancel()
         observationTask = Task.detached { [weak self] in
-            let observation = Self.observation(for: app, title: title)
+            let observation = RookPerformance.measure(
+                "GenericEnvironmentPoll",
+                operation: "generic-environment-poll",
+                description: "bundleId=\(app.bundleId)",
+                logger: Self.logger,
+                signposter: RookLog.environmentSignposter,
+                slowThresholdMs: 150,
+                hangThresholdMs: 600,
+                details: { observation in
+                    "normalizedIds=\(observation.normalizedIds.count) candidates=\(observation.candidates.count)"
+                }
+            ) {
+                Self.observation(for: app, title: title)
+            }
             guard !Task.isCancelled else { return }
             await self?.apply(observation, for: app)
         }
@@ -119,6 +136,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
             onStateChange?()
         }
         guard let previousNormalizedIds, previousNormalizedIds == observation.normalizedIds else {
+            Self.logger.info("generic provider observation changed bundleId=\(app.bundleId, privacy: .public) candidates=\(observation.candidates.count, privacy: .public)")
             return
         }
         registration.emitNow(candidates: observation.candidates, reason: "generic")
@@ -270,7 +288,7 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     nonisolated static func warningForNonAbsoluteDirectoryCandidate(rawValue: String, app: ForegroundApp) {
-        logger.warning("Skipping non-absolute directory candidate for bundleId=\(app.bundleId, privacy: .public): \(rawValue, privacy: .public)")
+        logger.warning("generic provider skipped non-absolute directory candidate bundleId=\(app.bundleId, privacy: .public)")
     }
 }
 

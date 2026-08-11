@@ -136,4 +136,20 @@ start_server
 kill "$owned_pid"
 wait "$owned_pid" 2>/dev/null || true
 
+# A server that exits during startup should stop the health wait immediately.
+health_ok() { return 1; }
+SERVER_PIDFILE="$TEST_ROOT/exited/server.pid"
+mkdir -p "$(dirname "$SERVER_PIDFILE")"
+sleep 120 &
+failed_start_pid="$!"
+printf '%s\n' "$failed_start_pid" >"$SERVER_PIDFILE"
+kill "$failed_start_pid"
+wait "$failed_start_pid" 2>/dev/null || true
+if wait_for_health 90; then
+  fail "an exited server must not pass the health wait"
+else
+  wait_status="$?"
+fi
+assert_eq "$wait_status" "2"
+
 printf 'PASS: run-rook lifecycle tests\n'

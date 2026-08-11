@@ -38,6 +38,11 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
 - **Server supervision** - health polling; if the server is down the panel can
   launch `npm run dev` for the repo and tail its log
   (`~/Library/Logs/Rook/server.log`).
+- **Main-thread stall watchdog** - a local background watchdog records a
+  unified-log warning when the Mac app's main run loop stops advancing for
+  several seconds. Records include a client instance ID, the last known
+  diagnostic operation, safe process/lifecycle context, and recovery duration;
+  they do not include window contents or transcript text.
 - **Mac environment provider** - the app immediately registers newly seen
   user-visible environments, keeps them alive with periodic re-registration,
   and forgets them locally after 4m45s without renewed user-visible focus. Generic path-derived registration is now conservative: it only emits project-like or agentic `dir:/...` environments under `/Users/<username>` rather than every observed path segment.
@@ -178,7 +183,53 @@ becomes frontmost, the current external provider is stopped rather than
 retaining its target PID. Cached registrations are re-announced if the server
 restarts.
 
-Provider activity is traced to `/tmp/rook.log` for debugging.
+### Client logging and beachball diagnostics
+
+The Mac app uses Apple Unified Logging through the shared `RookKit` logger. The
+subsystem is `com.rookery.Rook`; categories include `app`, `session`, `network`,
+`environment`, `bridge`, `server`, and `performance`. Fast successful timings
+are debug-level; operations that take at least 100 ms are warnings, and
+operations that take at least 500 ms are errors. This keeps normal logs small
+while making main-thread and Accessibility/Finder stalls easy to identify.
+
+Open **Rook Log** from the app to view the last ten minutes of the client
+subsystem log plus the managed server-log tail, followed by a live unified-log
+stream. The viewer is an inspection aid; the authoritative client log is
+Unified Logging, not a temporary file.
+
+You can view the logs in **Console.app** by selecting the Mac, searching for
+`subsystem:com.rookery.Rook`, and pressing **Start**. Terminal equivalents:
+
+```zsh
+log stream --style compact --predicate 'subsystem == "com.rookery.Rook"'
+log show --last 10m --style compact --predicate 'subsystem == "com.rookery.Rook"'
+sample Rook 10 -file ~/Desktop/rook-sample.txt
+```
+
+For a short diagnostic run with detailed polling and raw foreground context,
+launch from the worktree with:
+
+```zsh
+ROOK_VERBOSE_LOGGING=1 ./scripts/run-rook.sh server mac
+```
+
+Verbose mode is opt-in; it includes window titles, document paths, and URLs, so
+do not enable it for logs you plan to share without reviewing them.
+
+Capture the timestamp of the beachball and collect the unified log plus a
+`sample` while it is visible. In particular, search the `performance` and
+`environment` categories for `elapsedMs`, `ax-`, `finder-`, or
+`mac-bridge-route` entries immediately before the sample. The stall watchdog
+also emits one `StallWatchdog` warning per episode, including a short client
+instance ID and the last tracked operation; filter for it with:
+
+```zsh
+log show --last 1h --style compact \\
+  --predicate 'category == "StallWatchdog"'
+```
+
+Each client process gets a short instance ID, so records from simultaneous Rook
+clients can be compared without conflating their timelines.
 
 ### Tier 1 - window-title perception
 

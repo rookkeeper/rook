@@ -2,6 +2,8 @@
 
 > **TODO 1 — first step completed:** PR #139 added the local Mac stall watchdog and diagnostic logging. The wider cause remains under investigation. This is the working document; do not create an `OUTCOMES.md` until the beachball investigation is actually finished.
 
+> **TODO 1 — first step only:** This change is the first increment of an ongoing stall investigation. It adds diagnostic logging and a main-thread watchdog so the next occurrence gives us better evidence; it does not claim to fix or fully explain the stall. Keep this `CHANGES/` directory open for follow-up investigation rather than creating an `OUTCOMES.md` for this step.
+
 ## Context
 
 Implement the highest-value diagnostic piece from the stall investigation: a local macOS client watchdog that can report when the main actor/main thread stops making progress. The watchdog should help distinguish a main-thread stall from a broader macOS lifecycle or system pause without adding telemetry throughout the application.
@@ -26,17 +28,17 @@ The first pass does not need automatic `sample`/spindump capture or AX-call inst
 
 ## Steps
 
-- [ ] Add a Mac-local diagnostics/watchdog component with a unique client-instance identifier and a monotonic heartbeat.
-- [ ] Run the watchdog from a background queue and emit one unified-log warning per detected stale-heartbeat episode.
-- [ ] Record safe contextual metadata and the last registered operation label without collecting user-facing content.
-- [ ] Integrate heartbeat updates with the Mac app's main-actor lifecycle and diagnostics-relevant operations.
-- [ ] Add focused tests for stale-heartbeat detection, recovery, duplicate suppression, and configurable thresholds.
-- [ ] Document how to inspect the watchdog records with macOS unified-log tools and how to correlate multiple client instances.
-- [ ] Run the appropriate macOS tests/build checks and confirm they pass.
-- [ ] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
-- [ ] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
-- [ ] Update `AS-BUILT-ARCHITECTURE/` as needed.
-- [ ] Update `PRODUCT/` as needed.
+- [x] Add a Mac-local diagnostics/watchdog component with a unique client-instance identifier and a monotonic heartbeat.
+- [x] Run the watchdog from a background queue and emit one unified-log warning per detected stale-heartbeat episode.
+- [x] Record safe contextual metadata and the last registered operation label without collecting user-facing content.
+- [x] Integrate heartbeat updates with the Mac app's main-actor lifecycle and diagnostics-relevant operations.
+- [x] Add focused tests for stale-heartbeat detection, recovery, duplicate suppression, and configurable thresholds.
+- [x] Document how to inspect the watchdog records with macOS unified-log tools and how to correlate multiple client instances.
+- [x] Run the appropriate macOS tests/build checks and confirm they pass.
+- [x] Review the final diff for leftover backward-compatibility code, compatibility documentation, fallback paths, temporary shims, abandoned experiments, and other no-longer-needed transitional code.
+- [x] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
+- [x] Update `AS-BUILT-ARCHITECTURE/` as needed; no architecture change was needed.
+- [x] Update `PRODUCT/` as needed; this diagnostic-only change does not alter product behavior.
 
 ## TODO 2 — Remove Rook from environment inspection and audit generic AX perception
 
@@ -90,6 +92,6 @@ The initial result is therefore not “delete `activeTabURL` everywhere.” It i
 
 - [ ] A blocked Mac main actor produces a useful local unified-log warning without requiring the main actor to run.
 - [ ] A healthy client does not emit repeated false warnings during normal timer jitter.
-- [ ] Two running clients have distinguishable diagnostic instance IDs.
-- [ ] Tests cover the watchdog's state transitions and the relevant Mac build/test checks pass.
-- [ ] The implementation does not collect private window or transcript content and does not alter server behavior.
+- [x] Two running clients have distinguishable diagnostic instance IDs.
+- [x] Tests cover the watchdog's state transitions and the relevant Mac build/test checks pass.
+- [x] The implementation does not collect private window or transcript content and does not alter server behavior.

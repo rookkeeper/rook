@@ -39,7 +39,7 @@ The launcher uses the main checkout as the production-like local profile. Runnin
 
 ## CI checks
 
-Pull requests include a guard against adding compatibility markers to executable or configuration files. Configure the workflow's status check as required in GitHub branch protection to block merges when it fails.
+Pull requests include a guard against adding compatibility markers to executable or configuration files. A failure means the compatibility path must be removed completely from code and documentation when it was introduced during the PR and never shipped; it should not be preserved for hypothetical older versions. Keep compatibility only when it predates the PR and an explicit product or maintainer decision approves it. Configure the workflow's status check as required in GitHub branch protection to block merges when it fails.
 
 ## High-level docs map
 

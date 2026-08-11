@@ -12,6 +12,12 @@ The application database remains separate from environment repositories. This da
 
 For session recency, no extra table or column was added: the existing `sessions.updated_at` field now represents both prompt activity and explicit client-side view/touch events, so opening a session can reorder the shared recents list without synthesizing transcript content.
 
+## Session transcript persistence
+
+`session_transcript_events` stores logical transcript records rather than one row per ACP transport chunk. Contiguous user, assistant, and thought chunks are merged; tool-call updates are merged by `toolCallId` into the tool record's arguments, status, and accumulated output; plan and usage records are replaced by their latest update within a section. The current in-progress record is updated in place so a second client can hydrate a running session without waiting for the turn to finish.
+
+The REST transcript response retains the normalized event shape consumed by clients, and its events are already coalesced.
+
 ## Environment repository schema
 
 Each environment repository database has exactly three tables.

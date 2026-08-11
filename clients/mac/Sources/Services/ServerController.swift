@@ -1,9 +1,12 @@
 import Foundation
+import RookKit
 
 /// Launches and supervises a dev Rook server (`npm run dev`) for the
 /// rookery repo when one isn't already running.
 @MainActor
 final class ServerController {
+    private static let logger = RookLog.server
+
     var onTermination: (() -> Void)?
 
     private(set) var isManagedServerRunning = false
@@ -41,8 +44,18 @@ final class ServerController {
 
     func start() {
         guard process == nil else {
+            Self.logger.info("managed server start skipped existing process")
             return
         }
+        let timed = RookPerformance.begin(
+            "ManagedServerStart",
+            operation: "managed-server-start",
+            description: Self.repoRoot.path,
+            logger: Self.logger,
+            signposter: RookLog.serverSignposter,
+            slowThresholdMs: 250,
+            hangThresholdMs: 1_000
+        )
         let logURL = Self.logFileURL
         try? FileManager.default.createDirectory(
             at: logURL.deletingLastPathComponent(),
@@ -59,11 +72,12 @@ final class ServerController {
             process.standardOutput = logHandle
             process.standardError = logHandle
         }
-        process.terminationHandler = { [weak self] _ in
+        process.terminationHandler = { [weak self] process in
             Task { @MainActor in
                 guard let self else {
                     return
                 }
+                Self.logger.info("managed server terminated pid=\(process.processIdentifier, privacy: .public) status=\(process.terminationStatus, privacy: .public)")
                 self.process = nil
                 self.isManagedServerRunning = false
                 self.onTermination?()
@@ -73,13 +87,18 @@ final class ServerController {
             try process.run()
             self.process = process
             isManagedServerRunning = true
+            Self.logger.info("managed server started pid=\(process.processIdentifier, privacy: .public) log=\(logURL.path, privacy: .public)")
+            timed.finish(details: "pid=\(process.processIdentifier)")
         } catch {
             try? logHandle?.write(contentsOf: Data("Failed to launch server: \(error)\n".utf8))
+            Self.logger.error("managed server start failed error=\(error.localizedDescription, privacy: .public)")
+            timed.fail(error)
             isManagedServerRunning = false
         }
     }
 
     func stop() {
+        Self.logger.info("managed server stop pid=\(self.process?.processIdentifier ?? 0, privacy: .public)")
         process?.terminate()
         process = nil
         isManagedServerRunning = false
