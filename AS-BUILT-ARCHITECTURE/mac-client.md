@@ -152,6 +152,27 @@ Via `RookKit`:
 ### Worktree development profile
 When launched from a Git worktree through `scripts/run-rook.sh`, the Mac app is built with a distinct development bundle identity and display name. It connects to the worktree's deterministic development port and can run beside the production-like app from the main checkout without sharing app preferences or server state.
 
+## Client logging and hang diagnostics
+
+Apple-client logging is centralized in `RookKit/Logging/RookLog.swift` and uses
+Unified Logging with subsystem `com.rookery.Rook`. The Mac app uses categories
+for app, session, network, environment, bridge, server, and performance work.
+`RookPerformance` records elapsed milliseconds and emits `OSSignposter` intervals;
+fast successful operations are debug-level, 100 ms is the slow-operation threshold,
+and 500 ms is the hang-warning threshold. `ROOK_VERBOSE_LOGGING=1` enables
+additional polling and raw foreground-context details for a short diagnostic run;
+otherwise window titles, document paths, and URLs are summarized rather than
+logged.
+
+The Mac instruments the beachball-adjacent paths: Accessibility title/document,
+web-tree, text, and actionable-element reads; Finder AppleScript observation;
+foreground/provider polling and registration; bridge routes; server supervision;
+REST health/session/environment calls; WebSocket initialization/reconnect; and
+session transcript hydration and prompt lifecycle. The in-app Rook Log viewer
+shows recent unified logs for `com.rookery.Rook`, tails them live, and includes
+the managed server log as context. Unified Logging is authoritative for client
+diagnostics.
+
 ## Notable architectural characteristics
 
 - the mac app is both a client and an environment provider

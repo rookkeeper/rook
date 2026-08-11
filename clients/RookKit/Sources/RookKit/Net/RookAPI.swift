@@ -19,6 +19,8 @@ public enum RookHealthResult: Equatable {
 
 /// REST control plane for the Rook server.
 public struct RookAPI {
+    private static let logger = RookLog.network
+
     public let baseURL: URL
     public let authToken: String?
 
@@ -51,23 +53,36 @@ public struct RookAPI {
     public func healthResult(timeout: TimeInterval = 1.5) async -> RookHealthResult {
         var request = authorizedRequest(url: baseURL.appending(path: "api/health"))
         request.timeoutInterval = timeout
+        let timed = RookPerformance.begin(
+            "HealthCheck",
+            operation: "http-health",
+            description: "GET /api/health timeout=\(timeout)",
+            logger: Self.logger,
+            signposter: RookLog.networkSignposter
+        )
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
+                timed.finish(details: "non-http-response")
                 return .transportError("Non-HTTP response")
             }
             switch http.statusCode {
             case 200:
                 if let body = try? JSONDecoder().decode(JSONValue.self, from: data), body["ok"]?.boolValue == true {
+                    timed.finish(details: "status=200 bytes=\(data.count)")
                     return .ok
                 }
+                timed.finish(details: "status=200 malformed-body bytes=\(data.count)")
                 return .transportError("Malformed health response")
             case 401:
+                timed.finish(details: "status=401")
                 return .unauthorized
             default:
+                timed.finish(details: "status=\(http.statusCode)")
                 return .httpStatus(http.statusCode)
             }
         } catch {
+            timed.fail(error)
             return .transportError(error.localizedDescription)
         }
     }
@@ -164,7 +179,7 @@ public struct RookAPI {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try JSONEncoder().encode(request)
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await performData(for: urlRequest)
         try throwIfErrorResponse(data: data, response: response)
         return try JSONDecoder().decode(IdentifyResponse.self, from: data).candidates
     }
@@ -223,7 +238,7 @@ public struct RookAPI {
     }
 
     private func get<T: Decodable>(path: String, query: [String: String]) async throws -> T {
-        let (data, response) = try await URLSession.shared.data(for: authorizedRequest(url: requestURL(path: path, query: query)))
+        let (data, response) = try await performData(for: authorizedRequest(url: requestURL(path: path, query: query)))
         try throwIfErrorResponse(data: data, response: response)
         return try JSONDecoder().decode(T.self, from: data)
     }
@@ -261,7 +276,7 @@ public struct RookAPI {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(payload)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await performData(for: request)
         try throwIfErrorResponse(data: data, response: response)
         return try JSONDecoder().decode(T.self, from: data)
     }
@@ -272,6 +287,30 @@ public struct RookAPI {
             request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         }
         return request
+    }
+
+    private func performData(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let method = request.httpMethod ?? "GET"
+        let path = request.url?.path(percentEncoded: false) ?? request.url?.path ?? "(unknown)"
+        let timed = RookPerformance.begin(
+            "HTTPRequest",
+            operation: "http-request",
+            description: "\(method) \(path)",
+            logger: Self.logger,
+            signposter: RookLog.networkSignposter
+        )
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let http = response as? HTTPURLResponse {
+                timed.finish(details: "status=\(http.statusCode) bytes=\(data.count)")
+            } else {
+                timed.finish(details: "non-http-response bytes=\(data.count)")
+            }
+            return (data, response)
+        } catch {
+            timed.fail(error, details: "\(method) \(path)")
+            throw error
+        }
     }
 
     private func throwIfErrorResponse(data: Data, response: URLResponse) throws {

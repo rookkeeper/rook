@@ -1,18 +1,24 @@
 import AppKit
 import Foundation
+import RookKit
 
-/// Lightweight debug trace for the foreground-provider path; tail
-/// /tmp/rook.log while testing.
-func providerLog(_ message: String) {
-    let line = "\(Date()) \(message)\n"
-    let url = URL(fileURLWithPath: "/tmp/rook.log")
-    if let handle = try? FileHandle(forWritingTo: url) {
-        handle.seekToEndOfFile()
-        handle.write(Data(line.utf8))
-        try? handle.close()
-    } else {
-        try? Data(line.utf8).write(to: url)
-    }
+private let providerLogger = RookLog.environment
+
+func providerInfo(_ message: String) {
+    providerLogger.info("\(message, privacy: .public)")
+}
+
+func providerWarning(_ message: String) {
+    providerLogger.warning("\(message, privacy: .public)")
+}
+
+func providerDebug(_ message: String) {
+    guard RookLog.verboseEnabled else { return }
+    providerLogger.debug("\(message, privacy: .public)")
+}
+
+func providerError(_ message: String) {
+    providerLogger.error("\(message, privacy: .public)")
 }
 
 struct ForegroundApp: Equatable {
@@ -103,7 +109,7 @@ final class ForegroundAppMonitor {
     }
 
     private func handleActivation(_ app: ForegroundApp) {
-        providerLog("activation: \(app.name) [\(app.bundleId)]")
+        providerInfo("activation app=\(app.name) bundleId=\(app.bundleId) pid=\(app.pid)")
         // Our own panel/window gaining focus must not end the current episode.
         if app.bundleId == Bundle.main.bundleIdentifier {
             return
@@ -123,6 +129,7 @@ final class ForegroundAppMonitor {
 
     private func commit(_ app: ForegroundApp) {
         current = app
+        providerInfo("commit foreground app=\(app.name) bundleId=\(app.bundleId)")
         onForegroundChange?(app)
         emitContext(for: app)
     }
@@ -130,6 +137,7 @@ final class ForegroundAppMonitor {
     private func emitContext(for app: ForegroundApp) {
         let title = AXReader.focusedWindowTitle(pid: app.pid)
         currentTitle = title
+        providerDebug("context refresh bundleId=\(app.bundleId) title=\(title ?? "(null)")")
         onContextRefresh?(app, title)
     }
 

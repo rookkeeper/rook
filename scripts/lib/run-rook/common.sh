@@ -412,6 +412,9 @@ open_mac_app_bundle() {
   if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
     launchctl setenv ROOK_AUTH_TOKEN "$SERVER_AUTH_TOKEN"
   fi
+  if [[ -n "${ROOK_VERBOSE_LOGGING:-}" ]]; then
+    launchctl setenv ROOK_VERBOSE_LOGGING "$ROOK_VERBOSE_LOGGING"
+  fi
   launchctl setenv ROOK_SERVER_BASE_URL "http://127.0.0.1:${SERVER_PORT}"
   launchctl setenv ROOK_RUN_MODE "$RUN_ROOK_PROFILE"
   launchctl setenv ROOK_HOME "$ROOK_HOME"
@@ -433,6 +436,9 @@ open_mac_app_bundle() {
   if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
     launchctl unsetenv ROOK_AUTH_TOKEN
   fi
+  if [[ -n "${ROOK_VERBOSE_LOGGING:-}" ]]; then
+    launchctl unsetenv ROOK_VERBOSE_LOGGING
+  fi
   activate_mac_app "$app_path"
 }
 
@@ -442,6 +448,12 @@ ios_launch_env_json() {
     launch_env="{\"ROOK_AUTH_TOKEN\":$(json_escape "$SERVER_AUTH_TOKEN")"
   else
     launch_env="{"
+  fi
+  if [[ "${ROOK_VERBOSE_LOGGING:-0}" == "1" ]]; then
+    if [[ "$launch_env" != "{" ]]; then
+      launch_env+=","
+    fi
+    launch_env+='"ROOK_VERBOSE_LOGGING":"1"'
   fi
   if [[ -n "$SIMULATE_ARRIVAL" ]]; then
     log "simulating arrival at $SIMULATE_ARRIVAL (DEBUG ROOK_SIMULATE_ARRIVAL)"
@@ -601,6 +613,7 @@ build_ios_simulator_app() {
   log "launching Rook on simulator $sim_name with ROOK_SERVER_BASE_URL=$sim_url"
   SIMCTL_CHILD_ROOK_SERVER_BASE_URL="$sim_url" \
   SIMCTL_CHILD_ROOK_AUTH_TOKEN="${SERVER_AUTH_TOKEN:-}" \
+  SIMCTL_CHILD_ROOK_VERBOSE_LOGGING="${ROOK_VERBOSE_LOGGING:-0}" \
   SIMCTL_CHILD_ROOK_SIMULATE_ARRIVAL="${SIMULATE_ARRIVAL:-}" \
   xcrun simctl launch --terminate-running-process "$sim_udid" "$DEFAULT_IOS_APP_BUNDLE_ID" >/dev/null
 
