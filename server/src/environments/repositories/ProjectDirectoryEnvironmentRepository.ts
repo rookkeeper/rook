@@ -83,10 +83,11 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
     // THIS IS FOR BACKWARDS COMPATIBILITY
     // Preserve skill discovery from the established tool-specific project
     // directories while the standard .agents/skills layout is adopted.
+    // All roots are merged; on a name collision the earlier root wins.
     const roots = [".agents/skills", ".claude/skills", ".codex/skills", ".cursor/skills", ".github/skills"]
       .map((relative) => path.join(directory, relative))
       .filter((candidate) => existsSync(candidate));
-    const artifacts: BundleArtifact[] = [];
+    const artifactsById = new Map<string, BundleArtifact>();
     for (const root of roots) {
       let entries;
       try {
@@ -97,6 +98,7 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
       }
       for (const entry of entries) {
         if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+        if (artifactsById.has(entry.name)) continue;
         const skillPath = path.join(root, entry.name);
         if (entry.isSymbolicLink()) {
           // Skill directories are commonly linked from tool-specific roots.
@@ -118,11 +120,10 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
           errors.push({ code: "invalid_bundle_contents", message: `Skill ${entry.name} is missing SKILL.md`, repository: this.repositoryId, environmentId, path: skillPath });
           continue;
         }
-        artifacts.push({ id: entry.name, files, sourcePath: skillPath });
+        artifactsById.set(entry.name, { id: entry.name, files, sourcePath: skillPath });
       }
-      if (artifacts.length > 0) break;
     }
-    return artifacts.sort((a, b) => a.id.localeCompare(b.id));
+    return [...artifactsById.values()].sort((a, b) => a.id.localeCompare(b.id));
   }
 }
 
