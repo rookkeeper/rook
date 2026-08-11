@@ -31,7 +31,7 @@ const db = new DatabaseSync(dbPath);
 type Row = {
   bundle_hash: string;
   environment_id: string;
-  bundle_id: string | null;
+  bundle_id: string;
   decision: string;
   updated_at: string;
 };
@@ -50,7 +50,7 @@ if (rows.length === 0) {
 // Column widths
 const hashW = Math.max(12, ...rows.map((r) => r.bundle_hash.length));
 const envW = Math.max(14, ...rows.map((r) => r.environment_id.length));
-const bundleW = Math.max(9, ...rows.map((r) => (r.bundle_id ?? "(none)").length));
+const bundleW = Math.max(9, ...rows.map((r) => r.bundle_id.length));
 const decW = 8;
 const timeW = 20;
 
@@ -71,7 +71,7 @@ for (const row of rows) {
     ? row.bundle_hash.slice(0, 16) + "…"
     : row.bundle_hash;
   console.log(
-    `${pad(shortHash, hashW)}  ${pad(row.environment_id, envW)}  ${pad(row.bundle_id ?? "(none)", bundleW)}  ${pad(row.decision, decW)}  ${pad(row.updated_at.replace("T", " ").slice(0, 19), timeW)}`,
+    `${pad(shortHash, hashW)}  ${pad(row.environment_id, envW)}  ${pad(row.bundle_id, bundleW)}  ${pad(row.decision, decW)}  ${pad(row.updated_at.replace("T", " ").slice(0, 19), timeW)}`,
   );
 }
 

@@ -480,14 +480,14 @@ public final class SessionHandle {
         switch event {
         case .userMessageChunk(let text):
             if isReplaying {
-                replayFlushIncompatibleSection("user")
+                replayFlushMismatchedSection("user")
                 replayUserBuffer += text
             } else {
                 appendBlock(.user(text: text))
             }
         case .agentMessageChunk(let text):
             if isReplaying {
-                replayFlushIncompatibleSection("assistant")
+                replayFlushMismatchedSection("assistant")
                 replayAssistantBuffer += text
             } else {
                 statusLine = "Responding…"
@@ -496,7 +496,7 @@ public final class SessionHandle {
             }
         case .agentThoughtChunk(let text):
             if isReplaying {
-                replayFlushIncompatibleSection("thinking")
+                replayFlushMismatchedSection("thinking")
                 replayThinkingBuffer += text
             } else {
                 statusLine = "Thinking…"
@@ -504,9 +504,9 @@ public final class SessionHandle {
             }
         case .toolCallStarted(let toolCallId, let title, let kind, let status, let rawInput):
             if isReplaying {
-                replayFlushIncompatibleSection("tool")
+                replayFlushMismatchedSection("tool")
             } else {
-                flushLiveIncompatibleSection()
+                flushLiveMismatchedSection()
                 statusLine = "Using tool: \(title)"
             }
             let state = ToolBlockState(
@@ -520,9 +520,9 @@ public final class SessionHandle {
             appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
         case .toolCallUpdate(let toolCallId, let status, let toolName, let output):
             if isReplaying {
-                replayFlushIncompatibleSection("tool")
+                replayFlushMismatchedSection("tool")
             } else {
-                flushLiveIncompatibleSection()
+                flushLiveMismatchedSection()
             }
             updateTool(toolCallId) { tool in
                 if let toolName, tool.title.isEmpty { tool.title = toolName }
@@ -545,7 +545,7 @@ public final class SessionHandle {
             scheduleStreamingFlush()
         case .toolCallReady(let toolCallId, _):
             if isReplaying { updateTool(toolCallId) { advanceToolStatus(&$0, to: .ready) }; return }
-            flushLiveIncompatibleSection()
+            flushLiveMismatchedSection()
             updateTool(toolCallId) { advanceToolStatus(&$0, to: .ready) }
         case .toolOutputSnapshot(let toolCallId, _, let text):
             if isReplaying { updateTool(toolCallId) { $0.output = text }; return }
@@ -658,7 +658,7 @@ public final class SessionHandle {
         }
     }
 
-    private func flushLiveIncompatibleSection() {
+    private func flushLiveMismatchedSection() {
         streamingFlushTask?.cancel()
         streamingFlushTask = nil
         applyStreamingFlush()
@@ -705,7 +705,7 @@ public final class SessionHandle {
     }
 
     private func finalizeStreamingBlocks() {
-        flushLiveIncompatibleSection()
+        flushLiveMismatchedSection()
         streamingTextAccumulator = ""
         toolArgBuffers = [:]
         toolOutputBuffers = [:]
@@ -759,7 +759,7 @@ public final class SessionHandle {
         if !replayAssistantBuffer.isEmpty { appendBlock(.assistantText(text: replayAssistantBuffer, streaming: false)); replayAssistantBuffer = "" }
     }
 
-    private func replayFlushIncompatibleSection(_ next: String) {
+    private func replayFlushMismatchedSection(_ next: String) {
         switch next {
         case "user":
             if !replayAssistantBuffer.isEmpty { flushReplaySection("assistant") }

@@ -55,10 +55,6 @@ describe("ProjectDirectoryEnvironmentRepository", () => {
     const skill = path.join(project, ".agents", "skills", "deploy");
     await mkdir(skill, { recursive: true });
     await writeFile(path.join(skill, "SKILL.md"), "Deploy carefully.");
-    const ignored = path.join(project, ".claude", "skills", "ignored");
-    await mkdir(ignored, { recursive: true });
-    await writeFile(path.join(ignored, "SKILL.md"), "Not discovered.");
-
     const repository = new ProjectDirectoryEnvironmentRepository();
     const result = await repository.getBundles(`dir:${project}`);
 

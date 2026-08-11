@@ -1,7 +1,7 @@
 // Mirrors clients/RookKit/Sources/RookKit/Design/ChatBlockViews.swift
 //
 // AssistantText renders plain Text even once streaming is done, not styled Markdown — the
-// Phase 2 plan's markdown-renderer dependency has no release compatible with this project's
+// Phase 2 plan's markdown-renderer dependency has no release available for this project's
 // Kotlin 2.0.21 / compileSdk 35 toolchain (every maintained tag needs Kotlin 2.2+ /
 // compileSdk 36+), so it was dropped rather than bumping the whole toolchain. Revisit if the
 // toolchain moves.

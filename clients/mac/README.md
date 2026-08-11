@@ -158,8 +158,8 @@ they are the only environment providers that walk a focused `AXWebArea` to find
 the active page URL. The generic provider uses only top-level document values,
 so Electron and other arbitrary applications are not treated as browsers.
 Finder is a specialist too, but it emits `dir:/...` environments instead of
-Finder-specific IDs so local file context stays consistent. For Obsidian, vault parsing is title-based and works
-backwards so note names may contain dashes safely. For plain apps the base
+Finder-specific IDs so local file context stays consistent. For Obsidian, vault parsing is title-based and scans from the end so note names may contain
+dashes safely. For plain apps the base
 identity is the bundle id: `mac:<bundleId>`.
 
 Each newly encountered environment registers with a fresh `registeredAt`
