@@ -1,4 +1,6 @@
-# Mac client stall watchdog
+# Mac client stall investigation
+
+> **TODO 1 — first step completed:** PR #139 added the local Mac stall watchdog and diagnostic logging. The wider cause remains under investigation; this document stays open for follow-up steps.
 
 ## Context
 
@@ -35,6 +37,26 @@ The first pass does not need automatic `sample`/spindump capture or AX-call inst
 - [ ] Remove all unnecessary backward-compatibility code and compatibility documentation rather than keeping it around.
 - [ ] Update `AS-BUILT-ARCHITECTURE/` as needed.
 - [ ] Update `PRODUCT/` as needed.
+
+## TODO 2 — Remove Rook from environment inspection and audit generic AX perception
+
+Event 002 found a roughly 41-second `activeTabURL` lookup against the other Rook process. That exposed a broader design issue beyond the watchdog: generic perception can treat another Rook instance as an external app, apply browser-specific Accessibility behavior to it, and block the main actor while searching for a URL that cannot exist there.
+
+### Immediate safeguard
+
+- [ ] Define one internal-Rook bundle-ID predicate that covers the production app and all worktree/development Rook bundle IDs.
+- [ ] Make `ForegroundAppMonitor` ignore every internal Rook activation, not only `Bundle.main.bundleIdentifier`.
+- [ ] Ensure the generic and specialist environment providers never inspect or register another Rook instance as a user environment.
+- [ ] Decide what happens to the currently active provider when an internal Rook window becomes frontmost; it must stop polling the previous external app rather than retaining that target PID.
+- [ ] Add tests covering production Rook, worktree Rook, and ordinary external-app bundle IDs.
+
+### Generic AX perception audit
+
+- [ ] Document why `activeTabURL` exists, what signal it adds beyond `AXDocument`/`AXURL`, and which applications are expected to support it.
+- [ ] Separate browser-only URL discovery from generic document/path discovery and gate it to an explicit browser/Electron allowlist or capability check.
+- [ ] Move Chromium accessibility-tree priming out of the generic `focusedWindow` read path; only prime targets that need it.
+- [ ] Audit synchronous AX calls for per-call timeouts, main-actor blocking, repeated tree reads, and safe off-main-actor execution.
+- [ ] Reproduce with one Rook and with two Rooks, then capture nested AX timings or stacks to distinguish a pathological Rook AX tree from a cross-process wait.
 
 ## Exit criteria
 
