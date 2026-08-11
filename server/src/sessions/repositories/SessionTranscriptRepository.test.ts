@@ -105,6 +105,8 @@ describe("SessionTranscriptRepository", () => {
     });
   });
 
+  // THIS IS FOR BACKWARDS COMPATIBILITY: verify the one-time transcript reset
+  // preserves sessions and does not recur after the migration marker is set.
   it("clears legacy transcript rows once while preserving application data", async () => {
     datastore = new RookDatastore(":memory:");
     const sessions = new SqliteSessionRepository(datastore);
