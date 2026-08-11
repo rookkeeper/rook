@@ -46,7 +46,7 @@ Event 002 found a roughly 41-second `activeTabURL` lookup against the other Rook
 
 The Safari/Firefox specialist is containment, not yet the root-cause fix. The remaining work should proceed in this order:
 
-1. [ ] Exclude every internal Rook bundle ID and stop any active provider when Rook becomes frontmost. This directly removes the known cross-Rook trigger.
+1. [x] Exclude every internal Rook bundle ID and stop any active provider when Rook becomes frontmost. This directly removes the known cross-Rook trigger.
 2. [ ] Add per-operation AX timing for focused-window lookup, document attributes, child traversal, and URL lookup, logging only operation names, PIDs, bundle IDs, node counts, and durations.
 3. [ ] Add bounded AX messaging timeouts and move synchronous AX work off the main actor where the API permits, so a pathological target cannot freeze the client UI.
 4. [ ] Reproduce with one Rook and two Rook instances, comparing the timings and watchdog records.
@@ -54,11 +54,11 @@ The Safari/Firefox specialist is containment, not yet the root-cause fix. The re
 
 ### Immediate safeguard
 
-- [ ] Define one internal-Rook bundle-ID predicate that covers the production app and all worktree/development Rook bundle IDs.
-- [ ] Make `ForegroundAppMonitor` ignore every internal Rook activation, not only `Bundle.main.bundleIdentifier`.
-- [ ] Ensure the generic and specialist environment providers never inspect or register another Rook instance as a user environment.
-- [ ] Decide what happens to the currently active provider when an internal Rook window becomes frontmost; it must stop polling the previous external app rather than retaining that target PID.
-- [ ] Add tests covering production Rook, worktree Rook, and ordinary external-app bundle IDs.
+- [x] Define one internal-Rook bundle-ID predicate that covers the production app and all worktree/development Rook bundle IDs.
+- [x] Make `ForegroundAppMonitor` ignore every internal Rook activation, not only `Bundle.main.bundleIdentifier`.
+- [x] Ensure the generic and specialist environment providers never inspect or register another Rook instance as a user environment.
+- [x] Stop the currently active provider and clear its target when an internal Rook window becomes frontmost.
+- [x] Add tests covering production Rook, worktree Rook, and ordinary external-app bundle IDs.
 
 ### Generic AX perception audit
 

@@ -38,6 +38,7 @@ struct ForegroundApp: Equatable {
 final class ForegroundAppMonitor {
     var onForegroundChange: ((ForegroundApp) -> Void)?
     var onContextRefresh: ((ForegroundApp, String?) -> Void)?
+    var onInternalRookActivation: (() -> Void)?
 
     private(set) var current: ForegroundApp?
     private(set) var currentTitle: String?
@@ -104,8 +105,8 @@ final class ForegroundAppMonitor {
 
     private func handleActivation(_ app: ForegroundApp) {
         providerLog("activation: \(app.name) [\(app.bundleId)]")
-        // Our own panel/window gaining focus must not end the current episode.
-        if app.bundleId == Bundle.main.bundleIdentifier {
+        guard !RookBundleIdentity.isInternalRookBundleId(app.bundleId) else {
+            clearCurrentAppForInternalRook()
             return
         }
         guard app != current else {
@@ -135,8 +136,11 @@ final class ForegroundAppMonitor {
 
     private func poll() {
         guard let frontmost = NSWorkspace.shared.frontmostApplication,
-              let app = Self.makeApp(frontmost),
-              app.bundleId != Bundle.main.bundleIdentifier else {
+              let app = Self.makeApp(frontmost) else {
+            return
+        }
+        guard !RookBundleIdentity.isInternalRookBundleId(app.bundleId) else {
+            clearCurrentAppForInternalRook()
             return
         }
         if app != current {
@@ -151,5 +155,16 @@ final class ForegroundAppMonitor {
             currentTitle = title
             onContextRefresh?(app, title)
         }
+    }
+
+    private func clearCurrentAppForInternalRook() {
+        debounceTask?.cancel()
+        debounceTask = nil
+        guard current != nil || currentTitle != nil else {
+            return
+        }
+        current = nil
+        currentTitle = nil
+        onInternalRookActivation?()
     }
 }

@@ -25,6 +25,7 @@
 		63D2E0332EA1C12AED347106 /* DescriptEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6978A7CFCFEF87F2952C4AC5 /* DescriptEnvironmentProvider.swift */; };
 		64732F130DD711AA245FEE1A /* ScreenCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 684A1389822C3C6175B654FC /* ScreenCapturer.swift */; };
 		7C0C7C62A0472BC555EBD06C /* DiscordEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 340555CA54B734843C4099A1 /* DiscordEnvironmentProviderTests.swift */; };
+		7D566FFB988AEF5C001840CF /* RookBundleIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB97E548C9640FD9291F06F7 /* RookBundleIdentityTests.swift */; };
 		8224B5B06C84A1DAAD681691 /* EnvironmentListControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86584EE096D2C02645A3D28 /* EnvironmentListControllerTests.swift */; };
 		85C2D954A01F79270B40A48D /* EnvironmentProviderSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F944826D4DF0C05CAB24B551 /* EnvironmentProviderSupportTests.swift */; };
 		86F91627A128BBD4CBF341B2 /* MacBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCDBF5403D71795728D9928A /* MacBridge.swift */; };
@@ -40,6 +41,7 @@
 		BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3242EFA5038F71BF9B1BA2C2 /* RookApp.swift */; };
 		C0541E82132250AD65401A01 /* InputSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5143B8CA8023334102A62F2C /* InputSynthesizer.swift */; };
 		C1C532DBF0E733EDBEE32EEA /* SlackEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3343AE46AAED661AD40C912B /* SlackEnvironmentProviderTests.swift */; };
+		C2CC41F5C4779D38A692DBB4 /* RookBundleIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3CD5CF1F648016198A155B6 /* RookBundleIdentity.swift */; };
 		C315477A0C4A457CF110A6AD /* FinderEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E9E22AB1F639E8B0DA98B4 /* FinderEnvironmentProvider.swift */; };
 		C43A7D9F9F46BD625B1CEAF8 /* GenericEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5DBA5E0EAEC34DC430F3FF7 /* GenericEnvironmentProvider.swift */; };
 		C85887BE97842995601DE67E /* FinderEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E5581B2B0E5B8573C71E69 /* FinderEnvironmentProviderTests.swift */; };
@@ -91,6 +93,7 @@
 		89D369786A8FE57C99D452D1 /* RookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookView.swift; sourceTree = "<group>"; };
 		8B45927F85F1F4A50E48CCDF /* DescriptEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DescriptEnvironmentProviderTests.swift; sourceTree = "<group>"; };
 		941EDDB77C90AA9FD6843DD6 /* ObsidianEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObsidianEnvironmentProviderTests.swift; sourceTree = "<group>"; };
+		A3CD5CF1F648016198A155B6 /* RookBundleIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookBundleIdentity.swift; sourceTree = "<group>"; };
 		A86584EE096D2C02645A3D28 /* EnvironmentListControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentListControllerTests.swift; sourceTree = "<group>"; };
 		A93A5264726E74327D489A47 /* EnvironmentsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentsDetailView.swift; sourceTree = "<group>"; };
 		B08909E5BDA34D380AF7B25F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -105,6 +108,7 @@
 		E9E5581B2B0E5B8573C71E69 /* FinderEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderEnvironmentProviderTests.swift; sourceTree = "<group>"; };
 		F944826D4DF0C05CAB24B551 /* EnvironmentProviderSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentProviderSupportTests.swift; sourceTree = "<group>"; };
 		FA0E6742B34F0BC2C1D6A93B /* ObsidianEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObsidianEnvironmentProvider.swift; sourceTree = "<group>"; };
+		FB97E548C9640FD9291F06F7 /* RookBundleIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookBundleIdentityTests.swift; sourceTree = "<group>"; };
 		FCDBF5403D71795728D9928A /* MacBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBridge.swift; sourceTree = "<group>"; };
 		FDC526470E2B392162B815AC /* DiscordEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscordEnvironmentProvider.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -178,6 +182,7 @@
 				77DA2212E080B005F7111E80 /* MacImageAttachmentFactoryTests.swift */,
 				941EDDB77C90AA9FD6843DD6 /* ObsidianEnvironmentProviderTests.swift */,
 				1FD0CA244739F56CDABF5F1C /* OBSStudioEnvironmentProviderTests.swift */,
+				FB97E548C9640FD9291F06F7 /* RookBundleIdentityTests.swift */,
 				3343AE46AAED661AD40C912B /* SlackEnvironmentProviderTests.swift */,
 			);
 			path = Tests;
@@ -216,6 +221,7 @@
 				5143B8CA8023334102A62F2C /* InputSynthesizer.swift */,
 				FCDBF5403D71795728D9928A /* MacBridge.swift */,
 				208361F86466FB1CF444A79B /* MacImageAttachmentFactory.swift */,
+				A3CD5CF1F648016198A155B6 /* RookBundleIdentity.swift */,
 				684A1389822C3C6175B654FC /* ScreenCapturer.swift */,
 				31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */,
 				3AE9A6A5B6DDFA2693DF009B /* ServerController.swift */,
@@ -357,6 +363,7 @@
 				A42863FF4BE5CA2C3871D94D /* OBSStudioEnvironmentProvider.swift in Sources */,
 				071B3FB59CED95720606766F /* ObsidianEnvironmentProvider.swift in Sources */,
 				BC167FA11552D7BB927EA275 /* RookApp.swift in Sources */,
+				C2CC41F5C4779D38A692DBB4 /* RookBundleIdentity.swift in Sources */,
 				EC3CCE47D902A251BD27408A /* RookMacChatSessionController.swift in Sources */,
 				9E2E7BC2509E40784F0BCA14 /* RookMacModel.swift in Sources */,
 				001621DBC014A732B3A6C2DE /* RookMacSupport.swift in Sources */,
@@ -382,6 +389,7 @@
 				60A23F92DBE7E8434F6058CD /* MacImageAttachmentFactoryTests.swift in Sources */,
 				159D103CE9B49E8DBB2CA0F5 /* OBSStudioEnvironmentProviderTests.swift in Sources */,
 				419704B079AFD2478AA896D9 /* ObsidianEnvironmentProviderTests.swift in Sources */,
+				7D566FFB988AEF5C001840CF /* RookBundleIdentityTests.swift in Sources */,
 				C1C532DBF0E733EDBEE32EEA /* SlackEnvironmentProviderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

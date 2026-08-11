@@ -58,6 +58,9 @@ final class AppEnvironmentProvider {
         monitor.onContextRefresh = { [weak self] app, title in
             self?.handleContextRefresh(app: app, title: title)
         }
+        monitor.onInternalRookActivation = { [weak self] in
+            self?.handleInternalRookActivation()
+        }
     }
 
     func start() {
@@ -97,6 +100,18 @@ final class AppEnvironmentProvider {
         foregroundWindowTitle = title
         currentApp = app
         activeProvider?.update(app: app, title: title)
+        syncPublishedEnvironmentState()
+    }
+
+    private func handleInternalRookActivation() {
+        activeProvider?.deactivate()
+        activeProvider = nil
+        baseRegistration.clear()
+        currentApp = nil
+        foregroundEnvironmentId = nil
+        foregroundSiteEnvironmentId = nil
+        foregroundAppName = nil
+        foregroundWindowTitle = nil
         syncPublishedEnvironmentState()
     }
 

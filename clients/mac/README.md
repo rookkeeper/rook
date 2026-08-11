@@ -172,9 +172,11 @@ for:
 - server/wake reconciliation of currently visible environments
 
 Foreground activations are still debounced (700 ms) so ⌘-Tab flicker doesn't
-thrash the richer foreground context, the app ignores its own activations
-(opening the panel doesn't end the episode), and cached registrations are
-re-announced if the server restarts.
+thrash the richer foreground context. All production and development Rook
+bundle IDs are excluded from environment inspection; when a Rook window
+becomes frontmost, the current external provider is stopped rather than
+retaining its target PID. Cached registrations are re-announced if the server
+restarts.
 
 Provider activity is traced to `/tmp/rook.log` for debugging.
 

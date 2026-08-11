@@ -118,11 +118,11 @@ Via `RookKit`:
 10. queued messages, including image attachments, are delivered automatically once the agent goes idle
 
 ### Foreground environment detection
-1. `ForegroundAppMonitor` detects app activation or window-title change
+1. `ForegroundAppMonitor` detects app activation or window-title change, but ignores all internal Rook bundle identities (`com.rookery.Rook` and `com.rookery.Rook.Dev.*`); when Rook becomes frontmost it clears the active external target and provider
 2. `AppEnvironmentProvider` always emits the base `mac:<bundleId>` app environment after a short dwell delay
 3. `AppEnvironmentProvider` activates either a bundle-id-specific specialist or the generic fallback provider
 4. `GenericEnvironmentProvider` polls every 5 seconds while active, reads only focused-window Accessibility document values, inspects observed paths under `/Users/<username>`, and emits only project-like / agentic `dir:` candidates plus top-level-document `web:` candidates when the normalized environment-id set is stable across two polls
-5. Specialist providers are selected by bundle-id from an explicit registry and currently include Safari/Firefox browser URL detection, Obsidian, Slack, OBS Studio, Descript, Discord, and Finder
+5. Specialist providers are selected by bundle-id from an explicit registry and currently include Safari/Firefox browser URL detection, Obsidian, Slack, OBS Studio, Descript, Discord, and Finder; internal Rook bundle IDs never reach either the specialist registry or generic fallback
 6. `ObsidianEnvironmentProvider` polls local data every 5 seconds, reads `~/Library/Application Support/obsidian/obsidian.json`, emits open vault environments, and emits enabled community-plugin environments
 7. `SlackEnvironmentProvider` polls every 5 seconds, parses the focused window title, and emits workspace plus channel environments when the title exposes a stable channel context
 8. `OBSStudioEnvironmentProvider` polls every 5 seconds, parses the focused window title, and emits scene-collection environments with profile/collection metadata when available
