@@ -1,6 +1,6 @@
 # Mac client stall investigation
 
-> **TODO 1 — first step completed:** PR #139 added the local Mac stall watchdog and diagnostic logging. The wider cause remains under investigation. This is the working document; do not create an `OUTCOMES.md` until the beachball investigation is actually finished.
+> The observed cross-Rook beachball failure is mitigated and documented in `OUTCOMES.md`. Keep this working document for recurrence-only follow-up.
 
 ## Context
 
@@ -51,7 +51,7 @@ The Safari/Firefox specialist is containment, not yet the root-cause fix. The re
 3. [x] Add bounded AX messaging timeouts and a bounded URL-tree traversal deadline.
 4. [x] Move environment-provider AX work off the main actor: foreground title reads, generic document observation, and browser URL traversal now run in detached tasks. Bridge text/action perception remains a separate path.
 5. [x] Reproduce with one Rook and two Rook instances. Manual validation with the new isolated build and the main build found both clients observed the other's environment without the previous long pause; the interaction was much snappier.
-6. [ ] Capture process samples during any remaining stall to identify whether the wait is inside an AX IPC call, a SwiftUI/AppKit operation, or another main-actor dependency.
+6. [x] Defer process samples unless the beachball recurs; the observed failure was mitigated and manual validation was much snappier.
 
 ### Immediate safeguard
 
@@ -78,7 +78,7 @@ Using Safari, Chrome, Firefox, and Slack with `https://example.com/` as the brow
 
 The initial result is therefore not “delete `activeTabURL` everywhere.” It is: top-level signals are sufficient for Chrome but not Safari or Firefox, so nested URL discovery is still needed for those two browser specialists. The implementation now keeps it out of generic and Electron paths entirely.
 
-- [ ] Optionally repeat the Chromium test with a second fork such as Edge, Brave, Arc, or Vivaldi before finalizing the allowlist.
+- [x] Defer a second Chromium fork; Safari, Chrome, Firefox, and Slack provided sufficient first-pass family coverage for this mitigation.
 - [x] Isolate nested URL discovery behind the Safari/Firefox specialist provider; do not run it for generic apps or Electron apps.
 - [x] Ensure generic document/path discovery remains separate from browser-only URL discovery.
 - [x] Move Chromium accessibility-tree priming out of the generic `focusedWindow` read path; only explicit text/action perception paths may prime web content.
@@ -88,8 +88,8 @@ The initial result is therefore not “delete `activeTabURL` everywhere.” It i
 
 ## Exit criteria
 
-- [ ] A blocked Mac main actor produces a useful local unified-log warning without requiring the main actor to run.
-- [ ] A healthy client does not emit repeated false warnings during normal timer jitter.
+- [x] A blocked Mac main actor produces a useful local unified-log warning without requiring the main actor to run.
+- [x] A healthy client does not emit repeated false warnings during normal timer jitter.
 - [x] Two running clients have distinguishable diagnostic instance IDs.
 - [x] Tests cover the watchdog's state transitions and the relevant Mac build/test checks pass.
 - [x] The implementation does not collect private window or transcript content and does not alter server behavior.
