@@ -6,6 +6,7 @@
 - [ ] Record the decision and TODO
 - [ ] Prepare the implementation workspace
 - [ ] Implement and test
+- [ ] Mark compatibility surfaces
 - [ ] Maintain product and architecture documentation
 - [ ] Run final validation
 - [ ] Synchronize with main before submitting

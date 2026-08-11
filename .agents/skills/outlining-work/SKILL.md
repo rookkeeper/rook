@@ -29,11 +29,11 @@ If the user already has a topic/directory in mind, use that instead of inventing
 Inside that directory, use one or both of these files depending on the stage of work:
 
 - `BRAINSTORM.md`
-  - use when we are still exploring ideas, tradeoffs, constraints, or possible shapes
-  - keep it open-form and easy for the user to edit, react to, and paste into
+- use when we are still exploring ideas, tradeoffs, constraints, or possible shapes
+- keep it open-form and easy for the user to edit, react to, and paste into
 - `TODO.md`
-  - use when we are ready to track actionable work
-  - this is the execution document and should be detailed enough that a sub-agent could pick it up and complete the work
+- use when we are ready to track actionable work
+- this is the execution document and should be detailed enough that a sub-agent could pick it up and complete the work
 
 Sometimes we will skip `BRAINSTORM.md` and go straight to `TODO.md`.
 
@@ -133,13 +133,13 @@ Examples of good exit criteria:
 Once the planning document is in good shape and we are moving from planning to implementation:
 
 1. Commit the `CHANGES/` planning files to the main branch.
-   - This is one of the rare cases where you do **not** need to ask the user before committing.
-   - The goal is to preserve the plan/brainstorming work on main before implementation begins elsewhere.
+- This is one of the rare cases where you do **not** need to ask the user before committing.
+- The goal is to preserve the plan/brainstorming work on main before implementation begins elsewhere.
 2. Create a git worktree in `../_worktrees/` for the implementation work.
-   - For issue-sized work, use a descriptive name like `issue-46-tabs`.
-   - If there is no issue number yet, use a concise descriptive slug consistent with the planned work.
+- For issue-sized work, use a descriptive name like `issue-46-tabs`.
+- If there is no issue number yet, use a concise descriptive slug consistent with the planned work.
 3. Copy `.env` from the main repo into the worktree:
-   - `cp ../rook/.env ../_worktrees/<worktree-name>/.env`
+- `cp ../rook/.env ../_worktrees/<worktree-name>/.env`
 4. Do the implementation work in the worktree, not in the main checkout.
 
 While executing the work:
