@@ -54,7 +54,7 @@ Event 002 found a roughly 41-second `activeTabURL` lookup against the other Rook
 
 - [x] Probe representative installed members of the WebKit, Chromium, Gecko, and Electron families using only focused-window `AXDocument`, `AXFilename`, and top-level `AXURL` values.
 - [x] Record whether those top-level signals reliably identify the current page URL and satisfy the intended `web:` environment detection; use sanitized values and do not log browsing history into this document.
-- [ ] If the top-level signals meet the requirement, remove `activeTabURL` and Chromium priming from the generic path rather than preserving a speculative browser fallback.
+- [x] Remove `activeTabURL` and Chromium priming from the generic environment-inspection path rather than preserving a speculative browser fallback.
 
 #### Manual browser-family probe — August 11, 2026
 
@@ -65,12 +65,13 @@ Using Safari, Chrome, Firefox, and Slack with `https://example.com/` as the brow
 - **Firefox/Gecko:** top-level attributes did not provide the page URL; nested `AXWebArea` did.
 - **Slack/Electron:** top-level values were empty/non-useful; nested `AXWebArea` exposed Slack's internal web URL. Slack already has a specialist detector, so this does not by itself justify generic browser URL discovery for Electron apps.
 
-The initial result is therefore not “delete `activeTabURL` everywhere.” It is: top-level signals are sufficient for Chrome but not Safari or Firefox, so nested URL discovery is still needed if generic `web:` detection must support those browsers. The next design decision is whether to keep it only for an explicit browser allowlist and exclude Electron/non-browser apps entirely.
+The initial result is therefore not “delete `activeTabURL` everywhere.” It is: top-level signals are sufficient for Chrome but not Safari or Firefox, so nested URL discovery is still needed for those two browser specialists. The implementation now keeps it out of generic and Electron paths entirely.
 
 - [ ] Optionally repeat the Chromium test with a second fork such as Edge, Brave, Arc, or Vivaldi before finalizing the allowlist.
-- [ ] If a browser genuinely requires nested URL discovery, isolate it behind an explicit browser/Electron allowlist or capability check and document the failing browsers and exact reason.
-- [ ] Ensure generic document/path discovery remains separate from browser-only URL discovery.
-- [ ] Move Chromium accessibility-tree priming out of the generic `focusedWindow` read path; only prime targets that need it.
+- [x] Isolate nested URL discovery behind the Safari/Firefox specialist provider; do not run it for generic apps or Electron apps.
+- [x] Ensure generic document/path discovery remains separate from browser-only URL discovery.
+- [x] Move Chromium accessibility-tree priming out of the generic `focusedWindow` read path; only explicit text/action perception paths may prime web content.
+- [ ] Add bounded per-AX-call timing and timeout handling for the browser specialist path.
 - [ ] Audit synchronous AX calls for per-call timeouts, main-actor blocking, repeated tree reads, and safe off-main-actor execution.
 - [ ] Reproduce with one Rook and with two Rooks, then capture nested AX timings or stacks to distinguish a pathological Rook AX tree from a cross-process wait.
 

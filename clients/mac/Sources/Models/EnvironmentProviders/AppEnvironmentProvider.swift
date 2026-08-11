@@ -16,7 +16,6 @@ final class AppEnvironmentProvider {
     private var isServerOnline = false
 
     private var lastLoggedTitle: String?
-    private var lastLoggedURL: String?
     private var lastLoggedDocumentValues: [String] = []
     private var lastLoggedBundleId: String?
     private var hasLoggedContext = false
@@ -82,7 +81,6 @@ final class AppEnvironmentProvider {
     }
 
     private func handleForegroundApp(_ app: ForegroundApp) {
-        AXReader.primeAccessibility(pid: app.pid)
         let title = AXReader.focusedWindowTitle(pid: app.pid)
         logRawContext(app: app, title: title, reason: "app-switch")
         foregroundAppName = app.name
@@ -132,18 +130,15 @@ final class AppEnvironmentProvider {
 
     private func logRawContext(app: ForegroundApp, title: String?, reason: String) {
         let documentValues = AXReader.focusedWindowDocumentValues(pid: app.pid)
-        let webURL = AXReader.activeTabURL(pid: app.pid)
         let appChanged = app.bundleId != lastLoggedBundleId
         let titleChanged = title != lastLoggedTitle
-        let urlChanged = webURL != lastLoggedURL
         let documentChanged = documentValues != lastLoggedDocumentValues
-        if hasLoggedContext, !appChanged, !titleChanged, !urlChanged, !documentChanged {
+        if hasLoggedContext, !appChanged, !titleChanged, !documentChanged {
             return
         }
         hasLoggedContext = true
         lastLoggedBundleId = app.bundleId
         lastLoggedTitle = title
-        lastLoggedURL = webURL
         lastLoggedDocumentValues = documentValues
 
         var lines: [String] = []
@@ -152,9 +147,6 @@ final class AppEnvironmentProvider {
         let titleText = title.map { "\"\($0)\"" } ?? "(null)"
         lines.append("  windowTitle:  \(titleText)")
         lines.append("  axDocument:   \(documentValues.isEmpty ? "(none)" : documentValues.joined(separator: " | "))")
-        if let webURL {
-            lines.append("  axWebURL:     \(webURL)")
-        }
         lines.append("  trustedAX:    \(AXReader.isTrusted())")
         for line in lines {
             providerLog(line)

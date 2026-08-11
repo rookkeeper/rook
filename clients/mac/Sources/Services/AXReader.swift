@@ -21,15 +21,6 @@ enum AXReader {
         AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
     }
 
-    /// Warm up an app's accessibility tree (call when it comes to the
-    /// foreground) so content is ready by the time the agent reads it.
-    static func primeAccessibility(pid: pid_t) {
-        guard isTrusted() else {
-            return
-        }
-        enableWebContentAccessibility(AXUIElementCreateApplication(pid))
-    }
-
     /// Title of the focused (or main) window of the app owning `pid`, or nil if
     /// AX isn't trusted / the app exposes no titled window.
     static func focusedWindowTitle(pid: pid_t) -> String? {
@@ -67,7 +58,6 @@ enum AXReader {
             return nil
         }
         let appElement = AXUIElementCreateApplication(pid)
-        enableWebContentAccessibility(appElement)
         var windowRef: AnyObject?
         if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
             if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
@@ -80,10 +70,10 @@ enum AXReader {
         return windowRef as! AXUIElement
     }
 
-    /// The active tab's URL for a Chromium/WebKit browser owning `pid`, read from
-    /// the focused window's AXWebArea (AXURL). Relies on the web-content tree, so
-    /// the browser should have been primed (it comes forward → primeAccessibility).
-    /// Returns nil for non-browsers or before the URL is exposed.
+    /// The active tab's URL for a known browser owning `pid`, read from the
+    /// focused window's AXWebArea (AXURL). Callers must restrict this to browser
+    /// bundle IDs; walking an arbitrary app's AX tree can block for a long time.
+    /// Returns nil when the browser does not expose a focused web area or URL.
     static func activeTabURL(pid: pid_t, maxNodes: Int = 600) -> String? {
         guard let window = focusedWindow(pid: pid) else {
             return nil

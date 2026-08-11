@@ -19,6 +19,7 @@
 		3940FBAF5C395485EF47AD06 /* DescriptEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B45927F85F1F4A50E48CCDF /* DescriptEnvironmentProviderTests.swift */; };
 		419704B079AFD2478AA896D9 /* ObsidianEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 941EDDB77C90AA9FD6843DD6 /* ObsidianEnvironmentProviderTests.swift */; };
 		437DFA10167DD112587F7EB5 /* EnvironmentsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93A5264726E74327D489A47 /* EnvironmentsDetailView.swift */; };
+		5F1F805FD93B101F9833F16C /* BrowserEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E2BAE07BB6D910E0147F648 /* BrowserEnvironmentProvider.swift */; };
 		60A23F92DBE7E8434F6058CD /* MacImageAttachmentFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77DA2212E080B005F7111E80 /* MacImageAttachmentFactoryTests.swift */; };
 		620DCBCC3C91EFE21C5C2697 /* RookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 08EDA88AD90E24EB23D3D170 /* RookKit */; };
 		63D2E0332EA1C12AED347106 /* DescriptEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6978A7CFCFEF87F2952C4AC5 /* DescriptEnvironmentProvider.swift */; };
@@ -28,6 +29,7 @@
 		85C2D954A01F79270B40A48D /* EnvironmentProviderSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F944826D4DF0C05CAB24B551 /* EnvironmentProviderSupportTests.swift */; };
 		86F91627A128BBD4CBF341B2 /* MacBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCDBF5403D71795728D9928A /* MacBridge.swift */; };
 		8840E0A6C19AD35B38A0943B /* RookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 14EB51A753FB1D1C047A02B6 /* RookKit */; };
+		90D9BB358EEFAF00F3B812AA /* BrowserEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4C7EFEFCAA484A4561C9D8E /* BrowserEnvironmentProviderTests.swift */; };
 		9E2E7BC2509E40784F0BCA14 /* RookMacModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60DF8054837AA98A422E1919 /* RookMacModel.swift */; };
 		A42863FF4BE5CA2C3871D94D /* OBSStudioEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0C3E8AE268D668490DA6072 /* OBSStudioEnvironmentProvider.swift */; };
 		A7CAEE1B48AC6B1F8DD26AF4 /* RookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D369786A8FE57C99D452D1 /* RookView.swift */; };
@@ -78,6 +80,7 @@
 		4F66CA8B0705F9CBEB69CE12 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5143B8CA8023334102A62F2C /* InputSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSynthesizer.swift; sourceTree = "<group>"; };
 		5974426CBFD61E01CCD8FB3E /* EnvironmentProviderSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentProviderSupport.swift; sourceTree = "<group>"; };
+		5E2BAE07BB6D910E0147F648 /* BrowserEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserEnvironmentProvider.swift; sourceTree = "<group>"; };
 		60DF8054837AA98A422E1919 /* RookMacModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacModel.swift; sourceTree = "<group>"; };
 		684A1389822C3C6175B654FC /* ScreenCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapturer.swift; sourceTree = "<group>"; };
 		6978A7CFCFEF87F2952C4AC5 /* DescriptEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DescriptEnvironmentProvider.swift; sourceTree = "<group>"; };
@@ -96,6 +99,7 @@
 		CAB0B5D7F3477ABBB39A0B42 /* Rook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rook.entitlements; sourceTree = "<group>"; };
 		CE53483296E70F63627FCE2B /* RookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
+		D4C7EFEFCAA484A4561C9D8E /* BrowserEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserEnvironmentProviderTests.swift; sourceTree = "<group>"; };
 		E0C3E8AE268D668490DA6072 /* OBSStudioEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBSStudioEnvironmentProvider.swift; sourceTree = "<group>"; };
 		E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacChatSessionController.swift; sourceTree = "<group>"; };
 		E9E5581B2B0E5B8573C71E69 /* FinderEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderEnvironmentProviderTests.swift; sourceTree = "<group>"; };
@@ -129,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				BCB3BA363AD70B9B41E1823F /* AppEnvironmentProvider.swift */,
+				5E2BAE07BB6D910E0147F648 /* BrowserEnvironmentProvider.swift */,
 				6978A7CFCFEF87F2952C4AC5 /* DescriptEnvironmentProvider.swift */,
 				FDC526470E2B392162B815AC /* DiscordEnvironmentProvider.swift */,
 				5974426CBFD61E01CCD8FB3E /* EnvironmentProviderSupport.swift */,
@@ -163,6 +168,7 @@
 		4BC284657011B1089CB0F3F9 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				D4C7EFEFCAA484A4561C9D8E /* BrowserEnvironmentProviderTests.swift */,
 				8B45927F85F1F4A50E48CCDF /* DescriptEnvironmentProviderTests.swift */,
 				340555CA54B734843C4099A1 /* DiscordEnvironmentProviderTests.swift */,
 				A86584EE096D2C02645A3D28 /* EnvironmentListControllerTests.swift */,
@@ -333,6 +339,7 @@
 			files = (
 				2133C332EBC272332F53F69E /* AXReader.swift in Sources */,
 				D323C04BBED012225BCB910F /* AppEnvironmentProvider.swift in Sources */,
+				5F1F805FD93B101F9833F16C /* BrowserEnvironmentProvider.swift in Sources */,
 				CEEBCE8607A6BCB97868C2A0 /* ChatView.swift in Sources */,
 				63D2E0332EA1C12AED347106 /* DescriptEnvironmentProvider.swift in Sources */,
 				ADCD9F49893544B3240D9190 /* DiscordEnvironmentProvider.swift in Sources */,
@@ -365,6 +372,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				90D9BB358EEFAF00F3B812AA /* BrowserEnvironmentProviderTests.swift in Sources */,
 				3940FBAF5C395485EF47AD06 /* DescriptEnvironmentProviderTests.swift in Sources */,
 				7C0C7C62A0472BC555EBD06C /* DiscordEnvironmentProviderTests.swift in Sources */,
 				8224B5B06C84A1DAAD681691 /* EnvironmentListControllerTests.swift in Sources */,

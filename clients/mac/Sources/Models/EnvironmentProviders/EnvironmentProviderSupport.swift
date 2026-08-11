@@ -137,6 +137,7 @@ struct SpecialistProviderRegistry {
     @MainActor
     static func makeProviders(register: @escaping ([EnvironmentCandidate], String) -> Void) -> [String: SpecializedEnvironmentProvider] {
         let providers: [SpecializedEnvironmentProvider] = [
+            BrowserEnvironmentProvider(register: register),
             ObsidianEnvironmentProvider(register: register),
             SlackEnvironmentProvider(register: register),
             OBSStudioEnvironmentProvider(register: register),

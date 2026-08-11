@@ -115,7 +115,6 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
 
     private static func observation(for app: ForegroundApp, title: String?) -> GenericEnvironmentObservation {
         let documentValues = AXReader.focusedWindowDocumentValues(pid: app.pid)
-        let webURL = AXReader.activeTabURL(pid: app.pid)
         var candidatesById: [String: EnvironmentCandidate] = [:]
         var deepestWebEnvironmentId: String?
         var deepestDirEnvironmentId: String?
@@ -134,14 +133,6 @@ final class GenericEnvironmentProvider: SpecializedEnvironmentProvider {
                 warningForNonAbsoluteDirectoryCandidate(rawValue: rawValue, app: app)
                 continue
             }
-            deepestWebEnvironmentId = webCandidates.last?.id ?? deepestWebEnvironmentId
-            for candidate in webCandidates {
-                candidatesById[candidate.id] = candidate
-            }
-        }
-
-        if let webURL {
-            let webCandidates = webCandidates(from: webURL, app: app, title: title)
             deepestWebEnvironmentId = webCandidates.last?.id ?? deepestWebEnvironmentId
             for candidate in webCandidates {
                 candidatesById[candidate.id] = candidate
