@@ -23,9 +23,9 @@ enum class SessionSelectionStatus(val label: String) {
 }
 
 data class AgentSessionSummary(val raw: JsonObject) {
-    val id: String get() = raw["id"]?.stringValue ?: raw["sessionId"]?.stringValue ?: ""
-    val agent: String get() = raw["agent"]?.stringValue ?: raw["_meta"]?.jsonObject?.get("runtimeId")?.stringValue ?: ""
-    val name: String get() = raw["name"]?.stringValue ?: raw["title"]?.stringValue ?: "default"
+    val id: String get() = raw["sessionId"]?.stringValue ?: ""
+    val agent: String get() = raw["runtimeId"]?.stringValue ?: ""
+    val name: String get() = raw["title"]?.stringValue ?: "session"
     val running: Boolean get() = raw["running"]?.boolValue ?: false
     val connectedClients: Int get() = (raw["connectedClients"]?.numberValue ?: 0.0).toInt()
 
@@ -36,7 +36,7 @@ data class AgentSessionSummary(val raw: JsonObject) {
     }
 
     val createdAt: Instant?
-        get() = parseInstant(raw["createdAt"]?.stringValue ?: raw["_meta"]?.jsonObject?.get("startedAt")?.stringValue)
+        get() = parseInstant(raw["startedAt"]?.stringValue)
 
     val updatedAt: Instant?
         get() = parseInstant(raw["updatedAt"]?.stringValue)

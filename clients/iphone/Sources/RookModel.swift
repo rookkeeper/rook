@@ -596,11 +596,9 @@ final class RookModel: ObservableObject {
                     "sessionId": .string(sessionId),
                     "title": .string(title),
                     "updatedAt": .string(now),
+                    "runtimeId": .string(agentId),
+                    "startedAt": .string(now),
                     "running": .bool(true),
-                    "_meta": .object([
-                        "runtimeId": .string(agentId),
-                        "startedAt": .string(now),
-                    ]),
                 ]))
                 let handle = SessionHandle(sessionId: sessionId, api: api, socket: socket, isLoaded: true)
                 handles[sessionId] = handle
