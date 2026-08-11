@@ -88,6 +88,9 @@ See also: [database.md](./database.md)
 - `GET /api/health`
 - `GET /api/agent_runtimes`
 - `GET /api/sessions` — session listing over REST
+- `PATCH /api/sessions/:sessionId` — rename one session without changing recency ordering
+- `POST /api/sessions/:sessionId/touch` — mark one session as recently viewed so it sorts to the top
+- `DELETE /api/sessions/:sessionId` — delete one session plus transcript/workspace state
 - `GET /api/sessions/:sessionId/transcript` — server-owned normalized transcript for hydrators / second viewers
 - `POST /api/environments/register`
 - `POST /api/environments/decision`
@@ -132,6 +135,9 @@ Persisted in SQLite:
 
 The `GET /api/sessions` response additionally includes a `running` boolean
 (derived from whether a `SessionRuntime` is active for that session).
+`updatedAt` is used for both prompt activity and explicit view/touch operations,
+so entering a session can move it to the top of the shared recents list without
+creating a synthetic prompt.
 
 Related tables:
 - `session_environments(session_id, environment_id, entered_at)`
@@ -177,7 +183,7 @@ Related tables:
 5. server returns that public session ID and binds the same websocket to it
 
 ### Prompt execution
-1. every configured runtime starts with the base `## You are Rook` identity prompt and uses its agent workspace as process cwd; environment-specific instructions are discovered through generated `AGENTS.md`
+1. every configured runtime starts with the base `## You are Rook` identity prompt and uses its agent workspace as process cwd; environment-specific instructions are discovered through generated `AGENTS.md` (aliased as `CLAUDE.md` for Claude runtimes)
 2. client sends ACP `session/prompt` on a session-bound websocket
 3. ACP facade resolves the public session
 4. `AgentRuntimeManager` rewrites to the runtime-local session ID
@@ -192,7 +198,7 @@ Related tables:
 3. finalized environments resolve matching bundles and hash them
 4. undecided bundles are offered to subscribed sessions when that session enters the finalized environment
 5. client resolves via REST decision or ACP extension resolution
-6. approved/personal bundle content is resolved for workspace projection. The generated aggregate `AGENTS.md` exposes approved/user-owned instruction sources in environment-tagged blocks, gives authoring guidance, inventories known skill names by environment, and the workspace uses the standard `.agents/skills/` discovery directory; Pi receives one-run project approval because ACP is non-interactive, and the runtime no longer receives duplicate environment prompt injection.
+6. approved/personal bundle content is resolved for workspace projection. The generated aggregate `AGENTS.md` exposes approved/user-owned instruction sources in environment-tagged blocks, gives authoring guidance, inventories known skill names by environment, and the workspace uses the standard `.agents/skills/` discovery directory, aliased as `.claude/skills` so Claude Code's native skill discovery finds the same content; Pi receives one-run project approval because ACP is non-interactive, and the runtime no longer receives duplicate environment prompt injection.
 
 ### Environment-driven runtime restart
 1. session enters or exits an environment

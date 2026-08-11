@@ -162,6 +162,67 @@ final class ChatSessionController {
                 } else {
                     try await handle.load()
                 }
+                let touched = try await api.touchSession(sessionId: session.id)
+                currentSession = touched
+                await loadSessions()
+                if let refreshed = sessions.first(where: { $0.id == session.id }) {
+                    currentSession = refreshed
+                }
+            } catch {
+                sessionsError = error.localizedDescription
+            }
+        }
+    }
+
+    func renameSession(_ session: AgentSessionSummary, title: String) {
+        Task {
+            applyLocalSessionTitle(title, to: session.id)
+            do {
+                let renamed = try await api.renameSession(sessionId: session.id, title: title)
+                replaceSessionSummary(renamed)
+                currentSession = currentSession?.id == session.id ? renamed : currentSession
+                await loadSessions()
+                if currentSession?.id == session.id, let refreshed = sessions.first(where: { $0.id == session.id }) {
+                    currentSession = refreshed
+                }
+            } catch {
+                sessionsError = error.localizedDescription
+                await loadSessions()
+                if currentSession?.id == session.id, let refreshed = sessions.first(where: { $0.id == session.id }) {
+                    currentSession = refreshed
+                }
+            }
+        }
+    }
+
+    func deleteSession(_ session: AgentSessionSummary, completion: ((Bool) -> Void)? = nil) {
+        Task {
+            do {
+                try await api.deleteSession(sessionId: session.id)
+                handles.removeValue(forKey: session.id)?.close()
+                if currentSession?.id == session.id {
+                    currentSession = nil
+                }
+                sessions.removeAll { $0.id == session.id }
+                await loadSessions()
+                completion?(true)
+            } catch {
+                sessionsError = error.localizedDescription
+                completion?(false)
+            }
+        }
+    }
+
+    func touchCurrentSession() {
+        guard let session = currentSession else { return }
+        Task {
+            do {
+                let touched = try await api.touchSession(sessionId: session.id)
+                currentSession = touched
+                await loadSessions()
+                if let refreshed = sessions.first(where: { $0.id == session.id }) {
+                    currentSession = refreshed
+                }
             } catch {
                 sessionsError = error.localizedDescription
             }
@@ -187,6 +248,22 @@ final class ChatSessionController {
     func appendSystemMessage(_ text: String) { currentHandle?.appendSystemMessage(text) }
 
     // MARK: - Private
+
+    private func replaceSessionSummary(_ summary: AgentSessionSummary) {
+        guard let index = sessions.firstIndex(where: { $0.id == summary.id }) else { return }
+        sessions[index] = summary
+    }
+
+    private func applyLocalSessionTitle(_ title: String, to sessionId: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedTitle = trimmed.isEmpty ? "session" : trimmed
+        sessions = sessions.map { existing in
+            existing.id == sessionId ? existing.updating(title: normalizedTitle) : existing
+        }
+        if currentSession?.id == sessionId {
+            currentSession = currentSession?.updating(title: normalizedTitle)
+        }
+    }
 
     private func getOrCreateHandle(for session: AgentSessionSummary) -> SessionHandle {
         if let existing = handles[session.id] { return existing }

@@ -51,6 +51,7 @@
 - `healthResult()` / `health()`
 - `agents()`
 - `sessions()` — session list over REST
+- `renameSession(sessionId:title:)`, `touchSession(sessionId:)`, `deleteSession(sessionId:)` — session management over REST
 - `sessionTranscript(sessionId:)` — normalized transcript hydration for second viewers / running sessions
 - `environmentPreview(environmentId:)`
 - `registerEnvironment(candidate)`
@@ -69,6 +70,7 @@
   - `id`, `parentId`
 - `AgentSessionSummary`
   - wraps raw JSON and exposes normalized accessors like `id`, `agent`, `name`, `updatedAt`, `startedAt`
+  - can produce updated summaries while preserving unknown server fields for local/session-list refreshes
 
 ### Environment/location models
 - `EnvironmentArtifactPreview`

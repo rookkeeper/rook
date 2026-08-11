@@ -422,6 +422,7 @@ final class RookMacModel: ObservableObject {
     func openChat() {
         guard currentSession != nil else { return }
         stopEnvironmentListAutoRefresh()
+        chatSessionController.touchCurrentSession()
         panelMode = .chat
     }
 
@@ -443,6 +444,18 @@ final class RookMacModel: ObservableObject {
         Self.logger.info("mac model resume session=\(session.id, privacy: .public) runtime=\(session.agent, privacy: .public)")
         chatSessionController.resumeSession(session) { [weak self] in
             self?.panelMode = .chat
+        }
+    }
+
+    func renameSession(_ session: AgentSessionSummary, title: String) {
+        chatSessionController.renameSession(session, title: title)
+    }
+
+    func deleteSession(_ session: AgentSessionSummary) {
+        let deletingCurrent = currentSession?.id == session.id
+        chatSessionController.deleteSession(session) { [weak self] succeeded in
+            guard succeeded, deletingCurrent else { return }
+            self?.panelMode = .home
         }
     }
 

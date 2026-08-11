@@ -95,9 +95,10 @@ Same shared contract as other clients:
 2. starting a new session opens an unbound WebSocket, sends ACP `session/new`, then keeps that same socket as the new session's `SessionHandle`
 3. resuming an existing session creates or retrieves a `SessionHandle`
 4. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
-5. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and reduce wire frames into `AcpClientEvent`s
-6. `RookModel` mirrors handle state into published chat/UI state and layers on voice / Live Activity behavior
-7. on reconnect the model reattaches to the current session handle and re-announces place state
+5. after a successful resume/open, the client calls `POST /api/sessions/:id/touch` so the shared recents list reflects viewed sessions even without a prompt
+6. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and reduce wire frames into `AcpClientEvent`s
+7. `RookModel` mirrors handle state into published chat/UI state, drives rename/delete session actions through REST, and layers on voice / Live Activity behavior
+8. on reconnect the model reattaches to the current session handle and re-announces place state
 
 ### Voice flow
 1. user starts listening

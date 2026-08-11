@@ -38,6 +38,23 @@ describe("CapabilityWorkspaceManager", () => {
     await manager.close();
   });
 
+  it("aliases the projection for Claude runtimes via .claude/skills and CLAUDE.md links", async () => {
+    const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
+    const workspace = await manager.materialize("session", [personalBundle({ skills: [skill("remember")], agentsMd: "Remember this." })]);
+
+    const claudeSkills = path.join(workspace.root, ".claude", "skills");
+    const claudeMd = path.join(workspace.root, "CLAUDE.md");
+    expect((await lstat(claudeSkills)).isSymbolicLink()).toBe(true);
+    expect(await realpath(claudeSkills)).toBe(await realpath(workspace.skillsRoot));
+    expect((await lstat(claudeMd)).isSymbolicLink()).toBe(true);
+    expect(await readFile(claudeMd, "utf8")).toBe(await readFile(workspace.agentsPath, "utf8"));
+
+    await manager.materialize("session", [personalBundle({ skills: [skill("remember")], agentsMd: "Remember this." })]);
+    expect((await lstat(claudeSkills)).isSymbolicLink()).toBe(true);
+    expect((await lstat(claudeMd)).isSymbolicLink()).toBe(true);
+    await manager.close();
+  });
+
   it("links one SQLite-backed writable skill into every session and authoring slot", async () => {
     const root = await temporaryDirectory();
     const sessionRoot = await temporaryDirectory();

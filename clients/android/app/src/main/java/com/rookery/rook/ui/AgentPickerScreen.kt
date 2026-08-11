@@ -26,15 +26,21 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -75,6 +81,9 @@ fun SessionsHomeScreen(viewModel: RookViewModel) {
     val agentTree = remember(agents) { buildAgentTree(agents) }
     var newSessionName by remember { mutableStateOf("") }
     var selectedRuntimeId by remember(agents) { mutableStateOf(agents.firstOrNull()?.id ?: "") }
+    var sessionToRename by remember { mutableStateOf<AgentSessionSummary?>(null) }
+    var renameDraft by remember { mutableStateOf("") }
+    var sessionToDelete by remember { mutableStateOf<AgentSessionSummary?>(null) }
 
     Column(modifier = Modifier.fillMaxSize().background(PanelPalette.backgroundPrimary)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 4.dp, end = 8.dp)) {
@@ -129,13 +138,69 @@ fun SessionsHomeScreen(viewModel: RookViewModel) {
                         Text("No sessions yet — start a new chat above.", fontSize = 14.sp, color = PanelPalette.textMuted, modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp))
                     } else {
                         sessions.forEachIndexed { index, session ->
-                            SessionRow(session = session, currentSessionId = currentSession?.id, enabled = !startingSession, onClick = { viewModel.resumeSession(session) })
+                            SessionRow(
+                                session = session,
+                                currentSessionId = currentSession?.id,
+                                enabled = !startingSession,
+                                onClick = { viewModel.resumeSession(session) },
+                                onRename = {
+                                    renameDraft = session.name
+                                    sessionToRename = session
+                                },
+                                onDelete = {
+                                    sessionToDelete = session
+                                }
+                            )
                             if (index < sessions.lastIndex) HorizontalDivider(color = PanelPalette.border)
                         }
                     }
                 }
             }
         }
+    }
+
+    sessionToRename?.let { session ->
+        AlertDialog(
+            onDismissRequest = { sessionToRename = null },
+            title = { Text("Rename Session") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Update the title for ${session.name}.")
+                    OutlinedTextField(
+                        value = renameDraft,
+                        onValueChange = { renameDraft = it },
+                        singleLine = true,
+                        label = { Text("Session title") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.renameSession(session, renameDraft)
+                    sessionToRename = null
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { sessionToRename = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    sessionToDelete?.let { session ->
+        AlertDialog(
+            onDismissRequest = { sessionToDelete = null },
+            title = { Text("Delete Session?") },
+            text = { Text("Delete ${session.name} permanently?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteSession(session)
+                    sessionToDelete = null
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { sessionToDelete = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -201,13 +266,15 @@ private fun NewChatNameField(value: String, onValueChange: (String) -> Unit, onS
 }
 
 @Composable
-private fun SessionRow(session: AgentSessionSummary, currentSessionId: String?, enabled: Boolean, onClick: () -> Unit) {
+private fun SessionRow(session: AgentSessionSummary, currentSessionId: String?, enabled: Boolean, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
     val status = session.selectionStatus(currentSessionId)
     val statusTint = when (status) {
         SessionSelectionStatus.ACTIVE -> PanelPalette.warning
         SessionSelectionStatus.ON -> PanelPalette.success
         SessionSelectionStatus.OFF -> PanelPalette.textMuted
     }
+
+    var menuExpanded by remember(session.id) { mutableStateOf(false) }
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).padding(vertical = 9.dp)) {
         Box(modifier = Modifier.size(30.dp).clip(CircleShape).background(PanelPalette.info.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
@@ -222,6 +289,21 @@ private fun SessionRow(session: AgentSessionSummary, currentSessionId: String?, 
             Text(status.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.95f))
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = PanelPalette.textMuted)
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "Session actions", tint = PanelPalette.textMuted)
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(text = { Text("Rename") }, onClick = {
+                    menuExpanded = false
+                    onRename()
+                })
+                DropdownMenuItem(text = { Text("Delete") }, onClick = {
+                    menuExpanded = false
+                    onDelete()
+                })
+            }
+        }
     }
 }
 

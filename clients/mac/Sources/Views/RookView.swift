@@ -230,6 +230,9 @@ private struct HomeContent: View {
     @ObservedObject var model: RookMacModel
     @State private var newSessionName = ""
     @State private var selectedRuntimeID = ""
+    @State private var sessionToRename: AgentSessionSummary?
+    @State private var renameDraft = ""
+    @State private var sessionToDelete: AgentSessionSummary?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -252,6 +255,28 @@ private struct HomeContent: View {
                 serverOfflineCard
             }
             footerActions
+        }
+        .sheet(item: $sessionToRename) { session in
+            RenameSessionSheet(
+                sessionName: session.name,
+                draft: $renameDraft,
+                onCancel: { sessionToRename = nil },
+                onSave: {
+                    model.renameSession(session, title: renameDraft)
+                    sessionToRename = nil
+                }
+            )
+        }
+        .alert("Delete Session?", isPresented: Binding(get: { sessionToDelete != nil }, set: { if !$0 { sessionToDelete = nil } }), presenting: sessionToDelete) { session in
+            Button("Delete", role: .destructive) {
+                model.deleteSession(session)
+                sessionToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                sessionToDelete = nil
+            }
+        } message: { session in
+            Text("Delete \(session.name) permanently?")
         }
         .onAppear {
             ensureSelectedRuntimeID()
@@ -539,13 +564,25 @@ private struct HomeContent: View {
                 ScrollView(.vertical) {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
-                            Button {
-                                model.resumeSession(session)
-                            } label: {
-                                SessionHomeRow(session: session, currentSessionId: model.currentSession?.id)
+                            HStack(spacing: 8) {
+                                Button {
+                                    model.resumeSession(session)
+                                } label: {
+                                    SessionHomeRow(session: session, currentSessionId: model.currentSession?.id)
+                                }
+                                .buttonStyle(.plain)
+                                .pointingHandOnHover()
+
+                                SessionActionsMenu(
+                                    onRename: {
+                                        renameDraft = session.name
+                                        sessionToRename = session
+                                    },
+                                    onDelete: {
+                                        sessionToDelete = session
+                                    }
+                                )
                             }
-                            .buttonStyle(.plain)
-                            .pointingHandOnHover()
                             if index < model.sessions.count - 1 {
                                 Divider().opacity(0.45)
                             }
@@ -662,9 +699,6 @@ private struct SessionHomeRow: View {
                         .fill(statusTint.opacity(0.25))
                 )
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 6)
@@ -691,6 +725,9 @@ private struct SessionsDetail: View {
     @ObservedObject var model: RookMacModel
     var agentId: String
     @State private var newSessionName = ""
+    @State private var sessionToRename: AgentSessionSummary?
+    @State private var renameDraft = ""
+    @State private var sessionToDelete: AgentSessionSummary?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -704,6 +741,28 @@ private struct SessionsDetail: View {
 
             newChatCard
             sessionsCard
+        }
+        .sheet(item: $sessionToRename) { session in
+            RenameSessionSheet(
+                sessionName: session.name,
+                draft: $renameDraft,
+                onCancel: { sessionToRename = nil },
+                onSave: {
+                    model.renameSession(session, title: renameDraft)
+                    sessionToRename = nil
+                }
+            )
+        }
+        .alert("Delete Session?", isPresented: Binding(get: { sessionToDelete != nil }, set: { if !$0 { sessionToDelete = nil } }), presenting: sessionToDelete) { session in
+            Button("Delete", role: .destructive) {
+                model.deleteSession(session)
+                sessionToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                sessionToDelete = nil
+            }
+        } message: { session in
+            Text("Delete \(session.name) permanently?")
         }
     }
 
@@ -792,15 +851,27 @@ private struct SessionsDetail: View {
                 ScrollView(.vertical) {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
-                            Button {
-                                model.resumeSession(session)
-                            } label: {
-                                SessionRow(session: session, currentSessionId: model.currentSession?.id)
+                            HStack(spacing: 8) {
+                                Button {
+                                    model.resumeSession(session)
+                                } label: {
+                                    SessionRow(session: session, currentSessionId: model.currentSession?.id)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Resume this session")
+                                .disabled(model.startingSession)
+                                .pointingHandOnHover()
+
+                                SessionActionsMenu(
+                                    onRename: {
+                                        renameDraft = session.name
+                                        sessionToRename = session
+                                    },
+                                    onDelete: {
+                                        sessionToDelete = session
+                                    }
+                                )
                             }
-                            .buttonStyle(.plain)
-                            .help("Resume this session")
-                            .disabled(model.startingSession)
-                            .pointingHandOnHover()
 
                             if index < model.sessions.count - 1 {
                                 Divider()
@@ -892,5 +963,55 @@ private struct SessionRow: View {
 
     private var statusLabel: String {
         status.label
+    }
+}
+
+private struct SessionActionsMenu: View {
+    var onRename: () -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        Menu {
+            Button("Rename", action: onRename)
+            Divider()
+            Button("Delete", role: .destructive, action: onDelete)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(PanelPalette.secondaryText)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.white.opacity(0.06)))
+        }
+        .menuIndicator(.hidden)
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+}
+
+private struct RenameSessionSheet: View {
+    let sessionName: String
+    @Binding var draft: String
+    var onCancel: () -> Void
+    var onSave: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Rename Session")
+                .font(.headline)
+            Text("Update the title for \(sessionName).")
+                .font(.caption)
+                .foregroundStyle(PanelPalette.secondaryText)
+            TextField("Session title", text: $draft)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(onSave)
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                Button("Save", action: onSave)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 320)
     }
 }

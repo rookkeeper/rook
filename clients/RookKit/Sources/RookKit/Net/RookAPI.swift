@@ -127,6 +127,21 @@ public struct RookAPI {
         return response.events
     }
 
+    public func renameSession(sessionId: String, title: String) async throws -> AgentSessionSummary {
+        AgentSessionSummary(raw: try await patchJSON(
+            path: "api/sessions/\(sessionId)",
+            payload: .object(["title": .string(title)])
+        ))
+    }
+
+    public func touchSession(sessionId: String) async throws -> AgentSessionSummary {
+        AgentSessionSummary(raw: try await postJSON(path: "api/sessions/\(sessionId)/touch", payload: .object([:])) )
+    }
+
+    public func deleteSession(sessionId: String) async throws {
+        _ = try await deleteJSON(path: "api/sessions/\(sessionId)")
+    }
+
     public func environmentPreview(environmentId: String) async throws -> EnvironmentPreview {
         try await get(
             path: "api/environments/preview",
@@ -229,13 +244,11 @@ public struct RookAPI {
     }
 
     private func post<T: Decodable>(path: String, payload: JSONValue) async throws -> T {
-        var request = authorizedRequest(url: requestURL(path: path, query: [:]))
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(payload)
-        let (data, response) = try await performData(for: request)
-        try throwIfErrorResponse(data: data, response: response)
-        return try JSONDecoder().decode(T.self, from: data)
+        try await sendJSON(path: path, method: "POST", payload: payload)
+    }
+
+    private func patch<T: Decodable>(path: String, payload: JSONValue) async throws -> T {
+        try await sendJSON(path: path, method: "PATCH", payload: payload)
     }
 
     private func getJSON(path: String, query: [String: String]) async throws -> JSONValue {
@@ -243,13 +256,29 @@ public struct RookAPI {
     }
 
     private func postJSON(path: String, payload: JSONValue) async throws -> JSONValue {
+        try await sendJSON(path: path, method: "POST", payload: payload)
+    }
+
+    private func patchJSON(path: String, payload: JSONValue) async throws -> JSONValue {
+        try await sendJSON(path: path, method: "PATCH", payload: payload)
+    }
+
+    private func deleteJSON(path: String) async throws -> JSONValue {
         var request = authorizedRequest(url: requestURL(path: path, query: [:]))
-        request.httpMethod = "POST"
+        request.httpMethod = "DELETE"
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try throwIfErrorResponse(data: data, response: response)
+        return try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    private func sendJSON<T: Decodable>(path: String, method: String, payload: JSONValue) async throws -> T {
+        var request = authorizedRequest(url: requestURL(path: path, query: [:]))
+        request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(payload)
         let (data, response) = try await performData(for: request)
         try throwIfErrorResponse(data: data, response: response)
-        return try JSONDecoder().decode(JSONValue.self, from: data)
+        return try JSONDecoder().decode(T.self, from: data)
     }
 
     private func authorizedRequest(url: URL) -> URLRequest {

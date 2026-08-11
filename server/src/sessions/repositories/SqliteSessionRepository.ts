@@ -39,7 +39,7 @@ export class SqliteSessionRepository implements SessionRepository {
   async list(): Promise<SessionRecord[]> {
     return this.db.prepare(`
       SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at
-      FROM sessions ORDER BY updated_at DESC
+      FROM sessions ORDER BY updated_at DESC, started_at DESC, session_id DESC
     `).all().map(rowToRecord);
   }
 
@@ -63,6 +63,10 @@ export class SqliteSessionRepository implements SessionRepository {
         started_at = excluded.started_at,
         updated_at = excluded.updated_at
     `).run(record.sessionId, record.runtimeId, record.runtimeSessionId, record.title, record.cwd, record.startedAt, record.updatedAt);
+  }
+
+  async rename(sessionId: string, title: string): Promise<void> {
+    this.db.prepare("UPDATE sessions SET title = ? WHERE session_id = ?").run(title, sessionId);
   }
 
   async touch(sessionId: string, updatedAt = new Date().toISOString()): Promise<void> {
