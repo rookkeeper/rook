@@ -47,10 +47,11 @@ Event 002 found a roughly 41-second `activeTabURL` lookup against the other Rook
 The Safari/Firefox specialist is containment, not yet the root-cause fix. The remaining work should proceed in this order:
 
 1. [x] Exclude every internal Rook bundle ID and stop any active provider when Rook becomes frontmost. This directly removes the known cross-Rook trigger.
-2. [ ] Add per-operation AX timing for focused-window lookup, document attributes, child traversal, and URL lookup, logging only operation names, PIDs, bundle IDs, node counts, and durations.
-3. [ ] Add bounded AX messaging timeouts and move synchronous AX work off the main actor where the API permits, so a pathological target cannot freeze the client UI.
-4. [ ] Reproduce with one Rook and two Rook instances, comparing the timings and watchdog records.
-5. [ ] Capture process samples during any remaining stall to identify whether the wait is inside an AX IPC call, a SwiftUI/AppKit operation, or another main-actor dependency.
+2. [x] Add per-operation AX timing for focused-window lookup, document attributes, child traversal, and URL lookup, logging only operation names, PIDs, bundle IDs, node counts, and durations.
+3. [x] Add bounded AX messaging timeouts and a bounded URL-tree traversal deadline.
+4. [ ] Move synchronous AX work off the main actor where the API permits, so a pathological target cannot freeze the client UI.
+5. [ ] Reproduce with one Rook and two Rook instances, comparing the timings and watchdog records.
+6. [ ] Capture process samples during any remaining stall to identify whether the wait is inside an AX IPC call, a SwiftUI/AppKit operation, or another main-actor dependency.
 
 ### Immediate safeguard
 
@@ -81,7 +82,7 @@ The initial result is therefore not “delete `activeTabURL` everywhere.” It i
 - [x] Isolate nested URL discovery behind the Safari/Firefox specialist provider; do not run it for generic apps or Electron apps.
 - [x] Ensure generic document/path discovery remains separate from browser-only URL discovery.
 - [x] Move Chromium accessibility-tree priming out of the generic `focusedWindow` read path; only explicit text/action perception paths may prime web content.
-- [ ] Add bounded per-AX-call timing and timeout handling for the browser specialist path.
+- [x] Add bounded per-AX-call timing and timeout handling for the browser specialist path.
 - [ ] Audit synchronous AX calls for per-call timeouts, main-actor blocking, repeated tree reads, and safe off-main-actor execution.
 - [ ] Reproduce with one Rook and with two Rooks, then capture nested AX timings or stacks to distinguish a pathological Rook AX tree from a cross-process wait.
 

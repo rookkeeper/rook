@@ -130,8 +130,9 @@ Via `RookKit`:
 10. `DiscordEnvironmentProvider` polls every 5 seconds, parses the focused window title, and emits server plus channel environments when Discord exposes a `channel | server - Discord` title
 11. `FinderEnvironmentProvider` polls every 5 seconds, uses Finder AppleScript to inspect open Finder windows, and emits `dir:/...` environments for browsed folders while setting the frontmost Finder folder as the current app environment when available
 12. `BrowserEnvironmentProvider` handles Safari (`com.apple.Safari`) and Firefox (`org.mozilla.firefox`) only, walking the focused window's `AXWebArea` for the active page URL and emitting a host-level `web:` environment; generic and Electron paths do not perform this walk
-13. `EnvironmentRegistrationController` suppresses duplicate emissions of the same environment id for 1 minute
-14. server may respond with environment offers, which the client presents natively
+13. Environment-path AX calls apply a 500 ms messaging timeout, log slow operation metadata without content, and bound browser-tree traversal at 2 seconds; broader off-main-actor AX execution remains under investigation
+14. `EnvironmentRegistrationController` suppresses duplicate emissions of the same environment id for 1 minute
+15. server may respond with environment offers, which the client presents natively
 
 ### Environment approval
 1. server emits `_com.rookkeeper/environment_offer`

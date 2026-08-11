@@ -1,10 +1,27 @@
+import AppKit
 import ApplicationServices
 import Foundation
+import OSLog
 
 /// Tier 1 perception: reading another app's focused-window title needs the
 /// Accessibility (AX) permission. App *identity* (NSWorkspace) does not — only
 /// reading inside another process does.
 enum AXReader {
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.rookery.Rook", category: "AXReader")
+    private static let messagingTimeout: Float = 0.5
+    private static let activeTabTraversalDeadlineNanoseconds: UInt64 = 2_000_000_000
+    private static let slowCallThresholdMilliseconds = 100.0
+
+    private struct DiagnosticsContext {
+        let pid: pid_t
+        let bundleId: String
+
+        init(pid: pid_t) {
+            self.pid = pid
+            self.bundleId = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? "unknown"
+        }
+    }
+
     static func isTrusted(promptIfNeeded: Bool = false) -> Bool {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         let options = [key: promptIfNeeded] as CFDictionary
@@ -27,8 +44,14 @@ enum AXReader {
         guard let window = focusedWindow(pid: pid) else {
             return nil
         }
-        var titleRef: AnyObject?
-        guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success else {
+        let context = DiagnosticsContext(pid: pid)
+        let (error, titleRef) = copyAttributeValue(
+            window,
+            attribute: kAXTitleAttribute as String,
+            context: context,
+            operation: "focused-window-title"
+        )
+        guard error == .success else {
             return nil
         }
         let title = titleRef as? String
@@ -41,13 +64,22 @@ enum AXReader {
         guard let window = focusedWindow(pid: pid) else {
             return []
         }
+        let context = DiagnosticsContext(pid: pid)
         let attributes = ["AXDocument", "AXFilename", "AXURL"]
         var results: [String] = []
         for attribute in attributes {
-            if let value = stringAttribute(window, attribute)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !value.isEmpty,
-               !results.contains(value) {
-                results.append(value)
+            let (error, valueRef) = copyAttributeValue(
+                window,
+                attribute: attribute,
+                context: context,
+                operation: "focused-window-document.\(attribute)"
+            )
+            guard error == .success, let value = valueRef as? String else {
+                continue
+            }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, !results.contains(trimmed) {
+                results.append(trimmed)
             }
         }
         return results
@@ -57,12 +89,28 @@ enum AXReader {
         guard isTrusted() else {
             return nil
         }
+        let context = DiagnosticsContext(pid: pid)
         let appElement = AXUIElementCreateApplication(pid)
         var windowRef: AnyObject?
-        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
-            if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &windowRef) != .success {
+        let (focusedError, focusedWindowRef) = copyAttributeValue(
+            appElement,
+            attribute: kAXFocusedWindowAttribute as String,
+            context: context,
+            operation: "focused-window"
+        )
+        if focusedError == .success {
+            windowRef = focusedWindowRef
+        } else {
+            let (mainError, mainWindowRef) = copyAttributeValue(
+                appElement,
+                attribute: kAXMainWindowAttribute as String,
+                context: context,
+                operation: "main-window"
+            )
+            guard mainError == .success else {
                 return nil
             }
+            windowRef = mainWindowRef
         }
         guard let windowRef else {
             return nil
@@ -78,34 +126,57 @@ enum AXReader {
         guard let window = focusedWindow(pid: pid) else {
             return nil
         }
+        let context = DiagnosticsContext(pid: pid)
+        let deadline = DispatchTime.now().uptimeNanoseconds + activeTabTraversalDeadlineNanoseconds
         // Breadth-first: the web area sits near the top of the window subtree.
         var queue: [AXUIElement] = [window]
-        var budget = maxNodes
-        while !queue.isEmpty, budget > 0 {
+        var nodesVisited = 0
+        while !queue.isEmpty,
+              nodesVisited < maxNodes,
+              DispatchTime.now().uptimeNanoseconds < deadline {
             let element = queue.removeFirst()
-            budget -= 1
-            if stringAttribute(element, kAXRoleAttribute as String) == "AXWebArea",
-               let url = urlAttribute(element, "AXURL") {
-                return url
+            nodesVisited += 1
+            let (roleError, roleRef) = copyAttributeValue(
+                element,
+                attribute: kAXRoleAttribute as String,
+                context: context,
+                operation: "active-tab-url.role",
+                nodeCount: nodesVisited
+            )
+            if roleError == .success,
+               roleRef as? String == "AXWebArea" {
+                let (urlError, urlRef) = copyAttributeValue(
+                    element,
+                    attribute: "AXURL",
+                    context: context,
+                    operation: "active-tab-url.url",
+                    nodeCount: nodesVisited
+                )
+                if urlError == .success {
+                    if let url = urlRef as? NSURL {
+                        return url.absoluteString
+                    }
+                    if let url = urlRef as? String {
+                        return url
+                    }
+                }
             }
-            var childrenRef: AnyObject?
-            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+            let (childrenError, childrenRef) = copyAttributeValue(
+                element,
+                attribute: kAXChildrenAttribute as String,
+                context: context,
+                operation: "active-tab-url.children",
+                nodeCount: nodesVisited
+            )
+            if childrenError == .success,
                let children = childrenRef as? [AXUIElement] {
                 queue.append(contentsOf: children)
             }
         }
+        if DispatchTime.now().uptimeNanoseconds >= deadline {
+            logger.warning("AX traversal deadline reached operation=active-tab-url pid=\(context.pid, privacy: .public) bundleId=\(context.bundleId, privacy: .public) nodes=\(nodesVisited, privacy: .public)")
+        }
         return nil
-    }
-
-    private static func urlAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
-        var value: AnyObject?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success, let value else {
-            return nil
-        }
-        if let url = value as? NSURL {
-            return url.absoluteString
-        }
-        return value as? String
     }
 
     /// Visible text of the focused window, extracted by walking the
@@ -237,6 +308,24 @@ enum AXReader {
         for child in children {
             collectActionable(child, into: &elements, max: max, nodeBudget: &nodeBudget)
         }
+    }
+
+    private static func copyAttributeValue(
+        _ element: AXUIElement,
+        attribute: String,
+        context: DiagnosticsContext,
+        operation: String,
+        nodeCount: Int = 0
+    ) -> (AXError, AnyObject?) {
+        AXUIElementSetMessagingTimeout(element, messagingTimeout)
+        var value: AnyObject?
+        let started = DispatchTime.now().uptimeNanoseconds
+        let error = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        let elapsedMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
+        if elapsedMilliseconds >= slowCallThresholdMilliseconds {
+            logger.warning("slow AX call operation=\(operation, privacy: .public) pid=\(context.pid, privacy: .public) bundleId=\(context.bundleId, privacy: .public) elapsedMs=\(elapsedMilliseconds, privacy: .public) result=\(error.rawValue, privacy: .public) nodes=\(nodeCount, privacy: .public)")
+        }
+        return (error, value)
     }
 
     private static func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
