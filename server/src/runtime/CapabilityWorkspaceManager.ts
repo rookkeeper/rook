@@ -353,9 +353,7 @@ export class CapabilityWorkspaceManager {
       const directory = projectDirectory(entry.bundle.environmentId);
       if (!directory) throw new Error(`Project environment ${entry.bundle.environmentId} has no project directory.`);
       const agentsPath = path.join(directory, "AGENTS.md");
-      const claudePath = path.join(directory, "CLAUDE.md");
       if (await pathExists(agentsPath)) return { path: agentsPath, writable: true };
-      if (await pathExists(claudePath)) return { path: claudePath, writable: true };
       // A project AGENTS.md is created only when its empty temporary source is
       // first promoted by the project watcher. Until then this is disposable.
       const temporary = await this.ensureProjectStagingSource(entry, "instructions", async (target) => {

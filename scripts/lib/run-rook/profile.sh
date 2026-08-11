@@ -105,10 +105,6 @@ configure_run_profile() {
   CURRENT_SERVER_PIDFILE="$RUN_ROOT/server.pid"
   ROOK_HOME="${RUN_ROOK_HOME:-$RUN_ROOK_HOME_DEFAULT}"
   ROOK_DEV_ALLOW_REMOTE="${ROOK_DEV_ALLOW_REMOTE:-0}"
-  RUN_ROOK_DATABASE_PATH_EXPLICIT=0
-  if [[ -n "${RUN_ROOK_DATABASE_PATH:-}" ]]; then
-    RUN_ROOK_DATABASE_PATH_EXPLICIT=1
-  fi
   SERVER_DATABASE_PATH="${RUN_ROOK_DATABASE_PATH:-$ROOK_HOME/rook.sqlite}"
 
   export RUN_ROOK_PROFILE RUN_ROOK_PROFILE_SLUG
@@ -146,29 +142,8 @@ initialize_development_home() {
   fi
 }
 
-migrate_legacy_production_database_if_needed() {
-  # THIS IS FOR BACKWARDS COMPATIBILITY: preserve existing production session
-  # history by moving the legacy repo-local application database into the new
-  # ROOK_HOME/rook.sqlite location the first time the launcher starts.
-  [[ "$RUN_ROOK_PROFILE" == "production" ]] || return 0
-  [[ "$RUN_ROOK_DATABASE_PATH_EXPLICIT" == "0" ]] || return 0
-
-  local legacy_database_path="$REPO_ROOT/.var/rook/rook.sqlite"
-  [[ -e "$legacy_database_path" ]] || return 0
-  [[ ! -e "$SERVER_DATABASE_PATH" ]] || return 0
-
-  mkdir -p "$(dirname "$SERVER_DATABASE_PATH")"
-  local suffix
-  for suffix in "" "-shm" "-wal"; do
-    [[ -e "$legacy_database_path$suffix" ]] || continue
-    mv "$legacy_database_path$suffix" "$SERVER_DATABASE_PATH$suffix"
-  done
-  log "migrated legacy production database to $SERVER_DATABASE_PATH"
-}
-
 initialize_profile_state() {
   initialize_development_home
-  migrate_legacy_production_database_if_needed
 }
 
 log_run_profile() {

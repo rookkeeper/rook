@@ -300,6 +300,11 @@ for d in data.get('result', {}).get('devices', []):
         continue
     if conn.get('pairingState') != 'paired':
         continue
+    # CoreDevice keeps paired devices in its inventory after they disconnect.
+    # Require an active transport or developer disk image services so a stale
+    # device cannot be handed to xcodebuild/devicectl as a deploy target.
+    if not props.get('ddiServicesAvailable') and not conn.get('transportType') and conn.get('tunnelState') != 'available':
+        continue
     name=props.get('name') or hw.get('productType') or 'Unknown iPhone'
     udid=hw.get('udid') or d.get('identifier')
     rows.append((name,udid))
@@ -482,7 +487,7 @@ build_iphone_app() {
 
   local phone
   if ! phone="$(resolve_phone)"; then
-    die "no paired physical iPhone found; plug one in, unlock it, trust this Mac, and enable developer mode if prompted"
+    die "no available paired physical iPhone found; connect it, unlock it, trust this Mac, enable developer mode, and use an Xcode version that supports the phone's iOS version"
   fi
   local phone_name phone_udid
   IFS=$'\t' read -r phone_name phone_udid <<<"$phone"
@@ -515,11 +520,14 @@ EOF
   ensure_xcode_project "$app_dir" "$proj"
   log "building Rook for $phone_name"
   local build_log="$RUN_ROOT/${derived_name}-build.log"
+  # Build generically for iOS; the selected phone is installed and launched
+  # separately through devicectl below. This avoids making compilation depend
+  # on Xcode's live destination inventory.
   if ! xcodebuild \
     -project "$proj" \
     -scheme Rook \
     -configuration Debug \
-    -destination "id=$phone_udid" \
+    -destination "generic/platform=iOS" \
     -derivedDataPath "$derived" \
     -allowProvisioningUpdates \
     -allowProvisioningDeviceRegistration \

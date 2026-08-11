@@ -1,189 +1,62 @@
 ---
 name: debugging-rook
-description: Debugging patterns, CLI commands, scripts, and workflows for the Rook monorepo. Use when investigating bugs, testing server/client behavior, stepping through session replay, or inspecting environment state.
+description: Choose and follow the right debugging workflow for the Rook monorepo, especially CLI sessions, server state, Apple clients, and unified logs.
 ---
 
 # Debugging Rook
 
-Use these tools and patterns to investigate and fix bugs in Rook.
+Use this as a menu. Pick the cheapest lane that can answer the question, then
+escalate only when its evidence points elsewhere. The detailed procedures live
+in the linked references; read the relevant reference before running a longer
+workflow.
 
-## Priority order
+## Before you start
 
-1. **rook CLI + mock agent** — fastest iteration, no native rebuilds
-2. **rook CLI + real runtime** — when you need real AI behavior
-3. **Codex + computer use on the mac client** — only when the bug is in native UI rendering
+- Work from the checkout that owns the behavior under test.
+- Source `.env` before using `rook`; CLI calls need `--auth-token "$ROOK_AUTH_TOKEN"`.
+- Prefer a worktree's isolated profile. Never modify real `~/.rook` state or stop
+  another developer's Rook instance.
 
-## rook CLI
+## Pick a debugging lane
 
-All commands need `--auth-token "$ROOK_AUTH_TOKEN"` (source `.env` first).
+| Choose this | When | Why | Reference |
+| --- | --- | --- | --- |
+| **CLI / protocol** | A runtime, ACP, prompt, tool, or server response looks wrong | Fast, deterministic, and avoids native rebuilds | [CLI and protocol](references/cli-and-replay.md) |
+| **Transcript / replay** | A session works on the server but renders or hydrates incorrectly | Compares the server-owned transcript with client replay | [CLI and protocol](references/cli-and-replay.md) |
+| **Server / environment** | Health, environments, bundles, decisions, or managed processes look wrong | Inspects state directly instead of guessing from UI | [Server and environment](references/server-and-environment.md) |
+| **Prompt construction** | The agent seems to receive the wrong instructions, tools, or skills | Shows the exact provider payload sent to the model | [Server and environment](references/server-and-environment.md#prompt-and-instruction-traces) |
+| **Apple client logs** | Mac/iPhone networking, lifecycle, location, voice, or performance is suspect | Shared structured logs usually identify the failing boundary | [Apple client logs](references/apple-client-logs.md) |
+| **Native UI** | The bug is visual, interaction-specific, or cannot be explained by logs | Computer use observes the actual rendered app; use last | [Native client UI](references/native-client-ui.md) |
 
-### One-shot exec
+## Escalation order
 
-```bash
-rook exec --runtime MyPiOpenAiAgent --auth-token "$ROOK_AUTH_TOKEN" "tell me a joke"
-rook exec --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN" "what did you just say?"
-rook exec --last-message-only --runtime MockAcpAgent --auth-token "$ROOK_AUTH_TOKEN" "12+34"
-```
+1. CLI + `MockAcpAgent`
+2. CLI + the real runtime
+3. Server/environment diagnostics or Apple unified logs
+4. Codex computer use, and `sample` for a Mac beachball
 
-### Session management
+For a native hang, capture logs and a stack sample before trying to reproduce it
+through UI automation. For a client/server disagreement, compare the CLI
+transcript and client logs before inspecting the view.
 
-```bash
-rook sessions --auth-token "$ROOK_AUTH_TOKEN"                 # list sessions
-rook sessions --limit 5 --auth-token "$ROOK_AUTH_TOKEN"      # limit output
-rook --transcript --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN"  # dump replay
-```
-
-### Named sessions (for mac client testing)
-
-```bash
-rook exec --runtime MyPiOpenAiAgent --auth-token "$ROOK_AUTH_TOKEN" --title "my-test" "ls"
-```
-`--title` only works with `--runtime` (new session), not `--sessionId`.
-
-### Environment inspection
-
-```bash
-rook environments --auth-token "$ROOK_AUTH_TOKEN"             # list known environments
-rook environments --limit 5 --auth-token "$ROOK_AUTH_TOKEN"   # with bundle counts
-```
-
-### Join/leave environments on session create or resume
+## Quick entry points
 
 ```bash
-rook exec --runtime MyPiOpenAiAgent --auth-token "$ROOK_AUTH_TOKEN" --join location:office "hi"
-rook exec --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN" --leave web:example.com "done"
-```
-`--join` and `--leave` are repeatable. Works with both `--runtime` and `--sessionId`.
-
-### Interactive mode
-
-```bash
-rook --runtime MyPiOpenAiAgent --auth-token "$ROOK_AUTH_TOKEN"   # new session, chat
-rook --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN"            # resume, transcript replays
-```
-Ctrl+C prints sessionId and exits.
-
-## Mock agent
-
-File: `server/src/server/agents/test-fixtures/mockAcpServer.mjs`
-
-- stores a transcript and replays on `session/load`
-- streams thoughts, tool calls, tool outputs, assistant text
-- handles common prompt patterns: jokes, ls, arithmetic, prime checking
-- serialized via `enqueue` so load replay and prompt processing don't interleave
-- edit it to add new test scenarios
-
-## Debug scripts
-
-### `scripts/run-rook.sh`
-Launch the server and/or clients:
-```bash
-./scripts/run-rook.sh mac server     # mac client + server (most common)
-./scripts/run-rook.sh server         # server only
-./scripts/run-rook.sh stop           # kill everything
-```
-
-### `scripts/interact-with-remote-agent.sh`
-Exercise the remote-agent bridge without any UI. Needs `server/` deps installed.
-
-### `scripts/print-environments.sh`
-Dump active/recent environment state from the server:
-```bash
-./scripts/print-environments.sh
-./scripts/print-environments.sh --raw    # full JSON, no jq formatting
-```
-Uses `GET /api/diagnostics/environments`. Useful for inspecting what environments the server knows about, their status (active/recent), and bundles.
-
-### Environment paths
-
-Environment bundles live in two places:
-
-- **Repo**: `environment-repository/<kind>/<path>/.bundles/<bundle-id>/` — checked-in bundles (skills, AGENTS.md, tools)
-- **User-local**: `~/.rook/environment-repository/<kind>/<path>/.bundles/<bundle-id>/` — bundles Rook writes at runtime (e.g. agent-authored skills, memories)
-
-For the full filesystem shape and authoring model, see:
-- `PRODUCT/environment-repository.md`
-- `PRODUCT/environment-local-authoring.md`
-
-When debugging missing skills or instructions, check both locations. The user-local path is where `--join` will pick up agent-authored artifacts.
-
-### `scripts/dump-environment-decisions.sh`
-Dump the SQLite environment_decisions table:
-```bash
-./scripts/dump-environment-decisions.sh
-```
-Shows all approve/reject/accept/ignore decisions keyed by bundle hash.
-
-### `scripts/tail-logs.sh`
-Tail Pi provider-payload traces:
-```bash
-./scripts/tail-logs.sh
-./scripts/tail-logs.sh --instructions    # pretty-print system instructions
-./scripts/tail-logs.sh --tools           # YAML-style tool definitions
-```
-Reads from `/tmp/pi/provider-payload.jsonl` by default, or the path supplied through `PI_TRACE_LOG`. Shows the raw prompts sent to the LLM — useful for debugging prompt construction and environment context injection.
-
-### Inspecting agent instructions
-
-To see exactly what system prompt, skills, and context the agent is receiving:
-```bash
-# Start tailing Pi traces in one terminal:
-./scripts/tail-logs.sh --instructions
-
-# In another terminal, trigger a prompt:
-rook exec --runtime MyPiOpenAiAgent --auth-token "$ROOK_AUTH_TOKEN" "hi"
-```
-The trace logs show the full provider payload including system instructions, skill content, tool definitions, and environment context — everything the agent sees.
-
-### `scripts/run-tests.sh`
-Run the known server, Swift package, iPhone, and macOS test/build checks all at once.
-
-## Mac client debugging with Codex
-
-The mac client's sessions list does **not** auto-refresh. Restart to see new sessions:
-
-```bash
+rook exec --last-message-only --runtime MockAcpAgent \
+  --auth-token "$ROOK_AUTH_TOKEN" "12+34"
+./scripts/run-rook.sh server
 ./scripts/run-rook.sh mac server
+./scripts/run-rook.sh stop
 ```
 
-Then use Codex — **always specify the full app path** (multiple builds share the same bundle ID):
+## Reference map
 
-```bash
-codex exec "Use computer use. Interact with the Rook app at /Users/johnberryman/projects/github/rookkeeper/rook/.var/run-rook/build/Rook/Build/Products/Debug/Rook.app. [instruction]" 2>/dev/null
-```
-
-Examples:
-
-```bash
-codex exec "Use computer use. Interact with the Rook app at .../.var/run-rook/build/Rook/...Rook.app. Tell me what screen it's on." 2>/dev/null
-codex exec "Use computer use. Interact with the Rook app at .../.var/run-rook/build/Rook/...Rook.app. Click the session named 'my-test' and report what you see." 2>/dev/null
-codex exec "Use computer use. Interact with the Rook app at .../.var/run-rook/build/Rook/...Rook.app. Type 'hi' into the chat input and press enter. Report what happens." 2>/dev/null
-```
-
-Key bits: `codex exec` for one-shot, `"Use computer use."` first, always full app path, click sessions by name not position, `2>/dev/null` hides banner.
-
-## Full replay debug workflow
-
-1. Create a named session:
-   ```bash
-   rook exec --runtime MyPiOpenAiAgent --auth-token "$ROOK_AUTH_TOKEN" --title "replay-test" "ls the directory"
-   ```
-2. Verify the transcript:
-   ```bash
-   rook --transcript --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN"
-   ```
-3. Restart the mac app:
-   ```bash
-   ./scripts/run-rook.sh mac server
-   ```
-4. Codex clicks the session by name:
-   ```bash
-   codex exec "Use computer use. Interact with the Rook app at .../.var/run-rook/build/Rook/...Rook.app. Click the session named 'replay-test'. Describe every message in order." 2>/dev/null
-   ```
-5. Compare CLI transcript with Codex's report — they should match.
-
-## Common replay bugs
-
-- blocks must be cleared **before** `session/load`, not after — otherwise the runtime's replay events get wiped
-- user/assistant/thinking/tool events during replay need separate buffering from active-turn streaming
-- `isRunning` must stay `false` during replay so the status dot doesn't glow
+- [CLI and replay](references/cli-and-replay.md) — commands, mock-agent scenarios,
+  named sessions, transcript comparison, and replay failure modes.
+- [Server and environment](references/server-and-environment.md) — launcher
+  profiles, diagnostics, environment storage, tests, and prompt traces.
+- [Apple client logs](references/apple-client-logs.md) — Unified Logging capture,
+  categories, event vocabulary, performance interpretation, and iPhone/Mac
+  diagnostics.
+- [Native client UI](references/native-client-ui.md) — Mac launch/Codex usage,
+  beachball capture, and privacy cautions.

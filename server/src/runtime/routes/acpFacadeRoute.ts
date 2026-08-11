@@ -152,7 +152,7 @@ async function handleMessage(
       case "session/close": {
         const sessionId = requiredBoundSessionId(object(message.params) ?? {}, binding);
         subscribe(sessionId);
-        send(success(requestId!, await runtimes.closeSession(sessionId)));
+        send(success(requestId!, await runtimes.deleteSession(sessionId)));
         return;
       }
       default:

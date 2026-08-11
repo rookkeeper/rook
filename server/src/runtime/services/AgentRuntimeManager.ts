@@ -251,13 +251,6 @@ export class AgentRuntimeManager {
     return result;
   }
 
-  // THIS IS FOR BACKWARDS COMPATIBILITY
-  // Keep ACP session/close callers on the existing manager entry point while
-  // applying the new durable deletion semantics underneath.
-  async closeSession(sessionId: string): Promise<unknown> {
-    return this.deleteSession(sessionId);
-  }
-
   /** Relay a standard ACP response to an ACP request initiated by a runtime. */
   respondToRuntime(message: JsonRpcMessage): boolean {
     const id = message.id;

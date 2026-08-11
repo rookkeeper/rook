@@ -48,15 +48,8 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
 
     const errors: RepositoryReadError[] = [];
     const skills = await this.readSkills(directory, errors, environmentId);
-    const agents = await readOptionalText(path.join(directory, "AGENTS.md"));
-    // THIS IS FOR BACKWARDS COMPATIBILITY
-    // Preserve project instructions authored under the established CLAUDE.md
-    // convention when a project has not adopted AGENTS.md yet.
-    const claude = await readOptionalText(path.join(directory, "CLAUDE.md"));
+    const agentsMd = await readOptionalText(path.join(directory, "AGENTS.md"));
     const mcp = await readOptionalText(path.join(directory, ".mcp.json"));
-    // AGENTS.md is the project source when present. CLAUDE.md is a fallback
-    // source only, never a second instruction layer to concatenate.
-    const agentsMd = agents ?? claude;
     const hasContent = skills.length > 0 || Boolean(agentsMd) || Boolean(mcp);
     if (!hasContent) return { environment: environmentRecord(environmentId, directory), bundles: [], errors };
 
@@ -80,12 +73,7 @@ export class ProjectDirectoryEnvironmentRepository extends EnvironmentRepository
   }
 
   private async readSkills(directory: string, errors: RepositoryReadError[], environmentId: string): Promise<BundleArtifact[]> {
-    // THIS IS FOR BACKWARDS COMPATIBILITY
-    // Preserve skill discovery from the established tool-specific project
-    // directories while the standard .agents/skills layout is adopted.
-    // All roots are merged; on a name collision the earlier root wins.
-    const roots = [".agents/skills", ".claude/skills", ".codex/skills", ".cursor/skills", ".github/skills"]
-      .map((relative) => path.join(directory, relative))
+    const roots = [path.join(directory, ".agents/skills")]
       .filter((candidate) => existsSync(candidate));
     const artifactsById = new Map<string, BundleArtifact>();
     for (const root of roots) {
