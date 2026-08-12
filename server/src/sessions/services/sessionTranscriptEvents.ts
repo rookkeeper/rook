@@ -71,6 +71,17 @@ export function runFailedEvent(message: string): NormalizedTranscriptEvent {
   return { kind: "run_failed", message };
 }
 
+const CONTENT_KINDS = new Set(["user_message_chunk", "agent_message_chunk", "agent_thought_chunk", "tool_call"]);
+
+/**
+ * Whether a transcript holds conversation worth preserving. Run, plan, and
+ * usage markers are server bookkeeping: they can exist for a session that was
+ * never prompted successfully, so they do not count as content.
+ */
+export function transcriptHasContent(events: Array<Record<string, unknown>>): boolean {
+  return events.some((event) => typeof event.kind === "string" && CONTENT_KINDS.has(event.kind));
+}
+
 function object(value: unknown): JsonObject | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : undefined;
 }

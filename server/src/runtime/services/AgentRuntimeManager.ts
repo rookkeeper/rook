@@ -5,7 +5,7 @@ import type { SessionAttentionStatus, SessionRecord, SessionRepository } from ".
 import { SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotification, type SessionRuntimeConfiguration } from "../SessionRuntime.js";
 import { runtimeLaunchPlan, runtimeSessionParams } from "../runtimeLaunchPlan.js";
 import { SessionTranscriptRepository } from "../../sessions/repositories/SessionTranscriptRepository.js";
-import { normalizedEventsFromRuntimeMessage, runCompletedEvent, runFailedEvent } from "../../sessions/services/sessionTranscriptEvents.js";
+import { normalizedEventsFromRuntimeMessage, runCompletedEvent, runFailedEvent, transcriptHasContent } from "../../sessions/services/sessionTranscriptEvents.js";
 import { CapabilityWorkspaceManager, type CapabilityWorkspaceResult } from "../CapabilityWorkspaceManager.js";
 
 export type SessionActivityStatus = "active" | "ready" | "error" | "on" | "off";
@@ -207,11 +207,6 @@ export class AgentRuntimeManager {
     await this.sessions.touch(sessionId);
   }
 
-  /**
-   * Atomically applies session-specific environment launch state. The old
-   * process remains usable until a replacement has successfully loaded the
-   * exact same ACP session; loading failure never creates a fresh session.
-   */
   /** Applies an explicit non-ACP enter/leave request for one session. */
   async applyEnvironmentChange(sessionId: string, enterEnvironmentIds: string[], leaveEnvironmentIds: string[]): Promise<string[]> {
     if (!this.environmentManager) throw new Error("Environment manager is not configured.");
@@ -233,23 +228,25 @@ export class AgentRuntimeManager {
     this.environmentManager.decideEnvironment(environmentId, decision, bundleHash, sessionId);
   }
 
+  /**
+   * Atomically applies session-specific environment launch state. The old
+   * process remains usable until a replacement has taken over the session. A
+   * failed load creates a fresh runtime session only when the transcript proves
+   * the session holds no conversation, so history is never silently discarded.
+   */
   async restartSessionForEnvironmentChange(sessionId: string, configuration: SessionRuntimeConfiguration): Promise<void> {
     const record = await this.requireSession(sessionId);
     const current = this.runtimeFor(record);
     const replacement = current.replacement(configuration);
+    let runtimeSessionId: string;
     try {
-      const result = await replacement.request(
-        "session/load",
-        runtimeSessionParams(replacement.profile, { sessionId: record.runtimeSessionId, cwd: record.cwd, mcpServers: [] }, configuration),
-      );
-      if (typeof result === "object" && result !== null && "sessionId" in result && (result as JsonObject).sessionId !== record.runtimeSessionId) {
-        throw new Error("ACP session/load returned a different session ID; refusing to replace session runtime.");
-      }
+      runtimeSessionId = await this.adoptSessionOnRuntime(record, replacement, configuration);
     } catch (error) {
       await replacement.close();
       throw error;
     }
 
+    if (runtimeSessionId !== record.runtimeSessionId) await this.sessions.save({ ...record, runtimeSessionId });
     this.replaceSessionRuntime(sessionId, replacement);
     await current.close();
     await this.sessions.touch(sessionId);
@@ -339,6 +336,39 @@ export class AgentRuntimeManager {
     else this.attachSessionRuntime(record.sessionId, runtime);
     this.subscribeToEnvironments(record.sessionId);
     return runtime;
+  }
+
+  /**
+   * Points a replacement process at the session and answers which runtime
+   * session id it now serves. Runtimes that persist their transcript lazily
+   * (Claude Code writes it on first prompt) cannot load a session that was
+   * never prompted, so a load failure falls back to `session/new` — but only
+   * when the server transcript shows there is no conversation to lose.
+   */
+  private async adoptSessionOnRuntime(record: SessionRecord, replacement: SessionRuntime, configuration: SessionRuntimeConfiguration): Promise<string> {
+    try {
+      const result = await replacement.request(
+        "session/load",
+        runtimeSessionParams(replacement.profile, { sessionId: record.runtimeSessionId, cwd: record.cwd, mcpServers: [] }, configuration),
+      );
+      if (typeof result === "object" && result !== null && "sessionId" in result && (result as JsonObject).sessionId !== record.runtimeSessionId) {
+        throw new Error("ACP session/load returned a different session ID; refusing to replace session runtime.");
+      }
+      return record.runtimeSessionId;
+    } catch (error) {
+      if (!this.transcriptRepository) throw error;
+      const transcript = await this.transcriptRepository.list(record.sessionId);
+      if (transcriptHasContent(transcript.map((entry) => entry.event))) throw error;
+      const result = await replacement.request(
+        "session/new",
+        runtimeSessionParams(replacement.profile, { cwd: record.cwd, mcpServers: [] }, configuration),
+      );
+      this.logger.info(
+        { sessionId: record.sessionId, runtimeId: record.runtimeId, error: error instanceof Error ? error.message : String(error) },
+        "session/load failed for never-prompted session; recreated runtime session via session/new",
+      );
+      return sessionIdFromResult(result);
+    }
   }
 
   private createSessionRuntime(profile: AgentRuntimeProfile, configuration: SessionRuntimeConfiguration = this.baseRuntimeConfiguration()): SessionRuntime {

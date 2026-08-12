@@ -129,7 +129,7 @@ It implements:
 
 `AgentRuntimeManager` lazily creates one `SessionRuntime` subprocess per active session. Provider differences (Pi, Claude, Cursor, generic ACP) are composed launch strategies in `runtimeLaunchPlan.ts`, not subclasses.
 
-On environment change, only the affected session's runtime is restarted — the replacement process must successfully `session/load` the existing ACP session before the old process retires. A failed load never creates a fresh replacement session.
+On environment change, only the affected session's runtime is restarted — the replacement process must take over the session before the old process retires. It normally does that by `session/load` of the existing ACP session. Runtimes that persist their transcript lazily (Claude Code writes it on the first prompt) cannot load a session that was never prompted, so a failed load falls back to `session/new` when the server transcript holds no conversation content; a load failure for a session with real history still aborts the restart rather than discarding it.
 
 ### Environment system
 

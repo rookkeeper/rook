@@ -31,17 +31,17 @@ lives in our restart path.
 
 ## Work checklist
 
-- [ ] Reactive fallback in `restartSessionForEnvironmentChange`: on load failure,
+- [x] Reactive fallback in `restartSessionForEnvironmentChange`: on load failure,
       check transcript for content events; if none, `session/new` with same cwd and
       new configuration, verify/update `runtimeSessionId`, replace the runtime.
-- [ ] Persist a changed `runtimeSessionId` via the session repository.
-- [ ] Log the fallback distinctly (info: virgin session recreated for environment
+- [x] Persist a changed `runtimeSessionId` via the session repository.
+- [x] Log the fallback distinctly (info: virgin session recreated for environment
       change; keep the load error in the log entry).
-- [ ] Helper to classify transcript content events, colocated with the transcript
+- [x] Helper to classify transcript content events, colocated with the transcript
       event definitions in `sessionTranscriptEvents.ts` if that is its natural home.
-- [ ] Tests (vitest, mock runtime patterns from `acpFacade.test.ts`): load succeeds →
+- [x] Tests (vitest, mock runtime patterns from `acpFacade.test.ts`): load succeeds →
       unchanged path; load fails + empty transcript → recreated via session/new; load
       fails + `run_failed`-only transcript → recreated; load fails + transcript with
       user/agent content → rethrows and closes replacement; `session/new` returning a
       new id → record updated.
-- [ ] `npm run typecheck` and `npm test` in `server/` pass.
+- [x] `npm run typecheck` and `npm test` in `server/` pass.

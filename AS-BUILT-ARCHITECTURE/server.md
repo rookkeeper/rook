@@ -209,7 +209,7 @@ Related tables:
 2. `AgentRuntimeManager` resolves approved bundle content and asks `CapabilityWorkspaceManager` to update that session’s links and generated aggregate
 3. shared SQLite/project sources receive a final assessment before replacement; ordinary file edits do not themselves require runtime restart
 4. it creates a replacement `SessionRuntime` with the workspace as cwd
-5. replacement must successfully `session/load` the exact existing runtime session
+5. replacement must successfully `session/load` the exact existing runtime session; if that load fails and the server transcript holds no conversation content, it issues `session/new` instead and persists the new runtime session id (runtimes with lazy transcript persistence cannot load a never-prompted session)
 6. only then is the old subprocess retired
 
 ### Location registration
