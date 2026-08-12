@@ -1,5 +1,7 @@
 # Brainstorm
 
+**Status: provisional — not an implementation decision**
+
 This is an advised starting set of prompts, not a required form. Every task has different brainstorming needs, so keep only the useful sections, add anything important, and skip this document when the work is simple or obvious.
 
 ## Problem

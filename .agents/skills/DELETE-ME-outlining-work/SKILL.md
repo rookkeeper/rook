@@ -1,6 +1,6 @@
 ---
 name: outlining-work
-description: Create and maintain CHANGES work-planning documents for real chunks of work in the Rook repo. Use when the user wants to plan, scope, brainstorm, or outline implementation work before or during execution.
+description: THIS WILL BE DELETED SOON, USE development-lifecycle instead. -- Create and maintain CHANGES work-planning documents for real chunks of work in the Rook repo. Use when the user wants to plan, scope, brainstorm, or outline implementation work before or during execution.
 ---
 
 # Outlining work in `CHANGES/`

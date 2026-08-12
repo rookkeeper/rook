@@ -9,11 +9,13 @@ This is the main lifecycle for carrying substantial Rook development work from a
 
 The process is strongly advised, not a rigid form. Adapt the detail to the work, but keep the lifecycle record current. The lifecycle checklist is [`references/WORKSTEPS.md`](references/WORKSTEPS.md); copy it into the change directory as `WORKSTEPS.md` and check off each completed phase there.
 
+We often use brainstorming to figure out what we want to do and how we want to do it. Sometimes the path is obvious and we can skip it, but always check with the developer before creating `TODO.md` to make sure we agree on the approach.
+
 The change directory normally contains:
 
 - `WORKSTEPS.md` — the lifecycle checklist copied from [`references/WORKSTEPS.md`](references/WORKSTEPS.md).
-- `BRAINSTORM.md` — optional exploration, using [`references/BRAINSTORM.md`](references/BRAINSTORM.md) as a starting point.
-- `TODO.md` — the decisions and implementation checklist, using [`references/TODO.md`](references/TODO.md) as a starting point.
+- `BRAINSTORM.md` — optional, explicitly provisional exploration, using [`references/BRAINSTORM.md`](references/BRAINSTORM.md) as a starting point.
+- `TODO.md` — the agreed decisions and implementation checklist, using [`references/TODO.md`](references/TODO.md) as a starting point; do not create it before the decision gate.
 - `OUTCOMES.md` — the terse completion record added after merge.
 
 Each lifecycle phase below ends by requiring its checkbox to be updated in `WORKSTEPS.md`. The detailed work checklist belongs in `TODO.md`, not in `WORKSTEPS.md`.
@@ -32,15 +34,19 @@ Create `CHANGES/YYYY-MM-DD-topic-slug/` in the **main checkout**, not in a workt
 
 ### Brainstorm to work
 
-Brainstorming is an advised starting point, not a fixed form: every task has different needs. When the problem or solution needs exploration, create `BRAINSTORM.md` in the change directory from [`references/BRAINSTORM.md`](references/BRAINSTORM.md). Use it to investigate the problem, understand the relevant code and docs, compare options, record risks and open questions, and make the work legible to the user and future agents. Keep, remove, or add sections as the task requires. Bypass this phase when the work is simple or obvious. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
+Brainstorming is an advised starting point, not a fixed form: every task has different needs. When the problem or solution needs exploration, create `BRAINSTORM.md` in the change directory from [`references/BRAINSTORM.md`](references/BRAINSTORM.md). Use it to investigate the problem, understand the relevant code and docs, compare options, record risks and open questions, and make the work legible to the user and future agents.
+
+Keep the brainstorm explicitly provisional. Distinguish user requirements, observations, agent suggestions, decisions, and unresolved questions. Recommendations in the brainstorm are not decisions, and a preferred direction is not an agreed direction. Update the document as the conversation evolves. Do not create `TODO.md`, a planning commit, an implementation workspace, or code based only on the agent's recommendation. Bypass this phase when the work is simple or obvious. This phase is complete only when the developer confirms the direction or explicitly asks to proceed without further exploration; until then, leave its checkbox unchecked in [`WORKSTEPS.md`](WORKSTEPS.md).
 
 ### Record the decision and TODO
 
-Create `TODO.md` in the change directory from [`references/TODO.md`](references/TODO.md). Keep its three main sections:
+Wait for an explicit decision gate: the developer must confirm the direction, approve the stated scope, or clearly instruct the agent to proceed with a named approach. Do not treat silence, a request for more brainstorming, or an unchallenged suggestion as approval. If important questions remain open, continue brainstorming instead of creating `TODO.md`.
+
+Only after that agreement, create `TODO.md` in the change directory from [`references/TODO.md`](references/TODO.md). Keep its three main sections:
 
 1. **Context** — very concisely what we are doing and why it matters now.
-2. **Decision details** — what we decided to do and why, based on the investigation or discussion.
-3. **Work checklist** — actionable `- [ ]` bullets describing the work, which can be grouped into major categories when useful.
+2. **Decision details** — only what was explicitly agreed, including important boundaries and non-goals; do not present hypotheses as decisions.
+3. **Work checklist** — actionable `- [ ]` bullets describing the agreed work, which can be grouped into major categories when useful.
 
 Keep `TODO.md` current as the implementation changes the plan. Once the brainstorm and TODO are agreed, commit the change directory to the **main checkout** before creating the implementation workspace. This is the planning checkpoint: do not start implementation until that commit exists. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
 

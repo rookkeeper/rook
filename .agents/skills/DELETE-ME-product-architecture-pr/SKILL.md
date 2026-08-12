@@ -1,6 +1,6 @@
 ---
 name: product-architecture-pr
-description: Create and ship Rookery pull requests focused on product and architecture impact, not low-level code diffs. Reads all PRODUCT/ docs, classifies how changes align with product and architecture specs, updates documentation, and opens PRs via branch push (never direct to main). Use when the user asks to create, open, or ship a pull request; finish a feature; or merge work — never pushing directly to main.
+description: THIS WILL BE DELETED SOON, USE development-lifecycle instead. -- Create and ship Rookery pull requests focused on product and architecture impact, not low-level code diffs. Reads all PRODUCT/ docs, classifies how changes align with product and architecture specs, updates documentation, and opens PRs via branch push (never direct to main). Use when the user asks to create, open, or ship a pull request; finish a feature; or merge work — never pushing directly to main.
 ---
 
 # Product & Architecture Pull Requests
