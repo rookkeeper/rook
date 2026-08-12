@@ -84,3 +84,19 @@ Start with an end-to-end vertical slice that can:
 7. expose task state and failure/retry information.
 
 Do not begin with multi-server agent delegation, automatic whole-vault synchronization, or unrestricted Obsidian writes. Those are separate architecture decisions that depend on the first workflow's privacy, approval, and conflict requirements.
+
+## Questions to discuss
+
+1. Should the webhook and agent work run on the home server, the Mac, or a home-server/Mac combination?
+2. What should happen when the home server is down, the Mac is offline, or Zoom retries an event?
+3. Should the first trigger be a small external adapter or a Rook-native trigger and task system?
+4. What durable task states, retry behavior, and deduplication keys do we need?
+5. Should each meeting get its own Rook session, and should that session remain available for follow-up?
+6. Which runtime, working directory, prompt, and explicit environments should a triggered session use?
+7. Is the home server trusted to store full transcripts and derived notes?
+8. Should meeting processing write automatically, or produce a reviewable proposal first?
+9. What exactly is the Peeps structure and note schema in Obsidian?
+10. Should Obsidian synchronization use Git, another file-sync mechanism, a Mac bridge, or an inbox/import flow?
+11. How should users be notified about queued, running, completed, failed, or approval-needed work?
+12. Do clients need multi-server discovery, or should one Rook server remain the control plane?
+13. Should one Rook server ever be able to invoke work on another, and what allowlist, credentials, and audit trail would make that safe?
