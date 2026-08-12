@@ -46,11 +46,6 @@ final class ApiTypesTests: XCTestCase {
         }
     }
 
-    func testAgentSessionSummaryActivityStatusFallsBackForOlderServer() {
-        XCTAssertEqual(AgentSessionSummary(raw: .object(["running": .bool(true)])).activityStatus, .on)
-        XCTAssertEqual(AgentSessionSummary(raw: .object(["running": .bool(false)])).activityStatus, .off)
-    }
-
     func testAgentSessionSummaryFieldsAreCanonical() {
         let raw = JSONValue.object([
             "sessionId": .string("s2"),

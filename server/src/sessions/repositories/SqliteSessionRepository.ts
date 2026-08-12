@@ -64,7 +64,7 @@ export class SqliteSessionRepository implements SessionRepository {
         cwd = excluded.cwd,
         started_at = excluded.started_at,
         updated_at = excluded.updated_at
-    `).run(record.sessionId, record.runtimeId, record.runtimeSessionId, record.title, record.cwd, record.startedAt, record.updatedAt, record.attentionStatus ?? "clear");
+    `).run(record.sessionId, record.runtimeId, record.runtimeSessionId, record.title, record.cwd, record.startedAt, record.updatedAt, record.attentionStatus);
   }
 
   async rename(sessionId: string, title: string): Promise<void> {
@@ -110,8 +110,6 @@ export class SqliteSessionRepository implements SessionRepository {
   }
 
   private ensureAttentionStatusColumn(): void {
-    // THIS IS FOR BACKWARDS COMPATIBILITY
-    // Existing application databases predate attention_status and receive the clear default in place.
     const columns = this.db.prepare("PRAGMA table_info(sessions)").all() as Array<Record<string, unknown>>;
     if (columns.some((column) => column.name === "attention_status")) return;
     this.db.exec("ALTER TABLE sessions ADD COLUMN attention_status TEXT NOT NULL DEFAULT 'clear' CHECK (attention_status IN ('clear', 'ready', 'error'))");

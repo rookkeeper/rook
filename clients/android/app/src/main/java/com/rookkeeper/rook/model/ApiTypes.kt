@@ -31,9 +31,7 @@ data class AgentSessionSummary(val raw: JsonObject) {
     val running: Boolean get() = raw["running"]?.boolValue ?: false
     val activityStatus: SessionSelectionStatus
         get() = raw["activityStatus"]?.stringValue?.let { value -> SessionSelectionStatus.values().firstOrNull { it.name.lowercase() == value } }
-            // THIS IS FOR BACKWARDS COMPATIBILITY
-            // Older servers only expose running, so retain a non-selection-derived fallback during rollout.
-            ?: if (running) SessionSelectionStatus.ON else SessionSelectionStatus.OFF
+            ?: SessionSelectionStatus.OFF
     val connectedClients: Int get() = (raw["connectedClients"]?.numberValue ?: 0.0).toInt()
 
 

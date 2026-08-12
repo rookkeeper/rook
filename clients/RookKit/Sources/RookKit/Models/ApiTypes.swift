@@ -43,12 +43,7 @@ public struct AgentSessionSummary: Equatable, Identifiable {
     public var name: String { raw["title"]?.stringValue ?? "session" }
     public var running: Bool { raw["running"]?.boolValue ?? false }
     public var activityStatus: SessionSelectionStatus {
-        if let value = raw["activityStatus"]?.stringValue, let status = SessionSelectionStatus(rawValue: value) {
-            return status
-        }
-        // THIS IS FOR BACKWARDS COMPATIBILITY
-        // Older servers only expose running, so retain their non-selection-derived fallback during rollout.
-        return running ? .on : .off
+        SessionSelectionStatus(rawValue: raw["activityStatus"]?.stringValue ?? "") ?? .off
     }
     public var connectedClients: Int { Int(raw["connectedClients"]?.numberValue ?? 0) }
     public var updatedAtISO: String? { raw["updatedAt"]?.stringValue }

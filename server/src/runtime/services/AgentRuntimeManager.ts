@@ -159,7 +159,10 @@ export class AgentRuntimeManager {
     const privateReplay = method === "session/load" && options.privateReplayListener;
     const isPrompt = method === "session/prompt";
     if (privateReplay) this.beginPrivateReplay(sessionId, options.privateReplayListener!);
-    if (isPrompt) this.beginTurn(sessionId);
+    if (isPrompt) {
+      await this.sessions.touch(sessionId);
+      this.beginTurn(sessionId);
+    }
     let promptOutcome: SessionAttentionStatus | undefined;
     try {
       const result = await runtime.request(method, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration));

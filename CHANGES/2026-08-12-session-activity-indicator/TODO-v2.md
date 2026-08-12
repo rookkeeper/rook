@@ -27,5 +27,5 @@ Show reliable background activity on the session-selection page without changing
 - [x] Remove activity polling and activity presentation from per-agent session pages and chat views.
 - [x] Add quiet 5-second selection-page refreshes that update existing rows without loading/repaint glitches.
 - [x] Preserve existing chat status text and tool-call reporting.
-- [x] Add focused tests for state precedence, acknowledgment, active polling visibility, and server-provided client rendering.
+- [x] Add focused tests for state precedence, acknowledgment, active polling visibility, server-provided client rendering, and recency sorting.
 - [x] Run server, shared-client, and available native-client validation; Android validation is blocked by the unavailable Java runtime.

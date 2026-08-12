@@ -251,6 +251,25 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   });
 
 
+  it("moves a prompted session to the front of the recency-sorted list", async () => {
+    const olderWs = await connect();
+    const newerWs = await connect();
+    await request(olderWs, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "older" } });
+    await request(newerWs, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "newer" } });
+    const older = await request(olderWs, 2, "session/new", { cwd: "/tmp", mcpServers: [], _meta: { runtimeId: "MockAcpAgent", title: "older" } });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const newer = await request(newerWs, 2, "session/new", { cwd: "/tmp", mcpServers: [], _meta: { runtimeId: "MockAcpAgent", title: "newer" } });
+
+    await request(olderWs, 3, "session/prompt", { sessionId: older.sessionId, prompt: [{ type: "text", text: "tell me a joke" }] });
+    const list = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(list.sessions[0]?.sessionId).toBe(older.sessionId);
+
+    await request(olderWs, 4, "session/close", { sessionId: older.sessionId });
+    await request(newerWs, 3, "session/close", { sessionId: newer.sessionId });
+    olderWs.close();
+    newerWs.close();
+  });
+
   it("materializes approved environment skills during an environment restart", async () => {
     const ws = await connect();
     await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "materializer-test" } });
