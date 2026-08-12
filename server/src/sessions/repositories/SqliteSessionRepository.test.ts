@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { RookDatastore } from "../../infrastructure/datastores/RookDatastore.js";
 import { SqliteSessionRepository } from "./SqliteSessionRepository.js";
 
 describe("SqliteSessionRepository", () => {
   it("persists and orders the unified public session space by update time", async () => {
-    const repository = new SqliteSessionRepository(":memory:");
+    const datastore = new RookDatastore(":memory:");
+    const repository = new SqliteSessionRepository(datastore);
     await repository.save({
       sessionId: "Pi:pi-1",
       runtimeId: "Pi",
@@ -12,6 +14,7 @@ describe("SqliteSessionRepository", () => {
       cwd: "/tmp",
       startedAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
+      attentionStatus: "clear",
     });
     await repository.save({
       sessionId: "Claude:claude-1",
@@ -21,6 +24,7 @@ describe("SqliteSessionRepository", () => {
       cwd: "/tmp",
       startedAt: "2026-01-02T00:00:00.000Z",
       updatedAt: "2026-01-03T00:00:00.000Z",
+      attentionStatus: "clear",
     });
 
     expect((await repository.list()).map((session) => session.sessionId)).toEqual(["Claude:claude-1", "Pi:pi-1"]);
@@ -35,9 +39,14 @@ describe("SqliteSessionRepository", () => {
     await repository.replaceEnvironmentIds("Pi:pi-1", ["web:example.com", "location:target"]);
     expect(new Set(await repository.environmentIds("Pi:pi-1"))).toEqual(new Set(["web:example.com", "location:target"]));
 
+    await repository.setAttentionStatus("Pi:pi-1", "ready");
+    expect((await repository.get("Pi:pi-1"))?.attentionStatus).toBe("ready");
+    expect(() => datastore.db.prepare("UPDATE sessions SET attention_status = 'invalid'").run()).toThrow();
+
     await repository.delete("Pi:pi-1");
     expect(await repository.get("Pi:pi-1")).toBeUndefined();
     expect(await repository.environmentIds("Pi:pi-1")).toEqual([]);
     repository.close();
+    datastore.close();
   });
 });

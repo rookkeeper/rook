@@ -21,6 +21,7 @@ async function makeRepository(): Promise<SessionTranscriptRepository> {
     cwd: "/tmp",
     startedAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
+    attentionStatus: "clear",
   });
   transcripts = new SessionTranscriptRepository(datastore);
   return transcripts;

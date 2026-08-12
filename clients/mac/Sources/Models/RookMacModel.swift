@@ -86,6 +86,7 @@ final class RookMacModel: ObservableObject {
     private let appEnvironmentProvider: AppEnvironmentProvider
     private let environmentOfferController: EnvironmentOfferController
     private let environmentListController: EnvironmentListController
+    private var sessionListPollingTask: Task<Void, Never>?
 
     init(environmentFocusDelay: TimeInterval = 1) {
         let envBaseURL = ProcessInfo.processInfo.environment["ROOK_SERVER_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -408,6 +409,7 @@ final class RookMacModel: ObservableObject {
         appEnvironmentProvider.stop()
         serverStateController.stop()
         environmentListController.stopAutoRefresh()
+        stopSessionListPolling()
         MacStallWatchdog.shared.stop()
         Task {
             if managedServerRunning {
@@ -421,7 +423,35 @@ final class RookMacModel: ObservableObject {
 
     func goHome() {
         stopEnvironmentListAutoRefresh()
+        unviewCurrentSession()
         panelMode = .home
+    }
+
+    func updateSessionListPolling() {
+        if panelMode == .home { startSessionListPolling() }
+        else { stopSessionListPolling() }
+    }
+
+    func startSessionListPolling() {
+        guard sessionListPollingTask == nil else { return }
+        sessionListPollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard !Task.isCancelled, let self else { return }
+                await self.chatSessionController.loadSessions(showLoading: false)
+                self.syncChatState()
+            }
+        }
+    }
+
+    func stopSessionListPolling() {
+        sessionListPollingTask?.cancel()
+        sessionListPollingTask = nil
+    }
+
+    private func unviewCurrentSession() {
+        guard let sessionId = currentSession?.id else { return }
+        Task { try? await api.unviewSession(sessionId: sessionId) }
     }
 
     func openEnvironments() {

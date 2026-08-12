@@ -90,6 +90,7 @@ final class RookModel: ObservableObject {
     private var handles: [String: SessionHandle] = [:]
     private var healthTimer: Timer?
     private var environmentListAutoRefreshTask: Task<Void, Never>?
+    private var sessionListPollingTask: Task<Void, Never>?
     private var autoResumeAttempted = false
     private var blockCounter = 0
     private var enteredEnvironments: Set<String> = []
@@ -537,7 +538,7 @@ final class RookModel: ObservableObject {
         do {
             if sessions.isEmpty { sessions = try await api.sessions() }
             guard let recent = sessions.first else { return }
-            resumeSession(recent)
+            resumeSession(recent, acknowledge: false)
         } catch {
             sessionsError = error.localizedDescription
         }
@@ -546,15 +547,15 @@ final class RookModel: ObservableObject {
     func openAgentSessions(_ agentId: String) {}
     func closeAgentSessions() { selectedAgentId = nil }
 
-    func loadSessions(agentId _: String = "") async {
-        sessionsLoading = true
+    func loadSessions(agentId _: String = "", showLoading: Bool = true) async {
+        if showLoading { sessionsLoading = true }
         let timed = RookPerformance.begin(
             "iPhoneLoadSessions",
             operation: "iphone-load-sessions",
             logger: Self.logger,
             signposter: RookLog.sessionSignposter
         )
-        defer { sessionsLoading = false }
+        defer { if showLoading { sessionsLoading = false } }
         do {
             sessions = try await api.sessions()
             sessionsError = ""
@@ -622,7 +623,7 @@ final class RookModel: ObservableObject {
         }
     }
 
-    func resumeSession(_ session: AgentSessionSummary) {
+    func resumeSession(_ session: AgentSessionSummary, acknowledge: Bool = true) {
         Self.logger.info("iphone resume session=\(session.id, privacy: .public) runtime=\(session.agent, privacy: .public) running=\(session.running, privacy: .public)")
         startingSession = true
         Task {
@@ -639,8 +640,10 @@ final class RookModel: ObservableObject {
                 } else {
                     try await handle.load()
                 }
-                let touched = try await api.touchSession(sessionId: session.id)
-                currentSession = touched
+                if acknowledge {
+                    let touched = try await api.touchSession(sessionId: session.id)
+                    currentSession = touched
+                }
                 await loadSessions()
                 if let refreshed = sessions.first(where: { $0.id == session.id }) {
                     currentSession = refreshed
@@ -729,7 +732,26 @@ final class RookModel: ObservableObject {
         chatVisible = true
     }
 
+    func startSessionListPolling() {
+        guard sessionListPollingTask == nil else { return }
+        sessionListPollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard !Task.isCancelled, let self else { return }
+                await self.loadSessions(showLoading: false)
+            }
+        }
+    }
+
+    func stopSessionListPolling() {
+        sessionListPollingTask?.cancel()
+        sessionListPollingTask = nil
+    }
+
     func leaveChat() {
+        if let sessionId = currentSession?.id {
+            Task { try? await api.unviewSession(sessionId: sessionId) }
+        }
         for handle in handles.values { handle.close() }
         handles = [:]
         currentSession = nil

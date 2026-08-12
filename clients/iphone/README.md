@@ -40,6 +40,7 @@ binding, and bearer-token auth, start with [docs/setup.md](../../docs/setup.md).
   `AVSpeechSynthesizer` speaks the reply once the turn completes. The shared
   `VoiceController` adds an iOS `AVAudioSession` (`.playAndRecord`,
   `.spokenAudio`) so capture and playback coexist.
+- **Session activity selection pill.** The main session list quietly polls every five seconds and displays the server-authoritative Active/Ready/Error/On/Off state; per-agent session lists and chat keep their existing presentation.
 - **Live Activity / Dynamic Island.** The lock screen and Dynamic Island show
   the current place, whether skills are loaded, and the agent's status
   (idle/working) — for an active chat *or* ambiently when you're at a

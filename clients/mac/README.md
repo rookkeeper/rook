@@ -169,6 +169,8 @@ every 5 minutes. If it is not brought back into user-visible focus within
 4m45s, it simply falls out of the Mac cache; the server ages it out on its
 own.
 
+The main session-selection list quietly polls `GET /api/sessions` every five seconds for the server-authoritative Active/Ready/Error/On/Off pill. Per-agent session lists and chat views do not poll for or render this activity pill.
+
 Non-user timers/polls do **not** discover new environments. They are used only
 for:
 

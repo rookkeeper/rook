@@ -163,7 +163,7 @@ struct SessionsScreen: View {
                             Button {
                                 model.resumeSession(session)
                             } label: {
-                                SessionRow(session: session, currentSessionId: model.currentSession?.id)
+                                SessionRow(session: session, showsStatus: false)
                             }
                             .buttonStyle(.plain)
                             .disabled(model.startingSession)
@@ -199,13 +199,13 @@ struct SessionsScreen: View {
 
 private struct SessionRow: View {
     let session: AgentSessionSummary
-    let currentSessionId: String?
+    var showsStatus = true
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: statusIcon)
+            Image(systemName: showsStatus ? statusIcon : "bubble.left.and.bubble.right")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(statusTint)
+                .foregroundStyle(showsStatus ? statusTint : PanelPalette.info)
                 .frame(width: 30, height: 30)
                 .background(
                     Circle().fill(statusTint.opacity(0.14))
@@ -227,14 +227,16 @@ private struct SessionRow: View {
 
             Spacer(minLength: 4)
 
-            Text(statusLabel)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.95))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule().fill(statusTint.opacity(0.25))
-                )
+            if showsStatus {
+                Text(statusLabel)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule().fill(statusTint.opacity(0.25))
+                    )
+            }
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .bold))
@@ -245,12 +247,14 @@ private struct SessionRow: View {
     }
 
     private var status: SessionSelectionStatus {
-        session.selectionStatus(currentSessionId: currentSessionId)
+        session.activityStatus
     }
 
     private var statusTint: Color {
         switch status {
         case .active: return PanelPalette.warning
+        case .ready: return PanelPalette.info
+        case .error: return PanelPalette.danger
         case .on: return PanelPalette.success
         case .off: return PanelPalette.textMuted
         }
@@ -259,6 +263,8 @@ private struct SessionRow: View {
     private var statusIcon: String {
         switch status {
         case .active: return "waveform.and.mic"
+        case .ready: return "checkmark.circle.fill"
+        case .error: return "exclamationmark.circle.fill"
         case .on: return "bolt.fill"
         case .off: return "moon.zzz"
         }

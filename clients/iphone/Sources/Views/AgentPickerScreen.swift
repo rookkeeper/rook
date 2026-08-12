@@ -73,6 +73,8 @@ struct SessionsHomeScreen: View {
         .onAppear {
             if selectedRuntimeID.isEmpty { selectedRuntimeID = model.agents.first?.id ?? "" }
         }
+        .onAppear { model.startSessionListPolling() }
+        .onDisappear { model.stopSessionListPolling() }
         .onChange(of: model.agents) { _, newValue in
             if selectedRuntimeID.isEmpty || !newValue.contains(where: { $0.id == selectedRuntimeID }) {
                 selectedRuntimeID = newValue.first?.id ?? ""
@@ -151,7 +153,7 @@ struct SessionsHomeScreen: View {
                     ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
                         HStack(spacing: 8) {
                             Button { model.resumeSession(session) } label: {
-                                SessionRow(session: session, currentSessionId: model.currentSession?.id)
+                                SessionRow(session: session)
                             }
                             .buttonStyle(.plain)
                             .disabled(model.startingSession)
@@ -241,7 +243,6 @@ struct SessionsHomeScreen: View {
 
 private struct SessionRow: View {
     let session: AgentSessionSummary
-    let currentSessionId: String?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -286,12 +287,14 @@ private struct SessionRow: View {
     }
 
     private var status: SessionSelectionStatus {
-        session.selectionStatus(currentSessionId: currentSessionId)
+        session.activityStatus
     }
 
     private var statusTint: Color {
         switch status {
         case .active: return PanelPalette.warning
+        case .ready: return PanelPalette.info
+        case .error: return PanelPalette.danger
         case .on: return PanelPalette.success
         case .off: return PanelPalette.textMuted
         }
@@ -300,6 +303,8 @@ private struct SessionRow: View {
     private var statusIcon: String {
         switch status {
         case .active: return "waveform.and.mic"
+        case .ready: return "checkmark.circle.fill"
+        case .error: return "exclamationmark.circle.fill"
         case .on: return "bolt.fill"
         case .off: return "moon.zzz"
         }

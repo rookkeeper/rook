@@ -54,6 +54,14 @@ export class SessionRuntime {
     private readonly logger: { info: (obj: Record<string, unknown>, msg?: string) => void; error?: (obj: Record<string, unknown>, msg?: string) => void } = console,
   ) {}
 
+  get isAlive(): boolean {
+    return this.child !== null;
+  }
+
+  get isStarted(): boolean {
+    return this.child !== null || this.started !== null;
+  }
+
   /** Builds an unstarted replacement carrying new session-only environment state. */
   replacement(configuration: SessionRuntimeConfiguration): SessionRuntime {
     return new SessionRuntime(this.profile, this.repoRoot, this.launchPlanner, configuration, this.logger);

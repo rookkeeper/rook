@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { SessionRecord, SessionRepository } from "./SessionRepository.js";
+import type { SessionAttentionStatus, SessionRecord, SessionRepository } from "./SessionRepository.js";
 import { RookDatastore } from "../../infrastructure/datastores/RookDatastore.js";
 
 /** SQLite repository for the unified public session space. */
@@ -24,6 +24,7 @@ export class SqliteSessionRepository implements SessionRepository {
         cwd TEXT NOT NULL,
         started_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
+        attention_status TEXT NOT NULL DEFAULT 'clear' CHECK (attention_status IN ('clear', 'ready', 'error')),
         UNIQUE(runtime_id, runtime_session_id)
       );
       CREATE INDEX IF NOT EXISTS sessions_updated_at_idx ON sessions(updated_at DESC);
@@ -34,18 +35,19 @@ export class SqliteSessionRepository implements SessionRepository {
         PRIMARY KEY (session_id, environment_id)
       );
     `);
+    this.ensureAttentionStatusColumn();
   }
 
   async list(): Promise<SessionRecord[]> {
     return this.db.prepare(`
-      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at
+      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status
       FROM sessions ORDER BY updated_at DESC, started_at DESC, session_id DESC
     `).all().map(rowToRecord);
   }
 
   async get(sessionId: string): Promise<SessionRecord | undefined> {
     const row = this.db.prepare(`
-      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at
+      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status
       FROM sessions WHERE session_id = ?
     `).get(sessionId);
     return row ? rowToRecord(row) : undefined;
@@ -53,8 +55,8 @@ export class SqliteSessionRepository implements SessionRepository {
 
   async save(record: SessionRecord): Promise<void> {
     this.db.prepare(`
-      INSERT INTO sessions (session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sessions (session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id) DO UPDATE SET
         runtime_id = excluded.runtime_id,
         runtime_session_id = excluded.runtime_session_id,
@@ -62,7 +64,7 @@ export class SqliteSessionRepository implements SessionRepository {
         cwd = excluded.cwd,
         started_at = excluded.started_at,
         updated_at = excluded.updated_at
-    `).run(record.sessionId, record.runtimeId, record.runtimeSessionId, record.title, record.cwd, record.startedAt, record.updatedAt);
+    `).run(record.sessionId, record.runtimeId, record.runtimeSessionId, record.title, record.cwd, record.startedAt, record.updatedAt, record.attentionStatus);
   }
 
   async rename(sessionId: string, title: string): Promise<void> {
@@ -71,6 +73,10 @@ export class SqliteSessionRepository implements SessionRepository {
 
   async touch(sessionId: string, updatedAt = new Date().toISOString()): Promise<void> {
     this.db.prepare("UPDATE sessions SET updated_at = ? WHERE session_id = ?").run(updatedAt, sessionId);
+  }
+
+  async setAttentionStatus(sessionId: string, status: SessionAttentionStatus): Promise<void> {
+    this.db.prepare("UPDATE sessions SET attention_status = ? WHERE session_id = ?").run(status, sessionId);
   }
 
   async delete(sessionId: string): Promise<void> {
@@ -102,6 +108,12 @@ export class SqliteSessionRepository implements SessionRepository {
   close(): void {
     this.ownedDatastore?.close();
   }
+
+  private ensureAttentionStatusColumn(): void {
+    const columns = this.db.prepare("PRAGMA table_info(sessions)").all() as Array<Record<string, unknown>>;
+    if (columns.some((column) => column.name === "attention_status")) return;
+    this.db.exec("ALTER TABLE sessions ADD COLUMN attention_status TEXT NOT NULL DEFAULT 'clear' CHECK (attention_status IN ('clear', 'ready', 'error'))");
+  }
 }
 
 function rowToRecord(row: unknown): SessionRecord {
@@ -114,5 +126,10 @@ function rowToRecord(row: unknown): SessionRecord {
     cwd: String(value.cwd),
     startedAt: String(value.started_at),
     updatedAt: String(value.updated_at),
+    attentionStatus: normalizeAttentionStatus(value.attention_status),
   };
+}
+
+function normalizeAttentionStatus(value: unknown): SessionAttentionStatus {
+  return value === "ready" || value === "error" ? value : "clear";
 }

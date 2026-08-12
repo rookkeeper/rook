@@ -195,6 +195,7 @@ class RookViewModel(
     private var autoResumeAttempted = false
     private var reconnectJob: Job? = null
     private var environmentListAutoRefreshJob: Job? = null
+    private var sessionListPollingJob: Job? = null
     private var userCancelledRun = false
     // Set on any content-bearing event during the in-flight turn; checked on RunCompleted.
     // Upstream provider failures (e.g. billing/auth rejections) can come back from the
@@ -278,7 +279,7 @@ class RookViewModel(
                     _sessions.value = api.sessions().map(::AgentSessionSummary)
                 }
                 val recent = _sessions.value.firstOrNull() ?: return@launch
-                resumeSession(recent)
+                resumeSession(recent, acknowledge = false)
             } catch (_: Exception) {
             }
         }
@@ -286,18 +287,33 @@ class RookViewModel(
 
     // MARK: - Session lifecycle
 
-    fun loadSessions(agentId: String) {
+    fun loadSessions(agentId: String, showLoading: Boolean = true) {
         scope.launch {
-            _sessionsLoading.value = true
+            if (showLoading) _sessionsLoading.value = true
             try {
                 _sessions.value = api.sessions().map(::AgentSessionSummary)
                 _sessionsError.value = ""
             } catch (e: Exception) {
                 _sessionsError.value = e.message ?: "Failed to load sessions"
             } finally {
-                _sessionsLoading.value = false
+                if (showLoading) _sessionsLoading.value = false
             }
         }
+    }
+
+    fun startSessionListPolling() {
+        if (sessionListPollingJob != null) return
+        sessionListPollingJob = scope.launch {
+            while (true) {
+                delay(5_000)
+                loadSessions("", showLoading = false)
+            }
+        }
+    }
+
+    fun stopSessionListPolling() {
+        sessionListPollingJob?.cancel()
+        sessionListPollingJob = null
     }
 
     fun startNewSession(agentId: String, name: String) {
@@ -330,7 +346,7 @@ class RookViewModel(
         }
     }
 
-    fun resumeSession(session: AgentSessionSummary) {
+    fun resumeSession(session: AgentSessionSummary, acknowledge: Boolean = true) {
         scope.launch {
             _startingSession.value = true
             try {
@@ -341,8 +357,9 @@ class RookViewModel(
                 } else {
                     socket.loadSession(session.id)
                 }
-                val touched = AgentSessionSummary(api.touchSession(session.id))
-                _currentSession.value = touched
+                if (acknowledge) {
+                    _currentSession.value = AgentSessionSummary(api.touchSession(session.id))
+                }
                 _sessions.value = api.sessions().map(::AgentSessionSummary)
                 _sessions.value.firstOrNull { it.id == session.id }?.let { _currentSession.value = it }
             } catch (e: Exception) {
@@ -475,6 +492,7 @@ class RookViewModel(
     }
 
     fun leaveChat() {
+        _currentSession.value?.id?.let { sessionId -> scope.launch { runCatching { api.unviewSession(sessionId) } } }
         socket.disconnect()
         connectedSocketSessionId = null
         reconnectJob?.cancel()

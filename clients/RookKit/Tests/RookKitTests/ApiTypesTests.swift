@@ -38,6 +38,14 @@ final class ApiTypesTests: XCTestCase {
         XCTAssertEqual(summary.connectedClients, 2)
     }
 
+    func testAgentSessionSummaryActivityStatusUsesServerValue() {
+        for (rawValue, expected) in [("active", SessionSelectionStatus.active), ("ready", .ready), ("error", .error), ("on", .on), ("off", .off)] {
+            let summary = AgentSessionSummary(raw: .object(["activityStatus": .string(rawValue)]))
+            XCTAssertEqual(summary.activityStatus, expected)
+            XCTAssertEqual(summary.activityStatus.label, rawValue.capitalized)
+        }
+    }
+
     func testAgentSessionSummaryFieldsAreCanonical() {
         let raw = JSONValue.object([
             "sessionId": .string("s2"),

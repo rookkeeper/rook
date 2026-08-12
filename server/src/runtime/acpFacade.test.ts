@@ -213,12 +213,62 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
 
     const listResponse = await fetch(`http://127.0.0.1:${PORT}/api/sessions`);
     const list = await listResponse.json() as { sessions: Array<Record<string, unknown>> };
-    expect(list.sessions.some((session) => session.sessionId === sessionId)).toBe(true);
+    const listed = list.sessions.find((session) => session.sessionId === sessionId);
+    expect(listed?.activityStatus).toBe("ready");
+
+    const touched = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionId}/touch`, { method: "POST" }).then((response) => response.json()) as Record<string, unknown>;
+    expect(touched.activityStatus).toBe("on");
+
+    send(ws, 5, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "long task" }],
+    });
+    let activeStatus = "";
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const activeList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+      activeStatus = String(activeList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus ?? "");
+      if (activeStatus === "active") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(activeStatus).toBe("active");
+    while (true) {
+      const message = await recv(ws);
+      if (message.id === "5") break;
+    }
+
+    const unviewed = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionId}/unview`, { method: "POST" }).then((response) => response.json()) as Record<string, unknown>;
+    expect(unviewed.activityStatus).toBe("on");
+
+    await expect(request(ws, 5, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "boom" }],
+    })).rejects.toThrow("boom");
+    const failedList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(failedList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus).toBe("error");
 
     await request(ws, 6, "session/close", { sessionId });
     ws.close();
   });
 
+
+  it("moves a prompted session to the front of the recency-sorted list", async () => {
+    const olderWs = await connect();
+    const newerWs = await connect();
+    await request(olderWs, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "older" } });
+    await request(newerWs, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "newer" } });
+    const older = await request(olderWs, 2, "session/new", { cwd: "/tmp", mcpServers: [], _meta: { runtimeId: "MockAcpAgent", title: "older" } });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const newer = await request(newerWs, 2, "session/new", { cwd: "/tmp", mcpServers: [], _meta: { runtimeId: "MockAcpAgent", title: "newer" } });
+
+    await request(olderWs, 3, "session/prompt", { sessionId: older.sessionId, prompt: [{ type: "text", text: "tell me a joke" }] });
+    const list = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(list.sessions[0]?.sessionId).toBe(older.sessionId);
+
+    await request(olderWs, 4, "session/close", { sessionId: older.sessionId });
+    await request(newerWs, 3, "session/close", { sessionId: newer.sessionId });
+    olderWs.close();
+    newerWs.close();
+  });
 
   it("materializes approved environment skills during an environment restart", async () => {
     const ws = await connect();

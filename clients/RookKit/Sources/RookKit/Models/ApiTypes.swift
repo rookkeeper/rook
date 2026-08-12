@@ -14,12 +14,16 @@ public struct AgentDefinition: Codable, Equatable, Identifiable {
 /// ACP session summaries plus Rook `_meta` fields, including fields this app doesn't model.
 public enum SessionSelectionStatus: String, Equatable {
     case active
+    case ready
+    case error
     case on
     case off
 
     public var label: String {
         switch self {
         case .active: return "Active"
+        case .ready: return "Ready"
+        case .error: return "Error"
         case .on: return "On"
         case .off: return "Off"
         }
@@ -38,16 +42,12 @@ public struct AgentSessionSummary: Equatable, Identifiable {
     public var supportsImagePrompts: Bool { raw["supportsImagePrompts"]?.boolValue ?? false }
     public var name: String { raw["title"]?.stringValue ?? "session" }
     public var running: Bool { raw["running"]?.boolValue ?? false }
+    public var activityStatus: SessionSelectionStatus {
+        SessionSelectionStatus(rawValue: raw["activityStatus"]?.stringValue ?? "") ?? .off
+    }
     public var connectedClients: Int { Int(raw["connectedClients"]?.numberValue ?? 0) }
     public var updatedAtISO: String? { raw["updatedAt"]?.stringValue }
     public var startedAtISO: String? { raw["startedAt"]?.stringValue }
-
-    public func selectionStatus(currentSessionId: String?) -> SessionSelectionStatus {
-        if running, currentSessionId == id {
-            return .active
-        }
-        return running ? .on : .off
-    }
 
     public var createdAt: Date? {
         guard let iso = startedAtISO else {
@@ -80,6 +80,7 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         if let startedAt = raw["startedAt"]?.stringValue { object["startedAt"] = .string(startedAt) }
         if let supportsImagePrompts = raw["supportsImagePrompts"]?.boolValue { object["supportsImagePrompts"] = .bool(supportsImagePrompts) }
         if let connectedClients = raw["connectedClients"]?.numberValue { object["connectedClients"] = .number(connectedClients) }
+        if let activityStatus = raw["activityStatus"]?.stringValue { object["activityStatus"] = .string(activityStatus) }
         if let updatedAtISO { object["updatedAt"] = .string(updatedAtISO) }
         else if let updatedAt = raw["updatedAt"]?.stringValue { object["updatedAt"] = .string(updatedAt) }
         return AgentSessionSummary(raw: .object(object))
