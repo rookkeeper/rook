@@ -10,7 +10,7 @@ Rook's durable server state is split across SQLite databases:
 
 The application database remains separate from environment repositories. This database is intentionally small: it stores session persistence and durable environment decisions. Runtime processes, active/recent environment caches, subscribers, and workspace projections remain transient. By default it lives under `ROOK_HOME/rook.sqlite` (`~/.rook/rook.sqlite` for the main checkout and `~/.rook-<worktree-slug>/rook.sqlite` for development worktrees), with `ROOK_DATABASE_PATH` as an explicit override.
 
-For session recency, no extra table or column was added: the existing `sessions.updated_at` field now represents both prompt activity and explicit client-side view/touch events, so opening a session can reorder the shared recents list without synthesizing transcript content.
+For session recency, the existing `sessions.updated_at` field represents both prompt activity and explicit client-side view/touch events. The sessions table also stores `attention_status`, a CHECK-constrained enum of `clear`, `ready`, or `error`. Active-turn state and view presence remain transient server state; the API combines them with the durable enum to return `activityStatus` as `active`, `ready`, `error`, `on`, or `off`.
 
 ## Session transcript persistence
 

@@ -36,6 +36,7 @@ struct RookView: View {
         .environment(\.colorScheme, .dark)
         .onAppear {
             model.refreshNow()
+            model.updateSessionListPolling()
             applyWindowSizing(hostingWindow)
         }
         .onPreferenceChange(PanelContentHeightKey.self) { height in
@@ -45,6 +46,7 @@ struct RookView: View {
             applyWindowSizing(hostingWindow)
         }
         .onChange(of: model.panelMode) { _, _ in
+            model.updateSessionListPolling()
             applyWindowSizing(hostingWindow)
         }
     }
@@ -568,7 +570,7 @@ private struct HomeContent: View {
                                 Button {
                                     model.resumeSession(session)
                                 } label: {
-                                    SessionHomeRow(session: session, currentSessionId: model.currentSession?.id)
+                                    SessionHomeRow(session: session)
                                 }
                                 .buttonStyle(.plain)
                                 .pointingHandOnHover()
@@ -659,7 +661,6 @@ private struct HomeContent: View {
 
 private struct SessionHomeRow: View {
     var session: AgentSessionSummary
-    var currentSessionId: String?
 
     var body: some View {
         HStack(spacing: 9) {
@@ -707,12 +708,14 @@ private struct SessionHomeRow: View {
     }
 
     private var status: SessionSelectionStatus {
-        session.selectionStatus(currentSessionId: currentSessionId)
+        session.activityStatus
     }
 
     private var statusTint: Color {
         switch status {
         case .active: return PanelPalette.warning
+        case .ready: return PanelPalette.info
+        case .error: return PanelPalette.danger
         case .on: return PanelPalette.success
         case .off: return PanelPalette.secondaryText
         }
@@ -855,7 +858,7 @@ private struct SessionsDetail: View {
                                 Button {
                                     model.resumeSession(session)
                                 } label: {
-                                    SessionRow(session: session, currentSessionId: model.currentSession?.id)
+                                    SessionRow(session: session, showsStatus: false)
                                 }
                                 .buttonStyle(.plain)
                                 .help("Resume this session")
@@ -896,13 +899,13 @@ private struct SessionsDetail: View {
 
 private struct SessionRow: View {
     var session: AgentSessionSummary
-    var currentSessionId: String?
+    var showsStatus = true
 
     var body: some View {
         HStack(alignment: .center, spacing: 9) {
-            Image(systemName: statusIcon)
+            Image(systemName: showsStatus ? statusIcon : "bubble.left.and.bubble.right")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(statusTint)
+                .foregroundStyle(showsStatus ? statusTint : PanelPalette.info)
                 .frame(width: 22, height: 22)
                 .background(
                     Circle()
@@ -924,16 +927,18 @@ private struct SessionRow: View {
 
             Spacer(minLength: 4)
 
-            Text(statusLabel)
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(.white.opacity(0.96))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                    Capsule()
-                        .fill(statusTint.opacity(0.25))
-                )
+            if showsStatus {
+                Text(statusLabel)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white.opacity(0.96))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(statusTint.opacity(0.25))
+                    )
+            }
         }
         .padding(.vertical, 7)
         .padding(.horizontal, 6)
@@ -942,12 +947,14 @@ private struct SessionRow: View {
     }
 
     private var status: SessionSelectionStatus {
-        session.selectionStatus(currentSessionId: currentSessionId)
+        session.activityStatus
     }
 
     private var statusTint: Color {
         switch status {
         case .active: return PanelPalette.warning
+        case .ready: return PanelPalette.info
+        case .error: return PanelPalette.danger
         case .on: return PanelPalette.success
         case .off: return PanelPalette.secondaryText
         }
@@ -956,6 +963,8 @@ private struct SessionRow: View {
     private var statusIcon: String {
         switch status {
         case .active: return "waveform.and.mic"
+        case .ready: return "checkmark.circle.fill"
+        case .error: return "exclamationmark.circle.fill"
         case .on: return "bolt.fill"
         case .off: return "moon.zzz"
         }

@@ -22,10 +22,10 @@ Show reliable background activity on the session-selection page without changing
 
 ## Work checklist
 
-- [ ] Keep server turn tracking, durable attention, touch acknowledgment, and activity-status API behavior.
-- [ ] Keep the pill only on the main session-selection page across supported clients.
-- [ ] Remove activity polling and activity presentation from per-agent session pages and chat views.
-- [ ] Add quiet 10-second selection-page refreshes that update existing rows without loading/repaint glitches.
-- [ ] Preserve existing chat status text and tool-call reporting.
-- [ ] Add focused tests for state precedence, acknowledgment, polling updates, and stable selection-page rendering.
-- [ ] Run server, shared-client, and available native-client validation.
+- [x] Keep server turn tracking, durable attention, touch acknowledgment, and activity-status API behavior.
+- [x] Keep the pill only on the main session-selection page across supported clients.
+- [x] Remove activity polling and activity presentation from per-agent session pages and chat views.
+- [x] Add quiet 5-second selection-page refreshes that update existing rows without loading/repaint glitches.
+- [x] Preserve existing chat status text and tool-call reporting.
+- [x] Add focused tests for state precedence, acknowledgment, active polling visibility, and server-provided client rendering.
+- [x] Run server, shared-client, and available native-client validation; Android validation is blocked by the unavailable Java runtime.

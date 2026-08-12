@@ -42,6 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,6 +80,10 @@ fun SessionsHomeScreen(viewModel: RookViewModel) {
     val isRunning by viewModel.isRunning.collectAsState()
     val startingSession by viewModel.startingSession.collectAsState()
     val agentTree = remember(agents) { buildAgentTree(agents) }
+    DisposableEffect(Unit) {
+        viewModel.startSessionListPolling()
+        onDispose { viewModel.stopSessionListPolling() }
+    }
     var newSessionName by remember { mutableStateOf("") }
     var selectedRuntimeId by remember(agents) { mutableStateOf(agents.firstOrNull()?.id ?: "") }
     var sessionToRename by remember { mutableStateOf<AgentSessionSummary?>(null) }
@@ -140,7 +145,6 @@ fun SessionsHomeScreen(viewModel: RookViewModel) {
                         sessions.forEachIndexed { index, session ->
                             SessionRow(
                                 session = session,
-                                currentSessionId = currentSession?.id,
                                 enabled = !startingSession,
                                 onClick = { viewModel.resumeSession(session) },
                                 onRename = {
@@ -266,10 +270,12 @@ private fun NewChatNameField(value: String, onValueChange: (String) -> Unit, onS
 }
 
 @Composable
-private fun SessionRow(session: AgentSessionSummary, currentSessionId: String?, enabled: Boolean, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
-    val status = session.selectionStatus(currentSessionId)
+private fun SessionRow(session: AgentSessionSummary, enabled: Boolean, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+    val status = session.activityStatus
     val statusTint = when (status) {
         SessionSelectionStatus.ACTIVE -> PanelPalette.warning
+        SessionSelectionStatus.READY -> PanelPalette.info
+        SessionSelectionStatus.ERROR -> PanelPalette.danger
         SessionSelectionStatus.ON -> PanelPalette.success
         SessionSelectionStatus.OFF -> PanelPalette.textMuted
     }

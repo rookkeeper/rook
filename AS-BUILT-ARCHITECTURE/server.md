@@ -89,7 +89,8 @@ See also: [database.md](./database.md)
 - `GET /api/agent_runtimes`
 - `GET /api/sessions` — session listing over REST
 - `PATCH /api/sessions/:sessionId` — rename one session without changing recency ordering
-- `POST /api/sessions/:sessionId/touch` — mark one session as recently viewed so it sorts to the top
+- `POST /api/sessions/:sessionId/touch` — acknowledge pending attention, mark one session as recently viewed, and keep it open for activity acknowledgment
+- `POST /api/sessions/:sessionId/unview` — leave the session view so later completed turns can become pending attention
 - `DELETE /api/sessions/:sessionId` — delete one session plus transcript/workspace state
 - `GET /api/sessions/:sessionId/transcript` — server-owned normalized transcript for hydrators / second viewers
 - `POST /api/environments/register`
@@ -132,10 +133,13 @@ Persisted in SQLite:
 - `cwd`
 - `startedAt`
 - `updatedAt`
+- `attentionStatus` — durable `clear`, `ready`, or `error` enum constrained in SQLite
 
-The `GET /api/sessions` response additionally includes a `running` boolean
-(derived from whether a `SessionRuntime` is active for that session).
-`updatedAt` is used for both prompt activity and explicit view/touch operations,
+The `GET /api/sessions` response additionally includes `running` and the
+server-authoritative `activityStatus` (`active`, `ready`, `error`, `on`, or
+`off`). `active` is an in-flight ACP prompt; `ready` and `error` are durable
+pending attention states; `on` and `off` reflect live runtime liveness after
+attention precedence is applied. `updatedAt` is used for both prompt activity and explicit view/touch operations,
 so entering a session can move it to the top of the shared recents list without
 creating a synthetic prompt.
 

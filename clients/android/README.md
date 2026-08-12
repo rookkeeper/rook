@@ -2,7 +2,9 @@
 
 A native Android client at feature parity with the iOS/Mac apps — the fourth
 [Rook](../../README.md) client, speaking the same REST + ACP-over-WebSocket
-contract. No server changes required. Ported from the Swift clients in
+contract. The main session-selection list quietly polls every five seconds
+for the server-authoritative Active/Ready/Error/On/Off activity state; chat
+status remains local to the chat experience. Ported from the Swift clients in
 `clients/RookKit/` and `clients/iphone/`.
 
 ## Getting it running

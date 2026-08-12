@@ -65,15 +65,15 @@ final class ChatSessionController {
         handles = [:]
     }
 
-    func loadSessions() async {
-        sessionsLoading = true
+    func loadSessions(showLoading: Bool = true) async {
+        if showLoading { sessionsLoading = true }
         let timed = RookPerformance.begin(
             "MacLoadSessions",
             operation: "mac-load-sessions",
             logger: Self.logger,
             signposter: RookLog.sessionSignposter
         )
-        defer { sessionsLoading = false }
+        defer { if showLoading { sessionsLoading = false } }
         do {
             sessions = try await api.sessions()
             sessionsError = ""
@@ -90,7 +90,7 @@ final class ChatSessionController {
         do {
             if sessions.isEmpty { sessions = try await api.sessions() }
             guard let recent = sessions.first else { return }
-            resumeSession(recent)
+            resumeSession(recent, acknowledge: false)
         } catch {
             sessionsError = error.localizedDescription
         }
@@ -143,7 +143,7 @@ final class ChatSessionController {
         }
     }
 
-    func resumeSession(_ session: AgentSessionSummary, completion: (() -> Void)? = nil) {
+    func resumeSession(_ session: AgentSessionSummary, acknowledge: Bool = true, completion: (() -> Void)? = nil) {
         Self.logger.info("chat session controller resume session=\(session.id, privacy: .public) runtime=\(session.agent, privacy: .public) running=\(session.running, privacy: .public)")
         startingSession = true
         Task {
@@ -160,8 +160,10 @@ final class ChatSessionController {
                 } else {
                     try await handle.load()
                 }
-                let touched = try await api.touchSession(sessionId: session.id)
-                currentSession = touched
+                if acknowledge {
+                    let touched = try await api.touchSession(sessionId: session.id)
+                    currentSession = touched
+                }
                 await loadSessions()
                 if let refreshed = sessions.first(where: { $0.id == session.id }) {
                     currentSession = refreshed

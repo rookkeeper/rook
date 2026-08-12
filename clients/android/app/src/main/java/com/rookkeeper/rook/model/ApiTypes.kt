@@ -18,6 +18,8 @@ data class AgentDefinition(
 
 enum class SessionSelectionStatus(val label: String) {
     ACTIVE("Active"),
+    READY("Ready"),
+    ERROR("Error"),
     ON("On"),
     OFF("Off")
 }
@@ -27,13 +29,13 @@ data class AgentSessionSummary(val raw: JsonObject) {
     val agent: String get() = raw["runtimeId"]?.stringValue ?: ""
     val name: String get() = raw["title"]?.stringValue ?: "session"
     val running: Boolean get() = raw["running"]?.boolValue ?: false
+    val activityStatus: SessionSelectionStatus
+        get() = raw["activityStatus"]?.stringValue?.let { value -> SessionSelectionStatus.values().firstOrNull { it.name.lowercase() == value } }
+            // THIS IS FOR BACKWARDS COMPATIBILITY
+            // Older servers only expose running, so retain a non-selection-derived fallback during rollout.
+            ?: if (running) SessionSelectionStatus.ON else SessionSelectionStatus.OFF
     val connectedClients: Int get() = (raw["connectedClients"]?.numberValue ?: 0.0).toInt()
 
-    fun selectionStatus(currentSessionId: String?): SessionSelectionStatus = when {
-        running && currentSessionId == id -> SessionSelectionStatus.ACTIVE
-        running -> SessionSelectionStatus.ON
-        else -> SessionSelectionStatus.OFF
-    }
 
     val createdAt: Instant?
         get() = parseInstant(raw["startedAt"]?.stringValue)

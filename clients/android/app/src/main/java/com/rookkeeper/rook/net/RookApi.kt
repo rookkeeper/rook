@@ -115,6 +115,9 @@ class RookApi(
     suspend fun touchSession(sessionId: String): JsonObject =
         postJson("api/sessions/$sessionId/touch", buildJsonObject { }).jsonObject
 
+    suspend fun unviewSession(sessionId: String): JsonObject =
+        postJson("api/sessions/$sessionId/unview", buildJsonObject { }).jsonObject
+
     suspend fun deleteSession(sessionId: String) {
         deleteJson("api/sessions/$sessionId")
     }

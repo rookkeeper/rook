@@ -2,6 +2,18 @@
 
 A session is one public Rook conversation backed by one ACP runtime subprocess. An environment is a context such as a website, physical location, app surface, or project directory. A session may explicitly enter multiple environments.
 
+## Session-selection activity
+
+The session-selection list displays the server-authoritative `activityStatus`:
+
+- `Active` — an ACP turn is in progress.
+- `Ready` — a turn completed successfully and has not been acknowledged.
+- `Error` — a turn failed and has not been acknowledged.
+- `On` — the runtime is alive with no pending attention.
+- `Off` — the runtime is not alive with no pending attention.
+
+The precedence is `Active` > `Ready` > `Error` > `On` > `Off`. Opening a session acknowledges `Ready` or `Error`; automatic resume does not. The visible main selection list refreshes quietly every five seconds. Chat status text and tool-call details remain separate from this pill.
+
 ## Bundle decisions
 
 The user decides on bundles, not individual capabilities. Decisions are keyed by the exact canonical content hash:

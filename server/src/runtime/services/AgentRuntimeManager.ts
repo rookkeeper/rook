@@ -1,12 +1,14 @@
 import type { AgentRuntimeProfile } from "../../infrastructure/config/agentRuntimes.js";
 import type { EnvironmentManager } from "../../environments/services/EnvironmentManager.js";
 import type { EnvironmentBundleOffer, EnvironmentEventListener, EnvironmentResolution } from "../../environments/support/types.js";
-import type { SessionRecord, SessionRepository } from "../../sessions/repositories/SessionRepository.js";
+import type { SessionAttentionStatus, SessionRecord, SessionRepository } from "../../sessions/repositories/SessionRepository.js";
 import { SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotification, type SessionRuntimeConfiguration } from "../SessionRuntime.js";
 import { runtimeLaunchPlan, runtimeSessionParams } from "../runtimeLaunchPlan.js";
 import { SessionTranscriptRepository } from "../../sessions/repositories/SessionTranscriptRepository.js";
 import { normalizedEventsFromRuntimeMessage, runCompletedEvent, runFailedEvent } from "../../sessions/services/sessionTranscriptEvents.js";
 import { CapabilityWorkspaceManager, type CapabilityWorkspaceResult } from "../CapabilityWorkspaceManager.js";
+
+export type SessionActivityStatus = "active" | "ready" | "error" | "on" | "off";
 
 /**
  * Owns the configured runtime catalog and lazily creates one isolated
@@ -16,6 +18,8 @@ import { CapabilityWorkspaceManager, type CapabilityWorkspaceResult } from "../C
 export class AgentRuntimeManager {
   private readonly profilesById: Map<string, AgentRuntimeProfile>;
   private readonly sessionRuntimes = new Map<string, SessionRuntime>();
+  private readonly activeTurns = new Map<string, number>();
+  private readonly viewedSessions = new Set<string>();
   private readonly subscribers = new Map<string, Map<RuntimeNotification, { environmentOffers: boolean }>>();
   private readonly unresolvedOffers = new Map<string, Map<string, EnvironmentBundleOffer>>();
   private readonly runtimeSubscriptions = new Map<string, () => void>();
@@ -91,7 +95,21 @@ export class AgentRuntimeManager {
     await this.requireSession(sessionId);
     const updatedAt = new Date().toISOString();
     await this.sessions.touch(sessionId, updatedAt);
+    await this.sessions.setAttentionStatus(sessionId, "clear");
+    this.viewedSessions.add(sessionId);
     return await this.requireSession(sessionId);
+  }
+
+  async unviewSession(sessionId: string): Promise<void> {
+    await this.requireSession(sessionId);
+    this.viewedSessions.delete(sessionId);
+  }
+
+  activityStatus(sessionId: string, record?: SessionRecord): SessionActivityStatus {
+    if ((this.activeTurns.get(sessionId) ?? 0) > 0) return "active";
+    const attentionStatus = record?.attentionStatus ?? "clear";
+    if (attentionStatus === "ready" || attentionStatus === "error") return attentionStatus;
+    return this.sessionHasRuntime(sessionId) ? "on" : "off";
   }
 
   async createSession(runtimeId: string, params: JsonObject, title: string): Promise<SessionRecord> {
@@ -114,6 +132,7 @@ export class AgentRuntimeManager {
       cwd: workspace.root,
       startedAt: now,
       updatedAt: now,
+      attentionStatus: "clear",
     };
     await this.sessions.save(record);
     this.attachSessionRuntime(record.sessionId, runtime);
@@ -138,13 +157,17 @@ export class AgentRuntimeManager {
         ? { cwd: record.cwd, mcpServers: [], ...params, sessionId: record.runtimeSessionId }
         : { ...params, sessionId: record.runtimeSessionId };
     const privateReplay = method === "session/load" && options.privateReplayListener;
+    const isPrompt = method === "session/prompt";
     if (privateReplay) this.beginPrivateReplay(sessionId, options.privateReplayListener!);
+    if (isPrompt) this.beginTurn(sessionId);
+    let promptOutcome: SessionAttentionStatus | undefined;
     try {
       const result = await runtime.request(method, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration));
       if (method === "session/prompt") {
         const stopReason = typeof (result as JsonObject | undefined)?.stopReason === "string" ? String((result as JsonObject).stopReason) : "end_turn";
         await this.transcriptRepository?.append(sessionId, runCompletedEvent(stopReason));
         await this.workspaceManager.assessAndFlush();
+        promptOutcome = "ready";
       }
       await this.sessions.touch(sessionId);
       this.timingLog("request_complete", {
@@ -155,8 +178,9 @@ export class AgentRuntimeManager {
       });
       return rewriteResultSessionId(record, result);
     } catch (error) {
-      if (method === "session/prompt") {
+      if (isPrompt) {
         await this.transcriptRepository?.append(sessionId, runFailedEvent(error instanceof Error ? error.message : String(error)));
+        promptOutcome = "error";
       }
       this.timingLog("request_failed", {
         method,
@@ -167,6 +191,7 @@ export class AgentRuntimeManager {
       });
       throw error;
     } finally {
+      if (isPrompt) await this.finishTurn(sessionId, promptOutcome ?? "error");
       if (privateReplay) await this.endPrivateReplayAfterQuiet(sessionId);
     }
   }
@@ -276,7 +301,7 @@ export class AgentRuntimeManager {
   }
 
   sessionHasRuntime(sessionId: string): boolean {
-    return this.sessionRuntimes.has(sessionId);
+    return this.sessionRuntimes.get(sessionId)?.isAlive === true;
   }
 
   async close(): Promise<void> {
@@ -286,6 +311,8 @@ export class AgentRuntimeManager {
     await Promise.all([...this.sessionRuntimes.values()].map((runtime) => runtime.close()));
     await Promise.all([...this.workspaceResults.keys()].map((sessionId) => this.workspaceManager.removeSession(sessionId)));
     this.sessionRuntimes.clear();
+    this.activeTurns.clear();
+    this.viewedSessions.clear();
     this.inboundRequestRoutes.clear();
     if (this.environmentManager) {
       for (const sessionId of this.environmentSubscriptions) this.environmentManager.unsubscribe(sessionId);
@@ -299,13 +326,14 @@ export class AgentRuntimeManager {
 
   private runtimeFor(record: SessionRecord): SessionRuntime {
     const existing = this.sessionRuntimes.get(record.sessionId);
-    if (existing) return existing;
+    if (existing?.isStarted) return existing;
     const workspace = this.workspaceResults.get(record.sessionId);
     const runtime = this.createSessionRuntime(this.requireProfile(record.runtimeId), {
       ...this.baseRuntimeConfiguration(),
       ...(workspace ? { workspaceRoot: workspace.root } : {}),
     });
-    this.attachSessionRuntime(record.sessionId, runtime);
+    if (existing) this.replaceSessionRuntime(record.sessionId, runtime);
+    else this.attachSessionRuntime(record.sessionId, runtime);
     this.subscribeToEnvironments(record.sessionId);
     return runtime;
   }
@@ -355,6 +383,8 @@ export class AgentRuntimeManager {
     this.runtimeSubscriptions.get(sessionId)?.();
     this.runtimeSubscriptions.delete(sessionId);
     this.sessionRuntimes.delete(sessionId);
+    this.activeTurns.delete(sessionId);
+    this.viewedSessions.delete(sessionId);
     this.subscribers.delete(sessionId);
     this.privateReplayTargets.delete(sessionId);
     const timer = this.privateReplayIdleTimers.get(sessionId);
@@ -478,6 +508,20 @@ export class AgentRuntimeManager {
       }
       this.bumpPrivateReplayIdle(sessionId);
     });
+  }
+
+  private beginTurn(sessionId: string): void {
+    this.activeTurns.set(sessionId, (this.activeTurns.get(sessionId) ?? 0) + 1);
+  }
+
+  private async finishTurn(sessionId: string, outcome: SessionAttentionStatus): Promise<void> {
+    const remaining = (this.activeTurns.get(sessionId) ?? 1) - 1;
+    if (remaining > 0) {
+      this.activeTurns.set(sessionId, remaining);
+      return;
+    }
+    this.activeTurns.delete(sessionId);
+    await this.sessions.setAttentionStatus(sessionId, this.viewedSessions.has(sessionId) ? "clear" : outcome);
   }
 
   private async captureTranscriptEvents(sessionId: string, message: JsonRpcMessage): Promise<void> {

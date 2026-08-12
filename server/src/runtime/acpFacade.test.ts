@@ -213,7 +213,38 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
 
     const listResponse = await fetch(`http://127.0.0.1:${PORT}/api/sessions`);
     const list = await listResponse.json() as { sessions: Array<Record<string, unknown>> };
-    expect(list.sessions.some((session) => session.sessionId === sessionId)).toBe(true);
+    const listed = list.sessions.find((session) => session.sessionId === sessionId);
+    expect(listed?.activityStatus).toBe("ready");
+
+    const touched = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionId}/touch`, { method: "POST" }).then((response) => response.json()) as Record<string, unknown>;
+    expect(touched.activityStatus).toBe("on");
+
+    send(ws, 5, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "long task" }],
+    });
+    let activeStatus = "";
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const activeList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+      activeStatus = String(activeList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus ?? "");
+      if (activeStatus === "active") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(activeStatus).toBe("active");
+    while (true) {
+      const message = await recv(ws);
+      if (message.id === "5") break;
+    }
+
+    const unviewed = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionId}/unview`, { method: "POST" }).then((response) => response.json()) as Record<string, unknown>;
+    expect(unviewed.activityStatus).toBe("on");
+
+    await expect(request(ws, 5, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "boom" }],
+    })).rejects.toThrow("boom");
+    const failedList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(failedList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus).toBe("error");
 
     await request(ws, 6, "session/close", { sessionId });
     ws.close();

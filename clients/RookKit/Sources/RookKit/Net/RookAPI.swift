@@ -138,6 +138,10 @@ public struct RookAPI {
         AgentSessionSummary(raw: try await postJSON(path: "api/sessions/\(sessionId)/touch", payload: .object([:])) )
     }
 
+    public func unviewSession(sessionId: String) async throws -> AgentSessionSummary {
+        AgentSessionSummary(raw: try await postJSON(path: "api/sessions/\(sessionId)/unview", payload: .object([:])) )
+    }
+
     public func deleteSession(sessionId: String) async throws {
         _ = try await deleteJSON(path: "api/sessions/\(sessionId)")
     }

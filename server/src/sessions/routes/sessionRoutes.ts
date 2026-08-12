@@ -22,6 +22,13 @@ export async function registerSessionRoutes(app: FastifyInstance, runtimeManager
     return serializeSession(record, runtimeManager);
   });
 
+  app.post<{ Params: { sessionId: string } }>("/api/sessions/:sessionId/unview", async (request, reply) => {
+    if (!await ensureSessionExists(runtimeManager, request.params.sessionId, reply)) return;
+    await runtimeManager.unviewSession(request.params.sessionId);
+    const record = await runtimeManager.getSession(request.params.sessionId);
+    return serializeSession(record, runtimeManager);
+  });
+
   app.delete<{ Params: { sessionId: string } }>("/api/sessions/:sessionId", async (request, reply) => {
     if (!await ensureSessionExists(runtimeManager, request.params.sessionId, reply)) return;
     await runtimeManager.deleteSession(request.params.sessionId);
@@ -39,7 +46,10 @@ export async function registerSessionRoutes(app: FastifyInstance, runtimeManager
     const events = await transcriptRepository.list(sessionId);
     return {
       sessionId,
+      // THIS IS FOR BACKWARDS COMPATIBILITY
+      // Keep the legacy transcript liveness field alongside activityStatus.
       running: runtimeManager.sessionHasRuntime(sessionId),
+      activityStatus: runtimeManager.activityStatus(sessionId, record),
       events: events.map((item) => ({ sequence: item.sequence, createdAt: item.createdAt, ...item.event })),
     };
   });
@@ -63,7 +73,10 @@ function serializeSession(record: SessionRecord, runtimeManager: AgentRuntimeMan
     runtimeId: record.runtimeId,
     startedAt: record.startedAt,
     updatedAt: record.updatedAt,
+    // THIS IS FOR BACKWARDS COMPATIBILITY
+    // Keep the legacy liveness boolean while clients migrate to activityStatus.
     running: runtimeManager.sessionHasRuntime(record.sessionId),
+    activityStatus: runtimeManager.activityStatus(record.sessionId, record),
     supportsImagePrompts: runtimeManager.supportsImagePrompts(record.runtimeId),
   };
 }
