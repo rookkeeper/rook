@@ -65,7 +65,7 @@ Previews expose the bundle hash, active capability content, and repository ident
 The process-wide writable source is project-shaped and contains one environment directory per personal environment:
 
 ```text
-~/.rook/global-workspace/writable/<environment-key>/
+<ROOK_HOME>/global-workspace/writable/<environment-key>/
 ├── AGENTS.md
 └── .agents/
     └── skills/<skill-name>/
@@ -74,7 +74,7 @@ The process-wide writable source is project-shaped and contains one environment 
 Each session receives disposable links:
 
 ```text
-~/.rook/agent-workspaces/<session-id>/
+<ROOK_HOME>/agent-workspaces/<session-id>/
 ├── AGENTS.md
 └── .agents/
     ├── editable-per-environment/<environment> -> shared environment directory

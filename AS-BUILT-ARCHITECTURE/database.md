@@ -75,7 +75,7 @@ Rook derives one deterministic bundle hash from the active capability membership
 Writable personal content is materialized once per environment:
 
 ```text
-~/.rook/global-workspace/writable/<environment-key>/
+<ROOK_HOME>/global-workspace/writable/<environment-key>/
 ├── AGENTS.md
 └── .agents/skills/<skill-name>/
 ```
@@ -83,7 +83,7 @@ Writable personal content is materialized once per environment:
 Each session receives disposable links:
 
 ```text
-~/.rook/agent-workspaces/<session-id>/
+<ROOK_HOME>/agent-workspaces/<session-id>/
 ├── AGENTS.md
 ├── CLAUDE.md -> AGENTS.md
 ├── .agents/

@@ -5,17 +5,13 @@ description: Choose and follow the right debugging workflow for the Rook monorep
 
 # Debugging Rook
 
-Use this as a menu. Pick the cheapest lane that can answer the question, then
-escalate only when its evidence points elsewhere. The detailed procedures live
-in the linked references; read the relevant reference before running a longer
-workflow.
+Use this as a menu. Pick the cheapest lane that can answer the question, then escalate only when its evidence points elsewhere. The detailed procedures live in the linked references; read the relevant reference before running a longer workflow.
 
 ## Before you start
 
 - Work from the checkout that owns the behavior under test.
 - Source `.env` before using `rook`; CLI calls need `--auth-token "$ROOK_AUTH_TOKEN"`.
-- Prefer a worktree's isolated profile. Never modify real `~/.rook` state or stop
-  another developer's Rook instance.
+- Prefer a worktree's isolated profile. Never modify real `~/.rook` state or stop another developer's Rook instance.
 
 ## Pick a debugging lane
 
@@ -35,9 +31,7 @@ workflow.
 3. Server/environment diagnostics or Apple unified logs
 4. Codex computer use, and `sample` for a Mac beachball
 
-For a native hang, capture logs and a stack sample before trying to reproduce it
-through UI automation. For a client/server disagreement, compare the CLI
-transcript and client logs before inspecting the view.
+For a native hang, capture logs and a stack sample before trying to reproduce it through UI automation. For a client/server disagreement, compare the CLI transcript and client logs before inspecting the view.
 
 ## Quick entry points
 
@@ -51,12 +45,7 @@ rook exec --last-message-only --runtime MockAcpAgent \
 
 ## Reference map
 
-- [CLI and replay](references/cli-and-replay.md) — commands, mock-agent scenarios,
-  named sessions, transcript comparison, and replay failure modes.
-- [Server and environment](references/server-and-environment.md) — launcher
-  profiles, diagnostics, environment storage, tests, and prompt traces.
-- [Apple client logs](references/apple-client-logs.md) — Unified Logging capture,
-  categories, event vocabulary, performance interpretation, and iPhone/Mac
-  diagnostics.
-- [Native client UI](references/native-client-ui.md) — Mac launch/Codex usage,
-  beachball capture, and privacy cautions.
+- [CLI and replay](references/cli-and-replay.md) — commands, mock-agent scenarios, named sessions, transcript comparison, and replay failure modes.
+- [Server and environment](references/server-and-environment.md) — launcher profiles, diagnostics, environment storage, tests, and prompt traces.
+- [Apple client logs](references/apple-client-logs.md) — Unified Logging capture, categories, event vocabulary, performance interpretation, and iPhone/Mac diagnostics.
+- [Native client UI](references/native-client-ui.md) — Mac launch/Codex usage, beachball capture, and privacy cautions.

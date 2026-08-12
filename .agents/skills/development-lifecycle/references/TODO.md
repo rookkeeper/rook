@@ -1,5 +1,7 @@
 # Development work title
 
+> This document is created only after the developer explicitly agrees on the direction. It records decisions, not brainstorming hypotheses.
+
 ## Context
 
 Briefly describe what we are doing and why it matters now.

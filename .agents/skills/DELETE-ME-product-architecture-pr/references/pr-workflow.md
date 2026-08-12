@@ -38,13 +38,13 @@ Safe default:
 1. `git switch main`
 2. `git fetch origin`
 3. inspect divergence:
-   - `git log --oneline main..origin/main`
-   - `git log --oneline origin/main..main`
+- `git log --oneline main..origin/main`
+- `git log --oneline origin/main..main`
 4. if local `main` has **no local-only commits**, use:
-   - `git pull --ff-only`
+- `git pull --ff-only`
 5. if local `main` **does have local-only commits**, preserve them and integrate non-destructively:
-   - either `git merge origin/main`
-   - or create an integration branch and merge there first if conflict risk is high
+- either `git merge origin/main`
+- or create an integration branch and merge there first if conflict risk is high
 6. only stash unrelated dirty files if they block branch switching or merging, then restore them afterward
 
 The goal is to **merge remote `main` into local `main`, not overwrite local `main` with remote state**.

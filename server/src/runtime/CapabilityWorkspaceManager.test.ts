@@ -6,13 +6,69 @@ import path from "node:path";
 import { CapabilityWorkspaceManager, type CapabilityWorkspaceBundle } from "./CapabilityWorkspaceManager.js";
 
 const tempDirs: string[] = [];
+const originalRookHome = process.env.ROOK_HOME;
 
 afterEach(async () => {
   await Promise.all(tempDirs.map((directory) => rm(directory, { recursive: true, force: true })));
   tempDirs.length = 0;
+  if (originalRookHome === undefined) delete process.env.ROOK_HOME;
+  else process.env.ROOK_HOME = originalRookHome;
 });
 
 describe("CapabilityWorkspaceManager", () => {
+  it("defaults global and session workspace roots under ROOK_HOME", async () => {
+    const rookHome = await temporaryDirectory();
+    process.env.ROOK_HOME = rookHome;
+
+    const manager = await CapabilityWorkspaceManager.create();
+    const workspace = await manager.materialize("session", []);
+
+    expect(manager.globalRoot()).toBe(path.join(rookHome, "global-workspace"));
+    expect(workspace.root).toBe(path.join(rookHome, "agent-workspaces", "session"));
+    await manager.close();
+  });
+
+  it("keeps separate profile workspaces independent across startup, watching, and shutdown", async () => {
+    const firstHome = await temporaryDirectory();
+    const secondHome = await temporaryDirectory();
+    const firstPersisted: string[] = [];
+    const secondPersisted: string[] = [];
+
+    process.env.ROOK_HOME = firstHome;
+    const firstManager = await CapabilityWorkspaceManager.create();
+    const firstBundle = personalBundle({ skills: [skill("profile-skill", "first")] });
+    firstBundle.writeBackSkill = async (_id, files) => {
+      firstPersisted.push(files["profile-skill/SKILL.md"]!);
+      return true;
+    };
+    const firstWorkspace = await firstManager.materialize("first-session", [firstBundle]);
+
+    process.env.ROOK_HOME = secondHome;
+    const secondManager = await CapabilityWorkspaceManager.create();
+    const secondBundle = personalBundle({ skills: [skill("profile-skill", "second")] });
+    secondBundle.writeBackSkill = async (_id, files) => {
+      secondPersisted.push(files["profile-skill/SKILL.md"]!);
+      return true;
+    };
+    const secondWorkspace = await secondManager.materialize("second-session", [secondBundle]);
+
+    expect(secondManager.globalRoot()).toBe(path.join(secondHome, "global-workspace"));
+    expect(firstManager.globalRoot()).toBe(path.join(firstHome, "global-workspace"));
+    expect(await readFile(path.join(firstWorkspace.skillsRoot, "profile-skill", "SKILL.md"), "utf8")).toBe("first");
+    expect(await readFile(path.join(secondWorkspace.skillsRoot, "profile-skill", "SKILL.md"), "utf8")).toBe("second");
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await writeFile(path.join(firstWorkspace.skillsRoot, "profile-skill", "SKILL.md"), "first updated", "utf8");
+    await waitFor(() => firstPersisted.includes("first updated"));
+    expect(secondPersisted).toEqual([]);
+    expect(await readFile(path.join(secondWorkspace.skillsRoot, "profile-skill", "SKILL.md"), "utf8")).toBe("second");
+
+    await secondManager.close();
+    expect(await readFile(path.join(firstWorkspace.skillsRoot, "profile-skill", "SKILL.md"), "utf8")).toBe("first updated");
+    expect(await readFile(path.join(firstManager.globalRoot(), "manifest.json"), "utf8")).toContain("writable/web-mail-example");
+    await firstManager.close();
+  });
+
   it("clears the global workspace at startup and retains it after shutdown", async () => {
     const root = await temporaryDirectory();
     await writeFile(path.join(root, "stale.txt"), "stale", "utf8");

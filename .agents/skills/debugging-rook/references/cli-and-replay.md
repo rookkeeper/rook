@@ -1,8 +1,6 @@
 # CLI, protocol, and replay debugging
 
-Use this lane first for runtime behavior, ACP messages, prompt delivery,
-tool calls, session state, and transcript rendering. It is faster and more
-deterministic than rebuilding a native client.
+Use this lane first for runtime behavior, ACP messages, prompt delivery, tool calls, session state, and transcript rendering. It is faster and more deterministic than rebuilding a native client.
 
 ## Authentication
 
@@ -41,8 +39,7 @@ rook exec --sessionId <id> --auth-token "$ROOK_AUTH_TOKEN" \
   --leave web:example.com "done"
 ```
 
-`--join` and `--leave` are repeatable and work with both `--runtime` and
-`--sessionId`. `--title` only works with `--runtime` when creating a session.
+`--join` and `--leave` are repeatable and work with both `--runtime` and `--sessionId`. `--title` only works with `--runtime` when creating a session.
 
 ## Mock agent
 
@@ -55,8 +52,7 @@ The mock agent:
 - handles jokes, `ls`, arithmetic, and prime checking
 - serializes replay and prompt processing with `enqueue`
 
-Add a deterministic scenario to this fixture when testing client protocol
-behavior. Do not reach for a real model until the mock scenario is understood.
+Add a deterministic scenario to this fixture when testing client protocol behavior. Do not reach for a real model until the mock scenario is understood.
 
 ## Transcript replay comparison
 

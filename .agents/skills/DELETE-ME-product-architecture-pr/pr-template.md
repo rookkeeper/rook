@@ -60,4 +60,3 @@ _Optional. Abstract only — major types, services, APIs, events, schemas._
 - [ ] [How reviewer verifies the main behavior]
 - [ ] [Regression or edge case checked]
 - [ ] [Docs render / links valid]
-

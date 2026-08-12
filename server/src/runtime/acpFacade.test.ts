@@ -12,7 +12,7 @@ const CANONICAL_EXAMPLE_BUNDLE_ID = "33333333-3333-4333-8333-333333333333";
 const PERSONAL_EXAMPLE_BUNDLE_ID = "44444444-4444-4444-8444-444444444444";
 
 function agentWorkspaceRoot(home: string, sessionId: string): string {
-  return path.join(home, ".rook", "agent-workspaces", sessionId);
+  return path.join(process.env.ROOK_HOME ?? path.join(home, ".rook"), "agent-workspaces", sessionId);
 }
 
 function connect(path = "/api/ws"): Promise<WebSocket> {
@@ -68,6 +68,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   let tempConfigDir: string;
   const originalRuntimePath = process.env.ROOK_AGENT_RUNTIMES_PATH;
   const originalHome = process.env.HOME;
+  const originalRookHome = process.env.ROOK_HOME;
 
   beforeAll(async () => {
     tempConfigDir = mkdtempSync(path.join(os.tmpdir(), "rook-acp-facade-"));
@@ -94,6 +95,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     }));
     process.env.ROOK_AGENT_RUNTIMES_PATH = runtimesPath;
     process.env.HOME = tempConfigDir;
+    process.env.ROOK_HOME = path.join(tempConfigDir, "profile-home");
     const canonicalRepository = new SQLiteEnvironmentRepository(path.join(tempConfigDir, "canonical.db"), "canonical");
     canonicalRepository.saveResult({
       environment: { id: "mac:md.obsidian", displayName: "md.obsidian", description: "Obsidian vault" },
@@ -151,6 +153,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       environmentDecisionStoreLocation: ":memory:",
       authToken: "",
     });
+    expect(existsSync(path.join(process.env.ROOK_HOME!, "global-workspace", "manifest.json"))).toBe(true);
     await app.listen({ host: "127.0.0.1", port: PORT });
   });
 
@@ -160,6 +163,8 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     else process.env.ROOK_AGENT_RUNTIMES_PATH = originalRuntimePath;
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
+    if (originalRookHome === undefined) delete process.env.ROOK_HOME;
+    else process.env.ROOK_HOME = originalRookHome;
     rmSync(tempConfigDir, { recursive: true, force: true });
   });
 
