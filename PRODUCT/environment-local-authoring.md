@@ -29,7 +29,7 @@ Each capability has a UUID `TEXT` id, a human-readable name, a type, the complet
 Rook keeps one shared writable source per personal environment:
 
 ```text
-~/.rook/global-workspace/writable/<environment-key>/
+<ROOK_HOME>/global-workspace/writable/<environment-key>/
 ├── AGENTS.md
 └── .agents/skills/<skill-name>/
 ```
@@ -37,7 +37,7 @@ Rook keeps one shared writable source per personal environment:
 Each session links into that source:
 
 ```text
-~/.rook/agent-workspaces/<session-id>/.agents/
+<ROOK_HOME>/agent-workspaces/<session-id>/.agents/
 ├── editable-per-environment/<environment> -> shared environment directory
 └── skills/<visible-name>                  -> shared skill source
 ```

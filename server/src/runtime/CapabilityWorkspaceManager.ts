@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { EnvironmentBundle, BundleArtifact } from "../shared/environmentRepository.js";
 import { ProjectDirectoryEnvironmentRepository } from "../environments/repositories/ProjectDirectoryEnvironmentRepository.js";
+import { getRookHomeDir } from "../infrastructure/config/configPaths.js";
 import { DEFAULT_EMPTY_INSTRUCTIONS, renderAggregateAgents, type AggregateFact, type AggregateSource, writableInstructionsContent } from "./workspace/renderAggregateAgents.js";
 import { clearDirectory, makeReadOnly, materializeReadOnlyFile, pathExists, readSkillFiles, removeTree, replaceWithSymlink, safeChild, skillDirectories, writeArtifact } from "./workspace/workspaceFs.js";
 import { environmentNicknames, nextVisibleSkillName, personalEnvironmentPath, personalEnvironmentPathForSource, personalSourcePath, projectDirectory, safeName, sameSource, sourceDescriptor, sourceDigest, sourceFingerprint, type SourceKind, type WorkspaceSource, uniqueSkillName } from "./workspace/workspaceSources.js";
@@ -65,8 +66,9 @@ export class CapabilityWorkspaceManager {
   }
 
   static async create(options: { workspaceRoot?: string; sessionRoot?: string } = {}): Promise<CapabilityWorkspaceManager> {
-    const workspaceRoot = options.workspaceRoot ?? path.join(os.homedir(), ".rook", "global-workspace");
-    const sessionRoot = options.sessionRoot ?? path.join(os.homedir(), ".rook", "agent-workspaces");
+    const rookHome = getRookHomeDir();
+    const workspaceRoot = options.workspaceRoot ?? path.join(rookHome, "global-workspace");
+    const sessionRoot = options.sessionRoot ?? path.join(rookHome, "agent-workspaces");
     const projectStagingRoot = await mkdtemp(path.join(os.tmpdir(), "rook-project-authoring-"));
     await clearDirectory(workspaceRoot);
     await mkdir(sessionRoot, { recursive: true });
