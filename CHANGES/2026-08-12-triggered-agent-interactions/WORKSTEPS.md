@@ -2,8 +2,8 @@
 
 - [x] Orient to the project
 - [x] Create the change directory and lifecycle record
-- [ ] Brainstorm to work, or bypass because the work is simple or obvious; awaiting explicit agreement
-- [ ] Record the decision and TODO
+- [x] Brainstorm to work, or bypass because the work is simple or obvious; awaiting explicit agreement
+- [x] Record the decision and TODO
 - [ ] Prepare the implementation workspace
 - [ ] Implement and test
 - [ ] Mark compatibility surfaces
