@@ -77,7 +77,8 @@ Android defines Kotlin equivalents of the Swift shared models:
 4. `viewModel.start()` wires socket collectors, location callbacks, and periodic health refresh
 
 ### Chat flow
-1. `RookViewModel` opens an unbound ACP socket only for `session/new`, then the server binds it to the created session
+1. session selection partitions REST summaries into server-owned Pinned and recency-sorted Recent sections; Pin/Unpin is exposed from the row overflow menu
+2. `RookViewModel` opens an unbound ACP socket only for `session/new`, then the server binds it to the created session
 2. resuming an existing session opens `/api/ws?sessionId=...` and selects that session
 3. running sessions hydrate from `GET /api/sessions/:id/transcript`; inactive sessions use ACP `session/load`
 4. `AcpSocket` reduces standard WebSocket ACP frames into `AcpClientEvent`

@@ -195,6 +195,19 @@ final class ChatSessionController {
         }
     }
 
+    func setSessionPinned(_ session: AgentSessionSummary, pinned: Bool) {
+        Task {
+            do {
+                let updated = try await api.setSessionPinned(sessionId: session.id, pinned: pinned)
+                replaceSessionSummary(updated)
+                if currentSession?.id == session.id { currentSession = updated }
+                await loadSessions()
+            } catch {
+                sessionsError = error.localizedDescription
+            }
+        }
+    }
+
     func deleteSession(_ session: AgentSessionSummary, completion: ((Bool) -> Void)? = nil) {
         Task {
             do {

@@ -10,9 +10,15 @@ export async function registerSessionRoutes(app: FastifyInstance, runtimeManager
     return { sessions: records.map((record) => serializeSession(record, runtimeManager)) };
   });
 
-  app.patch<{ Params: { sessionId: string }; Body: { title?: string } }>("/api/sessions/:sessionId", async (request, reply) => {
+  app.patch<{ Params: { sessionId: string }; Body: { title?: string; pinned?: boolean } }>("/api/sessions/:sessionId", async (request, reply) => {
     if (!await ensureSessionExists(runtimeManager, request.params.sessionId, reply)) return;
-    const record = await runtimeManager.renameSession(request.params.sessionId, typeof request.body?.title === "string" ? request.body.title : "session");
+    let record = await runtimeManager.getSession(request.params.sessionId);
+    if (typeof request.body?.title === "string") {
+      record = await runtimeManager.renameSession(request.params.sessionId, request.body.title);
+    }
+    if (typeof request.body?.pinned === "boolean") {
+      record = await runtimeManager.setSessionPinned(request.params.sessionId, request.body.pinned);
+    }
     return serializeSession(record, runtimeManager);
   });
 
@@ -71,6 +77,7 @@ function serializeSession(record: SessionRecord, runtimeManager: AgentRuntimeMan
     runtimeId: record.runtimeId,
     startedAt: record.startedAt,
     updatedAt: record.updatedAt,
+    pinned: record.pinned,
     running: runtimeManager.sessionHasRuntime(record.sessionId),
     activityStatus: runtimeManager.activityStatus(record.sessionId, record),
     supportsImagePrompts: runtimeManager.supportsImagePrompts(record.runtimeId),

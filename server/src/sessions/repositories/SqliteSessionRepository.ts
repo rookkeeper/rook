@@ -25,6 +25,7 @@ export class SqliteSessionRepository implements SessionRepository {
         started_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         attention_status TEXT NOT NULL DEFAULT 'clear' CHECK (attention_status IN ('clear', 'ready', 'error')),
+        pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
         UNIQUE(runtime_id, runtime_session_id)
       );
       CREATE INDEX IF NOT EXISTS sessions_updated_at_idx ON sessions(updated_at DESC);
@@ -40,14 +41,14 @@ export class SqliteSessionRepository implements SessionRepository {
 
   async list(): Promise<SessionRecord[]> {
     return this.db.prepare(`
-      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status
+      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status, pinned
       FROM sessions ORDER BY updated_at DESC, started_at DESC, session_id DESC
     `).all().map(rowToRecord);
   }
 
   async get(sessionId: string): Promise<SessionRecord | undefined> {
     const row = this.db.prepare(`
-      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status
+      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status, pinned
       FROM sessions WHERE session_id = ?
     `).get(sessionId);
     return row ? rowToRecord(row) : undefined;
@@ -55,20 +56,25 @@ export class SqliteSessionRepository implements SessionRepository {
 
   async save(record: SessionRecord): Promise<void> {
     this.db.prepare(`
-      INSERT INTO sessions (session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sessions (session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status, pinned)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id) DO UPDATE SET
         runtime_id = excluded.runtime_id,
         runtime_session_id = excluded.runtime_session_id,
         title = excluded.title,
         cwd = excluded.cwd,
         started_at = excluded.started_at,
-        updated_at = excluded.updated_at
-    `).run(record.sessionId, record.runtimeId, record.runtimeSessionId, record.title, record.cwd, record.startedAt, record.updatedAt, record.attentionStatus);
+        updated_at = excluded.updated_at,
+        pinned = excluded.pinned
+    `).run(record.sessionId, record.runtimeId, record.runtimeSessionId, record.title, record.cwd, record.startedAt, record.updatedAt, record.attentionStatus, record.pinned ? 1 : 0);
   }
 
   async rename(sessionId: string, title: string): Promise<void> {
     this.db.prepare("UPDATE sessions SET title = ? WHERE session_id = ?").run(title, sessionId);
+  }
+
+  async setPinned(sessionId: string, pinned: boolean): Promise<void> {
+    this.db.prepare("UPDATE sessions SET pinned = ? WHERE session_id = ?").run(pinned ? 1 : 0, sessionId);
   }
 
   async touch(sessionId: string, updatedAt = new Date().toISOString()): Promise<void> {
@@ -111,8 +117,17 @@ export class SqliteSessionRepository implements SessionRepository {
 
   private ensureAttentionStatusColumn(): void {
     const columns = this.db.prepare("PRAGMA table_info(sessions)").all() as Array<Record<string, unknown>>;
-    if (columns.some((column) => column.name === "attention_status")) return;
-    this.db.exec("ALTER TABLE sessions ADD COLUMN attention_status TEXT NOT NULL DEFAULT 'clear' CHECK (attention_status IN ('clear', 'ready', 'error'))");
+    if (!columns.some((column) => column.name === "attention_status")) {
+      this.db.exec("ALTER TABLE sessions ADD COLUMN attention_status TEXT NOT NULL DEFAULT 'clear' CHECK (attention_status IN ('clear', 'ready', 'error'))");
+    }
+    this.ensurePinnedColumn();
+  }
+
+  // THIS IS FOR BACKWARDS COMPATIBILITY: existing SQLite databases may predate session pin metadata.
+  private ensurePinnedColumn(): void {
+    const columns = this.db.prepare("PRAGMA table_info(sessions)").all() as Array<Record<string, unknown>>;
+    if (columns.some((column) => column.name === "pinned")) return;
+    this.db.exec("ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))");
   }
 }
 
@@ -127,6 +142,7 @@ function rowToRecord(row: unknown): SessionRecord {
     startedAt: String(value.started_at),
     updatedAt: String(value.updated_at),
     attentionStatus: normalizeAttentionStatus(value.attention_status),
+    pinned: value.pinned === 1 || value.pinned === true,
   };
 }
 

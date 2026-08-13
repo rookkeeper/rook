@@ -42,6 +42,8 @@ public struct AgentSessionSummary: Equatable, Identifiable {
     public var supportsImagePrompts: Bool { raw["supportsImagePrompts"]?.boolValue ?? false }
     public var name: String { raw["title"]?.stringValue ?? "session" }
     public var running: Bool { raw["running"]?.boolValue ?? false }
+    // THIS IS FOR BACKWARDS COMPATIBILITY: older servers omit pin metadata.
+    public var pinned: Bool { raw["pinned"]?.boolValue ?? false }
     public var activityStatus: SessionSelectionStatus {
         SessionSelectionStatus(rawValue: raw["activityStatus"]?.stringValue ?? "") ?? .off
     }
@@ -81,6 +83,7 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         if let supportsImagePrompts = raw["supportsImagePrompts"]?.boolValue { object["supportsImagePrompts"] = .bool(supportsImagePrompts) }
         if let connectedClients = raw["connectedClients"]?.numberValue { object["connectedClients"] = .number(connectedClients) }
         if let activityStatus = raw["activityStatus"]?.stringValue { object["activityStatus"] = .string(activityStatus) }
+        object["pinned"] = .bool(pinned)
         if let updatedAtISO { object["updatedAt"] = .string(updatedAtISO) }
         else if let updatedAt = raw["updatedAt"]?.stringValue { object["updatedAt"] = .string(updatedAt) }
         return AgentSessionSummary(raw: .object(object))

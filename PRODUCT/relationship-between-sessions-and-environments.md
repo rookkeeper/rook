@@ -2,6 +2,15 @@
 
 A session is one public Rook conversation backed by one ACP runtime subprocess. An environment is a context such as a website, physical location, app surface, or project directory. A session may explicitly enter multiple environments.
 
+## Session-selection organization
+
+The shared session-selection view has two sections:
+
+- **Pinned** — sessions with durable server-owned pin state, shown above Recent and excluded from it.
+- **Recent** — all unpinned sessions, sorted by `updatedAt` descending.
+
+Pinning or unpinning does not change recency. Mac supports dragging a row into Pinned; iPhone and Android expose Pin/Unpin through native row-management actions. Empty pinned guidance is platform-specific and should describe only that platform's available action.
+
 ## Session-selection activity
 
 The session-selection list displays the server-authoritative `activityStatus`:

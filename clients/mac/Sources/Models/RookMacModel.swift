@@ -496,6 +496,10 @@ final class RookMacModel: ObservableObject {
         chatSessionController.renameSession(session, title: title)
     }
 
+    func setSessionPinned(_ session: AgentSessionSummary, pinned: Bool) {
+        chatSessionController.setSessionPinned(session, pinned: pinned)
+    }
+
     func deleteSession(_ session: AgentSessionSummary) {
         let deletingCurrent = currentSession?.id == session.id
         chatSessionController.deleteSession(session) { [weak self] succeeded in

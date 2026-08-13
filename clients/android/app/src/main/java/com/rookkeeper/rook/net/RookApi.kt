@@ -118,6 +118,12 @@ class RookApi(
     suspend fun unviewSession(sessionId: String): JsonObject =
         postJson("api/sessions/$sessionId/unview", buildJsonObject { }).jsonObject
 
+    suspend fun setSessionPinned(sessionId: String, pinned: Boolean): JsonObject =
+        patchJson(
+            "api/sessions/$sessionId",
+            buildJsonObject { put("pinned", pinned) }
+        ).jsonObject
+
     suspend fun deleteSession(sessionId: String) {
         deleteJson("api/sessions/$sessionId")
     }
