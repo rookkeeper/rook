@@ -305,8 +305,8 @@ class RookViewModel(
         if (sessionListPollingJob != null) return
         sessionListPollingJob = scope.launch {
             while (true) {
-                delay(5_000)
                 loadSessions("", showLoading = false)
+                delay(5_000)
             }
         }
     }

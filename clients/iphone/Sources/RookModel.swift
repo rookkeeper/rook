@@ -736,9 +736,10 @@ final class RookModel: ObservableObject {
         guard sessionListPollingTask == nil else { return }
         sessionListPollingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                guard !Task.isCancelled, let self else { return }
+                guard let self else { return }
                 await self.loadSessions(showLoading: false)
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
     }

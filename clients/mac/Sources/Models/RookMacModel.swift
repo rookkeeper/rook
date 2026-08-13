@@ -436,10 +436,11 @@ final class RookMacModel: ObservableObject {
         guard sessionListPollingTask == nil else { return }
         sessionListPollingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                guard !Task.isCancelled, let self else { return }
+                guard let self else { return }
                 await self.chatSessionController.loadSessions(showLoading: false)
+                guard !Task.isCancelled else { return }
                 self.syncChatState()
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
     }
