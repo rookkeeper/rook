@@ -1,6 +1,7 @@
 # Outcomes
 
 - Added server-authoritative session activity indicators and quiet selection-list polling.
+- Selection lists now refresh immediately when opened or revisited on Mac, iPhone, and Android, then continue polling every five seconds.
 - Durable attention state and prompt recency keep externally triggered sessions visible and correctly ordered.
 - Removed rollout-only client fallbacks and preserved chat status behavior.
 - Validated server, RookKit, Mac, and iPhone; Android validation remains deferred because Java was unavailable.
