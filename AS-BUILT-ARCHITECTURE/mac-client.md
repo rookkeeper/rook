@@ -108,7 +108,7 @@ Via `RookKit`:
 4. on server availability it loads runtimes/sessions and auto-resumes the most recent session
 
 ### Chat flow
-1. session selection partitions REST summaries into server-owned Pinned and recency-sorted Recent sections; Mac supports row drag/drop into Pinned and row-menu pin/unpin
+1. session selection partitions REST summaries into server-owned Pinned and recency-sorted Recent sections; Mac supports row drag/drop into a specific Pinned position and row-menu pin/unpin
 2. session list is fetched via REST, not the WebSocket
 3. starting a new session opens an unbound WebSocket, sends ACP `session/new`, then keeps that same socket as the new session's `SessionHandle`
 4. resuming an existing session creates or retrieves a `SessionHandle`
@@ -183,7 +183,7 @@ diagnostics.
 - the mac app is both a client and an environment provider
 - a local-only background watchdog records main-run-loop stalls without sending telemetry or collecting user content
 - session discovery is REST; agent interaction is one ACP WebSocket per session
-- pinned state is server-owned session metadata shared across clients; Mac uses drag/drop plus secondary row actions
+- pinned state and pinned order are server-owned session metadata shared across clients; Mac uses drag/drop plus secondary row actions
 - `SessionHandle` isolates all session state — blocks, streaming buffers, reconnection — so switching never tears down a running session
 - environment registration is layered: base app identity plus exactly one context provider for the focused bundle id
 - generic environment detection is AX-based and intentionally app-agnostic; app-specific providers are selected by bundle-id lookup from an explicit registry with a generic fallback

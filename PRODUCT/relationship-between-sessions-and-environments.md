@@ -6,10 +6,10 @@ A session is one public Rook conversation backed by one ACP runtime subprocess. 
 
 The shared session-selection view has two sections:
 
-- **Pinned** — sessions with durable server-owned pin state, shown above Recent and excluded from it.
+- **Pinned** — sessions with durable server-owned pin state and pinned order, shown above Recent and excluded from it.
 - **Recent** — all unpinned sessions, sorted by `updatedAt` descending.
 
-Pinning or unpinning does not change recency. Mac supports dragging a row into Pinned; iPhone and Android expose Pin/Unpin through native row-management actions. Empty pinned guidance is platform-specific and should describe only that platform's available action.
+Pinned sessions follow their durable pinned order rather than recency. Pinning, unpinning, or reordering does not change recency. Mac supports dragging a row into Pinned; iPhone and Android expose Pin/Unpin through native row-management actions. Empty pinned guidance is platform-specific and should describe only that platform's available action.
 
 ## Session-selection activity
 

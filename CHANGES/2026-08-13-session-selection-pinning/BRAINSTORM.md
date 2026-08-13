@@ -34,16 +34,16 @@ This work is tracked primarily by GitHub issue #150 (pinned sessions) and the re
 
 **Preferred:** use a hybrid list:
 
-- **Pinned**: pinned sessions, kept out of Recent; initially sorted by the same recency key as the regular list.
+- **Pinned**: pinned sessions, kept out of Recent and sorted by durable user-controlled order.
 - **Recent**: every unpinned session, sorted by server `updatedAt DESC`.
 
-This gives pinning a stable “keep this easy to find” meaning without introducing a second ordering model. It also makes the pinned section look and behave like the existing session list. A future explicit reorder feature could add ordering metadata later, but arbitrary manual order is not needed to deliver pinning.
+This gives pinning a stable “keep this easy to find” meaning while allowing the Mac user to curate the pinned list. Recent activity still has independent recency semantics.
 
 Questions to confirm:
 
-- Should pinned sessions also be recency-sorted, or should pin order be preserved? Recommendation: recency-sort them for this first pass, unless the user specifically wants a curated order.
+- Should pinned sessions also be recency-sorted, or should pin order be preserved? **Decision: preserve durable pin order.**
 - Should a newly created session be automatically pinned? Recommendation: no.
-- Should opening/touching a pinned session change its position? Recommendation: yes, if both sections use recency ordering; pinning only changes the section.
+- Should opening/touching a pinned session change its position? **Decision: no.** Opening affects Recent recency semantics only; it does not reorder Pinned.
 - Should pinning update recency? Recommendation: no. Pin/unpin changes organization, not “last viewed.”
 
 ### Mac interaction
@@ -56,7 +56,7 @@ Confirmed direction:
 - Do not make rows look like a reorder editor or add a permanent drag handle.
 - Keep a visible pin/unpin action in the existing row actions menu (and/or on hover) so pinning is discoverable and accessible without drag.
 - Drop feedback should be restrained: highlight the Pinned section/empty box while dragging, then show a short state change.
-- Because pinned items are recency-sorted, dragging within Pinned should not imply manual ordering.
+- Pinned items use durable manual order. Dragging a row onto a particular pinned row position persists that position.
 - The empty-state instruction should be Mac-specific: **“Drag sessions here to pin.”**
 
 A native SwiftUI `draggable`/`dropDestination` path is preferable to gesture logic that competes with the row’s click action. The exact API and minimum macOS deployment target need checking before implementation.
@@ -100,10 +100,10 @@ When there are no sessions at all, retain the existing “No sessions yet” emp
 
 Confirmed direction:
 
-- Implement durable server-side pin state shared by all clients.
-- Render `Pinned` above `Recent`; exclude pinned sessions from Recent; sort both sections by the existing server recency ordering for the first release.
+- Implement durable server-side pin state and pinned order shared by all clients.
+- Render `Pinned` above `Recent`; exclude pinned sessions from Recent; use durable pinned order for Pinned and existing server recency ordering for Recent.
 - Make the Mac session list/card consume available height instead of using a fixed seven-row cap; preserve the window’s sensible minimum height and scrolling for overflow. Apply this to the session-selection surfaces that currently use the constrained list layout.
-- Mac: direct row drag into Pinned plus an explicit Pin/Unpin secondary action. Empty pinned instruction: **“Drag sessions here to pin.”**
+- Mac: direct row drag into Pinned or onto a particular pinned position, plus an explicit Pin/Unpin secondary action. Empty pinned instruction: **“Drag sessions here to pin.”**
 - iPhone: explicit Pin/Unpin through native secondary actions; mobile drag is not required for the first release. Empty pinned instruction: **“Pin a session to keep it here.”**
 - Android: overflow-menu Pin/Unpin; mobile drag is deferred. Empty pinned instruction: **“Pin a session to keep it here.”**
 - Use a restrained section header/divider and a contextual empty pinned drop target.

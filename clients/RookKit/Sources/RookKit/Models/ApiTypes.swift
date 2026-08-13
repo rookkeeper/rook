@@ -44,6 +44,7 @@ public struct AgentSessionSummary: Equatable, Identifiable {
     public var running: Bool { raw["running"]?.boolValue ?? false }
     // THIS IS FOR BACKWARDS COMPATIBILITY: older servers omit pin metadata.
     public var pinned: Bool { raw["pinned"]?.boolValue ?? false }
+    public var pinnedOrder: Int { Int(raw["pinnedOrder"]?.numberValue ?? 0) }
     public var activityStatus: SessionSelectionStatus {
         SessionSelectionStatus(rawValue: raw["activityStatus"]?.stringValue ?? "") ?? .off
     }
@@ -84,6 +85,7 @@ public struct AgentSessionSummary: Equatable, Identifiable {
         if let connectedClients = raw["connectedClients"]?.numberValue { object["connectedClients"] = .number(connectedClients) }
         if let activityStatus = raw["activityStatus"]?.stringValue { object["activityStatus"] = .string(activityStatus) }
         object["pinned"] = .bool(pinned)
+        object["pinnedOrder"] = .number(Double(pinnedOrder))
         if let updatedAtISO { object["updatedAt"] = .string(updatedAtISO) }
         else if let updatedAt = raw["updatedAt"]?.stringValue { object["updatedAt"] = .string(updatedAt) }
         return AgentSessionSummary(raw: .object(object))

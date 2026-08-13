@@ -208,6 +208,19 @@ final class ChatSessionController {
         }
     }
 
+    func reorderPinnedSessions(_ sessionIds: [String]) {
+        Task {
+            do {
+                sessions = try await api.reorderPinnedSessions(sessionIds: sessionIds)
+                if let currentId = currentSession?.id, let refreshed = sessions.first(where: { $0.id == currentId }) {
+                    currentSession = refreshed
+                }
+            } catch {
+                sessionsError = error.localizedDescription
+            }
+        }
+    }
+
     func deleteSession(_ session: AgentSessionSummary, completion: ((Bool) -> Void)? = nil) {
         Task {
             do {

@@ -932,7 +932,11 @@ private struct MacSessionSections: View {
     var onDelete: (AgentSessionSummary) -> Void
     @State private var isDropTargeted = false
 
-    private var pinned: [AgentSessionSummary] { model.sessions.filter(\.pinned) }
+    private var pinned: [AgentSessionSummary] {
+        model.sessions.filter(\.pinned).sorted {
+            $0.pinnedOrder == $1.pinnedOrder ? $0.id < $1.id : $0.pinnedOrder < $1.pinnedOrder
+        }
+    }
     private var recent: [AgentSessionSummary] { model.sessions.filter { !$0.pinned } }
 
     var body: some View {
@@ -945,7 +949,7 @@ private struct MacSessionSections: View {
                         .foregroundStyle(PanelPalette.secondaryText)
                         .frame(maxWidth: .infinity, minHeight: 54)
                 } else {
-                    rows(pinned)
+                    rows(pinned, supportsPositionDrop: true)
                 }
             }
             .padding(.horizontal, 6)
@@ -958,12 +962,7 @@ private struct MacSessionSections: View {
                     .strokeBorder(isDropTargeted ? PanelPalette.accent : PanelPalette.border.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [5]))
             )
             .dropDestination(for: String.self) { ids, _ in
-                for id in ids {
-                    if let session = model.sessions.first(where: { $0.id == id }), !session.pinned {
-                        model.setSessionPinned(session, pinned: true)
-                    }
-                }
-                return !ids.isEmpty
+                drop(ids, at: pinned.count)
             } isTargeted: { isDropTargeted = $0 }
 
             sectionHeader("Recent", systemImage: "clock.arrow.circlepath")
@@ -974,7 +973,7 @@ private struct MacSessionSections: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 12)
             } else {
-                rows(recent)
+                rows(recent, supportsPositionDrop: false)
             }
         }
     }
@@ -987,9 +986,9 @@ private struct MacSessionSections: View {
     }
 
     @ViewBuilder
-    private func rows(_ sessions: [AgentSessionSummary]) -> some View {
+    private func rows(_ sessions: [AgentSessionSummary], supportsPositionDrop: Bool) -> some View {
         ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
-            HStack(spacing: 8) {
+            let row = HStack(spacing: 8) {
                 Button { model.resumeSession(session) } label: {
                     SessionRow(session: session)
                 }
@@ -1006,8 +1005,26 @@ private struct MacSessionSections: View {
                     onDelete: { onDelete(session) }
                 )
             }
+            if supportsPositionDrop {
+                row.dropDestination(for: String.self) { ids, _ in
+                    drop(ids, at: index)
+                }
+            } else {
+                row
+            }
             if index < sessions.count - 1 { Divider().opacity(0.45) }
         }
+    }
+
+    private func drop(_ ids: [String], at index: Int) -> Bool {
+        let movingIds = ids.filter { id in model.sessions.contains(where: { $0.id == id }) }
+        guard !movingIds.isEmpty else { return false }
+        let targetId = index < pinned.count ? pinned[index].id : nil
+        var ordered = pinned.map(\.id).filter { !movingIds.contains($0) }
+        let insertionIndex = targetId.flatMap { ordered.firstIndex(of: $0) } ?? ordered.count
+        ordered.insert(contentsOf: movingIds, at: insertionIndex)
+        model.reorderPinnedSessions(ordered)
+        return true
     }
 }
 

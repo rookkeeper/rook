@@ -26,6 +26,7 @@ export class SqliteSessionRepository implements SessionRepository {
         updated_at TEXT NOT NULL,
         attention_status TEXT NOT NULL DEFAULT 'clear' CHECK (attention_status IN ('clear', 'ready', 'error')),
         pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
+        pinned_order INTEGER NOT NULL DEFAULT 0,
         UNIQUE(runtime_id, runtime_session_id)
       );
       CREATE INDEX IF NOT EXISTS sessions_updated_at_idx ON sessions(updated_at DESC);
@@ -41,14 +42,14 @@ export class SqliteSessionRepository implements SessionRepository {
 
   async list(): Promise<SessionRecord[]> {
     return this.db.prepare(`
-      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status, pinned
+      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status, pinned, pinned_order
       FROM sessions ORDER BY updated_at DESC, started_at DESC, session_id DESC
     `).all().map(rowToRecord);
   }
 
   async get(sessionId: string): Promise<SessionRecord | undefined> {
     const row = this.db.prepare(`
-      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status, pinned
+      SELECT session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status, pinned, pinned_order
       FROM sessions WHERE session_id = ?
     `).get(sessionId);
     return row ? rowToRecord(row) : undefined;
@@ -56,8 +57,8 @@ export class SqliteSessionRepository implements SessionRepository {
 
   async save(record: SessionRecord): Promise<void> {
     this.db.prepare(`
-      INSERT INTO sessions (session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status, pinned)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sessions (session_id, runtime_id, runtime_session_id, title, cwd, started_at, updated_at, attention_status, pinned, pinned_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id) DO UPDATE SET
         runtime_id = excluded.runtime_id,
         runtime_session_id = excluded.runtime_session_id,
@@ -65,8 +66,9 @@ export class SqliteSessionRepository implements SessionRepository {
         cwd = excluded.cwd,
         started_at = excluded.started_at,
         updated_at = excluded.updated_at,
-        pinned = excluded.pinned
-    `).run(record.sessionId, record.runtimeId, record.runtimeSessionId, record.title, record.cwd, record.startedAt, record.updatedAt, record.attentionStatus, record.pinned ? 1 : 0);
+        pinned = excluded.pinned,
+        pinned_order = excluded.pinned_order
+    `).run(record.sessionId, record.runtimeId, record.runtimeSessionId, record.title, record.cwd, record.startedAt, record.updatedAt, record.attentionStatus, record.pinned ? 1 : 0, record.pinnedOrder);
   }
 
   async rename(sessionId: string, title: string): Promise<void> {
@@ -74,7 +76,34 @@ export class SqliteSessionRepository implements SessionRepository {
   }
 
   async setPinned(sessionId: string, pinned: boolean): Promise<void> {
-    this.db.prepare("UPDATE sessions SET pinned = ? WHERE session_id = ?").run(pinned ? 1 : 0, sessionId);
+    if (pinned) {
+      const nextOrder = Number((this.db.prepare("SELECT COALESCE(MAX(pinned_order), -1) + 1 AS next_order FROM sessions WHERE pinned = 1").get() as Record<string, unknown>).next_order);
+      this.db.prepare("UPDATE sessions SET pinned = 1, pinned_order = ? WHERE session_id = ?").run(nextOrder, sessionId);
+    } else {
+      this.db.prepare("UPDATE sessions SET pinned = 0, pinned_order = 0 WHERE session_id = ?").run(sessionId);
+    }
+  }
+
+  async reorderPinned(sessionIds: string[]): Promise<void> {
+    const ids = [...new Set(sessionIds)];
+    this.db.exec("BEGIN");
+    try {
+      const find = this.db.prepare("SELECT session_id FROM sessions WHERE session_id = ?");
+      const update = this.db.prepare("UPDATE sessions SET pinned = 1, pinned_order = ? WHERE session_id = ?");
+      for (const [index, sessionId] of ids.entries()) {
+        if (!find.get(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+        update.run(index, sessionId);
+      }
+      const placeholders = ids.map(() => "?").join(",");
+      const unpin = ids.length
+        ? this.db.prepare(`UPDATE sessions SET pinned = 0, pinned_order = 0 WHERE pinned = 1 AND session_id NOT IN (${placeholders})`)
+        : this.db.prepare("UPDATE sessions SET pinned = 0, pinned_order = 0 WHERE pinned = 1");
+      unpin.run(...ids);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   async touch(sessionId: string, updatedAt = new Date().toISOString()): Promise<void> {
@@ -121,6 +150,7 @@ export class SqliteSessionRepository implements SessionRepository {
       this.db.exec("ALTER TABLE sessions ADD COLUMN attention_status TEXT NOT NULL DEFAULT 'clear' CHECK (attention_status IN ('clear', 'ready', 'error'))");
     }
     this.ensurePinnedColumn();
+    this.ensurePinnedOrderColumn();
   }
 
   // THIS IS FOR BACKWARDS COMPATIBILITY: existing SQLite databases may predate session pin metadata.
@@ -128,6 +158,13 @@ export class SqliteSessionRepository implements SessionRepository {
     const columns = this.db.prepare("PRAGMA table_info(sessions)").all() as Array<Record<string, unknown>>;
     if (columns.some((column) => column.name === "pinned")) return;
     this.db.exec("ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))");
+  }
+
+  // THIS IS FOR BACKWARDS COMPATIBILITY: existing SQLite databases may predate pinned ordering.
+  private ensurePinnedOrderColumn(): void {
+    const columns = this.db.prepare("PRAGMA table_info(sessions)").all() as Array<Record<string, unknown>>;
+    if (columns.some((column) => column.name === "pinned_order")) return;
+    this.db.exec("ALTER TABLE sessions ADD COLUMN pinned_order INTEGER NOT NULL DEFAULT 0");
   }
 }
 
@@ -143,6 +180,7 @@ function rowToRecord(row: unknown): SessionRecord {
     updatedAt: String(value.updated_at),
     attentionStatus: normalizeAttentionStatus(value.attention_status),
     pinned: value.pinned === 1 || value.pinned === true,
+    pinnedOrder: Number(value.pinned_order ?? 0),
   };
 }
 

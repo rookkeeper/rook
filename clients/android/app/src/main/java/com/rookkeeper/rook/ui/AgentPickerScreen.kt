@@ -142,7 +142,7 @@ fun SessionsHomeScreen(viewModel: RookViewModel) {
                     if (sessions.isEmpty() && !sessionsLoading) {
                         Text("No sessions yet — start a new chat above.", fontSize = 14.sp, color = PanelPalette.textMuted, modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp))
                     } else {
-                        val pinned = sessions.filter { it.pinned }
+                        val pinned = sessions.filter { it.pinned }.sortedWith(compareBy<AgentSessionSummary> { it.pinnedOrder }.thenBy { it.id })
                         val recent = sessions.filter { !it.pinned }
                         Text("Pinned", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textMuted)
                         if (pinned.isEmpty()) {

@@ -91,7 +91,7 @@ Same shared contract as other clients:
 5. when an environment enters, the chat shows a business banner with display name and website favicons
 
 ### Chat flow
-1. session selection partitions REST session summaries into server-owned Pinned and recency-sorted Recent sections; Pin/Unpin is exposed through row management actions
+1. session selection partitions REST session summaries into server-owned ordered Pinned and recency-sorted Recent sections; Pin/Unpin is exposed through row management actions
 2. session list is fetched via REST
 3. starting a new session opens an unbound WebSocket, sends ACP `session/new`, then keeps that same socket as the new session's `SessionHandle`
 4. resuming an existing session creates or retrieves a `SessionHandle`

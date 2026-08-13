@@ -299,7 +299,11 @@ private struct IPhoneSessionSections: View {
     var onRename: (AgentSessionSummary) -> Void
     var onDelete: (AgentSessionSummary) -> Void
 
-    private var pinned: [AgentSessionSummary] { model.sessions.filter(\.pinned) }
+    private var pinned: [AgentSessionSummary] {
+        model.sessions.filter(\.pinned).sorted {
+            $0.pinnedOrder == $1.pinnedOrder ? $0.id < $1.id : $0.pinnedOrder < $1.pinnedOrder
+        }
+    }
     private var recent: [AgentSessionSummary] { model.sessions.filter { !$0.pinned } }
 
     var body: some View {

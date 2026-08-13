@@ -92,9 +92,14 @@ export class AgentRuntimeManager {
   }
 
   async setSessionPinned(sessionId: string, pinned: boolean): Promise<SessionRecord> {
-    const record = await this.requireSession(sessionId);
+    await this.requireSession(sessionId);
     await this.sessions.setPinned(sessionId, pinned);
-    return { ...record, pinned };
+    return await this.requireSession(sessionId);
+  }
+
+  async reorderPinnedSessions(sessionIds: string[]): Promise<SessionRecord[]> {
+    await this.sessions.reorderPinned(sessionIds);
+    return await this.sessions.list();
   }
 
   async touchSession(sessionId: string): Promise<SessionRecord> {
@@ -140,6 +145,7 @@ export class AgentRuntimeManager {
       updatedAt: now,
       attentionStatus: "clear",
       pinned: false,
+      pinnedOrder: 0,
     };
     await this.sessions.save(record);
     this.attachSessionRuntime(record.sessionId, runtime);
