@@ -6,12 +6,12 @@
 - [x] Create the change directory and lifecycle record
 - [x] Brainstorm to work, or bypass because the work is simple or obvious; do not mark complete until the developer confirms the direction
 - [x] Record the agreed decision and TODO after the explicit decision gate
-- [ ] Prepare the implementation workspace after the planning commit
-- [ ] Implement and test
-- [ ] Mark compatibility surfaces
-- [ ] Maintain product and architecture documentation
-- [ ] Run final validation
-- [ ] Synchronize with main before submitting
-- [ ] Open and validate the PR
-- [ ] Merge with approval
-- [ ] Record outcomes and clean up
+- [x] Prepare the implementation workspace after the planning commit
+- [x] Implement and test
+- [x] Mark compatibility surfaces
+- [x] Maintain product and architecture documentation
+- [x] Run final validation
+- [x] Synchronize with main before submitting
+- [x] Open and validate the PR (PR #156)
+- [x] Merge with approval (PR #156 merged as be93d9b)
+- [x] Record outcomes and clean up (worktree/branch retained because a live server is using the worktree)
