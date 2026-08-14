@@ -15,6 +15,8 @@ describe("SqliteSessionRepository", () => {
       startedAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
       attentionStatus: "clear",
+      pinned: false,
+      pinnedOrder: 0,
     });
     await repository.save({
       sessionId: "Claude:claude-1",
@@ -25,6 +27,8 @@ describe("SqliteSessionRepository", () => {
       startedAt: "2026-01-02T00:00:00.000Z",
       updatedAt: "2026-01-03T00:00:00.000Z",
       attentionStatus: "clear",
+      pinned: false,
+      pinnedOrder: 0,
     });
 
     expect((await repository.list()).map((session) => session.sessionId)).toEqual(["Claude:claude-1", "Pi:pi-1"]);
@@ -41,6 +45,12 @@ describe("SqliteSessionRepository", () => {
 
     await repository.setAttentionStatus("Pi:pi-1", "ready");
     expect((await repository.get("Pi:pi-1"))?.attentionStatus).toBe("ready");
+    await repository.setPinned("Pi:pi-1", true);
+    expect((await repository.get("Pi:pi-1"))?.pinned).toBe(true);
+    expect((await repository.get("Pi:pi-1"))?.pinnedOrder).toBe(0);
+    await repository.setPinned("Pi:pi-1", false);
+    await repository.reorderPinned(["Claude:claude-1"]);
+    expect((await repository.get("Claude:claude-1"))?.pinnedOrder).toBe(0);
     expect(() => datastore.db.prepare("UPDATE sessions SET attention_status = 'invalid'").run()).toThrow();
 
     await repository.delete("Pi:pi-1");
