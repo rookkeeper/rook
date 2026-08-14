@@ -12,6 +12,6 @@
 - [x] Maintain product and architecture documentation
 - [x] Run final validation
 - [x] Synchronize with main before submitting (origin/main fetched; branch was already up to date)
-- [ ] Open and validate the PR
+- [x] Open and validate the PR (draft PR #156; required compatibility-marker check passed)
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
