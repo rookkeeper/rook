@@ -221,6 +221,19 @@ final class ChatSessionController {
         }
     }
 
+    func movePinnedSessionToRecent(_ session: AgentSessionSummary) {
+        Task {
+            do {
+                _ = try await api.setSessionPinned(sessionId: session.id, pinned: false)
+                let touched = try await api.touchSession(sessionId: session.id)
+                replaceSessionSummary(touched)
+                await loadSessions()
+            } catch {
+                sessionsError = error.localizedDescription
+            }
+        }
+    }
+
     func deleteSession(_ session: AgentSessionSummary, completion: ((Bool) -> Void)? = nil) {
         Task {
             do {

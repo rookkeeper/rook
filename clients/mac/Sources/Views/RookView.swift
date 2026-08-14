@@ -966,14 +966,19 @@ private struct MacSessionSections: View {
             } isTargeted: { isDropTargeted = $0 }
 
             sectionHeader("Recent", systemImage: "clock.arrow.circlepath")
-            if recent.isEmpty {
-                Text("No recent sessions")
-                    .font(.callout)
-                    .foregroundStyle(PanelPalette.secondaryText)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 12)
-            } else {
-                rows(recent, supportsPositionDrop: false)
+            VStack(alignment: .leading, spacing: 0) {
+                if recent.isEmpty {
+                    Text("No recent sessions")
+                        .font(.callout)
+                        .foregroundStyle(PanelPalette.secondaryText)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 12)
+                } else {
+                    rows(recent, supportsPositionDrop: false)
+                }
+            }
+            .dropDestination(for: String.self) { ids, _ in
+                movePinnedToRecent(ids)
             }
         }
     }
@@ -1014,6 +1019,13 @@ private struct MacSessionSections: View {
             }
             if index < sessions.count - 1 { Divider().opacity(0.45) }
         }
+    }
+
+    private func movePinnedToRecent(_ ids: [String]) -> Bool {
+        let sessions = ids.compactMap { id in model.sessions.first(where: { $0.id == id }) }.filter(\.pinned)
+        guard !sessions.isEmpty else { return false }
+        for session in sessions { model.movePinnedSessionToRecent(session) }
+        return true
     }
 
     private func drop(_ ids: [String], at index: Int) -> Bool {

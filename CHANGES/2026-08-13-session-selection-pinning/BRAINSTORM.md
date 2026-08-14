@@ -57,6 +57,7 @@ Confirmed direction:
 - Keep a visible pin/unpin action in the existing row actions menu (and/or on hover) so pinning is discoverable and accessible without drag.
 - Drop feedback should be restrained: highlight the Pinned section/empty box while dragging, then show a short state change.
 - Pinned items use durable manual order. Dragging a row onto a particular pinned row position persists that position.
+- Dragging a pinned row into Recent unpins it and touches it so it appears at the top of Recent.
 - The empty-state instruction should be Mac-specific: **“Drag sessions here to pin.”**
 
 A native SwiftUI `draggable`/`dropDestination` path is preferable to gesture logic that competes with the row’s click action. The exact API and minimum macOS deployment target need checking before implementation.
@@ -103,7 +104,7 @@ Confirmed direction:
 - Implement durable server-side pin state and pinned order shared by all clients.
 - Render `Pinned` above `Recent`; exclude pinned sessions from Recent; use durable pinned order for Pinned and existing server recency ordering for Recent.
 - Make the Mac session list/card consume available height instead of using a fixed seven-row cap; preserve the window’s sensible minimum height and scrolling for overflow. Apply this to the session-selection surfaces that currently use the constrained list layout.
-- Mac: direct row drag into Pinned or onto a particular pinned position, plus an explicit Pin/Unpin secondary action. Empty pinned instruction: **“Drag sessions here to pin.”**
+- Mac: direct row drag into Pinned or onto a particular pinned position, plus drag-out into Recent to unpin and an explicit Pin/Unpin secondary action. Empty pinned instruction: **“Drag sessions here to pin.”**
 - iPhone: explicit Pin/Unpin through native secondary actions; mobile drag is not required for the first release. Empty pinned instruction: **“Pin a session to keep it here.”**
 - Android: overflow-menu Pin/Unpin; mobile drag is deferred. Empty pinned instruction: **“Pin a session to keep it here.”**
 - Use a restrained section header/divider and a contextual empty pinned drop target.

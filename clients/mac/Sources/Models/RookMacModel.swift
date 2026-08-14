@@ -504,6 +504,10 @@ final class RookMacModel: ObservableObject {
         chatSessionController.reorderPinnedSessions(sessionIds)
     }
 
+    func movePinnedSessionToRecent(_ session: AgentSessionSummary) {
+        chatSessionController.movePinnedSessionToRecent(session)
+    }
+
     func deleteSession(_ session: AgentSessionSummary) {
         let deletingCurrent = currentSession?.id == session.id
         chatSessionController.deleteSession(session) { [weak self] succeeded in
