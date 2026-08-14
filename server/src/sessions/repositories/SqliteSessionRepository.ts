@@ -153,14 +153,12 @@ export class SqliteSessionRepository implements SessionRepository {
     this.ensurePinnedOrderColumn();
   }
 
-  // THIS IS FOR BACKWARDS COMPATIBILITY: existing SQLite databases may predate session pin metadata.
   private ensurePinnedColumn(): void {
     const columns = this.db.prepare("PRAGMA table_info(sessions)").all() as Array<Record<string, unknown>>;
     if (columns.some((column) => column.name === "pinned")) return;
     this.db.exec("ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))");
   }
 
-  // THIS IS FOR BACKWARDS COMPATIBILITY: existing SQLite databases may predate pinned ordering.
   private ensurePinnedOrderColumn(): void {
     const columns = this.db.prepare("PRAGMA table_info(sessions)").all() as Array<Record<string, unknown>>;
     if (columns.some((column) => column.name === "pinned_order")) return;

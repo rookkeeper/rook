@@ -28,7 +28,6 @@ data class AgentSessionSummary(val raw: JsonObject) {
     val id: String get() = raw["sessionId"]?.stringValue ?: ""
     val agent: String get() = raw["runtimeId"]?.stringValue ?: ""
     val name: String get() = raw["title"]?.stringValue ?: "session"
-    // THIS IS FOR BACKWARDS COMPATIBILITY: older servers omit pin metadata.
     val pinned: Boolean get() = raw["pinned"]?.boolValue ?: false
     val pinnedOrder: Int get() = (raw["pinnedOrder"]?.numberValue ?: 0.0).toInt()
     val running: Boolean get() = raw["running"]?.boolValue ?: false
