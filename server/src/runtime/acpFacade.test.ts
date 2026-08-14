@@ -264,6 +264,15 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const list = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
     expect(list.sessions[0]?.sessionId).toBe(older.sessionId);
 
+    const pinned = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${newer.sessionId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pinned: true }),
+    }).then((response) => response.json()) as Record<string, unknown>;
+    expect(pinned.pinned).toBe(true);
+    const pinnedList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(pinnedList.sessions.find((session) => session.sessionId === newer.sessionId)?.pinned).toBe(true);
+
     await request(olderWs, 4, "session/close", { sessionId: older.sessionId });
     await request(newerWs, 3, "session/close", { sessionId: newer.sessionId });
     olderWs.close();

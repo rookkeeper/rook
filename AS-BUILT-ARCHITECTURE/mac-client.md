@@ -108,16 +108,17 @@ Via `RookKit`:
 4. on server availability it loads runtimes/sessions and auto-resumes the most recent session
 
 ### Chat flow
-1. session list is fetched via REST, not the WebSocket
-2. starting a new session opens an unbound WebSocket, sends ACP `session/new`, then keeps that same socket as the new session's `SessionHandle`
-3. resuming an existing session creates or retrieves a `SessionHandle`
-4. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
-5. after a successful resume/open, the client calls `POST /api/sessions/:id/touch` so the shared recents list reflects viewed sessions even without a prompt
-6. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and run `initialize`
-7. the handle reduces `AcpClientEvent`s into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
-8. switching sessions changes which handle the UI observes — background sessions keep their WebSocket and continue running
-9. session rows expose rename/delete management actions that call the REST session-management routes without stealing the primary click-to-resume interaction
-10. queued messages, including image attachments, are delivered automatically once the agent goes idle
+1. session selection partitions REST summaries into server-owned Pinned and recency-sorted Recent sections; Mac supports row drag/drop into a specific Pinned position and row-menu pin/unpin
+2. session list is fetched via REST, not the WebSocket
+3. starting a new session opens an unbound WebSocket, sends ACP `session/new`, then keeps that same socket as the new session's `SessionHandle`
+4. resuming an existing session creates or retrieves a `SessionHandle`
+5. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
+6. after a successful resume/open, the client calls `POST /api/sessions/:id/touch` so the shared recents list reflects viewed sessions even without a prompt
+7. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and run `initialize`
+8. the handle reduces `AcpClientEvent`s into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
+9. switching sessions changes which handle the UI observes — background sessions keep their WebSocket and continue running
+10. session rows expose rename/delete management actions that call the REST session-management routes without stealing the primary click-to-resume interaction
+11. queued messages, including image attachments, are delivered automatically once the agent goes idle
 
 ### Foreground environment detection
 1. `ForegroundAppMonitor` detects app activation or window-title change, but ignores all internal Rook bundle identities (`com.rookkeeper.Rook` and `com.rookkeeper.Rook.Dev.*`); when Rook becomes frontmost it clears the active external target and provider
@@ -182,6 +183,7 @@ diagnostics.
 - the mac app is both a client and an environment provider
 - a local-only background watchdog records main-run-loop stalls without sending telemetry or collecting user content
 - session discovery is REST; agent interaction is one ACP WebSocket per session
+- pinned state and pinned order are server-owned session metadata shared across clients; Mac uses drag/drop plus secondary row actions
 - `SessionHandle` isolates all session state — blocks, streaming buffers, reconnection — so switching never tears down a running session
 - environment registration is layered: base app identity plus exactly one context provider for the focused bundle id
 - generic environment detection is AX-based and intentionally app-agnostic; app-specific providers are selected by bundle-id lookup from an explicit registry with a generic fallback

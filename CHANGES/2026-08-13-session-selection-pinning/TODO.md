@@ -8,10 +8,10 @@ Improve the session-selection experience across Mac, iPhone, and Android. The Ma
 
 - Store pin state on the server so all clients share the same session organization.
 - Show a `Pinned` section above a `Recent` section. Pinned sessions are excluded from Recent.
-- Sort both sections by the existing server recency ordering (`updatedAt DESC`) for this release. Pinning does not change recency.
+- Sort Recent by the existing server recency ordering (`updatedAt DESC`). Pinned sessions use durable server-owned `pinnedOrder`; pinning and reordering do not change recency.
 - Do not automatically pin newly created sessions.
 - Mac session-selection lists should use available height rather than a fixed seven-row height cap, while retaining sensible minimum window sizing and scrolling when content overflows.
-- Mac supports click-and-dragging a row into the Pinned section, plus an explicit Pin/Unpin secondary action. Mac’s empty pinned instruction is: “Drag sessions here to pin.”
+- Mac supports click-and-dragging a row into the Pinned section or onto a specific pinned row position, plus dragging a pinned row into Recent to unpin it and touch it to the top. Pinned order is durable and is not recency-sorted. Mac’s empty pinned instruction is: “Drag sessions here to pin.”
 - iPhone supports Pin/Unpin through native secondary actions such as its row context/swipe management surface. Mobile drag is not required in this release. Its empty pinned instruction is: “Pin a session to keep it here.”
 - Android supports Pin/Unpin through the existing overflow menu. Mobile drag is deferred. Its empty pinned instruction is: “Pin a session to keep it here.”
 - Use modest section headers, spacing, and dividers, and avoid permanent drag handles or visually noisy rows.
@@ -22,29 +22,29 @@ Improve the session-selection experience across Mac, iPhone, and Android. The Ma
 
 ### Server and shared model
 
-- [ ] Add durable pin metadata to the session repository/schema with migration-safe initialization.
-- [ ] Expose pin/unpin through the session REST API and include pin state in session summaries.
-- [ ] Add server tests for pin persistence, pin/unpin behavior, and list partitioning/order semantics.
-- [ ] Add shared Apple and Android session-model/API support for pin state and pin/unpin operations.
+- [x] Add durable pin metadata and pinned ordering to the session repository/schema with migration-safe initialization.
+- [x] Expose pin/unpin and pinned reordering through the session REST API and include pin state/order in session summaries.
+- [x] Add server tests for pin persistence, pin/unpin behavior, and list partitioning/order semantics.
+- [x] Add shared Apple and Android session-model/API support for pin state and pin/unpin operations.
 
 ### Mac
 
-- [ ] Refactor the constrained session-selection list layout so it fills available height on the affected selection surfaces and still scrolls overflow.
-- [ ] Render Pinned and Recent sections without duplicate sessions, with restrained visual separation.
-- [ ] Add Mac pin/unpin secondary action and native row drag/drop into Pinned.
-- [ ] Add the Mac-specific empty pinned instruction and restrained drop feedback.
+- [x] Refactor the constrained session-selection list layout so it fills available height on the affected selection surfaces and still scrolls overflow.
+- [x] Render Pinned and Recent sections without duplicate sessions, with restrained visual separation.
+- [x] Add Mac pin/unpin secondary action and native row drag/drop into Pinned, including positional drops and drag-out-to-Recent unpinning.
+- [x] Add the Mac-specific empty pinned instruction and restrained drop feedback.
 
 ### iPhone and Android
 
-- [ ] Render Pinned and Recent sections in the existing single outer scroll containers.
-- [ ] Add platform-native Pin/Unpin secondary actions without permanent row clutter.
-- [ ] Add each platform’s specific empty pinned instruction; do not mention other platforms.
-- [ ] Defer mobile drag/reordering and avoid adding handles or gestures that compete with scrolling/tap-to-open.
+- [x] Render Pinned and Recent sections in the existing single outer scroll containers.
+- [x] Add platform-native Pin/Unpin secondary actions without permanent row clutter.
+- [x] Add each platform’s specific empty pinned instruction; do not mention other platforms.
+- [x] Defer mobile drag/reordering and avoid adding handles or gestures that compete with scrolling/tap-to-open.
 
 ### Documentation and validation
 
-- [ ] Add focused client tests or state-level coverage where practical, including partitioning and pin/unpin refresh behavior.
-- [ ] Update relevant READMEs, PRODUCT, and AS-BUILT-ARCHITECTURE documentation for the shared pinned-session contract and platform behavior.
-- [ ] Inspect changed files for compatibility surfaces and annotate retained compatibility behavior with the required marker, or record that none exist.
-- [ ] Run server, RookKit, Mac, iPhone, and Android validation available in the repository; inspect the final diff.
-- [ ] Update issue references/closure notes for #150 and #129 after implementation is validated.
+- [x] Add focused client tests or state-level coverage where practical, including partitioning and pin/unpin refresh behavior.
+- [x] Update relevant READMEs, PRODUCT, and AS-BUILT-ARCHITECTURE documentation for the shared pinned-session contract and platform behavior.
+- [x] Inspect changed files for compatibility surfaces and annotate retained compatibility behavior with the required marker, or record that none exist.
+- [x] Run server, RookKit, Mac, and iPhone validation; Android validation is deferred because Java is unavailable. Inspect the final diff.
+- [x] Update issue references/closure notes for #150 and #129 after implementation is validated; the PR will close #150 and explicitly supersede the remaining arbitrary manual-reorder scope in #129 with the pinned/recent model.

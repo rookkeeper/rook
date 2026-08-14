@@ -58,7 +58,7 @@ struct RookView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             baseContent
-                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
@@ -258,6 +258,7 @@ private struct HomeContent: View {
             }
             footerActions
         }
+        .frame(maxHeight: .infinity, alignment: .top)
         .sheet(item: $sessionToRename) { session in
             RenameSessionSheet(
                 sessionName: session.name,
@@ -564,43 +565,19 @@ private struct HomeContent: View {
                     .frame(maxWidth: .infinity, minHeight: 48, alignment: .center)
             } else {
                 ScrollView(.vertical) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
-                            HStack(spacing: 8) {
-                                Button {
-                                    model.resumeSession(session)
-                                } label: {
-                                    SessionHomeRow(session: session)
-                                }
-                                .buttonStyle(.plain)
-                                .pointingHandOnHover()
-
-                                SessionActionsMenu(
-                                    onRename: {
-                                        renameDraft = session.name
-                                        sessionToRename = session
-                                    },
-                                    onDelete: {
-                                        sessionToDelete = session
-                                    }
-                                )
-                            }
-                            if index < model.sessions.count - 1 {
-                                Divider().opacity(0.45)
-                            }
-                        }
-                    }
+                    MacSessionSections(
+                        model: model,
+                        onRename: { session in
+                            renameDraft = session.name
+                            sessionToRename = session
+                        },
+                        onDelete: { session in sessionToDelete = session }
+                    )
                 }
                 .scrollIndicators(.visible)
-                .frame(maxHeight: sessionsMaxHeight)
+                .frame(maxHeight: .infinity, alignment: .top)
             }
         }
-    }
-
-    private var sessionsMaxHeight: CGFloat {
-        let visibleRows = min(CGFloat(model.sessions.count), 7)
-        let rowHeight: CGFloat = 50
-        return visibleRows * rowHeight
     }
 
     private var serverOfflineCard: some View {
@@ -745,6 +722,7 @@ private struct SessionsDetail: View {
             newChatCard
             sessionsCard
         }
+        .frame(maxHeight: .infinity, alignment: .top)
         .sheet(item: $sessionToRename) { session in
             RenameSessionSheet(
                 sessionName: session.name,
@@ -852,49 +830,22 @@ private struct SessionsDetail: View {
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
             } else {
                 ScrollView(.vertical) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
-                            HStack(spacing: 8) {
-                                Button {
-                                    model.resumeSession(session)
-                                } label: {
-                                    SessionRow(session: session, showsStatus: false)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Resume this session")
-                                .disabled(model.startingSession)
-                                .pointingHandOnHover()
-
-                                SessionActionsMenu(
-                                    onRename: {
-                                        renameDraft = session.name
-                                        sessionToRename = session
-                                    },
-                                    onDelete: {
-                                        sessionToDelete = session
-                                    }
-                                )
-                            }
-
-                            if index < model.sessions.count - 1 {
-                                Divider()
-                                    .opacity(0.45)
-                            }
-                        }
-                    }
+                    MacSessionSections(
+                        model: model,
+                        onRename: { session in
+                            renameDraft = session.name
+                            sessionToRename = session
+                        },
+                        onDelete: { session in sessionToDelete = session }
+                    )
                 }
                 .scrollIndicators(.visible)
-                .frame(height: sessionListHeight)
+                .frame(maxHeight: .infinity, alignment: .top)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
         }
     }
 
-    private var sessionListHeight: CGFloat {
-        let visibleRows = min(CGFloat(model.sessions.count), 7)
-        let rowHeight: CGFloat = 54
-        return max(visibleRows * rowHeight, rowHeight)
-    }
 }
 
 private struct SessionRow: View {
@@ -975,13 +926,132 @@ private struct SessionRow: View {
     }
 }
 
+private struct MacSessionSections: View {
+    @ObservedObject var model: RookMacModel
+    var onRename: (AgentSessionSummary) -> Void
+    var onDelete: (AgentSessionSummary) -> Void
+    @State private var isDropTargeted = false
+
+    private var pinned: [AgentSessionSummary] {
+        model.sessions.filter(\.pinned).sorted {
+            $0.pinnedOrder == $1.pinnedOrder ? $0.id < $1.id : $0.pinnedOrder < $1.pinnedOrder
+        }
+    }
+    private var recent: [AgentSessionSummary] { model.sessions.filter { !$0.pinned } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("Pinned", systemImage: "pin.fill")
+            VStack(spacing: 0) {
+                if pinned.isEmpty {
+                    Text("Drag sessions here to pin.")
+                        .font(.callout)
+                        .foregroundStyle(PanelPalette.secondaryText)
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                } else {
+                    rows(pinned, supportsPositionDrop: true)
+                }
+            }
+            .padding(.horizontal, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isDropTargeted ? PanelPalette.accent.opacity(0.16) : PanelPalette.backgroundPrimary.opacity(0.28))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(isDropTargeted ? PanelPalette.accent : PanelPalette.border.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [5]))
+            )
+            .dropDestination(for: String.self) { ids, _ in
+                drop(ids, at: pinned.count)
+            } isTargeted: { isDropTargeted = $0 }
+
+            sectionHeader("Recent", systemImage: "clock.arrow.circlepath")
+            VStack(alignment: .leading, spacing: 0) {
+                if recent.isEmpty {
+                    Text("No recent sessions")
+                        .font(.callout)
+                        .foregroundStyle(PanelPalette.secondaryText)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 12)
+                } else {
+                    rows(recent, supportsPositionDrop: false)
+                }
+            }
+            .dropDestination(for: String.self) { ids, _ in
+                movePinnedToRecent(ids)
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(PanelPalette.secondaryText)
+            .padding(.top, 5)
+    }
+
+    @ViewBuilder
+    private func rows(_ sessions: [AgentSessionSummary], supportsPositionDrop: Bool) -> some View {
+        ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
+            let row = HStack(spacing: 8) {
+                Button { model.resumeSession(session) } label: {
+                    SessionRow(session: session)
+                }
+                .buttonStyle(.plain)
+                .help("Resume this session")
+                .disabled(model.startingSession)
+                .pointingHandOnHover()
+                .draggable(session.id)
+
+                SessionActionsMenu(
+                    onRename: { onRename(session) },
+                    isPinned: session.pinned,
+                    onTogglePin: { model.setSessionPinned(session, pinned: !session.pinned) },
+                    onDelete: { onDelete(session) }
+                )
+            }
+            if supportsPositionDrop {
+                row.dropDestination(for: String.self) { ids, _ in
+                    drop(ids, at: index)
+                }
+            } else {
+                row
+            }
+            if index < sessions.count - 1 { Divider().opacity(0.45) }
+        }
+    }
+
+    private func movePinnedToRecent(_ ids: [String]) -> Bool {
+        let sessions = ids.compactMap { id in model.sessions.first(where: { $0.id == id }) }.filter(\.pinned)
+        guard !sessions.isEmpty else { return false }
+        for session in sessions { model.movePinnedSessionToRecent(session) }
+        return true
+    }
+
+    private func drop(_ ids: [String], at index: Int) -> Bool {
+        let movingIds = ids.filter { id in model.sessions.contains(where: { $0.id == id }) }
+        guard !movingIds.isEmpty else { return false }
+        let targetId = index < pinned.count ? pinned[index].id : nil
+        var ordered = pinned.map(\.id).filter { !movingIds.contains($0) }
+        let insertionIndex = targetId.flatMap { ordered.firstIndex(of: $0) } ?? ordered.count
+        ordered.insert(contentsOf: movingIds, at: insertionIndex)
+        model.reorderPinnedSessions(ordered)
+        return true
+    }
+}
+
 private struct SessionActionsMenu: View {
     var onRename: () -> Void
+    var isPinned = false
+    var onTogglePin: (() -> Void)? = nil
     var onDelete: () -> Void
 
     var body: some View {
         Menu {
             Button("Rename", action: onRename)
+            if let onTogglePin {
+                Button(isPinned ? "Unpin" : "Pin", action: onTogglePin)
+            }
             Divider()
             Button("Delete", role: .destructive, action: onDelete)
         } label: {
