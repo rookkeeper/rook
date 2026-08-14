@@ -11,7 +11,7 @@
 - [x] Mark compatibility surfaces
 - [x] Maintain product and architecture documentation
 - [x] Run final validation
-- [ ] Synchronize with main before submitting
+- [x] Synchronize with main before submitting (origin/main fetched; branch was already up to date)
 - [ ] Open and validate the PR
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up

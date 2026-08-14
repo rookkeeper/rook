@@ -47,4 +47,4 @@ Improve the session-selection experience across Mac, iPhone, and Android. The Ma
 - [x] Update relevant READMEs, PRODUCT, and AS-BUILT-ARCHITECTURE documentation for the shared pinned-session contract and platform behavior.
 - [x] Inspect changed files for compatibility surfaces and annotate retained compatibility behavior with the required marker, or record that none exist.
 - [x] Run server, RookKit, Mac, and iPhone validation; Android validation is deferred because Java is unavailable. Inspect the final diff.
-- [ ] Update issue references/closure notes for #150 and #129 after implementation is validated.
+- [x] Update issue references/closure notes for #150 and #129 after implementation is validated; the PR will close #150 and explicitly supersede the remaining arbitrary manual-reorder scope in #129 with the pinned/recent model.
