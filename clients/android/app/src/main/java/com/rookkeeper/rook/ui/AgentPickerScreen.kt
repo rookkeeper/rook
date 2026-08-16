@@ -142,39 +142,20 @@ fun SessionsHomeScreen(viewModel: RookViewModel) {
                     if (sessions.isEmpty() && !sessionsLoading) {
                         Text("No sessions yet — start a new chat above.", fontSize = 14.sp, color = PanelPalette.textMuted, modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp))
                     } else {
-                        val pinned = sessions.filter { it.pinned }.sortedWith(compareBy<AgentSessionSummary> { it.pinnedOrder }.thenBy { it.id })
-                        val recent = sessions.filter { !it.pinned }
-                        Text("Pinned", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textMuted)
-                        if (pinned.isEmpty()) {
-                            Text("Pin a session to keep it here.", fontSize = 14.sp, color = PanelPalette.textMuted, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
-                        } else {
-                            pinned.forEachIndexed { index, session ->
-                                SessionRow(
-                                    session = session,
-                                    enabled = !startingSession,
-                                    onClick = { viewModel.resumeSession(session) },
-                                    onRename = { renameDraft = session.name; sessionToRename = session },
-                                    onTogglePin = { viewModel.setSessionPinned(session, false) },
-                                    onDelete = { sessionToDelete = session }
-                                )
-                                if (index < pinned.lastIndex) HorizontalDivider(color = PanelPalette.border)
-                            }
-                        }
-                        Text("Recent", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PanelPalette.textMuted, modifier = Modifier.padding(top = 8.dp))
-                        if (recent.isEmpty()) {
-                            Text("No recent sessions", fontSize = 14.sp, color = PanelPalette.textMuted, modifier = Modifier.padding(vertical = 12.dp))
-                        } else {
-                            recent.forEachIndexed { index, session ->
-                                SessionRow(
-                                    session = session,
-                                    enabled = !startingSession,
-                                    onClick = { viewModel.resumeSession(session) },
-                                    onRename = { renameDraft = session.name; sessionToRename = session },
-                                    onTogglePin = { viewModel.setSessionPinned(session, true) },
-                                    onDelete = { sessionToDelete = session }
-                                )
-                                if (index < recent.lastIndex) HorizontalDivider(color = PanelPalette.border)
-                            }
+                        sessions.forEachIndexed { index, session ->
+                            SessionRow(
+                                session = session,
+                                enabled = !startingSession,
+                                onClick = { viewModel.resumeSession(session) },
+                                onRename = {
+                                    renameDraft = session.name
+                                    sessionToRename = session
+                                },
+                                onDelete = {
+                                    sessionToDelete = session
+                                }
+                            )
+                            if (index < sessions.lastIndex) HorizontalDivider(color = PanelPalette.border)
                         }
                     }
                 }
@@ -289,7 +270,7 @@ private fun NewChatNameField(value: String, onValueChange: (String) -> Unit, onS
 }
 
 @Composable
-private fun SessionRow(session: AgentSessionSummary, enabled: Boolean, onClick: () -> Unit, onRename: () -> Unit, onTogglePin: () -> Unit, onDelete: () -> Unit) {
+private fun SessionRow(session: AgentSessionSummary, enabled: Boolean, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
     val status = session.activityStatus
     val statusTint = when (status) {
         SessionSelectionStatus.ACTIVE -> PanelPalette.warning
@@ -319,10 +300,6 @@ private fun SessionRow(session: AgentSessionSummary, enabled: Boolean, onClick: 
                 Icon(Icons.Filled.MoreVert, contentDescription = "Session actions", tint = PanelPalette.textMuted)
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                DropdownMenuItem(text = { Text(if (session.pinned) "Unpin" else "Pin") }, onClick = {
-                    menuExpanded = false
-                    onTogglePin()
-                })
                 DropdownMenuItem(text = { Text("Rename") }, onClick = {
                     menuExpanded = false
                     onRename()
