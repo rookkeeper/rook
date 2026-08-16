@@ -387,17 +387,6 @@ class RookViewModel(
         }
     }
 
-    fun setSessionPinned(session: AgentSessionSummary, pinned: Boolean) {
-        scope.launch {
-            try {
-                api.setSessionPinned(session.id, pinned)
-                _sessions.value = api.sessions().map(::AgentSessionSummary)
-            } catch (e: Exception) {
-                _sessionsError.value = e.message ?: "Failed to update pinned session"
-            }
-        }
-    }
-
     fun deleteSession(session: AgentSessionSummary) {
         scope.launch {
             try {

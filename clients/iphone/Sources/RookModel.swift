@@ -684,19 +684,6 @@ final class RookModel: ObservableObject {
         }
     }
 
-    func setSessionPinned(_ session: AgentSessionSummary, pinned: Bool) {
-        Task { @MainActor in
-            do {
-                let updated = try await api.setSessionPinned(sessionId: session.id, pinned: pinned)
-                replaceSessionSummary(updated)
-                if currentSession?.id == session.id { currentSession = updated }
-                sessions = try await api.sessions()
-            } catch {
-                sessionsError = error.localizedDescription
-            }
-        }
-    }
-
     func deleteSession(_ session: AgentSessionSummary) {
         Task {
             do {
