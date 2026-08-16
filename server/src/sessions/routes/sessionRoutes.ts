@@ -10,24 +10,10 @@ export async function registerSessionRoutes(app: FastifyInstance, runtimeManager
     return { sessions: records.map((record) => serializeSession(record, runtimeManager)) };
   });
 
-  app.patch<{ Params: { sessionId: string }; Body: { title?: string; pinned?: boolean } }>("/api/sessions/:sessionId", async (request, reply) => {
+  app.patch<{ Params: { sessionId: string }; Body: { title?: string } }>("/api/sessions/:sessionId", async (request, reply) => {
     if (!await ensureSessionExists(runtimeManager, request.params.sessionId, reply)) return;
-    let record = await runtimeManager.getSession(request.params.sessionId);
-    if (typeof request.body?.title === "string") {
-      record = await runtimeManager.renameSession(request.params.sessionId, request.body.title);
-    }
-    if (typeof request.body?.pinned === "boolean") {
-      record = await runtimeManager.setSessionPinned(request.params.sessionId, request.body.pinned);
-    }
+    const record = await runtimeManager.renameSession(request.params.sessionId, typeof request.body?.title === "string" ? request.body.title : "session");
     return serializeSession(record, runtimeManager);
-  });
-
-  app.post<{ Body: { sessionIds?: string[] } }>("/api/sessions/reorder-pinned", async (request, reply) => {
-    const sessionIds = Array.isArray(request.body?.sessionIds) && request.body.sessionIds.every((id) => typeof id === "string")
-      ? request.body.sessionIds
-      : [];
-    const records = await runtimeManager.reorderPinnedSessions(sessionIds);
-    return { sessions: records.map((record) => serializeSession(record, runtimeManager)) };
   });
 
   app.post<{ Params: { sessionId: string } }>("/api/sessions/:sessionId/touch", async (request, reply) => {
@@ -85,8 +71,6 @@ function serializeSession(record: SessionRecord, runtimeManager: AgentRuntimeMan
     runtimeId: record.runtimeId,
     startedAt: record.startedAt,
     updatedAt: record.updatedAt,
-    pinned: record.pinned,
-    pinnedOrder: record.pinnedOrder,
     running: runtimeManager.sessionHasRuntime(record.sessionId),
     activityStatus: runtimeManager.activityStatus(record.sessionId, record),
     supportsImagePrompts: runtimeManager.supportsImagePrompts(record.runtimeId),

@@ -108,8 +108,7 @@ It implements:
 - `session/prompt`, `session/cancel` — standard prompt flow; image-capable runtimes accept standard ACP image content blocks with per-session capability reporting and bounded base64 validation
 - `session/set_mode`, `session/set_config_option` — ACP controls
 - `session/close` — closes a session
-- `PATCH /api/sessions/:id` — rename and/or pin/unpin a session without changing its recency ordering
-- `POST /api/sessions/reorder-pinned` — persist the ordered pinned session IDs
+- `PATCH /api/sessions/:id` — rename a session without changing its recency ordering
 - `POST /api/sessions/:id/touch` — acknowledge pending attention and mark a session as recently viewed
 - `POST /api/sessions/:id/unview` — leave the viewed session so later turn results can become pending attention
 - `DELETE /api/sessions/:id` — delete a session, its transcript, and its workspace state
@@ -120,9 +119,8 @@ It implements:
 
 - Public session IDs are stable Rook-generated UUIDs (not runtime-derived)
 - Each session maps to `runtimeId` + runtime-local `runtimeSessionId` in SQLite
-- Sessions are a unified cross-runtime list ordered by `updatedAt` desc; clients partition it into durable Pinned and Recent sections using the `pinned` field
+- Sessions are a unified cross-runtime list ordered by `updatedAt` desc
 - `updatedAt` now represents both prompt activity and explicit client-side "viewed" touches, so opening/resuming a session moves it to the top
-- `pinned` and `pinnedOrder` are durable server-owned session metadata; pinned ordering is independent of recency
 - `attention_status` durably stores `clear`, `ready`, or `error`; live turn/liveness state is combined into `activityStatus` with precedence `Active` > `Ready` > `Error` > `On` > `Off`
 - Session-to-environment membership persists in `session_environments`
 - Logical transcript history persists in `session_transcript_events` so later viewers can hydrate from server state instead of forcing runtime replay; ACP chunks are merged and in-progress records are updated in place.

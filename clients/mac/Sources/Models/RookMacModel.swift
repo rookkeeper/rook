@@ -496,18 +496,6 @@ final class RookMacModel: ObservableObject {
         chatSessionController.renameSession(session, title: title)
     }
 
-    func setSessionPinned(_ session: AgentSessionSummary, pinned: Bool) {
-        chatSessionController.setSessionPinned(session, pinned: pinned)
-    }
-
-    func reorderPinnedSessions(_ sessionIds: [String]) {
-        chatSessionController.reorderPinnedSessions(sessionIds)
-    }
-
-    func movePinnedSessionToRecent(_ session: AgentSessionSummary) {
-        chatSessionController.movePinnedSessionToRecent(session)
-    }
-
     func deleteSession(_ session: AgentSessionSummary) {
         let deletingCurrent = currentSession?.id == session.id
         chatSessionController.deleteSession(session) { [weak self] succeeded in
