@@ -98,7 +98,7 @@ describe("WebEnvironmentScout", () => {
       [skillUrl("track-order")]: ok(second),
     });
 
-    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true });
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true, result: "content" });
 
     const loaded = await repository.getBundles(ENVIRONMENT_ID);
     expect(loaded.bundles).toHaveLength(1);
@@ -140,7 +140,7 @@ describe("WebEnvironmentScout", () => {
       const routes = { ...present, [missing]: ABSENT };
       const { scout, repository } = harness(routes);
 
-      expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true });
+      expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true, result: "content" });
       const bundle = (await repository.getBundles(ENVIRONMENT_ID)).bundles[0];
       expect(bundle?.llmsTxt !== undefined).toBe(missing !== LLMS_URL);
       expect(bundle?.agentsMd !== undefined).toBe(missing !== AGENTS_URL);
@@ -148,7 +148,7 @@ describe("WebEnvironmentScout", () => {
     }
 
     const { scout, repository } = harness({});
-    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false });
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false, result: "empty" });
     expect(repository.getScoutState(HOST)?.status).toBe("empty");
     expect((await repository.getBundles(ENVIRONMENT_ID)).bundles).toEqual([]);
   });
@@ -274,7 +274,7 @@ describe("WebEnvironmentScout", () => {
     expect(await scout.scout(HOST)).toEqual({ status: "fresh", changed: false });
     expect(calls).toHaveLength(fetched);
 
-    expect(await scout.scout(HOST, { force: true })).toEqual({ status: "scouted", changed: false });
+    expect(await scout.scout(HOST, { force: true })).toEqual({ status: "scouted", changed: false, result: "content" });
     expect(calls.length).toBeGreaterThan(fetched);
     expect(repository.getScoutState(HOST)?.fetchedAt).toBe(new Date(clock.now).toISOString());
   });
@@ -296,7 +296,7 @@ describe("WebEnvironmentScout", () => {
     routes[INDEX_URL] = notModified();
     clock.now = START + TTL_MS;
 
-    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false });
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false, result: "content" });
 
     const conditional = calls.slice(before);
     expect(conditional.map((call) => [call.url, call.options.ifNoneMatch, call.options.ifModifiedSince])).toEqual([
@@ -325,7 +325,7 @@ describe("WebEnvironmentScout", () => {
     routes[AGENTS_URL] = ok("Confirm twice.", { etag: '"a2"' });
     clock.now = START + TTL_MS;
 
-    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true });
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true, result: "content" });
 
     expect((await repository.getBundles(ENVIRONMENT_ID)).bundles[0]).toMatchObject({
       llmsTxt: "# Widgets",
@@ -351,7 +351,7 @@ describe("WebEnvironmentScout", () => {
     routes[INDEX_URL] = notModified();
     clock.now = START + TTL_MS;
 
-    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true });
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true, result: "content" });
 
     const bundle = (await repository.getBundles(ENVIRONMENT_ID)).bundles[0];
     expect(bundle).toMatchObject({ agentsMd: "Confirm twice." });
@@ -373,7 +373,7 @@ describe("WebEnvironmentScout", () => {
     routes[INDEX_URL] = failed();
     clock.now = START + TTL_MS;
 
-    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false });
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false, result: "error" });
     expect(repository.getScoutState(HOST)).toMatchObject({ status: "error", fetchedAt: new Date(clock.now).toISOString() });
     expect(repository.getScoutState(HOST)?.errors).toHaveLength(3);
     expect((await repository.getBundles(ENVIRONMENT_ID)).bundles[0]).toMatchObject({ llmsTxt: "# Widgets", agentsMd: "Confirm first." });
@@ -382,7 +382,7 @@ describe("WebEnvironmentScout", () => {
     routes[INDEX_URL] = ABSENT;
     clock.now = START + 2 * TTL_MS;
 
-    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false });
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false, result: "content" });
     const state = repository.getScoutState(HOST);
     expect(state?.status).toBe("content");
     expect(state?.errors).toEqual([expect.objectContaining({ code: "unreachable_url", url: LLMS_URL })]);
@@ -394,17 +394,183 @@ describe("WebEnvironmentScout", () => {
 
     const [left, right] = await Promise.all([scout.scout(HOST), scout.scout(HOST)]);
 
-    expect(left).toEqual({ status: "scouted", changed: true });
+    expect(left).toEqual({ status: "scouted", changed: true, result: "content" });
     expect(right).toEqual(left);
     expect(urls()).toEqual([LLMS_URL, AGENTS_URL, INDEX_URL]);
   });
 
-  it("refuses a host that is not a bare host before fetching anything", async () => {
+  it("skips a host shape it cannot probe, and throws only for a string that is no host", async () => {
     const { scout, calls } = harness({});
 
-    await expect(scout.scout("user@evil.example")).rejects.toThrow(/Invalid web scout host/);
+    for (const unscoutable of ["user@evil.example", "example.com:8443", "[2606:4700:4700::1111]"]) {
+      expect(await scout.scout(unscoutable)).toEqual({ status: "skipped", changed: false });
+    }
     await expect(scout.scout("exa mple.com")).rejects.toThrow(/Invalid web scout host/);
-    await expect(scout.scout("example.com:8443")).rejects.toThrow(/Invalid web scout host/);
+    await expect(scout.scout("")).rejects.toThrow(/Invalid web scout host/);
     expect(calls).toEqual([]);
+  });
+
+  it("records a transient failure as an error rather than durable emptiness", async () => {
+    const { scout, repository, clock } = harness({ [LLMS_URL]: failed() });
+
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false, result: "error" });
+
+    expect(repository.getScoutState(HOST)).toMatchObject({ status: "error", fetchedAt: new Date(START).toISOString() });
+    expect((await repository.getBundles(ENVIRONMENT_ID)).bundles).toEqual([]);
+    // The shorter error TTL applies, so the host is retried long before a settled answer
+    // would be refreshed.
+    clock.now = START + ERROR_TTL_MS;
+    expect(repository.isStale(HOST, { ttlMs: TTL_MS, errorTtlMs: ERROR_TTL_MS, now: clock.now })).toBe(true);
+    expect(repository.isStale(HOST, { ttlMs: TTL_MS, now: clock.now })).toBe(false);
+  });
+
+  it("keeps the published skill when its fetch fails, and refetches the index next pass", async () => {
+    const first = "---\nname: order-widget\n---\nOrder it.";
+    const second = "---\nname: track-order\n---\nTrack it.";
+    const routes: Routes = {
+      [INDEX_URL]: ok(indexBody([entry("order-widget", first), entry("track-order", second)]), { etag: '"i1"' }),
+      [skillUrl("order-widget")]: ok(first),
+      [skillUrl("track-order")]: ok(second),
+    };
+    const { scout, repository, clock, calls } = harness(routes);
+    await scout.scout(HOST);
+    expect(repository.getScoutState(HOST)?.validators["skills-index"]).toEqual({ etag: '"i1"' });
+
+    routes[skillUrl("track-order")] = failed();
+    clock.now = START + TTL_MS;
+
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false, result: "content" });
+
+    // The skill that failed keeps the body the site published, and the failure is reported.
+    const bundle = (await repository.getBundles(ENVIRONMENT_ID)).bundles[0];
+    expect(bundle?.skills.map((skill) => [skill.id, skill.files[`${skill.id}/SKILL.md`]])).toEqual([
+      ["order-widget", first],
+      ["track-order", second],
+    ]);
+    expect(repository.getScoutState(HOST)?.errors).toEqual([
+      expect.objectContaining({ code: "unreachable_url", url: skillUrl("track-order") }),
+    ]);
+    // Withholding the index validator is what makes the next pass retry the failed skill
+    // instead of taking a 304 on the index and never looking again.
+    expect(repository.getScoutState(HOST)?.validators["skills-index"]).toBeUndefined();
+
+    routes[skillUrl("track-order")] = ok(second);
+    clock.now = START + 2 * TTL_MS;
+    const before = calls.length;
+    await scout.scout(HOST);
+
+    expect(calls.slice(before).filter((call) => call.url === INDEX_URL).map((call) => call.options.ifNoneMatch)).toEqual([undefined]);
+    expect(repository.getScoutState(HOST)?.validators["skills-index"]).toEqual({ etag: '"i1"' });
+    expect(repository.getScoutState(HOST)?.errors).toEqual([]);
+  });
+
+  it("keeps the published skill when its url has gone missing", async () => {
+    const body = "---\nname: order-widget\n---\nOrder it.";
+    const routes: Routes = {
+      [INDEX_URL]: ok(indexBody([entry("order-widget", body)]), { etag: '"i1"' }),
+      [skillUrl("order-widget")]: ok(body),
+    };
+    const { scout, repository, clock } = harness(routes);
+    await scout.scout(HOST);
+
+    routes[skillUrl("order-widget")] = ABSENT;
+    clock.now = START + TTL_MS;
+
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false, result: "content" });
+    const bundle = (await repository.getBundles(ENVIRONMENT_ID)).bundles[0];
+    expect(bundle?.skills[0]?.files["order-widget/SKILL.md"]).toBe(body);
+    expect(repository.getScoutState(HOST)?.errors).toEqual([
+      expect.objectContaining({ code: "unreachable_url", url: skillUrl("order-widget") }),
+    ]);
+  });
+
+  it("takes a skill whose body carries a byte-order mark and stores it without one", async () => {
+    const served = `\uFEFF---\nname: order-widget\n---\nOrder it.`;
+    const { scout, repository } = harness({
+      // The publisher's digest is over the bytes it serves, mark included.
+      [INDEX_URL]: ok(indexBody([entry("order-widget", served)])),
+      [skillUrl("order-widget")]: ok(served),
+    });
+
+    await scout.scout(HOST);
+
+    const bundle = (await repository.getBundles(ENVIRONMENT_ID)).bundles[0];
+    expect(bundle?.skills[0]?.files["order-widget/SKILL.md"]).toBe(served.slice(1));
+    expect(repository.getScoutState(HOST)?.errors).toEqual([]);
+  });
+
+  it("resolves a relative skill url against the index url", async () => {
+    const body = "---\nname: order-widget\n---\nOrder it.";
+    const resolved = `https://${HOST}/.well-known/agent-skills/order-widget.md`;
+    const { scout, repository, urls } = harness({
+      [INDEX_URL]: ok(indexBody([entry("order-widget", body, { url: "order-widget.md" })])),
+      [resolved]: ok(body),
+    });
+
+    await scout.scout(HOST);
+
+    expect(urls()).toContain(resolved);
+    expect((await repository.getBundles(ENVIRONMENT_ID)).bundles[0]?.skills[0]?.files["order-widget/SKILL.md"]).toBe(body);
+  });
+
+  it("drops llms.txt when the host starts serving an empty body for it", async () => {
+    const routes: Routes = { [LLMS_URL]: ok("# Widgets", { etag: '"l1"' }), [AGENTS_URL]: ok("Confirm first.", { etag: '"a1"' }) };
+    const { scout, repository, clock } = harness(routes);
+    await scout.scout(HOST);
+
+    routes[LLMS_URL] = ok("");
+    clock.now = START + TTL_MS;
+
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true, result: "content" });
+
+    const bundle = (await repository.getBundles(ENVIRONMENT_ID)).bundles[0];
+    expect(bundle?.llmsTxt).toBeUndefined();
+    expect(bundle?.agentsMd).toBe("Confirm first.");
+    expect(repository.getScoutState(HOST)?.validators["llms.txt"]).toBeUndefined();
+  });
+
+  it("fetches at most four skills at a time", async () => {
+    const names = Array.from({ length: 8 }, (_value, position) => `skill-${position}`);
+    const bodies = new Map(names.map((name) => [name, `---\nname: ${name}\n---\nDo it.`]));
+    const routes: Routes = { [INDEX_URL]: ok(indexBody(names.map((name) => entry(name, bodies.get(name)!)))) };
+    for (const name of names) routes[skillUrl(name)] = ok(bodies.get(name)!);
+
+    let active = 0;
+    let peak = 0;
+    const { scout, repository } = harness(routes, {
+      fetch: async (url) => {
+        if (!url.startsWith(`https://${HOST}/skills/`)) return routes[url] ?? ABSENT;
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        active -= 1;
+        return routes[url] ?? ABSENT;
+      },
+    });
+
+    await scout.scout(HOST);
+
+    expect((await repository.getBundles(ENVIRONMENT_ID)).bundles[0]?.skills).toHaveLength(names.length);
+    expect(peak).toBe(4);
+  });
+
+  it("leaves no in-flight entry behind when recording the pass throws", async () => {
+    const repository = openRepository();
+    const record = repository.recordScout.bind(repository);
+    let failNext = true;
+    repository.recordScout = (input) => {
+      if (failNext) {
+        failNext = false;
+        throw new Error("store is busy");
+      }
+      return record(input);
+    };
+    const { scout, urls } = harness({ [AGENTS_URL]: ok("Confirm first.") }, { repository });
+
+    await expect(scout.scout(HOST)).rejects.toThrow("store is busy");
+
+    // A second visit must start a fresh pass rather than re-await the failed one.
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true, result: "content" });
+    expect(urls()).toEqual([LLMS_URL, AGENTS_URL, INDEX_URL, LLMS_URL, AGENTS_URL, INDEX_URL]);
   });
 });

@@ -46,8 +46,9 @@ and a read-only repository that serves the result through the normal offer → a
   recorded too (negative entry, same TTL) so they are not re-probed on every visit.
   Client-side debounce (≈1 s focus delay, 60 s per-environment duplicate suppression) is
   relied on and noted; the scout adds a per-host in-flight guard.
-- **Egress policy.** A small dedicated fetch helper: HTTPS only; 5 s timeout per
-  request; 1 MiB response cap; follow at most 3 same-host redirects; refuse hosts that
+- **Egress policy.** A small dedicated fetch helper: HTTPS only; 10 s deadline per
+  fetched resource (the guarded fetch deadline covers DNS, redirects, and the body read
+  for the whole call; skills on slow hosts need the headroom); 1 MiB response cap; follow at most 3 same-host redirects; refuse hosts that
   resolve to loopback/private/link-local addresses; fixed `User-Agent: Rook/<version>
   (+https://github.com/rookkeeper/rook)`; only 2xx bodies are used; 404 and network
   failures are non-errors for `llms.txt`/`AGENTS.md`/index (absent is normal) but are

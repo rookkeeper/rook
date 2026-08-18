@@ -19,7 +19,8 @@ import { parseAgentSkillsDiscoveryIndex, type DiscoverySkillEntry } from "./agen
  * concurrently (conditionally, when the store holds validators), fetches and
  * digest-verifies each `skill-md` the index lists, and records everything found as one
  * `site` bundle. Fetch and content problems become `errors` on the recorded scout rather
- * than exceptions: only a host that could never be scouted (a programmer error) throws.
+ * than exceptions: a host this scout cannot probe is skipped, and only a string that is
+ * not a host at all (a programmer error) throws.
  *
  * Nothing here decides when to scout — the caller triggers a pass and the repository's
  * TTL check answers whether the stored entry is still fresh.
@@ -40,10 +41,19 @@ type ResourceKey = (typeof RESOURCES)[number]["key"];
 /** Concurrent skill fetches per scout pass; small so one site cannot monopolize egress. */
 const SKILL_FETCH_CONCURRENCY = 4;
 
+/** Byte-order mark, stripped from stored text but never from a body before it is hashed. */
+const BOM = "\uFEFF";
+
 export type WebScoutOutcome = {
-  /** 'fresh' means the stored entry was still within its TTL and nothing was fetched. */
-  status: "fresh" | "scouted";
+  /**
+   * - `fresh`: the stored entry was still within its TTL and nothing was fetched.
+   * - `skipped`: the host is well-formed but not something this scout can probe.
+   * - `scouted`: a pass ran and `result` says what it recorded.
+   */
+  status: "fresh" | "scouted" | "skipped";
   changed: boolean;
+  /** The recorded status, present only when `status` is `scouted`. */
+  result?: WebScoutStatus;
 };
 
 /** The slice of a pino-style logger the scout uses. */
@@ -73,6 +83,17 @@ export interface WebEnvironmentScoutOptions {
 
 const NO_OP_LOGGER: WebScoutLogger = { info: () => {}, warn: () => {}, debug: () => {} };
 
+/** Everything one pass carries between its steps. */
+interface ScoutPass {
+  environmentId: string;
+  /** Problems found so far this pass; recorded on the scout, not thrown. */
+  errors: RepositoryReadError[];
+  /** Validators the store held when the pass started. */
+  storedValidators: Record<string, WebScoutValidators>;
+  /** The host's currently stored bundle, or null when nothing is stored. */
+  stored: EnvironmentBundle | null;
+}
+
 export class WebEnvironmentScout {
   private readonly repository: WebEnvironmentRepository;
   private readonly fetch: GuardedFetcher;
@@ -99,11 +120,22 @@ export class WebEnvironmentScout {
   /**
    * Scouts one host, skipping the fetch when the stored entry is still fresh (unless
    * `force`). Concurrent calls for the same host share one pass and one outcome.
+   *
+   * Throws only when `host` is not a host at all; a host shape this scout cannot probe
+   * (an IPv6 literal, a host carrying credentials or a port) resolves to `skipped`.
    */
   async scout(host: string, options: { force?: boolean } = {}): Promise<WebScoutOutcome> {
     const normalized = normalizeHost(host);
     if (!normalized) throw new Error(`Invalid web scout host: ${host}`);
-    const requests = RESOURCES.map((resource) => ({ key: resource.key, url: resourceUrl(normalized, resource.path) }));
+    const requests: { key: ResourceKey; url: string }[] = [];
+    for (const resource of RESOURCES) {
+      const url = resourceUrl(normalized, resource.path);
+      if (url === null) {
+        this.logger.debug({ host: normalized }, "web scout skipped, host cannot be scouted");
+        return { status: "skipped", changed: false };
+      }
+      requests.push({ key: resource.key, url });
+    }
 
     const running = this.inFlight.get(normalized);
     if (running) return running;
@@ -148,59 +180,71 @@ export class WebEnvironmentScout {
         if (result.kind === "error") errors.push(unreachable(environmentId, request.url, result.message));
       }
       const { changed } = this.repository.recordScout({ host, fetchedAt, status: "error", validators: {}, bundle: null, errors });
-      return this.finish(host, "error", changed, { errors: errors.length });
+      return this.finish(host, "error", changed, {}, errors);
     }
 
-    const stored = await this.storedBundle(environmentId, state !== null);
+    const pass: ScoutPass = {
+      environmentId,
+      errors,
+      storedValidators,
+      stored: await this.storedBundle(environmentId, state !== null),
+    };
     const validators: Record<string, WebScoutValidators> = {};
     let nothingNew = true;
 
-    const readText = (key: "llms.txt" | "AGENTS.md", storedValue: string | undefined): string | undefined => {
+    const readText = (key: "llms.txt" | "AGENTS.md"): string | undefined => {
       const { url, result } = byKey.get(key)!;
-      const outcome = this.interpretText(key, url, result, storedValue, storedValidators[key], environmentId, errors);
+      const outcome = this.interpretText(key, url, result, pass);
       if (outcome.validators) validators[key] = outcome.validators;
       if (!outcome.nothingNew) nothingNew = false;
       return outcome.value;
     };
-    const llmsTxt = readText("llms.txt", stored?.llmsTxt);
-    const agentsMd = readText("AGENTS.md", stored?.agentsMd);
+    const llmsTxt = readText("llms.txt");
+    const agentsMd = readText("AGENTS.md");
 
     const skillsIndex = byKey.get("skills-index")!;
-    const scoutedSkills = await this.readSkills(
-      skillsIndex.url,
-      skillsIndex.result,
-      stored?.skills ?? [],
-      storedValidators["skills-index"],
-      environmentId,
-      errors,
-    );
+    const scoutedSkills = await this.readSkills(skillsIndex.url, skillsIndex.result, pass);
     const skills = scoutedSkills.skills;
     if (scoutedSkills.validators) validators["skills-index"] = scoutedSkills.validators;
     if (!scoutedSkills.nothingNew) nothingNew = false;
 
     const hasContent = llmsTxt !== undefined || agentsMd !== undefined || skills.length > 0;
     if (!hasContent) {
-      const { changed } = this.repository.recordScout({ host, fetchedAt, status: "empty", validators, bundle: null, errors });
-      return this.finish(host, "empty", changed, { errors: errors.length });
+      // "Nothing here" is durable knowledge, but only when the site actually said so: if
+      // any of the three requests failed, the emptiness may be the failure talking, so
+      // record it as an error and retry on the shorter error TTL.
+      const status = results.some((result) => result.kind === "error") ? "error" : "empty";
+      const { changed } = this.repository.recordScout({ host, fetchedAt, status, validators, bundle: null, errors });
+      return this.finish(host, status, changed, {}, errors);
     }
 
     // Everything either revalidated or was already known: keep the stored rows and only
     // move the timestamp, the validators, and the errors.
-    const revalidated = nothingNew && stored !== null;
+    const revalidated = nothingNew && pass.stored !== null;
     const bundle = revalidated ? null : buildBundle(environmentId, host, llmsTxt, agentsMd, skills);
     const { changed } = this.repository.recordScout({ host, fetchedAt, status: "content", validators, bundle, errors });
     return this.finish(host, "content", changed, {
       llmsTxt: llmsTxt !== undefined,
       agentsMd: agentsMd !== undefined,
       skills: skills.length,
-      errors: errors.length,
       revalidated,
-    });
+    }, errors);
   }
 
-  private finish(host: string, status: WebScoutStatus, changed: boolean, details: Record<string, unknown>): WebScoutOutcome {
-    this.logger.info({ host, status, changed, ...details }, "scouted web environment");
-    return { status: "scouted", changed };
+  private finish(
+    host: string,
+    status: WebScoutStatus,
+    changed: boolean,
+    details: Record<string, unknown>,
+    errors: RepositoryReadError[],
+  ): WebScoutOutcome {
+    const line = { host, status, changed, ...details };
+    if (errors.length > 0) {
+      this.logger.warn({ ...line, errors: errors.length, errorCodes: countByCode(errors) }, "scouted web environment with errors");
+    } else {
+      this.logger.info(line, "scouted web environment");
+    }
+    return { status: "scouted", changed, result: status };
   }
 
   /** The host's currently stored bundle, read at most once per pass. */
@@ -214,11 +258,9 @@ export class WebEnvironmentScout {
     key: "llms.txt" | "AGENTS.md",
     url: string,
     result: GuardedFetchResult,
-    stored: string | undefined,
-    storedValidators: WebScoutValidators | undefined,
-    environmentId: string,
-    errors: RepositoryReadError[],
+    pass: ScoutPass,
   ): { value?: string; validators?: WebScoutValidators; nothingNew: boolean } {
+    const stored = key === "llms.txt" ? pass.stored?.llmsTxt : pass.stored?.agentsMd;
     switch (result.kind) {
       case "ok": {
         const text = normalizeText(result.body);
@@ -226,11 +268,11 @@ export class WebEnvironmentScout {
         // serves index.html for every path must never become a capability.
         if (text === undefined || looksLikeHtml(text)) {
           if (text !== undefined) {
-            errors.push({
+            pass.errors.push({
               code: "invalid_bundle_contents",
               message: `${url} returned an HTML document instead of ${key}`,
               repository: WEB_REPOSITORY_ID,
-              environmentId,
+              environmentId: pass.environmentId,
               bundleId: WEB_BUNDLE_ID,
               url,
             });
@@ -242,26 +284,25 @@ export class WebEnvironmentScout {
       case "not_modified":
         return {
           value: stored,
-          validators: mergeValidators(storedValidators, validatorsOf(result.etag, result.lastModified)),
+          validators: mergeValidators(pass.storedValidators[key], validatorsOf(result.etag, result.lastModified)),
           nothingNew: true,
         };
       case "absent":
         return { nothingNew: stored === undefined };
       case "error":
         // A transient failure must not cost the site content it already published.
-        errors.push(unreachable(environmentId, url, result.message));
-        return { value: stored, validators: storedValidators, nothingNew: true };
+        pass.errors.push(unreachable(pass.environmentId, url, result.message));
+        return { value: stored, validators: pass.storedValidators[key], nothingNew: true };
     }
   }
 
   private async readSkills(
     url: string,
     result: GuardedFetchResult,
-    stored: BundleArtifact[],
-    storedValidators: WebScoutValidators | undefined,
-    environmentId: string,
-    errors: RepositoryReadError[],
+    pass: ScoutPass,
   ): Promise<{ skills: BundleArtifact[]; validators?: WebScoutValidators; nothingNew: boolean }> {
+    const stored = pass.stored?.skills ?? [];
+    const storedValidators = pass.storedValidators["skills-index"];
     switch (result.kind) {
       case "not_modified":
         // The index is unchanged, so the skills it lists are too: no per-skill refetch.
@@ -269,73 +310,97 @@ export class WebEnvironmentScout {
       case "absent":
         return { skills: [], nothingNew: stored.length === 0 };
       case "error":
-        errors.push(unreachable(environmentId, url, result.message));
+        pass.errors.push(unreachable(pass.environmentId, url, result.message));
         return { skills: stored, validators: storedValidators, nothingNew: true };
       case "ok": {
-        const parsed = parseAgentSkillsDiscoveryIndex(result.body, { maxSkills: this.maxSkills });
+        const parsed = parseAgentSkillsDiscoveryIndex(result.body, { indexUrl: url, maxSkills: this.maxSkills });
         for (const problem of parsed.problems) {
-          errors.push({
+          pass.errors.push({
             code: problem.code,
             message: problem.message,
             repository: WEB_REPOSITORY_ID,
-            environmentId,
+            environmentId: pass.environmentId,
             bundleId: WEB_BUNDLE_ID,
             url: problem.url ?? url,
           });
         }
-        const fetched = await mapWithLimit(parsed.entries, SKILL_FETCH_CONCURRENCY, (entry) => this.fetchSkill(entry, environmentId, errors));
+        const storedByName = new Map(stored.map((artifact) => [artifact.id, artifact]));
+        let anyFailed = false;
+        const fetched = await mapWithLimit(parsed.entries, SKILL_FETCH_CONCURRENCY, async (entry) => {
+          const outcome = await this.fetchSkill(entry, pass);
+          if (outcome.artifact) return outcome.artifact;
+          anyFailed = true;
+          // A skill we could not reach must not cost the site content it already
+          // published; a body that failed its digest is a different matter and is dropped.
+          return outcome.transient ? storedByName.get(entry.name) ?? null : null;
+        });
         return {
           skills: fetched.filter((artifact): artifact is BundleArtifact => artifact !== null),
-          validators: validatorsOf(result.etag, result.lastModified),
+          // Storing the index validator after a partial pass would let the next pass take
+          // a 304 on the index and never retry the skills that failed, so the validator is
+          // withheld until one whole pass succeeds.
+          ...(anyFailed ? {} : { validators: validatorsOf(result.etag, result.lastModified) }),
           nothingNew: false,
         };
       }
     }
   }
 
-  /** Fetches one `skill-md` entry and keeps it only when its body matches the digest. */
-  private async fetchSkill(entry: DiscoverySkillEntry, environmentId: string, errors: RepositoryReadError[]): Promise<BundleArtifact | null> {
+  /**
+   * Fetches one `skill-md` entry and keeps it only when its body matches the digest.
+   * `transient` marks a failure that says nothing about the content itself, so the caller
+   * may keep what it already stored under this name.
+   */
+  private async fetchSkill(entry: DiscoverySkillEntry, pass: ScoutPass): Promise<{ artifact: BundleArtifact | null; transient: boolean }> {
     let result: GuardedFetchResult;
     try {
       result = await this.fetch(entry.url, { timeoutMs: this.requestTimeoutMs });
     } catch (cause) {
-      errors.push(unreachable(environmentId, entry.url, cause instanceof Error ? cause.message : String(cause)));
-      return null;
+      pass.errors.push(unreachable(pass.environmentId, entry.url, cause instanceof Error ? cause.message : String(cause)));
+      return { artifact: null, transient: true };
     }
     if (result.kind !== "ok") {
       const detail = result.kind === "absent" ? `status ${result.status}` : result.kind === "error" ? result.message : "unexpected 304";
-      errors.push(unreachable(environmentId, entry.url, `skill '${entry.name}': ${detail}`));
-      return null;
+      pass.errors.push(unreachable(pass.environmentId, entry.url, `skill '${entry.name}': ${detail}`));
+      return { artifact: null, transient: true };
     }
+    // Hashed over the body exactly as served, because that is what the publisher hashed.
     const digest = createHash("sha256").update(Buffer.from(result.body, "utf8")).digest("hex");
     if (`sha256:${digest}` !== entry.digest) {
-      errors.push({
+      pass.errors.push({
         code: "invalid_bundle_contents",
         message: `Skill '${entry.name}' does not match its digest (expected ${entry.digest}, got sha256:${digest})`,
         repository: WEB_REPOSITORY_ID,
-        environmentId,
+        environmentId: pass.environmentId,
         bundleId: WEB_BUNDLE_ID,
         url: entry.url,
       });
-      return null;
+      return { artifact: null, transient: false };
     }
     // Keyed `<id>/SKILL.md` like every other repository, so readers that flatten a bundle's
     // files (the RookKit preview) do not collide on a bare `SKILL.md`.
-    return { id: entry.name, files: { [`${entry.name}/SKILL.md`]: result.body }, sourceUrl: entry.url };
+    return {
+      artifact: { id: entry.name, files: { [`${entry.name}/SKILL.md`]: stripBom(result.body) }, sourceUrl: entry.url },
+      transient: false,
+    };
   }
 }
 
-/** The URL of one host-rooted resource; hosts that are not bare hosts are rejected here. */
-function resourceUrl(host: string, path: string): string {
+/**
+ * The URL of one host-rooted resource, or null when `host` is not a bare host this scout
+ * can probe. Credentials, ports, and other URL syntax hiding in a "host" would send the
+ * request somewhere other than the environment being scouted; an IPv6 literal is not a
+ * site identity worth scouting.
+ */
+function resourceUrl(host: string, path: string): string | null {
   let url: URL;
   try {
     url = new URL(path, `https://${host}/`);
   } catch {
-    throw new Error(`Invalid web scout host: ${host}`);
+    return null;
   }
-  // Credentials, ports, and other URL syntax hiding in a "host" would send the request
-  // somewhere other than the environment being scouted.
-  if (url.hostname !== host) throw new Error(`Invalid web scout host: ${host}`);
+  if (url.hostname.startsWith("[")) return null;
+  if (url.hostname !== host) return null;
   return url.toString();
 }
 
@@ -374,9 +439,20 @@ function unreachable(environmentId: string, url: string, message: string): Repos
   };
 }
 
+function countByCode(errors: RepositoryReadError[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const error of errors) counts[error.code] = (counts[error.code] ?? 0) + 1;
+  return counts;
+}
+
+/** A BOM belongs to the bytes on the wire, not to the text Rook stores and shows. */
+function stripBom(text: string): string {
+  return text.startsWith(BOM) ? text.slice(BOM.length) : text;
+}
+
 /** Line endings and trailing whitespace are normalized so serving quirks do not churn the bundle hash. */
 function normalizeText(raw: string): string | undefined {
-  const text = raw.replaceAll("\r\n", "\n").replaceAll("\r", "\n").trimEnd();
+  const text = stripBom(raw).replaceAll("\r\n", "\n").replaceAll("\r", "\n").trimEnd();
   return text.length === 0 ? undefined : text;
 }
 

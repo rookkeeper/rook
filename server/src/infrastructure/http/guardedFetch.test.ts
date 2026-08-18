@@ -37,6 +37,17 @@ describe("guardedFetch", () => {
     });
   });
 
+  it("keeps a leading byte-order mark in the decoded body", async () => {
+    const served = "\uFEFF# llms";
+    const { impl } = stubFetch(() => new Response(new TextEncoder().encode(served), { status: 200 }));
+
+    const result = await guardedFetch("https://example.com/llms.txt", { fetch: impl, lookup: PUBLIC_LOOKUP });
+
+    // The body has to stand for the exact bytes served, so a digest taken over it matches
+    // the one the publisher computed.
+    expect(result).toMatchObject({ kind: "ok", body: served });
+  });
+
   it("maps 304, 404, and 500 responses to not_modified, absent, and an http error", async () => {
     const call = async (status: number, headers?: Record<string, string>) => {
       const { impl } = stubFetch(() => new Response(status === 304 ? null : "body", { status, headers }));

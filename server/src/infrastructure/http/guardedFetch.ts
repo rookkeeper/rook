@@ -13,6 +13,9 @@ import { isDisallowedAddress } from "./ipAddressPolicy.js";
  *
  * DNS is checked before the request but the resolved address is not pinned for the
  * connection, so a DNS-rebinding attack is out of scope for this guard.
+ *
+ * Bodies are decoded as UTF-8 byte-for-byte: a leading BOM is preserved so `body` still
+ * represents exactly what the server sent.
  */
 
 export const DEFAULT_TIMEOUT_MS = 5_000;
@@ -80,7 +83,10 @@ function rejectOnAbort(signal: AbortSignal): Promise<never> {
 async function readCappedText(response: Response, maxBytes: number): Promise<{ capped: false; text: string } | { capped: true }> {
   if (!response.body) return { capped: false, text: "" };
   const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8");
+  // `ignoreBOM` keeps a leading BOM in the decoded text instead of swallowing it, so the
+  // string still stands for the exact bytes served — callers that hash a body against a
+  // publisher's digest depend on that.
+  const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
   let received = 0;
   let text = "";
   while (true) {

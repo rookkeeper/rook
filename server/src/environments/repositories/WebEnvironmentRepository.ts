@@ -207,7 +207,7 @@ export interface WebScoutState {
   /** ISO-8601 timestamp of the scout that produced this entry. */
   fetchedAt: string;
   status: WebScoutStatus;
-  /** Conditional-request validators keyed by resource ('llms.txt', 'AGENTS.md', 'skills-index', 'skill:<name>'). */
+  /** Conditional-request validators keyed by resource: 'llms.txt', 'AGENTS.md', 'skills-index'. */
   validators: Record<string, WebScoutValidators>;
   /** Problems the last scout hit, served alongside whatever content survived them. */
   errors: RepositoryReadError[];
