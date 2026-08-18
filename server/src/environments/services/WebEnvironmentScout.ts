@@ -211,9 +211,11 @@ export class WebEnvironmentScout {
     const hasContent = llmsTxt !== undefined || agentsMd !== undefined || skills.length > 0;
     if (!hasContent) {
       // "Nothing here" is durable knowledge, but only when the site actually said so: if
-      // any of the three requests failed, the emptiness may be the failure talking, so
-      // record it as an error and retry on the shorter error TTL.
-      const status = results.some((result) => result.kind === "error") ? "error" : "empty";
+      // any of the three requests failed, or an index listed skills none of which could be
+      // fetched, the emptiness may be the failure talking, so record it as an error and
+      // retry on the shorter error TTL.
+      const failed = scoutedSkills.anyFailed || results.some((result) => result.kind === "error");
+      const status = failed ? "error" : "empty";
       const { changed } = this.repository.recordScout({ host, fetchedAt, status, validators, bundle: null, errors });
       return this.finish(host, status, changed, {}, errors);
     }
@@ -300,20 +302,24 @@ export class WebEnvironmentScout {
     url: string,
     result: GuardedFetchResult,
     pass: ScoutPass,
-  ): Promise<{ skills: BundleArtifact[]; validators?: WebScoutValidators; nothingNew: boolean }> {
+  ): Promise<{ skills: BundleArtifact[]; validators?: WebScoutValidators; nothingNew: boolean; anyFailed: boolean }> {
     const stored = pass.stored?.skills ?? [];
     const storedValidators = pass.storedValidators["skills-index"];
     switch (result.kind) {
       case "not_modified":
         // The index is unchanged, so the skills it lists are too: no per-skill refetch.
-        return { skills: stored, validators: mergeValidators(storedValidators, validatorsOf(result.etag, result.lastModified)), nothingNew: true };
+        return { skills: stored, validators: mergeValidators(storedValidators, validatorsOf(result.etag, result.lastModified)), nothingNew: true, anyFailed: false };
       case "absent":
-        return { skills: [], nothingNew: stored.length === 0 };
+        return { skills: [], nothingNew: stored.length === 0, anyFailed: false };
       case "error":
         pass.errors.push(unreachable(pass.environmentId, url, result.message));
-        return { skills: stored, validators: storedValidators, nothingNew: true };
+        // The index fetch itself failing is already visible to the caller in the results.
+        return { skills: stored, validators: storedValidators, nothingNew: true, anyFailed: false };
       case "ok": {
-        const parsed = parseAgentSkillsDiscoveryIndex(result.body, { indexUrl: url, maxSkills: this.maxSkills });
+        // A redirect can move the index to another directory, and the guard only follows
+        // same-host hops, so the url it was finally served from is what relative entries
+        // are relative to.
+        const parsed = parseAgentSkillsDiscoveryIndex(result.body, { indexUrl: result.finalUrl, maxSkills: this.maxSkills });
         for (const problem of parsed.problems) {
           pass.errors.push({
             code: problem.code,
@@ -341,6 +347,7 @@ export class WebEnvironmentScout {
           // withheld until one whole pass succeeds.
           ...(anyFailed ? {} : { validators: validatorsOf(result.etag, result.lastModified) }),
           nothingNew: false,
+          anyFailed,
         };
       }
     }

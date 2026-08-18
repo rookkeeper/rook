@@ -15,10 +15,19 @@ const START = Date.parse("2026-08-18T12:00:00.000Z");
 const TTL_MS = 60_000;
 const ERROR_TTL_MS = 10_000;
 
-type Routes = Record<string, GuardedFetchResult>;
+/** A route may leave `finalUrl` out; `respond` fills in the url that was requested. */
+type Route = GuardedFetchResult | (Omit<Extract<GuardedFetchResult, { kind: "ok" }>, "finalUrl"> & { finalUrl?: string });
 
-function ok(body: string, validators: { etag?: string; lastModified?: string } = {}): GuardedFetchResult {
-  return { kind: "ok", status: 200, body, finalUrl: "https://example.com/", ...validators };
+type Routes = Record<string, Route>;
+
+function ok(body: string, validators: { etag?: string; lastModified?: string; finalUrl?: string } = {}): Route {
+  return { kind: "ok", status: 200, body, ...validators };
+}
+
+/** The routed answer for one url, defaulting `finalUrl` to the url asked for. */
+function respond(routes: Routes, url: string): GuardedFetchResult {
+  const route = routes[url] ?? ABSENT;
+  return route.kind === "ok" ? { ...route, finalUrl: route.finalUrl ?? url } : route;
 }
 
 function notModified(validators: { etag?: string; lastModified?: string } = {}): GuardedFetchResult {
@@ -80,7 +89,7 @@ describe("WebEnvironmentScout", () => {
       now: () => clock.now,
       fetch: async (url, options) => {
         calls.push({ url, options });
-        return routes[url] ?? ABSENT;
+        return respond(routes, url);
       },
       ...overrides,
     });
@@ -513,6 +522,38 @@ describe("WebEnvironmentScout", () => {
     expect((await repository.getBundles(ENVIRONMENT_ID)).bundles[0]?.skills[0]?.files["order-widget/SKILL.md"]).toBe(body);
   });
 
+  it("resolves a relative skill url against the url the index was finally served from", async () => {
+    const body = "---\nname: alpha\n---\nDo alpha.";
+    const resolved = `https://${HOST}/skills/alpha/SKILL.md`;
+    const { scout, repository, urls } = harness({
+      // A redirect moved the index into /skills/, so its relative entries hang off there.
+      [INDEX_URL]: ok(indexBody([entry("alpha", body, { url: "./alpha/SKILL.md" })]), { finalUrl: `https://${HOST}/skills/index.json` }),
+      [resolved]: ok(body),
+    });
+
+    await scout.scout(HOST);
+
+    expect(urls()).toContain(resolved);
+    expect((await repository.getBundles(ENVIRONMENT_ID)).bundles[0]?.skills[0]?.files["alpha/SKILL.md"]).toBe(body);
+  });
+
+  it("records an error when the only content an index offered could not be fetched", async () => {
+    const body = "---\nname: order-widget\n---\nOrder it.";
+    const { scout, repository } = harness({
+      [INDEX_URL]: ok(indexBody([entry("order-widget", body)]), { etag: '"i1"' }),
+      [skillUrl("order-widget")]: failed(),
+    });
+
+    // Emptiness here is the failed skill fetch talking, not the site saying it publishes
+    // nothing, so the pass is an error and gets retried on the shorter error TTL.
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: false, result: "error" });
+    expect(repository.getScoutState(HOST)).toMatchObject({ status: "error" });
+    expect(repository.getScoutState(HOST)?.errors).toEqual([
+      expect.objectContaining({ code: "unreachable_url", url: skillUrl("order-widget") }),
+    ]);
+    expect((await repository.getBundles(ENVIRONMENT_ID)).bundles).toEqual([]);
+  });
+
   it("drops llms.txt when the host starts serving an empty body for it", async () => {
     const routes: Routes = { [LLMS_URL]: ok("# Widgets", { etag: '"l1"' }), [AGENTS_URL]: ok("Confirm first.", { etag: '"a1"' }) };
     const { scout, repository, clock } = harness(routes);
@@ -539,12 +580,12 @@ describe("WebEnvironmentScout", () => {
     let peak = 0;
     const { scout, repository } = harness(routes, {
       fetch: async (url) => {
-        if (!url.startsWith(`https://${HOST}/skills/`)) return routes[url] ?? ABSENT;
+        if (!url.startsWith(`https://${HOST}/skills/`)) return respond(routes, url);
         active += 1;
         peak = Math.max(peak, active);
         await new Promise((resolve) => setTimeout(resolve, 1));
         active -= 1;
-        return routes[url] ?? ABSENT;
+        return respond(routes, url);
       },
     });
 

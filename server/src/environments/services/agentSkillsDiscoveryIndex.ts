@@ -134,11 +134,16 @@ function resolveHttpsUrl(value: string, indexUrl: string): string | undefined {
     return undefined;
   }
   if (resolved.protocol !== "https:") return undefined;
+  // `https://apple.com@evil.example/x.md` reads as a link to apple.com but points at
+  // evil.example, and credentials in a skill url are never something to fetch with or
+  // show, so the resolved url carries none.
+  resolved.username = "";
+  resolved.password = "";
   const href = resolved.toString();
   return href.length > MAX_URL_LENGTH ? undefined : href;
 }
 
-/** Renders an untrusted value as a short single line safe to put in a message. */
+/** Renders an untrusted value as a bounded-length string safe to put in a message. */
 function clip(value: unknown): string {
   const text = typeof value === "string" ? value : String(value);
   return text.length <= MAX_QUOTED_LENGTH ? text : `${text.slice(0, MAX_QUOTED_LENGTH)}…`;

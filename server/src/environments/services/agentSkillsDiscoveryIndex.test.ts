@@ -73,6 +73,20 @@ describe("parseAgentSkillsDiscoveryIndex", () => {
     ]);
   });
 
+  it("strips credentials from a resolved entry url", () => {
+    const parsed = parseAgentSkillsDiscoveryIndex(index([
+      entry({ name: "lookalike", url: "https://apple.com@evil.example/x.md" }),
+      entry({ name: "credentialed", url: "https://user:pw@cdn.example/x.md" }),
+    ]), OPTIONS);
+
+    expect(parsed.problems).toEqual([]);
+    for (const skill of parsed.entries) expect(skill.url).not.toContain("@");
+    expect(parsed.entries.map((skill) => skill.url)).toEqual([
+      "https://evil.example/x.md",
+      "https://cdn.example/x.md",
+    ]);
+  });
+
   it("bounds the untrusted text it quotes back in a problem", () => {
     const parsed = parseAgentSkillsDiscoveryIndex(index([entry({ digest: "z".repeat(5000) })]), OPTIONS);
 
