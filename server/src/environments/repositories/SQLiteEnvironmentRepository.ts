@@ -13,7 +13,7 @@ import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
 /** SQLite-backed repository using current capability content and bundle memberships. */
 export class SQLiteEnvironmentRepository extends EnvironmentRepository {
-  private readonly db: DatabaseSync;
+  protected readonly db: DatabaseSync;
   private readonly ownedDatastore: EnvironmentRepositoryDatastore | null;
 
   constructor(
@@ -198,7 +198,7 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     this.ownedDatastore?.close();
   }
 
-  private writeBundle(bundle: EnvironmentBundle, bundleId: string): void {
+  protected writeBundle(bundle: EnvironmentBundle, bundleId: string, publisher = "default"): void {
     this.db.prepare("DELETE FROM bundles WHERE bundle_id = ? AND environment_id = ?").run(bundleId, bundle.environmentId);
     const capabilities: Array<{ type: CapabilityType; name: string; files: Record<string, string> }> = [];
     if (bundle.agentsMd?.trim()) capabilities.push({ type: "instructions", name: "AGENTS.md", files: { "AGENTS.md": bundle.agentsMd } });
@@ -216,12 +216,12 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
       `).run(capabilityId, capability.type, capability.name, filesJson, hashFiles(capability.files));
       this.db.prepare(`
         INSERT INTO bundles (bundle_id, environment_id, capability_id, publisher)
-        VALUES (?, ?, ?, 'default')
-      `).run(bundleId, bundle.environmentId, capabilityId);
+        VALUES (?, ?, ?, ?)
+      `).run(bundleId, bundle.environmentId, capabilityId, publisher);
     }
   }
 
-  private upsertEnvironment(environment: EnvironmentRecord): void {
+  protected upsertEnvironment(environment: EnvironmentRecord): void {
     const metadataJson = JSON.stringify(environment.metadata ?? {});
     this.db.prepare(`
       INSERT INTO environments (environment_id, display_name, description, metadata_json)
@@ -247,7 +247,7 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     return row?.capability_id ? { capabilityId: row.capability_id, deletedAt: row.deleted_at ?? null } : undefined;
   }
 
-  private deleteOrphanedCapabilities(): void {
+  protected deleteOrphanedCapabilities(): void {
     this.db.exec("DELETE FROM capabilities WHERE capability_id NOT IN (SELECT capability_id FROM bundles)");
   }
 }
