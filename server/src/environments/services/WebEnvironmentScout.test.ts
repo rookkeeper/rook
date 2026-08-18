@@ -111,7 +111,7 @@ describe("WebEnvironmentScout", () => {
       agentsMd: "Confirm before ordering.",
       errors: [],
     });
-    expect(loaded.bundles[0]?.skills.map((skill) => [skill.id, skill.files["SKILL.md"]])).toEqual([
+    expect(loaded.bundles[0]?.skills.map((skill) => [skill.id, skill.files[`${skill.id}/SKILL.md`]])).toEqual([
       ["order-widget", first],
       ["track-order", second],
     ]);
@@ -306,7 +306,7 @@ describe("WebEnvironmentScout", () => {
     ]);
     const bundle = (await repository.getBundles(ENVIRONMENT_ID)).bundles[0];
     expect(bundle).toMatchObject({ llmsTxt: "# Widgets", agentsMd: "Confirm first." });
-    expect(bundle?.skills[0]?.files["SKILL.md"]).toBe(body);
+    expect(bundle?.skills[0]?.files["order-widget/SKILL.md"]).toBe(body);
     expect(repository.getScoutState(HOST)).toMatchObject({
       fetchedAt: new Date(START + TTL_MS).toISOString(),
       validators: { "llms.txt": { etag: '"l2"' } },
@@ -332,6 +332,35 @@ describe("WebEnvironmentScout", () => {
       agentsMd: "Confirm twice.",
     });
     expect(repository.getScoutState(HOST)?.validators).toEqual({ "llms.txt": { etag: '"l1"' }, "AGENTS.md": { etag: '"a2"' } });
+  });
+
+  it("carries the stored skills into a bundle rebuilt for changed instructions", async () => {
+    const first = "---\nname: order-widget\n---\nOrder it.";
+    const second = "---\nname: track-order\n---\nTrack it.";
+    const routes: Routes = {
+      [AGENTS_URL]: ok("Confirm first.", { etag: '"a1"' }),
+      [INDEX_URL]: ok(indexBody([entry("order-widget", first), entry("track-order", second)]), { etag: '"i1"' }),
+      [skillUrl("order-widget")]: ok(first),
+      [skillUrl("track-order")]: ok(second),
+    };
+    const { scout, repository, clock, urls } = harness(routes);
+    await scout.scout(HOST);
+    const before = urls().length;
+
+    routes[AGENTS_URL] = ok("Confirm twice.", { etag: '"a2"' });
+    routes[INDEX_URL] = notModified();
+    clock.now = START + TTL_MS;
+
+    expect(await scout.scout(HOST)).toEqual({ status: "scouted", changed: true });
+
+    const bundle = (await repository.getBundles(ENVIRONMENT_ID)).bundles[0];
+    expect(bundle).toMatchObject({ agentsMd: "Confirm twice." });
+    expect(bundle?.skills.map((skill) => [skill.id, skill.files[`${skill.id}/SKILL.md`]])).toEqual([
+      ["order-widget", first],
+      ["track-order", second],
+    ]);
+    // The unchanged index means the skills themselves are never refetched.
+    expect(urls().slice(before)).toEqual([LLMS_URL, AGENTS_URL, INDEX_URL]);
   });
 
   it("keeps stored content when the site stops answering", async () => {

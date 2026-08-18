@@ -20,8 +20,9 @@ and a read-only repository that serves the result through the normal offer → a
   the Cloudflare Agent Skills Discovery RFC (`$schema` must be a recognized
   `schemas.agentskills.io/discovery/…` URI; entries need `name`, `type`, `description`,
   `url`, `digest`). Only `type: "skill-md"` entries are fetched (the `url` is a single
-  `SKILL.md`, verified against `sha256:<hex>`); `archive` entries and entries whose
-  digest fails are skipped and reported in the bundle's `errors`. Path-scoped ids
+  `SKILL.md`, verified against `sha256:<hex>` and stored in the skill's file map as
+  `<name>/SKILL.md`); `archive` entries and entries whose digest fails are skipped
+  and reported in the bundle's `errors`. Path-scoped ids
   (`web:host/path`) are not scouted. MCP is out of scope (#3, #107).
 - **Shape.** New `WebEnvironmentRepository` (`repositoryId: "web"`, read-only, only
   `getBundles`, `listEnvironments`, `searchBundles` implemented) serving from a persistent store filled
@@ -78,20 +79,20 @@ and a read-only repository that serves the result through the normal offer → a
 
 ## Work checklist
 
-- [ ] `server/src/infrastructure/http/scoutFetch.ts` (name TBD in-code): the egress
+- [x] `server/src/infrastructure/http/scoutFetch.ts` (name TBD in-code): the egress
       helper above, injectable `fetch`, typed result (`ok | absent | error`), unit tests
       for timeout, size cap, redirect limit, private-address refusal, HTTPS-only.
-- [ ] Persistent store: `<ROOK_HOME>/web-environment-repository.db` opened through
+- [x] Persistent store: `<ROOK_HOME>/web-environment-repository.db` opened through
       the existing `EnvironmentRepositoryDatastore` schema plus a `web_scouts` table
       (host, fetched_at, per-resource etag/last-modified, last_status); ingest/replace
       bundle rows for a host; read side for `getBundles`; staleness query.
-- [ ] `WebEnvironmentScout` in `server/src/environments/`: given a host, fetch the
+- [x] `WebEnvironmentScout` in `server/src/environments/`: given a host, fetch the
       three resources (conditional requests when the store has validators), parse the
       discovery index (schema check, field validation, `skill-md` only, digest
       verification), assemble capability file maps and `errors`, write to the store;
       per-host in-flight dedupe; negative entries; `scout(host)` returns whether the
       stored result changed.
-- [ ] `WebEnvironmentRepository`: `getBundles(environmentId)` for `web:<host>` ids
+- [x] `WebEnvironmentRepository`: `getBundles(environmentId)` for `web:<host>` ids
       served from the store; `listEnvironments`/`searchBundles` over stored hosts;
       writes remain no-op. Wire into `CompositeEnvironmentRepository` in
       `server/src/index.ts` after `location-context`.
@@ -99,7 +100,7 @@ and a read-only repository that serves the result through the normal offer → a
       unknown or stale (in the register route or a thin wrapper around
       `registerCandidateEnvironment`) and re-register the candidate when the result
       changed. Keep it fire-and-forget with logging.
-- [ ] Shared types: `unreachable_url`, `unsupported_capability` error codes;
+- [x] Shared types: `unreachable_url`, `unsupported_capability` error codes;
       `sourceUrl` hints; confirm `hashEnvironmentBundle` covers the new content
       unchanged.
 - [ ] Tests (vitest, `// @vitest-environment node`, injected fake fetch): scout

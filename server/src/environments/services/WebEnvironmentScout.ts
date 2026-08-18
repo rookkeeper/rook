@@ -319,7 +319,9 @@ export class WebEnvironmentScout {
       });
       return null;
     }
-    return { id: entry.name, files: { "SKILL.md": result.body }, sourceUrl: entry.url };
+    // Keyed `<id>/SKILL.md` like every other repository, so readers that flatten a bundle's
+    // files (the RookKit preview) do not collide on a bare `SKILL.md`.
+    return { id: entry.name, files: { [`${entry.name}/SKILL.md`]: result.body }, sourceUrl: entry.url };
   }
 }
 
