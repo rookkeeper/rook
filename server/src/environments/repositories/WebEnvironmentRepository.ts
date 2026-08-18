@@ -93,12 +93,12 @@ export class WebEnvironmentRepository extends SQLiteEnvironmentRepository {
    * last scout errored use `errorTtlMs` when given, so a transient failure can be retried
    * sooner than settled knowledge is refreshed.
    */
-  isStale(host: string, ttlMs: number, now = Date.now(), errorTtlMs?: number): boolean {
+  isStale(host: string, options: WebScoutStalenessOptions): boolean {
     const state = this.getScoutState(host);
     if (!state) return true;
     const fetchedAt = Date.parse(state.fetchedAt);
-    const effectiveTtl = state.status === "error" && errorTtlMs !== undefined ? errorTtlMs : ttlMs;
-    return Number.isNaN(fetchedAt) || fetchedAt + effectiveTtl <= now;
+    const effectiveTtl = state.status === "error" && options.errorTtlMs !== undefined ? options.errorTtlMs : options.ttlMs;
+    return Number.isNaN(fetchedAt) || fetchedAt + effectiveTtl <= (options.now ?? Date.now());
   }
 
   /**
@@ -188,6 +188,14 @@ export function defaultWebEnvironmentRepositoryPath(): string {
 }
 
 export type WebScoutStatus = "content" | "empty" | "error";
+
+export interface WebScoutStalenessOptions {
+  ttlMs: number;
+  /** Shorter TTL applied when the last scout errored, so failures are retried sooner. */
+  errorTtlMs?: number;
+  /** Epoch milliseconds to compare against (defaults to now). */
+  now?: number;
+}
 
 export interface WebScoutValidators {
   etag?: string;

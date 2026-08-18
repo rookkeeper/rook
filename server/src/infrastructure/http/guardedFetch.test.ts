@@ -176,6 +176,25 @@ describe("guardedFetch", () => {
     expect(result).toMatchObject({ kind: "error", reason: "timeout" });
   });
 
+  it("stops an endless redirect chain at the deadline even when the fetch ignores the signal", async () => {
+    let hop = 0;
+    const { impl } = stubFetch(async () => {
+      hop += 1;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      return new Response(null, { status: 302, headers: { location: `https://example.com/hop-${hop}` } });
+    });
+
+    const result = await guardedFetch("https://example.com/llms.txt", {
+      fetch: impl,
+      lookup: PUBLIC_LOOKUP,
+      timeoutMs: 5,
+      maxRedirects: 1_000,
+    });
+
+    expect(result).toMatchObject({ kind: "error", reason: "timeout" });
+    expect(hop).toBeLessThan(1_000);
+  });
+
   it("applies the deadline to the DNS lookup too", async () => {
     const { impl, calls } = stubFetch(() => new Response("never reached"));
 

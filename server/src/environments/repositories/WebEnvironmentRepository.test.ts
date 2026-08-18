@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import type { EnvironmentBundle, RepositoryReadError } from "../../shared/environmentRepository.js";
 import { EnvironmentRepositoryDatastore } from "../datastores/EnvironmentRepositoryDatastore.js";
 import { hostForWebEnvironmentId, normalizeHost, WebEnvironmentRepository, webEnvironmentIdForHost } from "./WebEnvironmentRepository.js";
@@ -75,7 +76,7 @@ describe("WebEnvironmentRepository", () => {
 
     expect(await repository.getBundles("web:unknown.example")).toEqual({ environment: null, bundles: [], errors: [] });
     expect(repository.getScoutState("unknown.example")).toBeNull();
-    expect(repository.isStale("unknown.example", 24 * 60 * 60_000)).toBe(true);
+    expect(repository.isStale("unknown.example", { ttlMs: 24 * 60 * 60_000 })).toBe(true);
   });
 
   it("serves a scouted host as one site bundle published by the host", async () => {
@@ -202,9 +203,9 @@ describe("WebEnvironmentRepository", () => {
     record(repository, { status: "error", bundle: null, validators: {} });
     const fetchedAt = Date.parse(FETCHED_AT);
 
-    expect(repository.isStale(HOST, 60_000, fetchedAt + 30_000)).toBe(false);
-    expect(repository.isStale(HOST, 60_000, fetchedAt + 30_000, 10_000)).toBe(true);
-    expect(repository.isStale(HOST, 60_000, fetchedAt + 5_000, 10_000)).toBe(false);
+    expect(repository.isStale(HOST, { ttlMs: 60_000, now: fetchedAt + 30_000 })).toBe(false);
+    expect(repository.isStale(HOST, { ttlMs: 60_000, now: fetchedAt + 30_000, errorTtlMs: 10_000 })).toBe(true);
+    expect(repository.isStale(HOST, { ttlMs: 60_000, now: fetchedAt + 5_000, errorTtlMs: 10_000 })).toBe(false);
   });
 
   it("round-trips conditional-request validators and answers staleness from them", () => {
@@ -226,8 +227,8 @@ describe("WebEnvironmentRepository", () => {
     });
 
     const fetchedAt = Date.parse(FETCHED_AT);
-    expect(repository.isStale(HOST, 60_000, fetchedAt + 30_000)).toBe(false);
-    expect(repository.isStale(HOST, 60_000, fetchedAt + 60_000)).toBe(true);
+    expect(repository.isStale(HOST, { ttlMs: 60_000, now: fetchedAt + 30_000 })).toBe(false);
+    expect(repository.isStale(HOST, { ttlMs: 60_000, now: fetchedAt + 60_000 })).toBe(true);
   });
 
   it("refuses the inherited bundle writers", () => {
@@ -269,6 +270,41 @@ describe("WebEnvironmentRepository", () => {
     expect((await reopened.getBundles(`web:${HOST}`)).bundles[0]?.agentsMd).toBe("Confirm before ordering.");
     expect(reopened.getScoutState(HOST)).toMatchObject({ host: HOST, status: "content", validators: { "llms.txt": { etag: '"v1"' } } });
     reopened.close();
+  });
+
+  it("keeps rows written before the errors column existed", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "rook-web-repo-legacy-"));
+    tempDirs.push(directory);
+    const location = path.join(directory, "web-environment-repository.db");
+    const legacy = new DatabaseSync(location);
+    legacy.exec(`
+      CREATE TABLE web_scouts (
+        host TEXT PRIMARY KEY,
+        fetched_at TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('content', 'empty', 'error'))
+      );
+      CREATE TABLE web_scout_resources (
+        host TEXT NOT NULL REFERENCES web_scouts(host) ON DELETE CASCADE,
+        resource TEXT NOT NULL,
+        etag TEXT,
+        last_modified TEXT,
+        PRIMARY KEY (host, resource)
+      );
+    `);
+    legacy.prepare("INSERT INTO web_scouts (host, fetched_at, status) VALUES (?, ?, ?)").run(HOST, FETCHED_AT, "empty");
+    legacy.prepare("INSERT INTO web_scout_resources (host, resource, etag, last_modified) VALUES (?, ?, ?, ?)")
+      .run(HOST, "llms.txt", '"v1"', null);
+    legacy.close();
+
+    const migrated = new WebEnvironmentRepository(location);
+    expect(migrated.getScoutState(HOST)).toEqual({
+      host: HOST,
+      fetchedAt: FETCHED_AT,
+      status: "empty",
+      validators: { "llms.txt": { etag: '"v1"' } },
+      errors: [],
+    });
+    migrated.close();
   });
 
   it("maps hosts to host-rooted web environment ids and back", () => {

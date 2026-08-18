@@ -128,6 +128,9 @@ export async function guardedFetch(url: string, options: GuardedFetchOptions = {
   try {
     let screened = false;
     for (let hop = 0; ; hop += 1) {
+      // The deadline is enforced here too, so an injected fetch that ignores the abort
+      // signal cannot keep the redirect loop alive past it.
+      if (timedOut) return fail("timeout", `Request to ${url} timed out after ${timeoutMs}ms`);
       if (target.protocol !== "https:") return fail("policy", `Only https: URLs are allowed, got ${target.protocol}//`);
       const hostname = hostnameOf(target);
       if (!hostname) return fail("policy", `URL has no hostname: ${target.href}`);
