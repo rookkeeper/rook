@@ -60,6 +60,9 @@ final class RookMacModel: ObservableObject {
     @Published var offerBundles: [EnvironmentBundlePreview] = []
     @Published var offerLoading = false
     @Published var offerError = ""
+    @Published var offerPreviewError = ""
+    @Published var offerPreviewBundle: EnvironmentBundlePreview?
+    @Published var offerSectionExpansion: [String: Bool] = [:]
 
     // Environment join/leave
     @Published var environmentListItems: [EnvironmentListItem] = []
@@ -193,6 +196,10 @@ final class RookMacModel: ObservableObject {
         environmentOfferController.resolveOffer = { [weak self] environmentId, bundleHash, decision in
             try await self?.chatSessionController.resolveEnvironmentOffer(environmentId: environmentId, bundleHash: bundleHash, decision: decision)
         }
+        environmentOfferController.loadPreview = { [weak self] environmentId in
+            guard let self else { throw CancellationError() }
+            return try await self.api.environmentPreview(environmentId: environmentId)
+        }
 
         environmentListController.onStateChange = { [weak self] in
             self?.syncEnvironmentListState()
@@ -256,6 +263,9 @@ final class RookMacModel: ObservableObject {
         offerBundles = environmentOfferController.offerBundles
         offerLoading = environmentOfferController.offerLoading
         offerError = environmentOfferController.offerError
+        offerPreviewError = environmentOfferController.offerPreviewError
+        offerPreviewBundle = environmentOfferController.offerPreviewBundle
+        offerSectionExpansion = environmentOfferController.offerSectionExpansion
     }
 
     private func syncEnvironmentListState() {
@@ -557,6 +567,7 @@ final class RookMacModel: ObservableObject {
 
     func reviewPendingOffer() {
         guard pendingOffer != nil else { return }
+        environmentOfferController.ensureOfferPreviewLoaded()
         panelMode = .environmentOffer
     }
 
@@ -565,7 +576,16 @@ final class RookMacModel: ObservableObject {
     }
 
     func dismissOfferView() {
+        environmentOfferController.clearOfferViewState()
         panelMode = currentSession != nil ? .chat : .home
+    }
+
+    func reloadOfferPreview() {
+        environmentOfferController.reloadOfferPreview()
+    }
+
+    func setOfferSection(_ id: String, expanded: Bool) {
+        environmentOfferController.setOfferSection(id, expanded: expanded)
     }
 
     // MARK: - Environment join / leave

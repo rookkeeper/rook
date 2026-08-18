@@ -125,6 +125,15 @@ public struct EnvironmentArtifactPreview: Codable, Equatable, Identifiable {
     public var sortedFilePaths: [String] {
         files.keys.sorted()
     }
+
+    /// The artifact's main Markdown document: `<id>/SKILL.md`, then a bare
+    /// `SKILL.md`, then the first `.md` file by path.
+    public var primaryMarkdown: String? {
+        if let content = files["\(id)/SKILL.md"] { return content }
+        if let content = files["SKILL.md"] { return content }
+        guard let path = sortedFilePaths.first(where: { $0.lowercased().hasSuffix(".md") }) else { return nil }
+        return files[path]
+    }
 }
 
 /// Phone -> server payload asking which `location:` environments are likely
@@ -222,17 +231,19 @@ public struct RepositoryReadError: Codable, Equatable, Identifiable {
     public let environmentId: String
     public let bundleId: String?
     public let path: String?
+    public let url: String?
 
-    public init(code: String, message: String, repository: String, environmentId: String, bundleId: String?, path: String?) {
+    public init(code: String, message: String, repository: String, environmentId: String, bundleId: String?, path: String?, url: String? = nil) {
         self.code = code
         self.message = message
         self.repository = repository
         self.environmentId = environmentId
         self.bundleId = bundleId
         self.path = path
+        self.url = url
     }
 
-    public var id: String { [code, repository, environmentId, bundleId ?? "", path ?? ""].joined(separator: "|") }
+    public var id: String { [code, repository, environmentId, bundleId ?? "", path ?? "", url ?? ""].joined(separator: "|") }
 }
 
 public struct EnvironmentBundlePreview: Codable, Equatable, Identifiable {
@@ -247,9 +258,10 @@ public struct EnvironmentBundlePreview: Codable, Equatable, Identifiable {
     public let apps: [EnvironmentArtifactPreview]
     public let facts: [EnvironmentArtifactPreview]
     public let llmsTxt: String?
+    public let agentsMd: String?
     public let errors: [RepositoryReadError]
 
-    public init(id: String, bundleId: String, environmentId: String, repository: String, valid: Bool, bundleHash: String, skills: [EnvironmentArtifactPreview], mcpServers: [EnvironmentArtifactPreview], apps: [EnvironmentArtifactPreview], errors: [RepositoryReadError], facts: [EnvironmentArtifactPreview] = [], llmsTxt: String? = nil) {
+    public init(id: String, bundleId: String, environmentId: String, repository: String, valid: Bool, bundleHash: String, skills: [EnvironmentArtifactPreview], mcpServers: [EnvironmentArtifactPreview], apps: [EnvironmentArtifactPreview], errors: [RepositoryReadError], facts: [EnvironmentArtifactPreview] = [], llmsTxt: String? = nil, agentsMd: String? = nil) {
         self.id = id
         self.bundleId = bundleId
         self.environmentId = environmentId
@@ -261,7 +273,18 @@ public struct EnvironmentBundlePreview: Codable, Equatable, Identifiable {
         self.apps = apps
         self.facts = facts
         self.llmsTxt = llmsTxt
+        self.agentsMd = agentsMd
         self.errors = errors
+    }
+
+    /// The `SKILL.md` body of every skill in the bundle, in bundle order.
+    /// Repositories key skill files as `<skill-id>/SKILL.md`; older layouts use a
+    /// bare `SKILL.md`; failing both, the first Markdown file is used.
+    public var skillMarkdown: [(id: String, content: String)] {
+        skills.compactMap { skill in
+            guard let content = skill.primaryMarkdown else { return nil }
+            return (id: skill.id, content: content)
+        }
     }
 
     public var allArtifacts: [EnvironmentArtifactPreview] {

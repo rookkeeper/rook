@@ -114,7 +114,7 @@ and a read-only repository that serves the result through the normal offer → a
       hosts; composite integration; manager re-registration refreshes summaries and
       produces an offer on entry. One env-gated live test (`ROOK_WEB_SCOUT_LIVE=1`) against a
       real public site.
-- [ ] Mac approval preview: `EnvironmentOfferDetail` loads the preview for the
+- [x] Mac approval preview: `EnvironmentOfferDetail` loads the preview for the
       offered environment, matches the bundle by hash, and renders `llms.txt`,
       `AGENTS.md`, skill `SKILL.md` contents (collapsible) and errors; RookKit type
       gains `agentsMd` if needed; loading/failure states; RookKit decoding test.

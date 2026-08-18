@@ -2,9 +2,10 @@ import Foundation
 import RookKit
 import SwiftUI
 
-/// Simple bundle-level approval UI: shows the offered bundle and the names of
-/// the skills / MCP servers / apps it contains, then posts one of the four
-/// decisions for that specific bundle hash.
+/// Bundle-level approval UI: shows the offered bundle, the names of the skills /
+/// MCP servers / apps it contains, the bundle's actual content (see
+/// `BundleContentPreviewCard`), then posts one of the four decisions for that
+/// specific bundle hash.
 struct EnvironmentOfferDetail: View {
     @ObservedObject var model: RookMacModel
 
@@ -21,6 +22,7 @@ struct EnvironmentOfferDetail: View {
             if let offer = model.pendingOffer {
                 sourceCard(offer)
                 bundleSummaryCard(offer)
+                BundleContentPreviewCard(model: model, offer: offer)
                 decisionsCard
             } else {
                 PanelCard {

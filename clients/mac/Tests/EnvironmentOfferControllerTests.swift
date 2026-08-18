@@ -94,12 +94,131 @@ final class EnvironmentOfferControllerTests: XCTestCase {
     func testClearOfferViewStateResetsTransientState() {
         let controller = EnvironmentOfferController()
         controller.handleEnvironmentOffered(makeOffer(bundleHash: "hash-1"))
+        controller.setOfferSection("agents-md", expanded: false)
 
         controller.clearOfferViewState()
 
         XCTAssertEqual(controller.offerBundles, [])
         XCTAssertFalse(controller.offerLoading)
         XCTAssertEqual(controller.offerError, "")
+        XCTAssertEqual(controller.offerPreviewError, "")
+        XCTAssertEqual(controller.offerSectionExpansion, [:])
+    }
+
+    func testFirstOfferLoadsPreviewAndMatchesBundleByHash() async {
+        let controller = EnvironmentOfferController()
+        var requested: [String] = []
+        controller.loadPreview = { environmentId in
+            requested.append(environmentId)
+            return EnvironmentPreview(environmentId: environmentId, bundles: [
+                self.makeBundle(bundleId: "other", bundleHash: "hash-other"),
+                self.makeBundle(bundleId: "default", bundleHash: "hash-1", agentsMd: "# Rules"),
+            ])
+        }
+
+        controller.handleEnvironmentOffered(makeOffer(bundleHash: "hash-1"))
+        XCTAssertTrue(controller.offerLoading)
+        await waitForCondition { !controller.offerLoading }
+
+        XCTAssertEqual(requested, ["mac:md.obsidian"])
+        XCTAssertEqual(controller.offerBundles.count, 2)
+        XCTAssertEqual(controller.offerPreviewBundle?.bundleHash, "hash-1")
+        XCTAssertEqual(controller.offerPreviewBundle?.agentsMd, "# Rules")
+        XCTAssertEqual(controller.offerPreviewError, "")
+    }
+
+    func testPreviewFallsBackToBundleIdWhenHashDoesNotMatch() async {
+        let controller = EnvironmentOfferController()
+        controller.loadPreview = { environmentId in
+            EnvironmentPreview(environmentId: environmentId, bundles: [
+                self.makeBundle(bundleId: "default", bundleHash: "hash-newer"),
+            ])
+        }
+
+        controller.handleEnvironmentOffered(makeOffer(bundleHash: "hash-1"))
+        await waitForCondition { !controller.offerLoading }
+
+        XCTAssertEqual(controller.offerPreviewBundle?.bundleHash, "hash-newer")
+    }
+
+    func testPreviewFailureRecordsErrorAndReloadRetries() async {
+        let controller = EnvironmentOfferController()
+        var attempts = 0
+        controller.loadPreview = { environmentId in
+            attempts += 1
+            if attempts == 1 { throw URLError(.notConnectedToInternet) }
+            return EnvironmentPreview(environmentId: environmentId, bundles: [
+                self.makeBundle(bundleId: "default", bundleHash: "hash-1"),
+            ])
+        }
+
+        controller.handleEnvironmentOffered(makeOffer(bundleHash: "hash-1"))
+        await waitForCondition { !controller.offerLoading }
+        XCTAssertFalse(controller.offerPreviewError.isEmpty)
+        XCTAssertNil(controller.offerPreviewBundle)
+
+        controller.reloadOfferPreview()
+        XCTAssertEqual(controller.offerPreviewError, "")
+        await waitForCondition { !controller.offerLoading }
+
+        XCTAssertEqual(attempts, 2)
+        XCTAssertEqual(controller.offerPreviewBundle?.bundleHash, "hash-1")
+    }
+
+    func testResolvingHeadOfferLoadsPreviewForNextOffer() async {
+        let controller = EnvironmentOfferController()
+        var requested: [String] = []
+        controller.loadPreview = { environmentId in
+            requested.append(environmentId)
+            return EnvironmentPreview(environmentId: environmentId, bundles: [])
+        }
+        controller.handleEnvironmentOffered(makeOffer(bundleHash: "hash-1"))
+        controller.handleEnvironmentOffered(makeOffer(bundleHash: "hash-2"))
+        await waitForCondition { !controller.offerLoading }
+
+        controller.handleEnvironmentOfferResolved(bundleHash: "hash-1")
+        await waitForCondition { !controller.offerLoading }
+
+        XCTAssertEqual(requested.count, 2)
+        XCTAssertNil(controller.offerPreviewBundle)
+    }
+
+    func testEnsureOfferPreviewLoadedOnlyLoadsWhenEmpty() async {
+        let controller = EnvironmentOfferController()
+        var attempts = 0
+        controller.loadPreview = { environmentId in
+            attempts += 1
+            return EnvironmentPreview(environmentId: environmentId, bundles: [
+                self.makeBundle(bundleId: "default", bundleHash: "hash-1"),
+            ])
+        }
+        controller.handleEnvironmentOffered(makeOffer(bundleHash: "hash-1"))
+        await waitForCondition { !controller.offerLoading }
+
+        controller.ensureOfferPreviewLoaded()
+        XCTAssertEqual(attempts, 1)
+
+        controller.clearOfferViewState()
+        controller.ensureOfferPreviewLoaded()
+        await waitForCondition { !controller.offerLoading }
+        XCTAssertEqual(attempts, 2)
+        XCTAssertEqual(controller.offerPreviewBundle?.bundleHash, "hash-1")
+    }
+
+    private func makeBundle(bundleId: String, bundleHash: String, agentsMd: String? = nil) -> EnvironmentBundlePreview {
+        EnvironmentBundlePreview(
+            id: "mac:md.obsidian#\(bundleId)",
+            bundleId: bundleId,
+            environmentId: "mac:md.obsidian",
+            repository: "official",
+            valid: true,
+            bundleHash: bundleHash,
+            skills: [],
+            mcpServers: [],
+            apps: [],
+            errors: [],
+            agentsMd: agentsMd
+        )
     }
 
     private func makeOffer(bundleHash: String) -> EnvironmentOffer {
