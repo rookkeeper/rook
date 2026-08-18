@@ -4,6 +4,7 @@ import type { EnvironmentDecision } from "../support/types.js";
 import type { EnvironmentIdentifier } from "../../location/EnvironmentIdentifier.js";
 import type { LocationRegistrar } from "../../location/LocationRegistrar.js";
 import type { AgentRuntimeManager } from "../../runtime/services/AgentRuntimeManager.js";
+import type { WebScoutTrigger } from "../services/WebScoutTrigger.js";
 import type { CandidateEnvironmentRecord, CandidateEnvironmentMetadata, IdentifyAvailableRequest, IdentifySource } from "../../shared/environment.js";
 
 export async function registerEnvironmentRoutes(
@@ -12,6 +13,7 @@ export async function registerEnvironmentRoutes(
   environmentIdentifier: EnvironmentIdentifier,
   locationRegistrar: LocationRegistrar,
   runtimeManager?: AgentRuntimeManager,
+  webScoutTrigger?: WebScoutTrigger,
 ): Promise<void> {
   app.post<{ Body: { id?: unknown; metadata?: unknown } }>("/api/environments/register", async (request, reply) => {
     const id = request.body?.id;
@@ -56,9 +58,12 @@ export async function registerEnvironmentRoutes(
     const candidate: CandidateEnvironmentRecord = { id: id.trim(), metadata: typedMetadata };
     request.log.info({ environmentId: candidate.id, displayName: candidate.metadata.displayName }, "environment candidate registered");
 
-    void environmentManager.registerCandidateEnvironment(candidate).catch((error) => {
-      request.log.warn({ environmentId: candidate.id, error }, "environment candidate finalization failed");
-    });
+    // Register first, then scout the host if it is a web environment; a changed scout
+    // result re-registers the candidate so its summary reflects the new bundle.
+    void environmentManager.registerCandidateEnvironment(candidate)
+      .catch((error) => request.log.warn({ environmentId: candidate.id, error }, "environment candidate finalization failed"))
+      .then(() => webScoutTrigger?.handleCandidate(candidate))
+      .catch((error) => request.log.warn({ environmentId: candidate.id, error }, "web scout trigger failed"));
     const registeredAt = new Date().toISOString();
     return { ok: true, id: candidate.id, registeredAt };
   });

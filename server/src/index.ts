@@ -12,6 +12,8 @@ import { ProjectDirectoryEnvironmentRepository } from "./environments/repositori
 import { LocationContextRepository } from "./environments/repositories/LocationContextRepository.js";
 import { defaultWebEnvironmentRepositoryPath, WebEnvironmentRepository } from "./environments/repositories/WebEnvironmentRepository.js";
 import { EnvironmentRepositoryService } from "./environments/services/EnvironmentRepositoryService.js";
+import { WebEnvironmentScout, type GuardedFetcher } from "./environments/services/WebEnvironmentScout.js";
+import { WebScoutTrigger } from "./environments/services/WebScoutTrigger.js";
 import { JsonlEnvironmentMetadataCaptureSink } from "./environments/services/environmentMetadataCapture.js";
 import { EnvironmentIdentifier } from "./location/EnvironmentIdentifier.js";
 import { MockBuildingSkillSuggester } from "./location/BuildingSkillSuggester.js";
@@ -59,8 +61,22 @@ export interface BuildServerOptions {
   personalEnvironmentRepositoryDatabase?: string;
   /** Optional store of website capabilities scouted for `web:` environments. */
   webEnvironmentRepositoryDatabase?: string;
+  /**
+   * Web scouting on `web:` candidate registration. `enabled` defaults to true unless
+   * `ROOK_WEB_SCOUT_DISABLED=1`; disabling only stops new scouts, the repository still
+   * serves already-stored content. `fetch` is a test hook for the scout's egress.
+   */
+  webScout?: { enabled?: boolean; fetch?: GuardedFetcher; ttlMs?: number; errorTtlMs?: number };
   /** Test hook: observe registered routes. */
   onRoute?: (route: { method: string | readonly string[]; url: string; websocket?: boolean }) => void;
+}
+
+/** A numeric env override, or undefined when unset or not a number (the default applies). */
+function optionalNumberEnv(name: string): number | undefined {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {
@@ -112,6 +128,23 @@ export async function buildServer(options: BuildServerOptions = {}) {
     skillSuggester: new MockBuildingSkillSuggester(),
   });
   const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
+  const webScoutEnabled = options.webScout?.enabled ?? process.env.ROOK_WEB_SCOUT_DISABLED !== "1";
+  const webScoutTtlMs = options.webScout?.ttlMs ?? optionalNumberEnv("ROOK_WEB_SCOUT_TTL_MS");
+  const webScoutErrorTtlMs = options.webScout?.errorTtlMs ?? optionalNumberEnv("ROOK_WEB_SCOUT_ERROR_TTL_MS");
+  const webScoutTrigger = webScoutEnabled
+    ? new WebScoutTrigger({
+      scout: new WebEnvironmentScout({
+        repository: webEnvironmentRepository,
+        logger: app.log,
+        fetch: options.webScout?.fetch,
+        ttlMs: webScoutTtlMs,
+        errorTtlMs: webScoutErrorTtlMs,
+      }),
+      environmentManager,
+      logger: app.log,
+    })
+    : undefined;
+  app.log.info({ ttlMs: webScoutTtlMs ?? "default", errorTtlMs: webScoutErrorTtlMs ?? "default" }, `web scout ${webScoutEnabled ? "enabled" : "disabled"}`);
   const sessionRepository = new SqliteSessionRepository(datastore);
   const transcriptRepository = new SessionTranscriptRepository(datastore);
   const workspaceManager = await CapabilityWorkspaceManager.create();
@@ -137,7 +170,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   app.get("/api/health", async () => ({ ok: true, service: "rook" }));
   await registerRuntimeRoutes(app, runtimeManager);
   await registerSessionRoutes(app, runtimeManager, transcriptRepository);
-  await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar, runtimeManager);
+  await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar, runtimeManager, webScoutTrigger);
   await registerDiagnosticRoutes(app, environmentManager);
   await registerAcpFacadeRoute(app, runtimeManager, auth);
 

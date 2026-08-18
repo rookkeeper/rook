@@ -97,7 +97,7 @@ and a read-only repository that serves the result through the normal offer → a
       served from the store; `listEnvironments`/`searchBundles` over stored hosts;
       writes remain no-op. Wire into `CompositeEnvironmentRepository` in
       `server/src/index.ts` after `location-context`.
-- [ ] Trigger: hook `web:` candidate registration to `scout(host)` when the host is
+- [x] Trigger: hook `web:` candidate registration to `scout(host)` when the host is
       unknown or stale (in the register route or a thin wrapper around
       `registerCandidateEnvironment`) and re-register the candidate when the result
       changed. Keep it fire-and-forget with logging.
