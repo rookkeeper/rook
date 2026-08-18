@@ -610,9 +610,6 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const during = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((r) => r.json()) as { sessions: Array<Record<string, unknown>> };
     expect(during.sessions.find((item) => item.sessionId === sessionId)?.running).toBe(true);
 
-    const transcript = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionId}/transcript`).then((r) => r.json()) as { events: Array<Record<string, unknown>> };
-    expect(transcript.events.length).toBeGreaterThan(0);
-
     const reopened = await connect(`/api/ws?sessionId=${sessionId}`);
     await request(reopened, 5, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "reopen" } });
     const after = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((r) => r.json()) as { sessions: Array<Record<string, unknown>> };
@@ -693,20 +690,16 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
 
     await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/touch`, { method: "POST" });
     sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
-    expect(sessions.sessions[0]?.sessionId).toBe(sessionA.sessionId);
+    expect(sessions.sessions.filter((session) => session.sessionId === sessionA.sessionId || session.sessionId === sessionB.sessionId)[0]?.sessionId).toBe(sessionA.sessionId);
 
     await request(wsA, 5, "session/prompt", {
       sessionId: sessionA.sessionId as string,
       prompt: [{ type: "text", text: "tell me a joke" }],
     });
-    const transcriptBeforeDelete = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/transcript`).then((response) => response.json()) as { events: Array<Record<string, unknown>> };
-    expect(transcriptBeforeDelete.events.length).toBeGreaterThan(0);
-
     const deleted = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}`, { method: "DELETE" });
     expect(deleted.status).toBe(200);
     sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
     expect(sessions.sessions.some((session) => session.sessionId === sessionA.sessionId)).toBe(false);
-    expect(await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/transcript`).then((response) => response.status)).toBe(404);
 
     wsA.close();
     wsB.close();

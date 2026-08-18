@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { JsonObject, JsonRpcMessage, RuntimeNotification } from "../SessionRuntime.js";
 import type { AgentRuntimeManager } from "../services/AgentRuntimeManager.js";
 import type { ServerAuth } from "../../infrastructure/auth.js";
+import { boundedClientMessage } from "../clientMessage.js";
 
 /** One session-bound ACP JSON-RPC WebSocket facade. */
 export async function registerAcpFacadeRoute(app: FastifyInstance, runtimes: AgentRuntimeManager, auth: ServerAuth): Promise<void> {
@@ -16,7 +17,7 @@ export async function registerAcpFacadeRoute(app: FastifyInstance, runtimes: Age
     let environmentOffers = false;
     let boundSessionId = queryBoundSessionId(request.raw.url);
     const send: RuntimeNotification = (message) => {
-      if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
+      if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(boundedClientMessage(message)));
     };
     const subscribe = (sessionId: string) => {
       if (!subscriptions.has(sessionId)) subscriptions.set(sessionId, runtimes.subscribe(sessionId, send, { environmentOffers }));

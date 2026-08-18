@@ -119,14 +119,6 @@ public struct RookAPI {
         return response.sessions.map { AgentSessionSummary(raw: $0) }
     }
 
-    public func sessionTranscript(sessionId: String) async throws -> [JSONValue] {
-        struct TranscriptResponse: Decodable {
-            let events: [JSONValue]
-        }
-        let response: TranscriptResponse = try await get(path: "api/sessions/\(sessionId)/transcript", query: [:])
-        return response.events
-    }
-
     public func renameSession(sessionId: String, title: String) async throws -> AgentSessionSummary {
         AgentSessionSummary(raw: try await patchJSON(
             path: "api/sessions/\(sessionId)",

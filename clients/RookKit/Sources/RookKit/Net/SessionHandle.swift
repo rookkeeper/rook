@@ -131,33 +131,17 @@ public final class SessionHandle {
         }
     }
 
-    public func attach(transcript events: [JSONValue]) async throws {
-        if isLoaded {
-            Self.logger.info("session handle attach reused session=\(self.sessionId, privacy: .public)")
-            onStateChange?()
-            return
-        }
-        let timed = RookPerformance.begin(
-            "AttachTranscript",
-            operation: "session-handle-attach-transcript",
-            description: "session=\(self.sessionId) events=\(events.count)",
-            logger: Self.logger,
-            signposter: RookLog.sessionSignposter,
-            slowThresholdMs: 250,
-            hangThresholdMs: 1_000
-        )
+    public func reloadFromRuntime() async throws {
+        let previousBlocks = blocks
+        let previousLoaded = isLoaded
+        isLoaded = false
+        resetVisibleState(preserveQueuedMessages: true)
         do {
-            resetVisibleState()
-            for event in events {
-                applyTranscriptEvent(event)
-            }
-            try await ensureSocketConnected()
-            socket.selectSession(sessionId)
-            isLoaded = true
-            onStateChange?()
-            timed.finish(details: "blocks=\(blocks.count)")
+            try await load()
         } catch {
-            timed.fail(error)
+            blocks = previousBlocks
+            isLoaded = previousLoaded
+            onStateChange?()
             throw error
         }
     }
@@ -279,9 +263,9 @@ public final class SessionHandle {
         }
     }
 
-    private func resetVisibleState() {
+    private func resetVisibleState(preserveQueuedMessages: Bool = false) {
         blocks = []
-        queuedMessages = []
+        if !preserveQueuedMessages { queuedMessages = [] }
         isRunning = false
         statusLine = ""
         contextUsage = nil
@@ -293,96 +277,6 @@ public final class SessionHandle {
         enteredEnvironments = []
         blockCounter = 0
         scrollTick = 0
-    }
-
-    private func applyTranscriptEvent(_ event: JSONValue) {
-        let kind = event["kind"]?.stringValue ?? ""
-        switch kind {
-        case "user_message_chunk":
-            if let text = event["text"]?.stringValue { appendBlock(.user(text: text)) }
-        case "agent_message_chunk":
-            if let text = event["text"]?.stringValue { appendBlock(.assistantText(text: text, streaming: false)) }
-        case "agent_thought_chunk":
-            if let text = event["text"]?.stringValue { appendBlock(.thinking(text: text, streaming: false)) }
-        case "tool_call":
-            guard let toolCallId = event["toolCallId"]?.stringValue else { return }
-            let state = ToolBlockState(
-                toolCallId: toolCallId,
-                title: event["title"]?.stringValue ?? "Tool",
-                kindLabel: event["toolKind"]?.stringValue ?? "",
-                status: transcriptStatus(event["status"]?.stringValue),
-                arguments: stringifyTranscriptJSON(event["rawInput"]),
-                output: stringifyTranscriptJSON(event["output"] ?? event["rawOutput"])
-            )
-            appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
-        case "tool_call_update":
-            guard let toolCallId = event["toolCallId"]?.stringValue else { return }
-            updateTool(toolCallId) { tool in
-                if let toolName = event["toolName"]?.stringValue, tool.title.isEmpty { tool.title = toolName }
-                if event["rawInput"] != nil {
-                    tool.arguments = stringifyTranscriptJSON(event["rawInput"])
-                }
-                let outputDelta = event["outputDelta"]?.stringValue
-                switch event["status"]?.stringValue {
-                case "pending": advanceToolStatus(&tool, to: .pending)
-                case "in_progress":
-                    advanceToolStatus(&tool, to: .running)
-                    if let outputDelta { tool.output += outputDelta }
-                    else if event["rawOutput"] != nil { tool.output = stringifyTranscriptJSON(event["rawOutput"]) }
-                case "completed":
-                    advanceToolStatus(&tool, to: .completed)
-                    if let outputDelta { tool.output += outputDelta }
-                    else if event["rawOutput"] != nil { tool.output = stringifyTranscriptJSON(event["rawOutput"]) }
-                case "failed":
-                    advanceToolStatus(&tool, to: .failed)
-                    if let outputDelta { tool.output += outputDelta }
-                    else if event["rawOutput"] != nil { tool.output = stringifyTranscriptJSON(event["rawOutput"]) }
-                case "cancelled": advanceToolStatus(&tool, to: .cancelled)
-                default: break
-                }
-            }
-        case "plan_update":
-            if case .array(let entries)? = event["entries"] {
-                let planEntries = entries.enumerated().compactMap { index, item -> PlanEntry? in
-                    guard let content = item["content"]?.stringValue ?? item["text"]?.stringValue else { return nil }
-                    return PlanEntry(id: Int(item["id"]?.numberValue ?? Double(index)), content: content, priority: item["priority"]?.stringValue ?? "", status: item["status"]?.stringValue ?? "")
-                }
-                upsertPlanBlock(planEntries)
-            }
-        case "usage_update":
-            if let used = event["used"]?.numberValue, let size = event["size"]?.numberValue {
-                contextUsage = ContextUsageState(used: Int(used), size: Int(size), cost: nil)
-            }
-        case "run_completed":
-            isRunning = false
-            statusLine = ""
-        case "run_failed":
-            isRunning = false
-            statusLine = ""
-            if let message = event["message"]?.stringValue { appendErrorBlock(source: "run", message: message) }
-        default:
-            break
-        }
-    }
-
-    private func transcriptStatus(_ raw: String?) -> ToolBlockStatus {
-        switch raw {
-        case "in_progress": return .running
-        case "completed": return .completed
-        case "failed": return .failed
-        case "cancelled": return .cancelled
-        case "ready": return .ready
-        case "input_streaming": return .inputStreaming
-        default: return .pending
-        }
-    }
-
-    private func stringifyTranscriptJSON(_ value: JSONValue?) -> String {
-        guard let value else { return "" }
-        if case .string(let text) = value { return text }
-        if case .null = value { return "" }
-        if let data = try? JSONEncoder().encode(value), let text = String(data: data, encoding: .utf8) { return text }
-        return ""
     }
 
     // MARK: - Private: connection
@@ -413,20 +307,29 @@ public final class SessionHandle {
                         hangThresholdMs: 1_000
                     )
                     try await ensureSocketConnected()
-                    try await socket.loadSession(sessionId)
+                    try await reloadFromRuntime()
                     guard !Task.isCancelled else { return }
                     reconnecting = false
                     timed.finish(details: "queuedMessages=\(self.queuedMessages.count)")
                     deliverNextQueuedIfIdle()
                 } catch {
                     Self.logger.warning("session handle reconnect failed session=\(self.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                    if !Task.isCancelled { scheduleReconnect(delaySeconds: 3) }
+                    if !Task.isCancelled {
+                        if shouldRetryReconnect(error) { scheduleReconnect(delaySeconds: 3) }
+                        else { reconnecting = false; appendErrorBlock(source: "connection", message: error.localizedDescription) }
+                    }
                 }
             } else if !Task.isCancelled {
                 Self.logger.info("session handle reconnect skipped unhealthy server session=\(self.sessionId, privacy: .public)")
                 scheduleReconnect(delaySeconds: 3)
             }
         }
+    }
+
+    private func shouldRetryReconnect(_ error: Error) -> Bool {
+        let message = error.localizedDescription.lowercased()
+        let permanentMarkers = ["unknown session", "missing session", "invalid", "not found", "unsupported", "corrupt", "message too long"]
+        return !permanentMarkers.contains { message.contains($0) }
     }
 
     // MARK: - Private: delivery

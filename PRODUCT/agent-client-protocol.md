@@ -14,9 +14,9 @@ Fastify Rook server
 one runtime subprocess per public session
 ```
 
-Client interaction uses a session-bound WebSocket at `/api/ws?sessionId=...` plus REST for health, session listing, transcript hydration, session rename/delete/view-touch management, environment previews, registration, and decisions. An unbound socket can create a session and becomes bound to it.
+Client interaction uses a session-bound WebSocket at `/api/ws?sessionId=...` plus REST for health, session listing, session rename/delete/view-touch management, environment previews, registration, and decisions. An unbound socket can create a session and becomes bound to it. Session history is populated exclusively through requester-private ACP `session/load` replay.
 
-The server maps public session ids to runtime-local ACP session ids and owns coalesced logical transcript persistence rather than storing transport chunks as separate messages. A second client can hydrate a running session from the server transcript without asking the runtime to replay publicly; the current in-progress logical record is available as a snapshot. Session recency is also server-owned: clients explicitly touch/view a session over REST when entering it so the shared list moves it to the top even if no new prompt is sent.
+The server maps public session ids to runtime-local ACP session ids and does not persist or normalize transcript notifications. Loaded clients retain session handles and their ACP connections in memory, including for background sessions; a genuine disconnect reloads through ACP and replaces cached presentation state. Client-facing ACP notifications are bounded to 10 kB without modifying runtime history. Session recency is server-owned: clients explicitly touch/view a session over REST when entering it so the shared list moves it to the top even if no new prompt is sent.
 
 ## Environment integration
 

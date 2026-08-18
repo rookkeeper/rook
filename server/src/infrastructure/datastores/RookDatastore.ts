@@ -11,6 +11,10 @@ export class RookDatastore {
     const resolvedLocation = location ?? process.env.ROOK_DATABASE_PATH ?? path.join(getRookHomeDir(), "rook.sqlite");
     if (resolvedLocation !== ":memory:") mkdirSync(path.dirname(resolvedLocation), { recursive: true });
     this.db = new DatabaseSync(resolvedLocation);
+    // THIS IS FOR BACKWARDS COMPATIBILITY
+    // Remove the obsolete transcript copy from existing application databases; no
+    // application code reads or recreates this table after the ACP-only migration.
+    this.db.exec(`DROP TABLE IF EXISTS session_transcript_events`);
   }
 
   close(): void {

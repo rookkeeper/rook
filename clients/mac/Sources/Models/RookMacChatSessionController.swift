@@ -152,14 +152,7 @@ final class ChatSessionController {
                 let handle = getOrCreateHandle(for: session)
                 currentSession = session
                 wireHandle(handle)
-                if handle.isLoaded {
-                    try await handle.load()
-                } else if session.running {
-                    let events = try await api.sessionTranscript(sessionId: session.id)
-                    try await handle.attach(transcript: events)
-                } else {
-                    try await handle.load()
-                }
+                try await handle.load()
                 if acknowledge {
                     let touched = try await api.touchSession(sessionId: session.id)
                     currentSession = touched

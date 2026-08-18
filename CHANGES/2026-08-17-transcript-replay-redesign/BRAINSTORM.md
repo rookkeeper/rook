@@ -59,8 +59,7 @@ Rook could temporarily rely exclusively on ACP runtime history for playback and 
 
 ## Remaining questions
 
-1. What truncation representation should fit within the agreed 10 kB client-message limit, including useful image/tool-result metadata?
-2. Which specific ACP errors belong in the transient-retry versus permanent-failure categories, within the agreed rule that transient failures retry and permanent failures stop?
+1. Which specific ACP errors belong in the transient-retry versus permanent-failure categories, within the agreed rule that transient failures retry and permanent failures stop?
 
 ## Resolution
 
