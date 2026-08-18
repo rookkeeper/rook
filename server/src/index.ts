@@ -71,12 +71,15 @@ export interface BuildServerOptions {
   onRoute?: (route: { method: string | readonly string[]; url: string; websocket?: boolean }) => void;
 }
 
-/** A numeric env override, or undefined when unset or not a number (the default applies). */
+/**
+ * A non-negative numeric env override, or undefined when unset, empty, negative, or not a
+ * number (the default applies). Zero is accepted so a TTL of `0` genuinely disables caching.
+ */
 function optionalNumberEnv(name: string): number | undefined {
   const raw = process.env[name];
   if (raw === undefined || raw.trim() === "") return undefined;
   const value = Number(raw);
-  return Number.isFinite(value) && value > 0 ? value : undefined;
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {

@@ -28,8 +28,9 @@ and a read-only repository that serves the result through the normal offer → a
   `getBundles`, `listEnvironments`, `searchBundles` implemented) serving from a persistent store filled
   by a `WebEnvironmentScout`. One synthesized bundle per host: `bundleId: "site"`,
   `id: "<envId>#site"`, `repository: "web"`, `publisher: <host>`, `editable` unset so
-  materialization takes the read-only path. A host with nothing found yields
-  `environment` but zero bundles (mirrors `ProjectDirectoryEnvironmentRepository`).
+  materialization takes the read-only path. A host that was scouted and found
+  empty is remembered but yields no environment record and no bundles; an unknown host
+  yields nothing.
 - **Trigger and persistence.** Scouting starts when a `web:` candidate is registered
   (`POST /api/environments/register`, already fire-and-forget). `getBundles` never does
   network I/O; it reads a **persistent SQLite store** so scouted capabilities survive
@@ -50,9 +51,9 @@ and a read-only repository that serves the result through the normal offer → a
   fetched resource (the guarded fetch deadline covers DNS, redirects, and the body read
   for the whole call; skills on slow hosts need the headroom); 1 MiB response cap; follow at most 3 same-host redirects; refuse hosts that
   resolve to loopback/private/link-local addresses; fixed `User-Agent: Rook/<version>
-  (+https://github.com/rookkeeper/rook)`; only 2xx bodies are used; 404 and network
-  failures are non-errors for `llms.txt`/`AGENTS.md`/index (absent is normal) but are
-  logged at debug. Skill URLs from the index may be cross-origin (RFC allows it) and go
+  (+https://github.com/rookkeeper/rook)`; only 2xx bodies are used; 404 is normal and not
+  an error; network failures are recorded as `unreachable_url` bundle errors (stored
+  content for that resource is kept) and logged at warn. Skill URLs from the index may be cross-origin (RFC allows it) and go
   through the same helper. Fetched text is normalized to `\n` line endings and trailing
   whitespace trimmed before hashing so incidental serving differences do not churn the
   bundle hash.
@@ -104,7 +105,7 @@ and a read-only repository that serves the result through the normal offer → a
 - [x] Shared types: `unreachable_url`, `unsupported_capability` error codes;
       `sourceUrl` hints; confirm `hashEnvironmentBundle` covers the new content
       unchanged.
-- [ ] Tests (vitest, `// @vitest-environment node`, injected fake fetch): scout
+- [x] Tests (vitest, `// @vitest-environment node`, injected fake fetch): scout
       happy path (all three present), each resource absent, malformed index,
       unknown `$schema`, `archive` entry skipped with error, digest mismatch skipped,
       cross-origin skill URL, fresh entry skipped, stale entry re-scouted with

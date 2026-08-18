@@ -278,8 +278,8 @@ public struct EnvironmentBundlePreview: Codable, Equatable, Identifiable {
     }
 
     /// The `SKILL.md` body of every skill in the bundle, in bundle order.
-    /// Repositories key skill files as `<skill-id>/SKILL.md`; older layouts use a
-    /// bare `SKILL.md`; failing both, the first Markdown file is used.
+    /// Repositories key skill files as `<skill-id>/SKILL.md`; the bare `SKILL.md`
+    /// and first-`.md` lookups are defensive fallbacks (no repository writes them today).
     public var skillMarkdown: [(id: String, content: String)] {
         skills.compactMap { skill in
             guard let content = skill.primaryMarkdown else { return nil }

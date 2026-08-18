@@ -62,7 +62,7 @@ A capability can be referenced by memberships in multiple environments. Deleting
 
 The web repository database lives at `<ROOK_HOME>/web-environment-repository.db` (`ROOK_WEB_ENVIRONMENT_REPOSITORY_DB` overrides it) and adds:
 
-- `web_scouts(host PRIMARY KEY, fetched_at, status, errors_json)` — one row per scouted host; `status` is `content`, `empty`, or `error`; `errors_json` holds the scout's `RepositoryReadError` list. The column is added to older files on open.
+- `web_scouts(host PRIMARY KEY, fetched_at, status, errors_json)` — one row per scouted host; `status` is `content`, `empty`, or `error`; `errors_json` holds the scout's `RepositoryReadError` list.
 - `web_scout_resources(host, resource, etag, last_modified)` — HTTP validators per fetched resource (`llms.txt`, `AGENTS.md`, `skills-index`), keyed `(host, resource)`, cascading on host delete.
 
 Content rows use the three shared tables: one environment per host, one bundle (`site`, publisher = host) per environment. An `empty` host keeps its `web_scouts` row and no environment row; an `error` scout leaves previous content and validators in place. `WebEnvironmentRepository.recordScout` is the only writer.

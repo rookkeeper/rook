@@ -37,10 +37,6 @@ export class WebEnvironmentRepository extends SQLiteEnvironmentRepository {
         PRIMARY KEY (host, resource)
       );
     `);
-    const columns = this.db.prepare("PRAGMA table_info(web_scouts)").all() as Array<{ name: string }>;
-    if (!columns.some((column) => column.name === "errors_json")) {
-      this.db.exec("ALTER TABLE web_scouts ADD COLUMN errors_json TEXT NOT NULL DEFAULT '[]'");
-    }
   }
 
   override async getBundles(environmentId: string): Promise<EnvironmentBundleResult> {
