@@ -3,12 +3,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { EnvironmentBundle } from "../../shared/environmentRepository.js";
+import type { EnvironmentBundle, RepositoryReadError } from "../../shared/environmentRepository.js";
 import { EnvironmentRepositoryDatastore } from "../datastores/EnvironmentRepositoryDatastore.js";
-import { hostForWebEnvironmentId, WebEnvironmentRepository, webEnvironmentIdForHost } from "./WebEnvironmentRepository.js";
+import { hostForWebEnvironmentId, normalizeHost, WebEnvironmentRepository, webEnvironmentIdForHost } from "./WebEnvironmentRepository.js";
 
 const HOST = "example.com";
 const FETCHED_AT = "2026-08-18T12:00:00.000Z";
+const LATER = "2026-08-19T12:00:00.000Z";
+const READ_ERROR: RepositoryReadError = {
+  code: "unreachable_url",
+  message: "llms.txt timed out",
+  repository: "web",
+  environmentId: `web:${HOST}`,
+  url: `https://${HOST}/llms.txt`,
+};
 
 function siteBundle(overrides: Partial<EnvironmentBundle> = {}): EnvironmentBundle {
   return {
@@ -116,23 +124,87 @@ describe("WebEnvironmentRepository", () => {
     expect(datastore.db.prepare("SELECT count(*) AS count FROM capabilities").get()).toMatchObject({ count: 0 });
   });
 
-  it("forgets bundle rows for a host whose scout failed", async () => {
+  it("reports no change when an already-empty host is re-scouted", () => {
+    const { repository } = open();
+    record(repository, { status: "empty", bundle: null, validators: {} });
+
+    expect(record(repository, { status: "empty", bundle: null, validators: {}, fetchedAt: LATER })).toEqual({ changed: false });
+  });
+
+  it("keeps content and validators when a later scout errors", async () => {
     const { repository, datastore } = open();
     record(repository);
 
-    expect(record(repository, { status: "error", bundle: null, validators: {} })).toEqual({ changed: true });
+    expect(record(repository, { status: "error", bundle: null, validators: {}, fetchedAt: LATER })).toEqual({ changed: false });
 
     const loaded = await repository.getBundles(`web:${HOST}`);
-    expect(loaded.environment?.id).toBe(`web:${HOST}`);
-    expect(loaded.bundles).toEqual([]);
-    expect(repository.getScoutState(HOST)?.status).toBe("error");
-    expect(datastore.db.prepare("SELECT count(*) AS count FROM bundles").get()).toMatchObject({ count: 0 });
+    expect(loaded.bundles).toHaveLength(1);
+    expect(loaded.bundles[0]).toMatchObject({ sourceUrl: `https://${HOST}/`, llmsTxt: "Reference material for widgets." });
+    expect(repository.getScoutState(HOST)).toMatchObject({
+      status: "error",
+      fetchedAt: LATER,
+      validators: { "llms.txt": { etag: '"v1"' } },
+    });
+    expect(datastore.db.prepare("SELECT count(*) AS count FROM bundles").get()).toMatchObject({ count: 3 });
   });
 
-  it("rejects a content scout with no bundle", () => {
+  it("keeps stored bundle rows when everything revalidates unchanged", async () => {
+    const { repository } = open();
+    record(repository);
+
+    const rescouted = record(repository, { bundle: null, fetchedAt: LATER, validators: { "llms.txt": { etag: '"v2"' } } });
+
+    expect(rescouted).toEqual({ changed: false });
+    expect((await repository.getBundles(`web:${HOST}`)).bundles[0]?.llmsTxt).toBe("Reference material for widgets.");
+    expect(repository.getScoutState(HOST)).toMatchObject({ fetchedAt: LATER, validators: { "llms.txt": { etag: '"v2"' } } });
+  });
+
+  it("rejects a content scout with no bundle when nothing is stored", () => {
     const { repository } = open();
 
-    expect(() => record(repository, { status: "content", bundle: null })).toThrow(/requires a bundle/);
+    expect(() => record(repository, { bundle: null })).toThrow(/requires a bundle/);
+  });
+
+  it("rejects a bundle carried by a non-content status", () => {
+    const { repository } = open();
+
+    expect(() => record(repository, { status: "empty" })).toThrow(/must not carry a bundle/);
+  });
+
+  it("round-trips scout errors onto the bundle and onto emptied hosts", async () => {
+    const { repository } = open();
+    record(repository, { errors: [READ_ERROR] });
+
+    const served = await repository.getBundles(`web:${HOST}`);
+    expect(served.bundles[0]?.valid).toBe(true);
+    expect(served.bundles[0]?.errors).toEqual([READ_ERROR]);
+    expect(served.errors).toEqual([]);
+    expect(repository.getScoutState(HOST)?.errors).toEqual([READ_ERROR]);
+
+    record(repository, { status: "empty", bundle: null, validators: {}, errors: [READ_ERROR] });
+    const emptied = await repository.getBundles(`web:${HOST}`);
+    expect(emptied.bundles).toEqual([]);
+    expect(emptied.errors).toEqual([READ_ERROR]);
+  });
+
+  it("clears validators a later scout no longer reports", () => {
+    const { repository, datastore } = open();
+    record(repository, { validators: { "llms.txt": { etag: '"v1"' }, "AGENTS.md": { etag: '"a1"' } } });
+
+    record(repository, { validators: { "llms.txt": { etag: '"v2"' } } });
+
+    expect(repository.getScoutState(HOST)?.validators).toEqual({ "llms.txt": { etag: '"v2"' } });
+    expect(datastore.db.prepare("SELECT count(*) AS count FROM web_scout_resources").get()).toMatchObject({ count: 1 });
+  });
+
+  it("retries an errored host on the shorter error ttl when one is given", () => {
+    const { repository } = open();
+    record(repository, { status: "error", bundle: null, validators: {} });
+    const fetchedAt = Date.parse(FETCHED_AT);
+
+    expect(repository.isStale(HOST, 60_000, fetchedAt + 30_000)).toBe(false);
+    expect(repository.isStale(HOST, 60_000, fetchedAt + 30_000, 10_000)).toBe(true);
+    expect(repository.isStale(HOST, 60_000, fetchedAt + 5_000, 10_000)).toBe(false);
   });
 
   it("round-trips conditional-request validators and answers staleness from them", () => {
@@ -156,6 +228,13 @@ describe("WebEnvironmentRepository", () => {
     const fetchedAt = Date.parse(FETCHED_AT);
     expect(repository.isStale(HOST, 60_000, fetchedAt + 30_000)).toBe(false);
     expect(repository.isStale(HOST, 60_000, fetchedAt + 60_000)).toBe(true);
+  });
+
+  it("refuses the inherited bundle writers", () => {
+    const { repository } = open();
+
+    expect(() => repository.saveBundle()).toThrow(/recordScout/);
+    expect(() => repository.saveResult()).toThrow(/recordScout/);
   });
 
   it("refuses every capability write", async () => {
@@ -198,5 +277,14 @@ describe("WebEnvironmentRepository", () => {
     expect(hostForWebEnvironmentId("web:example.com/docs")).toBeNull();
     expect(hostForWebEnvironmentId("web:")).toBeNull();
     expect(hostForWebEnvironmentId("dir:/Users/dev")).toBeNull();
+    expect(() => webEnvironmentIdForHost("exa mple.com")).toThrow(/Invalid web host/);
+  });
+
+  it("normalizes hosts and rejects what could never be a bare host", () => {
+    expect(normalizeHost("  Example.COM  ")).toBe("example.com");
+    expect(normalizeHost("example.com/docs")).toBeNull();
+    expect(normalizeHost("exa mple.com")).toBeNull();
+    expect(normalizeHost("\t")).toBeNull();
+    expect(normalizeHost("")).toBeNull();
   });
 });

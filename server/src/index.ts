@@ -10,7 +10,7 @@ import { CompositeEnvironmentRepository } from "./environments/repositories/Comp
 import { SQLiteEnvironmentRepository } from "./environments/repositories/SQLiteEnvironmentRepository.js";
 import { ProjectDirectoryEnvironmentRepository } from "./environments/repositories/ProjectDirectoryEnvironmentRepository.js";
 import { LocationContextRepository } from "./environments/repositories/LocationContextRepository.js";
-import { WebEnvironmentRepository } from "./environments/repositories/WebEnvironmentRepository.js";
+import { defaultWebEnvironmentRepositoryPath, WebEnvironmentRepository } from "./environments/repositories/WebEnvironmentRepository.js";
 import { EnvironmentRepositoryService } from "./environments/services/EnvironmentRepositoryService.js";
 import { JsonlEnvironmentMetadataCaptureSink } from "./environments/services/environmentMetadataCapture.js";
 import { EnvironmentIdentifier } from "./location/EnvironmentIdentifier.js";
@@ -20,7 +20,6 @@ import { LocationRegistrar } from "./location/LocationRegistrar.js";
 import { createUpstreamFetchRange } from "./location/ptiles/ptilesFetch.js";
 import type { PoiLookupProvider } from "./location/PoiLookupProvider.js";
 import { REPO_ROOT } from "./infrastructure/paths.js";
-import { getRookHomeDir } from "./infrastructure/config/configPaths.js";
 import { registerEnvironmentRoutes } from "./environments/routes/environmentRoutes.js";
 import { registerDiagnosticRoutes } from "./environments/routes/diagnosticRoutes.js";
 import { registerRuntimeRoutes } from "./runtime/routes/runtimeRoutes.js";
@@ -82,7 +81,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   const locationContextRepository = new LocationContextRepository();
   const environmentRepositoryDatabase = options.environmentRepositoryDatabase ?? process.env.ROOK_ENVIRONMENT_REPOSITORY_DB ?? path.join(REPO_ROOT, "environment-repository.db");
   const personalEnvironmentRepositoryDatabase = options.personalEnvironmentRepositoryDatabase ?? process.env.ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB ?? path.join(os.homedir(), ".rook", "environment-repository.db");
-  const webEnvironmentRepositoryDatabase = options.webEnvironmentRepositoryDatabase ?? process.env.ROOK_WEB_ENVIRONMENT_REPOSITORY_DB ?? path.join(getRookHomeDir(), "web-environment-repository.db");
+  const webEnvironmentRepositoryDatabase = options.webEnvironmentRepositoryDatabase ?? process.env.ROOK_WEB_ENVIRONMENT_REPOSITORY_DB ?? defaultWebEnvironmentRepositoryPath();
   const canonicalEnvironmentRepository = new SQLiteEnvironmentRepository(environmentRepositoryDatabase, "canonical");
   const personalEnvironmentRepository = new SQLiteEnvironmentRepository(personalEnvironmentRepositoryDatabase, "personal");
   const webEnvironmentRepository = new WebEnvironmentRepository(webEnvironmentRepositoryDatabase);
