@@ -21,6 +21,8 @@ export interface RepositoryReadError {
   environmentId: string;
   bundleId?: string;
   path?: string;
+  /** URL the error refers to, for web-sourced content. */
+  url?: string;
 }
 
 export interface BundleArtifact {

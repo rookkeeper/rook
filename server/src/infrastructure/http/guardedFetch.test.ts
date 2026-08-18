@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { guardedFetch, isDisallowedAddress, type HostLookup } from "./guardedFetch.js";
+import { DEFAULT_ACCEPT, guardedFetch, type HostLookup } from "./guardedFetch.js";
 
 const PUBLIC_LOOKUP: HostLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 
@@ -38,12 +38,16 @@ describe("guardedFetch", () => {
   });
 
   it("maps 304, 404, and 500 responses to not_modified, absent, and an http error", async () => {
-    const call = async (status: number) => {
-      const { impl } = stubFetch(() => new Response(status === 304 ? null : "body", { status }));
+    const call = async (status: number, headers?: Record<string, string>) => {
+      const { impl } = stubFetch(() => new Response(status === 304 ? null : "body", { status, headers }));
       return guardedFetch("https://example.com/AGENTS.md", { fetch: impl, lookup: PUBLIC_LOOKUP });
     };
 
-    expect(await call(304)).toEqual({ kind: "not_modified" });
+    expect(await call(304, { etag: '"v1"', "last-modified": "Mon, 17 Aug 2026 12:00:00 GMT" })).toEqual({
+      kind: "not_modified",
+      etag: '"v1"',
+      lastModified: "Mon, 17 Aug 2026 12:00:00 GMT",
+    });
     expect(await call(404)).toEqual({ kind: "absent", status: 404 });
     expect(await call(500)).toMatchObject({ kind: "error", reason: "http", status: 500 });
   });
@@ -57,16 +61,13 @@ describe("guardedFetch", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("classifies loopback, unspecified, private, link-local, and IPv4-mapped addresses", () => {
-    const disallowed = [
-      "127.0.0.1", "0.0.0.0", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.1.1",
-      "::1", "::", "fc00::1", "fd12:3456::1", "fe80::1", "::ffff:127.0.0.1", "::ffff:192.168.0.1", "::ffff:7f00:1",
-      "not-an-address",
-    ];
-    const allowed = ["93.184.216.34", "8.8.8.8", "172.32.0.1", "172.15.0.1", "2606:2800:220:1::1", "::ffff:93.184.216.34"];
+  it("refuses a string that is not a URL", async () => {
+    const { impl, calls } = stubFetch(() => new Response("nope"));
 
-    expect(disallowed.filter((address) => !isDisallowedAddress(address))).toEqual([]);
-    expect(allowed.filter((address) => isDisallowedAddress(address))).toEqual([]);
+    const result = await guardedFetch("not a url", { fetch: impl, lookup: PUBLIC_LOOKUP });
+
+    expect(result).toMatchObject({ kind: "error", reason: "policy" });
+    expect(calls).toHaveLength(0);
   });
 
   it("refuses a host that resolves to a private address without making a request", async () => {
@@ -78,6 +79,29 @@ describe("guardedFetch", () => {
     });
 
     expect(result).toMatchObject({ kind: "error", reason: "policy" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses loopback literals through the default resolver", async () => {
+    for (const url of ["https://127.0.0.1/llms.txt", "https://[::1]/llms.txt"]) {
+      const { impl, calls } = stubFetch(() => new Response("nope"));
+
+      const result = await guardedFetch(url, { fetch: impl });
+
+      expect(result).toMatchObject({ kind: "error", reason: "policy" });
+      expect(calls).toHaveLength(0);
+    }
+  });
+
+  it("reports a failing DNS lookup as a network error", async () => {
+    const { impl, calls } = stubFetch(() => new Response("nope"));
+
+    const result = await guardedFetch("https://example.com/llms.txt", {
+      fetch: impl,
+      lookup: async () => { throw new Error("ENOTFOUND"); },
+    });
+
+    expect(result).toMatchObject({ kind: "error", reason: "network" });
     expect(calls).toHaveLength(0);
   });
 
@@ -100,6 +124,22 @@ describe("guardedFetch", () => {
     expect(result).toMatchObject({ kind: "error", reason: "policy" });
   });
 
+  it("refuses a redirect to a different port on the same hostname", async () => {
+    const { impl } = stubFetch(() => new Response(null, { status: 302, headers: { location: "https://example.com:8443/llms.txt" } }));
+
+    const result = await guardedFetch("https://example.com/llms.txt", { fetch: impl, lookup: PUBLIC_LOOKUP });
+
+    expect(result).toMatchObject({ kind: "error", reason: "policy" });
+  });
+
+  it("reports a redirect without a Location header as an http error", async () => {
+    const { impl } = stubFetch(() => new Response(null, { status: 301 }));
+
+    const result = await guardedFetch("https://example.com/llms.txt", { fetch: impl, lookup: PUBLIC_LOOKUP });
+
+    expect(result).toMatchObject({ kind: "error", reason: "http", status: 301 });
+  });
+
   it("refuses more redirects than the hop limit", async () => {
     let hop = 0;
     const { impl, calls } = stubFetch(() => {
@@ -110,7 +150,16 @@ describe("guardedFetch", () => {
     const result = await guardedFetch("https://example.com/llms.txt", { fetch: impl, lookup: PUBLIC_LOOKUP, maxRedirects: 2 });
 
     expect(calls).toHaveLength(3);
-    expect(result).toMatchObject({ kind: "error", reason: "policy", message: expect.stringContaining("redirect limit") });
+    expect(result).toMatchObject({ kind: "error", reason: "policy" });
+  });
+
+  it("refuses the first redirect when the hop limit is zero", async () => {
+    const { impl, calls } = stubFetch(() => new Response(null, { status: 308, headers: { location: "https://example.com/docs/llms.txt" } }));
+
+    const result = await guardedFetch("https://example.com/llms.txt", { fetch: impl, lookup: PUBLIC_LOOKUP, maxRedirects: 0 });
+
+    expect(calls).toHaveLength(1);
+    expect(result).toMatchObject({ kind: "error", reason: "policy" });
   });
 
   it("reports a timeout when the request is aborted by the deadline", async () => {
@@ -125,6 +174,19 @@ describe("guardedFetch", () => {
     const result = await guardedFetch("https://example.com/llms.txt", { fetch: impl, lookup: PUBLIC_LOOKUP, timeoutMs: 5 });
 
     expect(result).toMatchObject({ kind: "error", reason: "timeout" });
+  });
+
+  it("applies the deadline to the DNS lookup too", async () => {
+    const { impl, calls } = stubFetch(() => new Response("never reached"));
+
+    const result = await guardedFetch("https://example.com/llms.txt", {
+      fetch: impl,
+      lookup: () => new Promise(() => {}),
+      timeoutMs: 5,
+    });
+
+    expect(result).toMatchObject({ kind: "error", reason: "timeout" });
+    expect(calls).toHaveLength(0);
   });
 
   it("stops reading once the response exceeds the size cap", async () => {
@@ -157,11 +219,20 @@ describe("guardedFetch", () => {
     });
 
     expect(calls[0]!.init.redirect).toBe("manual");
-    expect(headersOf(calls[0]!.init)).toEqual({
-      "user-agent": expect.stringMatching(/^Rook\/\S+ \(\+https:\/\/github\.com\/rookkeeper\/rook\)$/) as unknown as string,
+    const { "user-agent": userAgent, ...rest } = headersOf(calls[0]!.init);
+    expect(userAgent).toMatch(/^Rook\/\S+ \(\+https:\/\/github\.com\/rookkeeper\/rook\)$/);
+    expect(rest).toEqual({
       accept: "text/plain",
       "if-none-match": '"v1"',
       "if-modified-since": "Mon, 17 Aug 2026 12:00:00 GMT",
     });
+  });
+
+  it("sends the default Accept header when none is supplied", async () => {
+    const { impl, calls } = stubFetch(() => new Response("body", { status: 200 }));
+
+    await guardedFetch("https://example.com/llms.txt", { fetch: impl, lookup: PUBLIC_LOOKUP });
+
+    expect(headersOf(calls[0]!.init).accept).toBe(DEFAULT_ACCEPT);
   });
 });

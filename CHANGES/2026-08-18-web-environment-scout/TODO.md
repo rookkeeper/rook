@@ -124,5 +124,6 @@ and a read-only repository that serves the result through the normal offer → a
       preview**, approval materializes the content read-only into the session
       workspace, the agent can use it, and after a server restart the site is still
       known without a re-fetch.
-- [ ] `npm run typecheck` and `npm test` in `server/` pass; final review; sync with
-      main; PR (documenting the adopted convention) through the fork.
+- [ ] `npm run typecheck`, `node ./node_modules/typescript/bin/tsc -p tsconfig.server.json --noEmit`,
+      and `npm test` in `server/` pass; final review; sync with main; PR (documenting
+      the adopted convention) through the fork.
