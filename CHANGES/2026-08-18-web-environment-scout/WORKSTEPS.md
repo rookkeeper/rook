@@ -6,7 +6,7 @@
 - [x] Create the change directory and lifecycle record
 - [x] Brainstorm to work, or bypass because the work is simple or obvious; do not mark complete until the developer confirms the direction
 - [x] Record the agreed decision and TODO after the explicit decision gate
-- [ ] Prepare the implementation workspace after the planning commit
+- [x] Prepare the implementation workspace after the planning commit
 - [ ] Implement and test
 - [ ] Mark compatibility surfaces
 - [ ] Maintain product and architecture documentation
