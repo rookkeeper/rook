@@ -11,12 +11,22 @@ import SwiftUI
 /// The offer panel is rendered twice (once hidden for height measurement), so
 /// section expansion lives on the model rather than in view `@State`; both
 /// copies then agree on the panel height.
+///
+/// The panel sizes itself to its content (`fixedSize(vertical:)`), so this card
+/// bounds its own height: the sections stack scrolls as a whole once it passes
+/// `contentMaxHeight`, and each expanded section scrolls internally past
+/// `sectionMaxHeight`. Otherwise a bundle with content plus issues could push
+/// the decision buttons below the bottom of a laptop screen.
 struct BundleContentPreviewCard: View {
     @ObservedObject var model: RookMacModel
     let offer: EnvironmentOffer
 
     private static let issuesSectionId = "issues"
-    private static let sectionMaxHeight: CGFloat = 220
+    /// Per-section cap. Sized so one expanded section plus the Issues section
+    /// both fit inside `contentMaxHeight` before the outer scroll kicks in.
+    private static let sectionMaxHeight: CGFloat = 180
+    /// Cap on the whole sections stack (headers included).
+    private static let contentMaxHeight: CGFloat = 360
 
     var body: some View {
         PanelCard {
@@ -94,15 +104,27 @@ struct BundleContentPreviewCard: View {
         let content: String
     }
 
+    @ViewBuilder
     private func bundleContent(_ bundle: EnvironmentBundlePreview) -> some View {
         let sections = contentSections(bundle)
+        if sections.isEmpty && bundle.errors.isEmpty {
+            Text("This bundle has no reviewable text content.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            // `frame(maxHeight:)` on a ScrollView hugs short content and caps
+            // tall content, so a small bundle leaves no empty space in the card.
+            ScrollView(.vertical) {
+                sectionsStack(sections, errors: bundle.errors)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: Self.contentMaxHeight)
+        }
+    }
+
+    private func sectionsStack(_ sections: [ContentSection], errors: [RepositoryReadError]) -> some View {
         let firstNonEmptyId = sections.first?.id
         return VStack(alignment: .leading, spacing: 6) {
-            if sections.isEmpty && bundle.errors.isEmpty {
-                Text("This bundle has no reviewable text content.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             ForEach(sections) { section in
                 DisclosureGroup(isExpanded: expansionBinding(section.id, defaultExpanded: section.id == firstNonEmptyId)) {
                     contentBody(section.content)
@@ -113,11 +135,11 @@ struct BundleContentPreviewCard: View {
                         .foregroundStyle(PanelPalette.secondaryText)
                 }
             }
-            if !bundle.errors.isEmpty {
+            if !errors.isEmpty {
                 DisclosureGroup(isExpanded: expansionBinding(Self.issuesSectionId, defaultExpanded: true)) {
-                    issuesBody(bundle.errors)
+                    issuesBody(errors)
                 } label: {
-                    Label("Issues (\(bundle.errors.count))", systemImage: "exclamationmark.triangle.fill")
+                    Label("Issues (\(errors.count))", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundStyle(PanelPalette.warning)
@@ -170,7 +192,7 @@ struct BundleContentPreviewCard: View {
         .frame(maxHeight: Self.sectionMaxHeight)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.black.opacity(0.28))
+                .fill(PanelPalette.backgroundPrimary.opacity(0.75))
         )
     }
 
