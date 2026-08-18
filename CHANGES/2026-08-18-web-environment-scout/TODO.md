@@ -118,7 +118,7 @@ and a read-only repository that serves the result through the normal offer → a
       offered environment, matches the bundle by hash, and renders `llms.txt`,
       `AGENTS.md`, skill `SKILL.md` contents (collapsible) and errors; RookKit type
       gains `agentsMd` if needed; loading/failure states; RookKit decoding test.
-- [ ] Docs per Decision details; add the discovery-index convention and a short
+- [x] Docs per Decision details; add the discovery-index convention and a short
       "publish for Rook" note for site owners in `PRODUCT/environment-repository.md`.
 - [ ] Manual verification (developer-driven): open a browser tab on a site that
       publishes at least one of the three resources; confirm the environment shows

@@ -74,13 +74,13 @@
 
 ### Environment/location models
 - `EnvironmentArtifactPreview`
-- `EnvironmentBundlePreview` — skills, MCP/apps, facts, `llms.txt`, instructions, errors, and derived bundle hash
+- `EnvironmentBundlePreview` — skills, MCP/apps, facts, `llmsTxt`, `agentsMd`, errors, and derived bundle hash; `skillMarkdown` returns each skill's `SKILL.md` body (keyed `<skill-id>/SKILL.md`, falling back to a bare `SKILL.md` or the first Markdown file) for offer previews
 - `EnvironmentPreview`
 - `EnvironmentOffer`
 - `EnvironmentListItem`
 - `IdentifyAvailableRequest`
 - `EnvironmentCandidate`
-- `RepositoryReadError`
+- `RepositoryReadError` — includes optional `path` and `url` so filesystem and web sources both name what failed
 
 ### Chat/rendering models
 - `ChatBlock`, `ChatBlockKind`
