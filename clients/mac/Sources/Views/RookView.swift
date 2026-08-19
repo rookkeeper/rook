@@ -286,6 +286,17 @@ private struct HomeContent: View {
         .onChange(of: model.agents.map(\.id).joined(separator: "|")) { _ in
             ensureSelectedRuntimeID()
         }
+        // Catch drops anywhere else in the home view. Session-row drop targets
+        // take precedence; a pinned source released in the surrounding home
+        // view is unpinned and touched to the top of Recent.
+        .onDrop(of: [.text], delegate: SessionDropDelegate { id, _ in
+            unpinDroppedSession(id)
+        })
+    }
+
+    private func unpinDroppedSession(_ id: String) {
+        guard let session = model.sessions.first(where: { $0.id == id }), session.pinned else { return }
+        model.setSessionPinned(session, pinned: false, moveToRecent: true)
     }
 
     // MARK: - Identity (slim, one line)
