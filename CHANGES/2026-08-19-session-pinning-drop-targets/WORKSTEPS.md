@@ -6,11 +6,11 @@
 - [x] Create the change directory and lifecycle record
 - [x] Brainstorm bypassed because this is a focused, obvious UI regression fix confirmed by the developer
 - [x] Record the agreed decision and TODO after the explicit decision gate
-- [ ] Prepare the implementation workspace after the planning commit
-- [ ] Implement and test
-- [ ] Mark compatibility surfaces
-- [ ] Maintain product and architecture documentation
-- [ ] Run final validation
+- [x] Prepare the implementation workspace after the planning commit
+- [x] Implement and test — expanded the empty Pinned drop target and clear drag state after pin/reorder
+- [x] Mark compatibility surfaces — no compatibility surface retained by this focused UI change
+- [x] Maintain product and architecture documentation — existing Mac drag/drop documentation remains accurate; no product or architecture change
+- [x] Run final validation — Mac build passed and final diff is whitespace-clean
 - [ ] Synchronize with main before submitting
 - [ ] Open and validate the PR
 - [ ] Merge with approval

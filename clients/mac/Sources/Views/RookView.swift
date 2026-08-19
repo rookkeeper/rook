@@ -663,17 +663,22 @@ private struct MacSessionSections: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 6) {
-                sectionHeader("Pinned", systemImage: "pin.fill")
                 if pinned.isEmpty {
-                    Text("Pin a session to keep it here.")
-                        .font(.caption)
-                        .foregroundStyle(PanelPalette.textMuted)
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(PanelPalette.backgroundPrimary.opacity(0.35)))
-                        .onDrop(of: [.text], delegate: SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in
-                            pin(id, moveToRecent: false)
-                        })
+                    VStack(alignment: .leading, spacing: 6) {
+                        sectionHeader("Pinned", systemImage: "pin.fill")
+                        Text("Pin a session to keep it here.")
+                            .font(.caption)
+                            .foregroundStyle(PanelPalette.textMuted)
+                            .frame(maxWidth: .infinity, minHeight: 72)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(PanelPalette.backgroundPrimary.opacity(0.35)))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onDrop(of: [.text], delegate: SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in
+                        pin(id, moveToRecent: false)
+                    })
                 } else {
+                    sectionHeader("Pinned", systemImage: "pin.fill")
                     sessionRows(pinned, allowsReordering: true)
                 }
                 sectionHeader("Recent", systemImage: "clock.arrow.circlepath")
@@ -770,16 +775,20 @@ private struct MacSessionSections: View {
         dropTarget = nil
     }
 
+    private func clearDragState() {
+        draggedSessionID = nil
+        dropTarget = nil
+    }
+
     private func pin(_ id: String, moveToRecent: Bool) {
         model.setSessionPinned(model.sessions.first { $0.id == id } ?? AgentSessionSummary(raw: .object(["sessionId": .string(id)])), pinned: !moveToRecent, moveToRecent: moveToRecent)
-        draggedSessionID = nil
+        clearDragState()
     }
 
     private func unpinIfPinned(_ id: String) {
         guard let session = model.sessions.first(where: { $0.id == id }), session.pinned else { return }
         model.setSessionPinned(session, pinned: false, moveToRecent: true)
-        draggedSessionID = nil
-        dropTarget = nil
+        clearDragState()
     }
 
     private func handlePinnedDrop(_ id: String, before targetID: String?, after: Bool) {
@@ -793,7 +802,7 @@ private struct MacSessionSections: View {
                 nextID = targetID
             }
             model.pinSessionInPinned(source, before: nextID)
-            draggedSessionID = nil
+            clearDragState()
         }
     }
 
@@ -806,7 +815,7 @@ private struct MacSessionSections: View {
             reordered.append(source)
         }
         model.reorderPinnedSessions(reordered)
-        draggedSessionID = nil
+        clearDragState()
     }
 }
 

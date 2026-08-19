@@ -13,7 +13,7 @@ Make dragging the first session into an empty Pinned section easy to target and 
 
 ## Work checklist
 
-- [ ] Expand the empty Pinned section drop target.
-- [ ] Clear stale insertion indicators after pinning/reordering.
-- [ ] Update relevant Mac documentation if needed.
-- [ ] Build and validate the Mac client and inspect the final diff.
+- [x] Expand the empty Pinned section drop target.
+- [x] Clear stale insertion indicators after pinning/reordering.
+- [x] Review relevant Mac documentation; existing drag/drop behavior documentation remains accurate.
+- [x] Build and validate the Mac client and inspect the final diff.
