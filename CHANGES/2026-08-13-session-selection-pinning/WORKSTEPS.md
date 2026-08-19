@@ -12,6 +12,6 @@
 - [x] Maintain product and architecture documentation
 - [x] Run final validation
 - [x] Synchronize with main before submitting — fetched origin and merged origin/main
-- [ ] Open and validate the PR
+- [x] Open and validate the PR — PR #163 is mergeable and required checks pass
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up — deferred until merge
