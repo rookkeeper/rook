@@ -79,10 +79,10 @@ Android defines Kotlin equivalents of the Swift shared models:
 ### Chat flow
 1. `RookViewModel` opens an unbound ACP socket only for `session/new`, then the server binds it to the created session
 2. resuming an existing session opens `/api/ws?sessionId=...` and selects that session
-3. running sessions hydrate from `GET /api/sessions/:id/transcript`; inactive sessions use ACP `session/load`
+3. all resumed sessions use ACP `session/load`; a recovery replay replaces the cached blocks rather than appending to them
 4. `AcpSocket` reduces standard WebSocket ACP frames into `AcpClientEvent`
 5. `RookViewModel` turns those events into `ChatBlock` lists and run state
-6. reconnect logic reopens the session-bound socket, rehydrates running sessions, reloads inactive sessions, and flushes queued prompts
+6. reconnect logic reopens the session-bound socket, reloads the session through ACP to replace cached blocks, and flushes queued prompts
 
 ### Place registration flow
 1. region-like place state comes from `MovementService` checking current location against saved places
@@ -110,5 +110,5 @@ Android defines Kotlin equivalents of the Swift shared models:
 - Android uses a service-based movement classifier instead of iOS region monitoring
 - the location controller is intentionally process-wide so UI and services share one source of truth when the process is alive
 - the client is structurally close to the iPhone client, but the sensor/process model is much more Android-native
-- Android's session transport now follows the same session-bound ACP + REST transcript contract as the Apple clients
+- Android's session transport uses the same ACP-only replay and bounded client-message contract as the Apple clients
 - standard ACP notifications are the event protocol

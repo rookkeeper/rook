@@ -38,7 +38,8 @@ final class FinderEnvironmentProviderTests: XCTestCase {
         XCTAssertEqual(candidates.last?.metadata["displayName"], .string("Finder · rookkeeper"))
     }
 
-    func testProviderTracksCurrentDirectoryEnvironmentId() {
+    func testProviderTracksCurrentDirectoryEnvironmentId() async {
+        let didApply = expectation(description: "Finder observation applied")
         let provider = FinderEnvironmentProvider(
             register: { _, _ in },
             observe: {
@@ -48,9 +49,16 @@ final class FinderEnvironmentProviderTests: XCTestCase {
                 )
             }
         )
+        var applied = false
+        provider.onStateChange = {
+            guard !applied else { return }
+            applied = true
+            didApply.fulfill()
+        }
         let app = ForegroundApp(bundleId: "com.apple.finder", name: "Finder", pid: 1)
 
         provider.activate(app: app, title: "rookkeeper")
+        await fulfillment(of: [didApply], timeout: 1)
         XCTAssertEqual(provider.currentAppEnvironmentId, "dir:/Users/johnberryman/projects/github/rookkeeper")
 
         provider.deactivate()

@@ -2,7 +2,7 @@
 
 ## Summary
 
-The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with an optional second remote/VPN listener. A Git worktree launched through `scripts/run-rook.sh` receives an isolated development profile with a deterministic alternate port and profile-specific local state. The server exposes a session-bound ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes, sessions, transcripts, and environments, and an internal runtime broker that launches one ACP subprocess per public session.
+The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with an optional second remote/VPN listener. A Git worktree launched through `scripts/run-rook.sh` receives an isolated development profile with a deterministic alternate port and profile-specific local state. The server exposes a session-bound ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes, sessions, and environments, and an internal runtime broker that launches one ACP subprocess per public session.
 
 ## Main components
 
@@ -47,7 +47,7 @@ Top-level layout:
   - cross-domain bootstrap/support code
   - auth, config loading, path helpers, remote proxy, shared SQLite connection bootstrap
 - `server/src/sessions/`
-  - session routes, repository contract, SQLite session repository, transcript persistence/helpers
+  - session routes, repository contract, and SQLite session repository
 - `server/src/runtime/`
   - ACP facade, runtime REST routes, subprocess transport, runtime orchestration, subscriber/replay routing, runtime-only extension code
 - `server/src/environments/`
@@ -91,8 +91,7 @@ See also: [database.md](./database.md)
 - `PATCH /api/sessions/:sessionId` — rename one session without changing recency ordering
 - `POST /api/sessions/:sessionId/touch` — acknowledge pending attention, mark one session as recently viewed, and keep it open for activity acknowledgment
 - `POST /api/sessions/:sessionId/unview` — leave the session view so later completed turns can become pending attention
-- `DELETE /api/sessions/:sessionId` — delete one session plus transcript/workspace state
-- `GET /api/sessions/:sessionId/transcript` — server-owned normalized transcript for hydrators / second viewers
+- `DELETE /api/sessions/:sessionId` — delete one session plus workspace state
 - `POST /api/environments/register`
 - `POST /api/environments/decision`
 - `GET /api/environments/preview`
@@ -115,7 +114,8 @@ The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configurat
 
 Current durable persistence is SQLite-backed and split between:
 
-- the application database: session records, coalesced logical transcript records (including in-progress snapshots), session-environment membership, and durable environment decisions
+- the application database: session records, session-environment membership, and durable environment decisions
+- runtime-owned ACP session files: conversation history and replay source
 - the environment repository databases: environments, reusable capabilities, and bundle memberships for canonical and personal repositories
 
 Canonical and personal environment-repository content is SQLite-only. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
@@ -145,7 +145,6 @@ creating a synthetic prompt.
 
 Related tables:
 - `session_environments(session_id, environment_id, entered_at)`
-- `session_transcript_events(sequence, session_id, created_at, event_json)`
 
 ### Environment decision model
 - `accept` — allow for this session/visit
@@ -193,8 +192,7 @@ Related tables:
 4. `AgentRuntimeManager` rewrites to the runtime-local session ID
 5. `SessionRuntime` forwards the request to the subprocess
 6. runtime emits `session/update` notifications
-7. server normalizes live transcript notifications and coalesces them into logical records in `session_transcript_events`
-8. server rewrites session IDs back to the public ID and forwards the original live notifications to subscribed watchers of that same session
+7. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
 
 ### Environment offer and approval
 1. a provider registers an environment candidate with `POST /api/environments/register`
@@ -224,10 +222,10 @@ Related tables:
 - websocket connections are session-bound, not general multi-session ACP pipes
 - `session/load` replay is requester-private; it no longer fans out to every watcher of that session
 - session discovery uses the REST sessions endpoint
-- the server owns a durable coalesced logical transcript for each session, including the current in-progress record, so additional viewers can hydrate without runtime replay
+- ACP runtime history is the sole transcript source; clients use requester-private `session/load` replay for initial and recovery hydration
 - environment state is session-specific at runtime launch time
 - writable SQLite capability files have one process-wide temporary materialization and are linked into per-session workspaces
-- durable decisions, transcript history, and session membership are SQLite-backed
+- durable decisions and session membership are SQLite-backed; ACP session history remains runtime-owned
 - canonical and personal environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
 - facts and `llms.txt` use capability-specific projections; MCP content is reviewable/read-only but not started by the runtime
 - personal authoring uses one shared writable source per environment, watcher-mediated current-content write-back and membership soft deletion, and explicit environment authoring directories; filesystem permissions are not a strong sandbox against same-user arbitrary shell access

@@ -215,10 +215,10 @@ async function handleLoad(message) {
   const sessionId = message.params.sessionId;
   const session = ensureSession(sessionId);
   currentSessionId = sessionId;
-  write({ jsonrpc: '2.0', id: message.id, result: { sessionId } });
   if (session.transcript.length > 0) {
     await replayTranscript(sessionId, session.transcript);
   }
+  write({ jsonrpc: '2.0', id: message.id, result: { sessionId } });
 }
 
 async function handlePrompt(message) {
