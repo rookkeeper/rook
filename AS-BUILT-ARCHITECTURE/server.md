@@ -88,7 +88,8 @@ See also: [database.md](./database.md)
 - `GET /api/health`
 - `GET /api/agent_runtimes`
 - `GET /api/sessions` — session listing over REST
-- `PATCH /api/sessions/:sessionId` — rename one session without changing recency ordering
+- `PATCH /api/sessions/:sessionId` — rename or pin/unpin one session without changing recency ordering
+- `POST /api/sessions/reorder-pinned` — replace the complete pinned-session order; the request must contain each currently pinned session exactly once
 - `POST /api/sessions/:sessionId/touch` — acknowledge pending attention, mark one session as recently viewed, and keep it open for activity acknowledgment
 - `POST /api/sessions/:sessionId/unview` — leave the session view so later completed turns can become pending attention
 - `DELETE /api/sessions/:sessionId` — delete one session plus workspace state
@@ -134,6 +135,8 @@ Persisted in SQLite:
 - `startedAt`
 - `updatedAt`
 - `attentionStatus` — durable `clear`, `ready`, or `error` enum constrained in SQLite
+- `pinned` — durable boolean organization state
+- `pinnedOrder` — durable positional order among pinned sessions
 
 The `GET /api/sessions` response additionally includes `running` and the
 server-authoritative `activityStatus` (`active`, `ready`, `error`, `on`, or
@@ -141,7 +144,7 @@ server-authoritative `activityStatus` (`active`, `ready`, `error`, `on`, or
 pending attention states; `on` and `off` reflect live runtime liveness after
 attention precedence is applied. `updatedAt` is used for both prompt activity and explicit view/touch operations,
 so entering a session can move it to the top of the shared recents list without
-creating a synthetic prompt.
+creating a synthetic prompt. Pinned sessions are ordered by durable `pinnedOrder`, while unpinned sessions retain `updatedAt DESC` recency ordering; clients render the shared `Pinned` then `Recent` organization.
 
 Related tables:
 - `session_environments(session_id, environment_id, entered_at)`

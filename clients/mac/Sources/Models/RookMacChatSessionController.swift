@@ -186,6 +186,54 @@ final class ChatSessionController {
         }
     }
 
+    func setSessionPinned(_ session: AgentSessionSummary, pinned: Bool, moveToRecent: Bool = false) {
+        Task {
+            do {
+                let updated = try await api.setSessionPinned(sessionId: session.id, pinned: pinned)
+                replaceSessionSummary(updated)
+                if moveToRecent { _ = try await api.touchSession(sessionId: session.id) }
+                await loadSessions(showLoading: false)
+            } catch {
+                sessionsError = error.localizedDescription
+            }
+        }
+    }
+
+    func reorderPinnedSessions(_ sessions: [AgentSessionSummary]) {
+        Task {
+            do {
+                _ = try await api.reorderPinnedSessions(sessionIds: sessions.map(\.id))
+                await loadSessions(showLoading: false)
+            } catch {
+                sessionsError = error.localizedDescription
+                await loadSessions(showLoading: false)
+            }
+        }
+    }
+
+    func pinSessionInPinned(_ session: AgentSessionSummary, before sessionID: String?) {
+        Task {
+            do {
+                _ = try await api.setSessionPinned(sessionId: session.id, pinned: true)
+                let refreshed = try await api.sessions()
+                var ordered = refreshed.filter(\.pinned).sorted {
+                    $0.pinnedOrder == $1.pinnedOrder ? $0.id < $1.id : $0.pinnedOrder < $1.pinnedOrder
+                }
+                ordered.removeAll { $0.id == session.id }
+                if let sessionID, let index = ordered.firstIndex(where: { $0.id == sessionID }) {
+                    ordered.insert(session, at: index)
+                } else {
+                    ordered.append(session)
+                }
+                _ = try await api.reorderPinnedSessions(sessionIds: ordered.map(\.id))
+                await loadSessions(showLoading: false)
+            } catch {
+                sessionsError = error.localizedDescription
+                await loadSessions(showLoading: false)
+            }
+        }
+    }
+
     func deleteSession(_ session: AgentSessionSummary, completion: ((Bool) -> Void)? = nil) {
         Task {
             do {

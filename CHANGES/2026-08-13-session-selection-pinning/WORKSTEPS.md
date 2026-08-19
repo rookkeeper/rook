@@ -6,12 +6,12 @@
 - [x] Create the change directory and lifecycle record
 - [x] Brainstorm bypassed — the user confirmed restarting the previously agreed pinned/recent direction from the current baseline
 - [x] Record the agreed decision and TODO after the explicit decision gate
-- [ ] Prepare the implementation workspace after the planning commit
-- [ ] Implement and test
-- [ ] Mark compatibility surfaces
-- [ ] Maintain product and architecture documentation
-- [ ] Run final validation
-- [ ] Synchronize with main before submitting
-- [ ] Open and validate the PR
-- [ ] Merge with approval
-- [ ] Record outcomes and clean up
+- [x] Prepare the implementation workspace after the planning commit
+- [x] Implement and test
+- [x] Mark compatibility surfaces
+- [x] Maintain product and architecture documentation
+- [x] Run final validation
+- [ ] Synchronize with main before submitting — not performed because no PR submission was requested
+- [ ] Open and validate the PR — not performed because no PR submission was requested
+- [ ] Merge with approval — requires explicit developer approval
+- [ ] Record outcomes and clean up — deferred until merge

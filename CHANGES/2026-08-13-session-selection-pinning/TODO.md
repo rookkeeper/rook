@@ -27,28 +27,28 @@ Pinning should give users a durable way to keep important sessions easy to find 
 
 ### Plan and baseline
 
-- [ ] Inspect the current session repository, REST contract, shared client models, and all three global session-selection surfaces at `7d7b2a7`.
-- [ ] Create a fresh implementation worktree and branch from the planning commit; do not reuse the reverted pinning implementation branch.
+- [x] Inspect the current session repository, REST contract, shared client models, and all three global session-selection surfaces at `7d7b2a7`.
+- [x] Create a fresh implementation worktree and branch from the planning commit; do not reuse the reverted pinning implementation branch.
 
 ### Server and shared session contract
 
-- [ ] Add migration-safe durable pin state and pinned ordering to the current session schema and repository.
-- [ ] Define and implement pin/unpin and pinned-order operations without changing session recency unless the explicit Mac drag-to-Recent behavior requires a touch.
-- [ ] Expose pin state/order and the necessary management operations through the session REST API.
-- [ ] Add server tests for persistence, migration initialization, pin/unpin, pinned ordering, list partitioning, recency preservation, deletion, and malformed or conflicting order requests.
-- [ ] Update RookKit and Android session models/networking for the shared pin fields and operations.
+- [x] Add migration-safe durable pin state and pinned ordering to the current session schema and repository.
+- [x] Define and implement pin/unpin and pinned-order operations without changing session recency unless the explicit Mac drag-to-Recent behavior requires a touch.
+- [x] Expose pin state/order and the necessary management operations through the session REST API.
+- [x] Add server tests for persistence, migration initialization, pin/unpin, pinned ordering, list partitioning, recency preservation, deletion, and malformed or conflicting order requests.
+- [x] Update RookKit and Android session models/networking for the shared pin fields and operations.
 
 ### Client behavior
 
-- [ ] Update the Mac global session-selection UI with Pinned and Recent sections, available-height layout, secondary Pin/Unpin actions, positional drag/drop, drag-out unpinning, empty-section messaging, and restrained drop feedback.
-- [ ] Update iPhone with Pinned and Recent sections and native Pin/Unpin actions without adding mobile drag handles or gestures.
-- [ ] Update Android with Pinned and Recent sections and Pin/Unpin actions through the existing overflow/menu pattern.
-- [ ] Preserve existing activity pills only where they currently belong, preserve chat status presentation, and ensure rename/delete/touch/resume refreshes do not lose pin state or order.
-- [ ] Add focused client/model/UI tests or documented manual checks for partitioning, stable pinned ordering, pin/unpin refreshes, deletion, and recency behavior.
+- [x] Update the Mac global session-selection UI with Pinned and Recent sections, available-height layout, secondary Pin/Unpin actions, positional drag/drop, drag-out unpinning, empty-section messaging, and restrained drop feedback.
+- [x] Update iPhone with Pinned and Recent sections and native Pin/Unpin actions without adding mobile drag handles or gestures.
+- [x] Update Android with Pinned and Recent sections and Pin/Unpin actions through the existing overflow/menu pattern.
+- [x] Preserve existing activity pills only where they currently belong, preserve chat status presentation, and ensure rename/delete/touch/resume refreshes do not lose pin state or order.
+- [x] Add focused client/model/UI tests or documented manual checks for partitioning, stable pinned ordering, pin/unpin refreshes, deletion, and recency behavior.
 
 ### Documentation, compatibility, and validation
 
-- [ ] Update relevant PRODUCT, AS-BUILT-ARCHITECTURE, and package README documentation for the server-owned pinned/recent contract and platform behavior.
-- [ ] Inspect every changed file for retained compatibility surfaces; annotate any intentionally retained compatibility behavior or record that none exists.
-- [ ] Run focused server, RookKit, Mac, iPhone, and Android validation as available; Android may remain blocked by the unavailable Java runtime.
-- [ ] Run final validation, inspect the diff and lifecycle record, and record any deferred follow-up work explicitly.
+- [x] Update relevant PRODUCT, AS-BUILT-ARCHITECTURE, and package README documentation for the server-owned pinned/recent contract and platform behavior.
+- [x] Inspect every changed file for retained compatibility surfaces; annotate any intentionally retained compatibility behavior or record that none exists.
+- [x] Run focused server, RookKit, Mac, and iPhone validation; Android build remains blocked because no Java runtime is installed.
+- [x] Run final validation, inspect the diff and lifecycle record, and record deferred Android validation explicitly.
