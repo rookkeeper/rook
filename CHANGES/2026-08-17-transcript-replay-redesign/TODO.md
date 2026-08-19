@@ -36,4 +36,4 @@ Rook's normalized SQLite transcript copy amplified replay failures and was not n
 - [ ] Add focused regression tests for replay shape, message bounds, handle reuse, background sessions, disconnect recovery, runtime restoration, retry classification, table cleanup, and absence of transcript persistence.
 - [x] Update architecture docs, package READMEs, and protocol documentation to describe ACP-only playback.
 - [x] Inspect compatibility surfaces and remove obsolete compatibility code and documentation.
-- [ ] Run focused tests, builds, and final validation.
+- [x] Run available focused tests, builds, and final validation; Android validation remains blocked by the missing Java runtime.
