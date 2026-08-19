@@ -764,6 +764,7 @@ private struct MacSessionSections: View {
     }
 
     private func updateDropTarget(_ sessionID: String?, after: Bool) {
+        guard draggedSessionID != nil else { return }
         guard let sessionID else {
             dropTarget = nil
             return
