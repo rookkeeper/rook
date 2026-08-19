@@ -145,23 +145,21 @@ final class ChatSessionController {
 
     func resumeSession(_ session: AgentSessionSummary, acknowledge: Bool = true, completion: (() -> Void)? = nil) {
         Self.logger.info("chat session controller resume session=\(session.id, privacy: .public) runtime=\(session.agent, privacy: .public) running=\(session.running, privacy: .public)")
-        startingSession = true
+        let handle = getOrCreateHandle(for: session)
+        currentSession = session
+        wireHandle(handle)
+        startingSession = !handle.isLoaded
+
         Task {
-            defer { self.startingSession = false; completion?() }
             do {
-                let handle = getOrCreateHandle(for: session)
-                currentSession = session
-                wireHandle(handle)
                 try await handle.load()
-                if acknowledge {
-                    let touched = try await api.touchSession(sessionId: session.id)
-                    currentSession = touched
-                }
-                await loadSessions()
-                if let refreshed = sessions.first(where: { $0.id == session.id }) {
-                    currentSession = refreshed
-                }
+                // Make cached or freshly replayed blocks visible immediately. REST
+                // recency/list bookkeeping must not delay returning to the chat.
+                self.startingSession = false
+                completion?()
+                await refreshSessionMetadata(session, acknowledge: acknowledge)
             } catch {
+                self.startingSession = false
                 sessionsError = error.localizedDescription
             }
         }
@@ -241,6 +239,24 @@ final class ChatSessionController {
     func appendSystemMessage(_ text: String) { currentHandle?.appendSystemMessage(text) }
 
     // MARK: - Private
+
+    private func refreshSessionMetadata(_ session: AgentSessionSummary, acknowledge: Bool) async {
+        do {
+            if acknowledge {
+                let touched = try await api.touchSession(sessionId: session.id)
+                if currentSession?.id == session.id {
+                    currentSession = touched
+                }
+            }
+            await loadSessions(showLoading: false)
+            if currentSession?.id == session.id,
+               let refreshed = sessions.first(where: { $0.id == session.id }) {
+                currentSession = refreshed
+            }
+        } catch {
+            sessionsError = error.localizedDescription
+        }
+    }
 
     private func replaceSessionSummary(_ summary: AgentSessionSummary) {
         guard let index = sessions.firstIndex(where: { $0.id == summary.id }) else { return }

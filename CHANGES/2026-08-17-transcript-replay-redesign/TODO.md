@@ -28,11 +28,12 @@ Rook's normalized SQLite transcript copy amplified replay failures and was not n
 - [x] Preserve one session handle and session-bound socket per loaded session while the client is alive.
 - [x] Fix reconnect handling so a genuine disconnect/suspension reloads through ACP and atomically replaces cached blocks.
 - [x] Ensure ordinary session switching never reloads or resets a live handle.
+- [x] Return to cached Mac sessions immediately and coalesce concurrent `session/load` calls per handle.
 - [x] Replace the 80 ms replay quiet timer with the completed `session/load` request boundary.
 - [x] Add server-side bounded serialization/truncation for oversized live and replay presentation payloads, enforcing the 10 kB serialized-notification limit.
 - [ ] Define and test transient/permanent ACP load-error classification and bounded backoff.
 - [x] Physically delete obsolete transcript tables and rows without leaving application compatibility code.
 - [ ] Add focused regression tests for replay shape, message bounds, handle reuse, background sessions, disconnect recovery, runtime restoration, retry classification, table cleanup, and absence of transcript persistence.
 - [x] Update architecture docs, package READMEs, and protocol documentation to describe ACP-only playback.
-- [ ] Inspect compatibility surfaces and remove obsolete compatibility code and documentation.
+- [x] Inspect compatibility surfaces and remove obsolete compatibility code and documentation.
 - [ ] Run focused tests, builds, and final validation.

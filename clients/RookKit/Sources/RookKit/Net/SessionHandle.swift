@@ -51,6 +51,7 @@ public final class SessionHandle {
     private var toolArgBuffers: [String: String] = [:]
     private var toolOutputBuffers: [String: String] = [:]
     private var reconnectTask: Task<Void, Never>?
+    private var loadTask: Task<Void, Error>?
     private var queuedMessageCounter = 0
     private var isReplaying = false
     private var replayUserBuffer = ""
@@ -98,10 +99,28 @@ public final class SessionHandle {
     public func load() async throws {
         if isLoaded {
             Self.logger.info("session handle load reused session=\(self.sessionId, privacy: .public)")
-            // Already connected and subscribed — just report current state.
             onStateChange?()
             return
         }
+        if let loadTask {
+            try await loadTask.value
+            return
+        }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try await self.loadFromRuntime()
+        }
+        loadTask = task
+        do {
+            try await task.value
+            loadTask = nil
+        } catch {
+            loadTask = nil
+            throw error
+        }
+    }
+
+    private func loadFromRuntime() async throws {
         let timed = RookPerformance.begin(
             "LoadSessionHandle",
             operation: "session-handle-load",
@@ -132,6 +151,8 @@ public final class SessionHandle {
     }
 
     public func reloadFromRuntime() async throws {
+        loadTask?.cancel()
+        loadTask = nil
         let previousBlocks = blocks
         let previousLoaded = isLoaded
         isLoaded = false
@@ -149,6 +170,8 @@ public final class SessionHandle {
     public func close() {
         Self.logger.info("session handle close session=\(self.sessionId, privacy: .public)")
         reconnectTask?.cancel()
+        loadTask?.cancel()
+        loadTask = nil
         streamingFlushTask?.cancel()
         socket.disconnect()
         isLoaded = false

@@ -28,22 +28,6 @@ describe("RookDatastore", () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  it("removes the obsolete transcript table while retaining the application database", () => {
-    const tempRoot = mkdtempSync(path.join(os.tmpdir(), "rook-datastore-cleanup-"));
-    const databasePath = path.join(tempRoot, "rook.sqlite");
-    const initial = new RookDatastore(databasePath);
-    initial.db.exec("CREATE TABLE session_transcript_events (sequence INTEGER PRIMARY KEY)");
-    initial.close();
-
-    const datastore = new RookDatastore(databasePath);
-    const table = datastore.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_transcript_events'").get();
-    datastore.close();
-
-    expect(table).toBeUndefined();
-    expect(existsSync(databasePath)).toBe(true);
-    rmSync(tempRoot, { recursive: true, force: true });
-  });
-
   it("defaults to ROOK_HOME/rook.sqlite when no explicit database path is set", () => {
     const tempRoot = mkdtempSync(path.join(os.tmpdir(), "rook-datastore-home-"));
     const rookHome = path.join(tempRoot, "rook-home");

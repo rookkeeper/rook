@@ -43,7 +43,7 @@ Default example:
 }
 ```
 
-A `MockAcpAgent` is configured for fast CLI-driven testing — it stores transcripts, replays history on `session/load`, and handles common prompt patterns.
+A `MockAcpAgent` is configured for fast CLI-driven testing — it keeps agent history in memory, replays it on `session/load`, and handles common prompt patterns.
 
 ## Architecture
 
@@ -122,7 +122,7 @@ It implements:
 - `updatedAt` now represents both prompt activity and explicit client-side "viewed" touches, so opening/resuming a session moves it to the top
 - `attention_status` durably stores `clear`, `ready`, or `error`; live turn/liveness state is combined into `activityStatus` with precedence `Active` > `Ready` > `Error` > `On` > `Off`
 - Session-to-environment membership persists in `session_environments`
-- Runtime-owned ACP history is the sole transcript source. Clients populate session state through requester-private `session/load` replay; the server does not capture or store transcript events.
+- Runtime-owned ACP history is authoritative. Clients populate session state through requester-private `session/load` replay; the server stores session metadata and lifecycle state.
 
 ### Runtime management
 
