@@ -4,8 +4,6 @@ import type { EnvironmentBundleOffer, EnvironmentEventListener, EnvironmentResol
 import type { SessionAttentionStatus, SessionRecord, SessionRepository } from "../../sessions/repositories/SessionRepository.js";
 import { SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotification, type SessionRuntimeConfiguration } from "../SessionRuntime.js";
 import { runtimeLaunchPlan, runtimeSessionParams } from "../runtimeLaunchPlan.js";
-import { SessionTranscriptRepository } from "../../sessions/repositories/SessionTranscriptRepository.js";
-import { normalizedEventsFromRuntimeMessage, runCompletedEvent, runFailedEvent } from "../../sessions/services/sessionTranscriptEvents.js";
 import { CapabilityWorkspaceManager, type CapabilityWorkspaceResult } from "../CapabilityWorkspaceManager.js";
 
 export type SessionActivityStatus = "active" | "ready" | "error" | "on" | "off";
@@ -29,8 +27,6 @@ export class AgentRuntimeManager {
   private readonly environmentSkillPaths = new Map<string, Map<string, string[]>>();
   private readonly environmentRestartQueues = new Map<string, Promise<void>>();
   private readonly privateReplayTargets = new Map<string, Set<RuntimeNotification>>();
-  private readonly privateReplayIdleTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private readonly privateReplayWaiters = new Map<string, Set<() => void>>();
   private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
   private readonly workspaceResults = new Map<string, CapabilityWorkspaceResult>();
 
@@ -40,7 +36,6 @@ export class AgentRuntimeManager {
     private readonly repoRoot: string,
     private readonly workspaceManager: CapabilityWorkspaceManager,
     private readonly environmentManager?: EnvironmentManager,
-    private readonly transcriptRepository?: SessionTranscriptRepository,
     private readonly logger: { info: (obj: Record<string, unknown>, msg?: string) => void } = console,
   ) {
     this.profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
@@ -167,8 +162,6 @@ export class AgentRuntimeManager {
     try {
       const result = await runtime.request(method, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration));
       if (method === "session/prompt") {
-        const stopReason = typeof (result as JsonObject | undefined)?.stopReason === "string" ? String((result as JsonObject).stopReason) : "end_turn";
-        await this.transcriptRepository?.append(sessionId, runCompletedEvent(stopReason));
         await this.workspaceManager.assessAndFlush();
         promptOutcome = "ready";
       }
@@ -182,7 +175,6 @@ export class AgentRuntimeManager {
       return rewriteResultSessionId(record, result);
     } catch (error) {
       if (isPrompt) {
-        await this.transcriptRepository?.append(sessionId, runFailedEvent(error instanceof Error ? error.message : String(error)));
         promptOutcome = "error";
       }
       this.timingLog("request_failed", {
@@ -195,7 +187,7 @@ export class AgentRuntimeManager {
       throw error;
     } finally {
       if (isPrompt) await this.finishTurn(sessionId, promptOutcome ?? "error");
-      if (privateReplay) await this.endPrivateReplayAfterQuiet(sessionId);
+      if (privateReplay) this.endPrivateReplay(sessionId);
     }
   }
 
@@ -272,7 +264,6 @@ export class AgentRuntimeManager {
         await runtime.close();
       }
     }
-    await this.transcriptRepository?.clear(sessionId);
     await this.workspaceManager.removeSession(sessionId);
     this.detachSessionRuntime(sessionId);
     await this.sessions.delete(sessionId);
@@ -366,11 +357,9 @@ export class AgentRuntimeManager {
       }
       const privateTargets = this.privateReplayTargets.get(sessionId);
       if (privateTargets && privateTargets.size > 0) {
-        this.bumpPrivateReplayIdle(sessionId);
         for (const listener of privateTargets) listener(outbound);
         return;
       }
-      void this.captureTranscriptEvents(sessionId, outbound);
       for (const listener of this.subscribers.get(sessionId)?.keys() ?? []) listener(outbound);
     }));
   }
@@ -390,12 +379,6 @@ export class AgentRuntimeManager {
     this.viewedSessions.delete(sessionId);
     this.subscribers.delete(sessionId);
     this.privateReplayTargets.delete(sessionId);
-    const timer = this.privateReplayIdleTimers.get(sessionId);
-    if (timer) clearTimeout(timer);
-    this.privateReplayIdleTimers.delete(sessionId);
-    const waiters = this.privateReplayWaiters.get(sessionId) ?? new Set<() => void>();
-    for (const waiter of waiters) waiter();
-    this.privateReplayWaiters.delete(sessionId);
     if (this.environmentManager && this.environmentSubscriptions.delete(sessionId)) this.environmentManager.unsubscribe(sessionId);
     this.environmentSkillPaths.delete(sessionId);
     this.environmentRestartQueues.delete(sessionId);
@@ -483,34 +466,10 @@ export class AgentRuntimeManager {
     const listeners = this.privateReplayTargets.get(sessionId) ?? new Set<RuntimeNotification>();
     listeners.add(listener);
     this.privateReplayTargets.set(sessionId, listeners);
-    this.bumpPrivateReplayIdle(sessionId);
   }
 
-  private bumpPrivateReplayIdle(sessionId: string): void {
-    const existing = this.privateReplayIdleTimers.get(sessionId);
-    if (existing) clearTimeout(existing);
-    this.privateReplayIdleTimers.set(sessionId, setTimeout(() => {
-      this.privateReplayTargets.delete(sessionId);
-      this.privateReplayIdleTimers.delete(sessionId);
-      const waiters = this.privateReplayWaiters.get(sessionId) ?? new Set<() => void>();
-      for (const waiter of waiters) waiter();
-      this.privateReplayWaiters.delete(sessionId);
-    }, 80));
-  }
-
-  private async endPrivateReplayAfterQuiet(sessionId: string): Promise<void> {
-    await new Promise<void>((resolve) => {
-      const waiters = this.privateReplayWaiters.get(sessionId) ?? new Set<() => void>();
-      waiters.add(resolve);
-      this.privateReplayWaiters.set(sessionId, waiters);
-      if (!this.privateReplayIdleTimers.has(sessionId)) {
-        this.privateReplayTargets.delete(sessionId);
-        this.privateReplayWaiters.delete(sessionId);
-        resolve();
-        return;
-      }
-      this.bumpPrivateReplayIdle(sessionId);
-    });
+  private endPrivateReplay(sessionId: string): void {
+    this.privateReplayTargets.delete(sessionId);
   }
 
   private beginTurn(sessionId: string): void {
@@ -525,12 +484,6 @@ export class AgentRuntimeManager {
     }
     this.activeTurns.delete(sessionId);
     await this.sessions.setAttentionStatus(sessionId, this.viewedSessions.has(sessionId) ? "clear" : outcome);
-  }
-
-  private async captureTranscriptEvents(sessionId: string, message: JsonRpcMessage): Promise<void> {
-    for (const event of normalizedEventsFromRuntimeMessage(message)) {
-      await this.transcriptRepository?.append(sessionId, event);
-    }
   }
 
   private requireProfile(runtimeId: string): AgentRuntimeProfile {

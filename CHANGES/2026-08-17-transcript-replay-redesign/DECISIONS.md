@@ -4,7 +4,7 @@
 
 The server must never send a client-facing ACP notification larger than **10 kB**. Before forwarding or replaying an ACP notification, oversized presentation content will be truncated to a bounded representation.
 
-This applies to both live notifications and `session/load` replay. It is a client-presentation rule: it must not alter what the agent runtime receives or what the runtime considers its source history. The exact truncation representation remains to be decided.
+This applies to both live notifications and `session/load` replay. It is a client-presentation rule: it must not alter what the agent runtime receives or what the runtime considers its source history. Oversized raw input/output and content are replaced with a concise truncation marker while ACP identity fields such as update kind, tool-call id, status, title, and kind are retained.
 
 ## Decision 2: remove server transcript persistence completely
 
@@ -56,5 +56,4 @@ When a session handle experiences a genuine WebSocket disconnect or platform sus
 
 ## Still to decide
 
-- Exact truncation representation within the 10 kB limit, including useful image/tool-result metadata.
 - Exact ACP error classification and retry backoff/limits.

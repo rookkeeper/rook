@@ -15,7 +15,7 @@ Location environments use the same repository/bundle model as web, app, and proj
 - registration is gated by dwell/stationary signals to avoid drive-by arrivals.
 - exact client and server location ids are literal; parent environments are not implicitly entered.
 - the current location-context bundle is synthetic; authored location capability catalogs and a production skill suggester remain future work.
-- entering an environment rebuilds the affected runtime and can interrupt an in-flight reply, although transcript state is retained.
+- entering an environment rebuilds the affected runtime and can interrupt an in-flight reply, although ACP session history is retained.
 
 ## Dwell tuning
 

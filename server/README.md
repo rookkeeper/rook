@@ -43,7 +43,7 @@ Default example:
 }
 ```
 
-A `MockAcpAgent` is configured for fast CLI-driven testing — it stores transcripts, replays history on `session/load`, and handles common prompt patterns.
+A `MockAcpAgent` is configured for fast CLI-driven testing — it keeps agent history in memory, replays it on `session/load`, and handles common prompt patterns.
 
 ## Architecture
 
@@ -54,7 +54,7 @@ The server is a single ACP-compliant agent from the client's perspective. Intern
 The server is organized **primarily by domain**:
 
 - `src/infrastructure/` — auth, config loading, path helpers, remote proxy, shared datastore bootstrap
-- `src/sessions/` — session routes, repository contract, SQLite session persistence, transcript storage/helpers
+- `src/sessions/` — session routes, repository contract, and SQLite session persistence
 - `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
 - `src/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
   - `SQLiteEnvironmentRepository` and `EnvironmentRepositoryDatastore` are the live database-backed repository path
@@ -85,7 +85,6 @@ For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTU
 - `GET /api/health` — service health
 - `GET /api/agent_runtimes` — configured runtime catalog (only explicitly declared entries)
 - `GET /api/sessions` — session list + running state + server-authoritative activity status (`Active`, `Ready`, `Error`, `On`, or `Off`)
-- `GET /api/sessions/:sessionId/transcript` — coalesced logical server-owned transcript hydration
 - `POST /api/session/environments` — enter/leave environments for a session
 - `POST /api/environments/register` — mark an environment available
 - `POST /api/environments/decision` — record accept/approve/ignore/reject
@@ -111,7 +110,7 @@ It implements:
 - `PATCH /api/sessions/:id` — rename a session without changing its recency ordering
 - `POST /api/sessions/:id/touch` — acknowledge pending attention and mark a session as recently viewed
 - `POST /api/sessions/:id/unview` — leave the viewed session so later turn results can become pending attention
-- `DELETE /api/sessions/:id` — delete a session, its transcript, and its workspace state
+- `DELETE /api/sessions/:id` — delete a session and its workspace state
 - `session/request_permission` — permission request relay
 - `_com.rookkeeper/environment_offer*` — negotiated env-offer extension
 
@@ -123,7 +122,7 @@ It implements:
 - `updatedAt` now represents both prompt activity and explicit client-side "viewed" touches, so opening/resuming a session moves it to the top
 - `attention_status` durably stores `clear`, `ready`, or `error`; live turn/liveness state is combined into `activityStatus` with precedence `Active` > `Ready` > `Error` > `On` > `Off`
 - Session-to-environment membership persists in `session_environments`
-- Logical transcript history persists in `session_transcript_events` so later viewers can hydrate from server state instead of forcing runtime replay; ACP chunks are merged and in-progress records are updated in place.
+- Runtime-owned ACP history is authoritative. Clients populate session state through requester-private `session/load` replay; the server stores session metadata and lifecycle state.
 
 ### Runtime management
 

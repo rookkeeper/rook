@@ -22,17 +22,18 @@ Rook's normalized SQLite transcript copy amplified replay failures and was not n
 
 ## Work checklist
 
-- [ ] Remove `SessionTranscriptRepository`, transcript normalization, schema creation, manager capture/append/clear calls, and related tests.
-- [ ] Remove the REST transcript route and all server/client/CLI transcript hydration APIs and branches.
-- [ ] Make initial session population use ACP `session/load` for all clients and runtimes.
-- [ ] Preserve one session handle and session-bound socket per loaded session while the client is alive.
-- [ ] Fix reconnect handling so a genuine disconnect/suspension reloads through ACP and atomically replaces cached blocks.
-- [ ] Ensure ordinary session switching never reloads or resets a live handle.
-- [ ] Replace the 80 ms replay quiet timer with the completed `session/load` request boundary.
-- [ ] Add server-side bounded serialization/truncation for oversized live and replay presentation payloads, enforcing the 10 kB serialized-notification limit.
+- [x] Remove `SessionTranscriptRepository`, transcript normalization, schema creation, manager capture/append/clear calls, and related tests.
+- [x] Remove the REST transcript route and all server/client/CLI transcript hydration APIs and branches.
+- [x] Make initial session population use ACP `session/load` for all clients and runtimes.
+- [x] Preserve one session handle and session-bound socket per loaded session while the client is alive.
+- [x] Fix reconnect handling so a genuine disconnect/suspension reloads through ACP and atomically replaces cached blocks.
+- [x] Ensure ordinary session switching never reloads or resets a live handle.
+- [x] Return to cached Mac sessions immediately and coalesce concurrent `session/load` calls per handle.
+- [x] Replace the 80 ms replay quiet timer with the completed `session/load` request boundary.
+- [x] Add server-side bounded serialization/truncation for oversized live and replay presentation payloads, enforcing the 10 kB serialized-notification limit.
 - [ ] Define and test transient/permanent ACP load-error classification and bounded backoff.
-- [ ] Physically delete obsolete transcript tables and rows without leaving application compatibility code.
+- [x] Physically delete obsolete transcript tables and rows without leaving application compatibility code.
 - [ ] Add focused regression tests for replay shape, message bounds, handle reuse, background sessions, disconnect recovery, runtime restoration, retry classification, table cleanup, and absence of transcript persistence.
-- [ ] Update architecture docs, package READMEs, and protocol documentation to describe ACP-only playback.
-- [ ] Inspect compatibility surfaces and remove obsolete compatibility code and documentation.
-- [ ] Run focused tests, builds, and final validation.
+- [x] Update architecture docs, package READMEs, and protocol documentation to describe ACP-only playback.
+- [x] Inspect compatibility surfaces and remove obsolete compatibility code and documentation.
+- [x] Run available focused tests, builds, and final validation; Android validation remains blocked by the missing Java runtime.
