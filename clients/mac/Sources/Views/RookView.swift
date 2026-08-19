@@ -676,6 +676,9 @@ private struct MacSessionSections: View {
                 }
             }
         }
+        .onDrop(of: [.text], delegate: SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in
+            unpinIfPinned(id)
+        })
         .scrollIndicators(.visible)
         .frame(minHeight: 100, maxHeight: 360)
     }
@@ -759,6 +762,13 @@ private struct MacSessionSections: View {
     private func pin(_ id: String, moveToRecent: Bool) {
         model.setSessionPinned(model.sessions.first { $0.id == id } ?? AgentSessionSummary(raw: .object(["sessionId": .string(id)])), pinned: !moveToRecent, moveToRecent: moveToRecent)
         draggedSessionID = nil
+    }
+
+    private func unpinIfPinned(_ id: String) {
+        guard let session = model.sessions.first(where: { $0.id == id }), session.pinned else { return }
+        model.setSessionPinned(session, pinned: false, moveToRecent: true)
+        draggedSessionID = nil
+        dropTarget = nil
     }
 
     private func handlePinnedDrop(_ id: String, before targetID: String?, after: Bool) {
