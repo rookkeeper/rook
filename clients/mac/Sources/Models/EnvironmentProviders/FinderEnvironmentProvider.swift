@@ -216,10 +216,12 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
 tell application "Finder"
 set outputLines to {}
 try
-	if (count of Finder windows) > 0 then
-		repeat with w in Finder windows
+	set windowCount to count of Finder windows
+	if windowCount > 0 then
+		repeat with i from 1 to windowCount
 			try
-				set end of outputLines to "window" & tab & POSIX path of ((target of w) as alias)
+				set currentWindow to window i
+				set end of outputLines to "window" & tab & POSIX path of ((target of currentWindow) as alias)
 			end try
 		end repeat
 		try
