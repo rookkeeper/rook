@@ -11,7 +11,7 @@
 - [x] Mark compatibility surfaces
 - [x] Maintain product and architecture documentation
 - [x] Run final validation
-- [ ] Synchronize with main before submitting — not performed because no PR submission was requested
-- [ ] Open and validate the PR — not performed because no PR submission was requested
-- [ ] Merge with approval — requires explicit developer approval
+- [x] Synchronize with main before submitting — fetched origin and merged origin/main
+- [ ] Open and validate the PR
+- [ ] Merge with approval
 - [ ] Record outcomes and clean up — deferred until merge
