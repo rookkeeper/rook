@@ -12,6 +12,6 @@
 - [x] Maintain product and architecture documentation
 - [x] Run final validation — server typecheck (both configs) + 220 tests, RookKit 69 tests, Mac build + offer-controller tests; one pre-existing acpFacade flake reproduces on origin/main
 - [x] Synchronize with main before submitting — origin/main unchanged at 0b6cdc8; branch is 0 behind
-- [ ] Open and validate the PR
+- [x] Open and validate the PR — #159, mergeable
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
