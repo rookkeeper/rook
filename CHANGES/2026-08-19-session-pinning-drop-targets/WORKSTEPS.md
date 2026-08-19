@@ -11,7 +11,7 @@
 - [x] Mark compatibility surfaces — no compatibility surface retained by this focused UI change
 - [x] Maintain product and architecture documentation — existing Mac drag/drop documentation remains accurate; no product or architecture change
 - [x] Run final validation — Mac build passed and final diff is whitespace-clean
-- [ ] Synchronize with main before submitting
+- [x] Synchronize with main before submitting — fetched origin and merged origin/main; branch is up to date
 - [ ] Open and validate the PR
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
