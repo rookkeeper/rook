@@ -121,12 +121,12 @@ and a read-only repository that serves the result through the normal offer → a
       gains `agentsMd` if needed; loading/failure states; RookKit decoding test.
 - [x] Docs per Decision details; add the discovery-index convention and a short
       "publish for Rook" note for site owners in `PRODUCT/environment-repository.md`.
-- [ ] Manual verification (developer-driven): open a browser tab on a site that
+- [x] Manual verification (developer-driven): open a browser tab on a site that
       publishes at least one of the three resources; confirm the environment shows
       the `web` bundle, the offer appears on entry **with the content visible in the
       preview**, approval materializes the content read-only into the session
       workspace, the agent can use it, and after a server restart the site is still
       known without a re-fetch.
-- [ ] `npm run typecheck`, `node ./node_modules/typescript/bin/tsc -p tsconfig.server.json --noEmit`,
+- [x] `npm run typecheck`, `node ./node_modules/typescript/bin/tsc -p tsconfig.server.json --noEmit`,
       and `npm test` in `server/` pass; final review; sync with main; PR (documenting
       the adopted convention) through the fork.
