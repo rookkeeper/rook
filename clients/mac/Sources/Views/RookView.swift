@@ -690,9 +690,6 @@ private struct MacSessionSections: View {
     @ViewBuilder
     private func sessionRows(_ sessions: [AgentSessionSummary], allowsReordering: Bool) -> some View {
         ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
-            if allowsReordering && dropTarget?.sessionID == session.id && dropTarget?.after == false {
-                dropIndicator
-            }
             HStack(spacing: 8) {
                 Button { model.resumeSession(session) } label: { SessionHomeRow(session: session) }
                     .buttonStyle(.plain)
@@ -710,8 +707,15 @@ private struct MacSessionSections: View {
             .onDrop(of: [.text], delegate: allowsReordering
                 ? SessionDropDelegate(targetID: session.id, onTargetChanged: updateDropTarget) { id, after in handlePinnedDrop(id, before: session.id, after: after) }
                 : SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in pin(id, moveToRecent: true) })
-            if allowsReordering && dropTarget?.sessionID == session.id && dropTarget?.after == true {
-                dropIndicator
+            .overlay(alignment: .top) {
+                if allowsReordering && dropTarget?.sessionID == session.id && dropTarget?.after == false {
+                    dropIndicator
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if allowsReordering && dropTarget?.sessionID == session.id && dropTarget?.after == true {
+                    dropIndicator
+                }
             }
             if index < sessions.count - 1 { Divider().opacity(0.45) }
         }
@@ -720,6 +724,11 @@ private struct MacSessionSections: View {
                 dropIndicator
             }
             Color.clear.frame(height: 12)
+                .overlay(alignment: .top) {
+                    if dropTarget?.sessionID == pinnedEndDropID {
+                        dropIndicator
+                    }
+                }
                 .onDrop(of: [.text], delegate: SessionDropDelegate(targetID: pinnedEndDropID, onTargetChanged: updateDropTarget) { id, _ in handlePinnedDrop(id, before: nil, after: true) })
         } else {
             Color.clear.frame(height: 8)
