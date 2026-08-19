@@ -1,7 +1,7 @@
 import Foundation
 import RookKit
 
-struct FinderObservation: Equatable {
+struct FinderObservation: Equatable, Sendable {
     let currentDirectoryPath: String?
     let allDirectoryPaths: [String]
 }
@@ -16,8 +16,9 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
     var currentSiteEnvironmentId: String? { nil }
 
     private let registration: EnvironmentRegistrationController
-    private let observe: () -> FinderObservation
+    private let observe: @Sendable () -> FinderObservation
     private var pollTimer: Timer?
+    private var observationTask: Task<Void, Never>?
     private var currentApp: ForegroundApp?
     private var currentTitle: String?
 
@@ -28,7 +29,7 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
 
     init(
         register: @escaping ([EnvironmentCandidate], String) -> Void,
-        observe: @escaping () -> FinderObservation
+        observe: @escaping @Sendable () -> FinderObservation
     ) {
         self.registration = EnvironmentRegistrationController(register: register)
         self.observe = observe
@@ -38,8 +39,6 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
         providerInfo("finder provider activate title=\(title ?? "(null)")")
         currentApp = app
         currentTitle = title
-        let observation = observe()
-        currentAppEnvironmentId = Self.currentEnvironmentId(from: observation)
         startPolling()
         poll()
     }
@@ -47,12 +46,13 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
     func update(app: ForegroundApp, title: String?) {
         currentApp = app
         currentTitle = title
-        currentAppEnvironmentId = Self.currentEnvironmentId(from: observe())
     }
 
     func deactivate() {
         pollTimer?.invalidate()
         pollTimer = nil
+        observationTask?.cancel()
+        observationTask = nil
         currentApp = nil
         currentTitle = nil
         currentAppEnvironmentId = nil
@@ -74,22 +74,33 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
     }
 
     private func poll() {
-        guard let currentApp else { return }
-        let timed = RookPerformance.begin(
-            "FinderEnvironmentPoll",
-            operation: "finder-environment-poll",
-            description: "bundleId=\(currentApp.bundleId)",
-            logger: RookLog.environment,
-            signposter: RookLog.environmentSignposter,
-            slowThresholdMs: 150,
-            hangThresholdMs: 600
-        )
+        guard let app = currentApp else { return }
         let title = currentTitle
-        let observation = observe()
+        let observe = self.observe
+        observationTask?.cancel()
+        observationTask = Task.detached { [weak self] in
+            let observation = RookPerformance.measure(
+                "FinderObservation",
+                operation: "finder-observe",
+                description: "osascript finder windows",
+                logger: RookLog.environment,
+                signposter: RookLog.environmentSignposter,
+                slowThresholdMs: 150,
+                hangThresholdMs: 600,
+                details: { (observation: FinderObservation) in "directories=\(observation.allDirectoryPaths.count)" }
+            ) {
+                observe()
+            }
+            guard !Task.isCancelled else { return }
+            await self?.apply(observation, for: app, title: title)
+        }
+    }
+
+    private func apply(_ observation: FinderObservation, for app: ForegroundApp, title: String?) {
+        guard currentApp == app else { return }
         currentAppEnvironmentId = Self.currentEnvironmentId(from: observation)
-        let candidates = Self.candidates(for: currentApp, title: title, observation: observation)
+        let candidates = Self.candidates(for: app, title: title, observation: observation)
         registration.emitNow(candidates: candidates, reason: "finder")
-        timed.finish(details: "candidates=\(candidates.count)")
         onStateChange?()
     }
 
@@ -113,7 +124,7 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
         }
     }
 
-    static func parseObservation(from output: String) -> FinderObservation {
+    nonisolated static func parseObservation(from output: String) -> FinderObservation {
         var currentDirectoryPath: String?
         var allDirectoryPaths: [String] = []
 
@@ -145,7 +156,7 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
         return URL(fileURLWithPath: path).lastPathComponent
     }
 
-    static func observeFinder() -> FinderObservation {
+    nonisolated static func observeFinder() -> FinderObservation {
         MacStallWatchdog.shared.beginOperation("FinderEnvironmentProvider.observeFinder")
         defer { MacStallWatchdog.shared.endOperation("FinderEnvironmentProvider.observeFinder") }
         MacStallWatchdog.shared.updateContext(["automationTarget": "Finder"])
