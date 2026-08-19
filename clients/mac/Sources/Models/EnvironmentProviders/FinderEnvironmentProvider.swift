@@ -9,6 +9,7 @@ struct FinderObservation: Equatable, Sendable {
 @MainActor
 final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
     private static let pollInterval: TimeInterval = 5
+    private nonisolated static let observeTimeout: TimeInterval = 2
 
     let supportedBundleIds = ["com.apple.finder"]
     var onStateChange: (() -> Void)?
@@ -181,7 +182,16 @@ final class FinderEnvironmentProvider: SpecializedEnvironmentProvider {
 
             do {
                 try process.run()
-                process.waitUntilExit()
+                let deadline = Date().addingTimeInterval(observeTimeout)
+                while process.isRunning && Date() < deadline {
+                    Thread.sleep(forTimeInterval: 0.05)
+                }
+                guard !process.isRunning else {
+                    process.terminate()
+                    process.waitUntilExit()
+                    providerError("finder observe timed out after \(observeTimeout)s")
+                    return FinderObservation(currentDirectoryPath: nil, allDirectoryPaths: [])
+                }
             } catch {
                 providerError("finder observe failed error=\(error.localizedDescription)")
                 return FinderObservation(currentDirectoryPath: nil, allDirectoryPaths: [])
