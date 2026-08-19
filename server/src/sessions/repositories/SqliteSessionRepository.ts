@@ -148,7 +148,6 @@ export class SqliteSessionRepository implements SessionRepository {
     this.ensurePinColumns();
   }
 
-  // THIS IS FOR BACKWARDS COMPATIBILITY: existing SQLite databases may predate durable session pin metadata.
   private ensurePinColumns(): void {
     const columns = this.db.prepare("PRAGMA table_info(sessions)").all() as Array<Record<string, unknown>>;
     if (!columns.some((column) => column.name === "pinned")) {

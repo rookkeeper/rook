@@ -41,7 +41,6 @@ public struct AgentSessionSummary: Equatable, Identifiable {
     public var agent: String { raw["runtimeId"]?.stringValue ?? "" }
     public var supportsImagePrompts: Bool { raw["supportsImagePrompts"]?.boolValue ?? false }
     public var name: String { raw["title"]?.stringValue ?? "session" }
-    // THIS IS FOR BACKWARDS COMPATIBILITY: older servers omit pin metadata, so clients treat those sessions as unpinned.
     public var pinned: Bool { raw["pinned"]?.boolValue ?? false }
     public var pinnedOrder: Int { Int(raw["pinnedOrder"]?.numberValue ?? 0) }
     public var running: Bool { raw["running"]?.boolValue ?? false }
