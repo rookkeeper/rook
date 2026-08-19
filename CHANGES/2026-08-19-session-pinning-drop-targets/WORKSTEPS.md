@@ -13,5 +13,5 @@
 - [x] Run final validation — Mac build passed and final diff is whitespace-clean
 - [x] Synchronize with main before submitting — fetched origin and merged origin/main; branch is up to date
 - [x] Open and validate the PR — PR #165 is mergeable and required checks pass
-- [ ] Merge with approval
-- [ ] Record outcomes and clean up
+- [x] Merge with approval — PR #165 merged with a merge commit
+- [x] Record outcomes and clean up — outcomes recorded; development resources stopped
