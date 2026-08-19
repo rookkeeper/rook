@@ -13,5 +13,5 @@
 - [x] Run final validation
 - [x] Synchronize with main before submitting — fetched origin and merged origin/main
 - [x] Open and validate the PR — PR #163 is mergeable and required checks pass
-- [ ] Merge with approval
-- [ ] Record outcomes and clean up — deferred until merge
+- [x] Merge with approval — PR #163 merged with a merge commit
+- [x] Record outcomes and clean up — outcomes recorded; development resources stopped
