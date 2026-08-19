@@ -126,6 +126,22 @@ public struct RookAPI {
         ))
     }
 
+    public func setSessionPinned(sessionId: String, pinned: Bool) async throws -> AgentSessionSummary {
+        AgentSessionSummary(raw: try await patchJSON(
+            path: "api/sessions/\(sessionId)",
+            payload: .object(["pinned": .bool(pinned)])
+        ))
+    }
+
+    public func reorderPinnedSessions(sessionIds: [String]) async throws -> [AgentSessionSummary] {
+        let response = try await postJSON(
+            path: "api/sessions/reorder-pinned",
+            payload: .object(["sessionIds": .array(sessionIds.map { .string($0) })])
+        )
+        guard case .array(let values) = response["sessions"] else { return [] }
+        return values.map(AgentSessionSummary.init(raw:))
+    }
+
     public func touchSession(sessionId: String) async throws -> AgentSessionSummary {
         AgentSessionSummary(raw: try await postJSON(path: "api/sessions/\(sessionId)/touch", payload: .object([:])) )
     }

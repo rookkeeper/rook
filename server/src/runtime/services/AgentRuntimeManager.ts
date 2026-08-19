@@ -86,6 +86,22 @@ export class AgentRuntimeManager {
     return { ...record, title: normalizedTitle };
   }
 
+  async setSessionPinned(sessionId: string, pinned: boolean): Promise<SessionRecord> {
+    await this.requireSession(sessionId);
+    await this.sessions.setPinned(sessionId, pinned);
+    return await this.requireSession(sessionId);
+  }
+
+  async reorderPinnedSessions(sessionIds: string[]): Promise<SessionRecord[]> {
+    const records = await this.sessions.list();
+    const pinnedIds = records.filter((record) => record.pinned).map((record) => record.sessionId);
+    if (sessionIds.length !== pinnedIds.length || new Set(sessionIds).size !== sessionIds.length || sessionIds.some((id) => !pinnedIds.includes(id))) {
+      throw new Error("Pinned reorder must contain each currently pinned session exactly once.");
+    }
+    await this.sessions.reorderPinned(sessionIds);
+    return await this.sessions.list();
+  }
+
   async touchSession(sessionId: string): Promise<SessionRecord> {
     await this.requireSession(sessionId);
     const updatedAt = new Date().toISOString();
@@ -128,6 +144,8 @@ export class AgentRuntimeManager {
       startedAt: now,
       updatedAt: now,
       attentionStatus: "clear",
+      pinned: false,
+      pinnedOrder: 0,
     };
     await this.sessions.save(record);
     this.attachSessionRuntime(record.sessionId, runtime);

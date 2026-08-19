@@ -13,7 +13,7 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
 ## Features
 
 - **Sessions home** - unified session-selection screen listing all sessions across runtimes, with a New Chat form that selects a configured runtime.
-- **Sessions** - session history ordered by most recently viewed/updated; resume any session by clicking it, rename it from the row action menu, or delete it with confirmation. Discovery is REST (`GET /api/sessions`), management uses `PATCH/DELETE /api/sessions/:id`, and opening/resuming a session records a REST touch so it moves to the top even without a new prompt. New chats start on one unbound WebSocket that becomes session-bound after `session/new`; thereafter live interaction is one session WebSocket per session.
+- **Sessions** - the global list has durable `Pinned` and recency-sorted `Recent` sections. Pin/unpin is available from the row action menu; Mac also supports dragging sessions into Pinned, reordering pinned rows, and dragging a pinned row to Recent to unpin and touch it to the top. Discovery is REST (`GET /api/sessions`), management uses `PATCH/DELETE /api/sessions/:id` plus `POST /api/sessions/reorder-pinned`, and normal resume/rename/delete behavior remains unchanged. New chats start on one unbound WebSocket that becomes session-bound after `session/new`; thereafter live interaction is one session WebSocket per session.
 - **Auto-resume** - on launch the app rejoins the most recent session through ACP `session/load`; loaded session handles remain available in memory when switching sessions.
 - **Streaming chat** — `session/prompt` over `ws://127.0.0.1:7665/api/ws?sessionId=...`;
   renders agent text, thinking (collapsible), tool calls with normalized raw

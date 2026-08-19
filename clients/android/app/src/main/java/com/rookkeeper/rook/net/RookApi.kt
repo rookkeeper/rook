@@ -106,6 +106,20 @@ class RookApi(
             buildJsonObject { put("title", title) }
         ).jsonObject
 
+    suspend fun setSessionPinned(sessionId: String, pinned: Boolean): JsonObject =
+        patchJson(
+            "api/sessions/$sessionId",
+            buildJsonObject { put("pinned", pinned) }
+        ).jsonObject
+
+    suspend fun reorderPinnedSessions(sessionIds: List<String>): List<JsonObject> {
+        @Serializable data class SessionsResponse(val sessions: List<JsonObject>)
+        val body = postJson("api/sessions/reorder-pinned", buildJsonObject {
+            put("sessionIds", kotlinx.serialization.json.buildJsonArray { sessionIds.forEach { add(it) } })
+        })
+        return json.decodeFromJsonElement(SessionsResponse.serializer(), body).sessions
+    }
+
     suspend fun touchSession(sessionId: String): JsonObject =
         postJson("api/sessions/$sessionId/touch", buildJsonObject { }).jsonObject
 

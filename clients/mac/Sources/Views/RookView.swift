@@ -286,6 +286,17 @@ private struct HomeContent: View {
         .onChange(of: model.agents.map(\.id).joined(separator: "|")) { _ in
             ensureSelectedRuntimeID()
         }
+        // Catch drops anywhere else in the home view. Session-row drop targets
+        // take precedence; a pinned source released in the surrounding home
+        // view is unpinned and touched to the top of Recent.
+        .onDrop(of: [.text], delegate: SessionDropDelegate { id, _ in
+            unpinDroppedSession(id)
+        })
+    }
+
+    private func unpinDroppedSession(_ id: String) {
+        guard let session = model.sessions.first(where: { $0.id == id }), session.pinned else { return }
+        model.setSessionPinned(session, pinned: false, moveToRecent: true)
     }
 
     // MARK: - Identity (slim, one line)
@@ -563,45 +574,18 @@ private struct HomeContent: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 48, alignment: .center)
             } else {
-                ScrollView(.vertical) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
-                            HStack(spacing: 8) {
-                                Button {
-                                    model.resumeSession(session)
-                                } label: {
-                                    SessionHomeRow(session: session)
-                                }
-                                .buttonStyle(.plain)
-                                .pointingHandOnHover()
-
-                                SessionActionsMenu(
-                                    onRename: {
-                                        renameDraft = session.name
-                                        sessionToRename = session
-                                    },
-                                    onDelete: {
-                                        sessionToDelete = session
-                                    }
-                                )
-                            }
-                            if index < model.sessions.count - 1 {
-                                Divider().opacity(0.45)
-                            }
-                        }
-                    }
-                }
-                .scrollIndicators(.visible)
-                .frame(maxHeight: sessionsMaxHeight)
+                MacSessionSections(
+                    model: model,
+                    onRename: { session in
+                        renameDraft = session.name
+                        sessionToRename = session
+                    },
+                    onDelete: { session in sessionToDelete = session }
+                )
             }
         }
     }
 
-    private var sessionsMaxHeight: CGFloat {
-        let visibleRows = min(CGFloat(model.sessions.count), 7)
-        let rowHeight: CGFloat = 50
-        return visibleRows * rowHeight
-    }
 
     private var serverOfflineCard: some View {
         PanelCard {
@@ -656,6 +640,217 @@ private struct HomeContent: View {
                 model.quitApp()
             }
         }
+    }
+}
+
+private struct MacSessionSections: View {
+    @ObservedObject var model: RookMacModel
+    var onRename: (AgentSessionSummary) -> Void
+    var onDelete: (AgentSessionSummary) -> Void
+    @State private var draggedSessionID: String?
+    @State private var dropTarget: SessionDropTarget?
+
+    private let pinnedEndDropID = "__pinned_end__"
+
+    private var pinned: [AgentSessionSummary] {
+        model.sessions.filter(\.pinned).sorted {
+            $0.pinnedOrder == $1.pinnedOrder ? $0.id < $1.id : $0.pinnedOrder < $1.pinnedOrder
+        }
+    }
+
+    private var recent: [AgentSessionSummary] { model.sessions.filter { !$0.pinned } }
+
+    var body: some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 6) {
+                sectionHeader("Pinned", systemImage: "pin.fill")
+                if pinned.isEmpty {
+                    Text("Pin a session to keep it here.")
+                        .font(.caption)
+                        .foregroundStyle(PanelPalette.textMuted)
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(PanelPalette.backgroundPrimary.opacity(0.35)))
+                        .onDrop(of: [.text], delegate: SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in
+                            pin(id, moveToRecent: false)
+                        })
+                } else {
+                    sessionRows(pinned, allowsReordering: true)
+                }
+                sectionHeader("Recent", systemImage: "clock.arrow.circlepath")
+                if recent.isEmpty {
+                    Text("No recent sessions")
+                        .font(.caption)
+                        .foregroundStyle(PanelPalette.textMuted)
+                        .padding(.vertical, 8)
+                } else {
+                    sessionRows(recent, allowsReordering: false)
+                }
+            }
+        }
+        .onDrop(of: [.text], delegate: SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in
+            unpinIfPinned(id)
+        })
+        .scrollIndicators(.visible)
+        .frame(minHeight: 100, maxHeight: 360)
+    }
+
+    private func sectionHeader(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(PanelPalette.textMuted)
+            .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private func sessionRows(_ sessions: [AgentSessionSummary], allowsReordering: Bool) -> some View {
+        ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
+            HStack(spacing: 8) {
+                Button { model.resumeSession(session) } label: { SessionHomeRow(session: session) }
+                    .buttonStyle(.plain)
+                    .pointingHandOnHover()
+                SessionActionsMenu(
+                    onTogglePin: { model.setSessionPinned(session, pinned: !session.pinned, moveToRecent: session.pinned) },
+                    onRename: { onRename(session) },
+                    onDelete: { onDelete(session) }
+                )
+            }
+            .onDrag {
+                draggedSessionID = session.id
+                return NSItemProvider(object: session.id as NSString)
+            }
+            .onDrop(of: [.text], delegate: allowsReordering
+                ? SessionDropDelegate(targetID: session.id, onTargetChanged: updateDropTarget) { id, after in handlePinnedDrop(id, before: session.id, after: after) }
+                : SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in pin(id, moveToRecent: true) })
+            .overlay(alignment: .top) {
+                if allowsReordering && dropTarget?.sessionID == session.id && dropTarget?.after == false {
+                    dropIndicator
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if allowsReordering && dropTarget?.sessionID == session.id && dropTarget?.after == true {
+                    dropIndicator
+                }
+            }
+            if index < sessions.count - 1 { Divider().opacity(0.45) }
+        }
+        if allowsReordering {
+            if dropTarget?.sessionID == pinnedEndDropID {
+                dropIndicator
+            }
+            Color.clear.frame(height: 12)
+                .overlay(alignment: .top) {
+                    if dropTarget?.sessionID == pinnedEndDropID {
+                        dropIndicator
+                    }
+                }
+                .onDrop(of: [.text], delegate: SessionDropDelegate(targetID: pinnedEndDropID, onTargetChanged: updateDropTarget) { id, _ in handlePinnedDrop(id, before: nil, after: true) })
+        } else {
+            Color.clear.frame(height: 8)
+                .onDrop(of: [.text], delegate: SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in pin(id, moveToRecent: true) })
+        }
+    }
+
+    private var dropIndicator: some View {
+        Capsule()
+            .fill(PanelPalette.accent)
+            .frame(height: 3)
+            .padding(.horizontal, 6)
+            .transition(.opacity)
+    }
+
+    private func updateDropTarget(_ sessionID: String?, after: Bool) {
+        guard let sessionID else {
+            dropTarget = nil
+            return
+        }
+        dropTarget = SessionDropTarget(sessionID: sessionID, after: after)
+    }
+
+    private func clearDropTarget() {
+        dropTarget = nil
+    }
+
+    private func pin(_ id: String, moveToRecent: Bool) {
+        model.setSessionPinned(model.sessions.first { $0.id == id } ?? AgentSessionSummary(raw: .object(["sessionId": .string(id)])), pinned: !moveToRecent, moveToRecent: moveToRecent)
+        draggedSessionID = nil
+    }
+
+    private func unpinIfPinned(_ id: String) {
+        guard let session = model.sessions.first(where: { $0.id == id }), session.pinned else { return }
+        model.setSessionPinned(session, pinned: false, moveToRecent: true)
+        draggedSessionID = nil
+        dropTarget = nil
+    }
+
+    private func handlePinnedDrop(_ id: String, before targetID: String?, after: Bool) {
+        if pinned.contains(where: { $0.id == id }) {
+            reorder(id, before: targetID, after: after)
+        } else if let source = model.sessions.first(where: { $0.id == id }) {
+            let nextID: String?
+            if let targetID, after, let targetIndex = pinned.firstIndex(where: { $0.id == targetID }) {
+                nextID = pinned.dropFirst(targetIndex + 1).first?.id
+            } else {
+                nextID = targetID
+            }
+            model.pinSessionInPinned(source, before: nextID)
+            draggedSessionID = nil
+        }
+    }
+
+    private func reorder(_ id: String, before targetID: String?, after: Bool) {
+        guard let source = pinned.first(where: { $0.id == id }) else { return }
+        var reordered = pinned.filter { $0.id != id }
+        if let targetID, let targetIndex = reordered.firstIndex(where: { $0.id == targetID }) {
+            reordered.insert(source, at: targetIndex + (after ? 1 : 0))
+        } else {
+            reordered.append(source)
+        }
+        model.reorderPinnedSessions(reordered)
+        draggedSessionID = nil
+    }
+}
+
+private struct SessionDropTarget: Equatable {
+    let sessionID: String
+    let after: Bool
+}
+
+private struct SessionDropDelegate: DropDelegate {
+    var targetID: String?
+    var onTargetChanged: (String?, Bool) -> Void
+    var action: (String, Bool) -> Void
+
+    init(targetID: String? = nil, onTargetChanged: @escaping (String?, Bool) -> Void = { _, _ in }, action: @escaping (String, Bool) -> Void) {
+        self.targetID = targetID
+        self.onTargetChanged = onTargetChanged
+        self.action = action
+    }
+
+    func dropEntered(info: DropInfo) {
+        onTargetChanged(targetID, isAfter(info))
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        onTargetChanged(targetID, isAfter(info))
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        onTargetChanged(nil, false)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let after = isAfter(info)
+        onTargetChanged(nil, false)
+        guard let provider = info.itemProviders(for: [.text]).first else { return false }
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+            if let id = object as? NSString { DispatchQueue.main.async { action(String(id), after) } }
+        }
+        return true
+    }
+
+    private func isAfter(_ info: DropInfo) -> Bool {
+        targetID != nil && info.location.y > 27
     }
 }
 
@@ -976,11 +1171,15 @@ private struct SessionRow: View {
 }
 
 private struct SessionActionsMenu: View {
+    var onTogglePin: (() -> Void)? = nil
     var onRename: () -> Void
     var onDelete: () -> Void
 
     var body: some View {
         Menu {
+            if let onTogglePin {
+                Button("Pin/Unpin", action: onTogglePin)
+            }
             Button("Rename", action: onRename)
             Divider()
             Button("Delete", role: .destructive, action: onDelete)
