@@ -12,6 +12,6 @@
 - [x] Maintain product and architecture documentation — existing Mac drag/drop documentation remains accurate; no product or architecture change
 - [x] Run final validation — Mac build passed and final diff is whitespace-clean
 - [x] Synchronize with main before submitting — fetched origin and merged origin/main; branch is up to date
-- [ ] Open and validate the PR
+- [x] Open and validate the PR — PR #165 is mergeable and required checks pass
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
