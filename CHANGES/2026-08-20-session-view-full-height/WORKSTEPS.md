@@ -12,6 +12,6 @@
 - [x] Maintain product and architecture documentation
 - [x] Run final validation
 - [x] Synchronize with main before submitting (merged `origin/main` and reran launcher tests plus Mac build)
-- [ ] Open and validate the PR
+- [x] Open and validate the PR (PR #168 is open and currently reports mergeable; GitHub checks are queued)
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
