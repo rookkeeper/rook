@@ -251,6 +251,35 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   });
 
 
+  it("marks exhausted runtime retries as errors while allowing retry recovery", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "retry-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "retry-test" },
+    });
+    const sessionId = created.sessionId as string;
+
+    await expect(request(ws, 3, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "retry exhausted" }],
+    })).rejects.toThrow("Runtime retries exhausted before producing a response.");
+    const failedList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(failedList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus).toBe("error");
+
+    const recovered = await request(ws, 4, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "retry recovery" }],
+    });
+    expect(recovered.stopReason).toBe("end_turn");
+    const recoveredList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(recoveredList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus).toBe("ready");
+
+    await request(ws, 5, "session/close", { sessionId });
+    ws.close();
+  });
+
   it("moves a prompted session to the front of the recency-sorted list", async () => {
     const olderWs = await connect();
     const newerWs = await connect();
