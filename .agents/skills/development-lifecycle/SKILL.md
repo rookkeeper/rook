@@ -52,7 +52,7 @@ Keep `TODO.md` current as the implementation changes the plan. Once the brainsto
 
 ### Prepare the implementation workspace
 
-After the planning commit exists on main, create a dedicated worktree and feature branch from that main commit under `../_worktrees/`, copy `.env` into it, and do the implementation there rather than in `main`. The committed change directory will therefore also be present in the worktree, but its primary planning record remains visible in main. Subsequent TODO and WORKSTEPS updates belong to the implementation branch and are merged with the code. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
+After the planning commit exists on main, create a dedicated worktree and feature branch from that main commit at `<rook-dir>/../_worktrees/<task-branch-name>`, where `<rook-dir>` is the main Rook checkout. In other words, `_worktrees` is a sibling of the `rook` checkout, not a sibling of the repository's parent directory; do not hardcode an absolute path. Copy `.env` into the worktree and do the implementation there rather than in `main`. The committed change directory will therefore also be present in the worktree, but its primary planning record remains visible in main. Subsequent TODO and WORKSTEPS updates belong to the implementation branch and are merged with the code. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
 
 ### Implement and test
 
