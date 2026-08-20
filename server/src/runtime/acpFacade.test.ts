@@ -251,6 +251,35 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   });
 
 
+  it("marks exhausted runtime retries as errors while allowing retry recovery", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "retry-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "retry-test" },
+    });
+    const sessionId = created.sessionId as string;
+
+    await expect(request(ws, 3, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "retry exhausted" }],
+    })).rejects.toThrow("Runtime retries exhausted before producing a response.");
+    const failedList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(failedList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus).toBe("error");
+
+    const recovered = await request(ws, 4, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "retry recovery" }],
+    });
+    expect(recovered.stopReason).toBe("end_turn");
+    const recoveredList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(recoveredList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus).toBe("ready");
+
+    await request(ws, 5, "session/close", { sessionId });
+    ws.close();
+  });
+
   it("moves a prompted session to the front of the recency-sorted list", async () => {
     const olderWs = await connect();
     const newerWs = await connect();
@@ -610,9 +639,6 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const during = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((r) => r.json()) as { sessions: Array<Record<string, unknown>> };
     expect(during.sessions.find((item) => item.sessionId === sessionId)?.running).toBe(true);
 
-    const transcript = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionId}/transcript`).then((r) => r.json()) as { events: Array<Record<string, unknown>> };
-    expect(transcript.events.length).toBeGreaterThan(0);
-
     const reopened = await connect(`/api/ws?sessionId=${sessionId}`);
     await request(reopened, 5, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "reopen" } });
     const after = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((r) => r.json()) as { sessions: Array<Record<string, unknown>> };
@@ -693,20 +719,16 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
 
     await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/touch`, { method: "POST" });
     sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
-    expect(sessions.sessions[0]?.sessionId).toBe(sessionA.sessionId);
+    expect(sessions.sessions.filter((session) => session.sessionId === sessionA.sessionId || session.sessionId === sessionB.sessionId)[0]?.sessionId).toBe(sessionA.sessionId);
 
     await request(wsA, 5, "session/prompt", {
       sessionId: sessionA.sessionId as string,
       prompt: [{ type: "text", text: "tell me a joke" }],
     });
-    const transcriptBeforeDelete = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/transcript`).then((response) => response.json()) as { events: Array<Record<string, unknown>> };
-    expect(transcriptBeforeDelete.events.length).toBeGreaterThan(0);
-
     const deleted = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}`, { method: "DELETE" });
     expect(deleted.status).toBe(200);
     sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
     expect(sessions.sessions.some((session) => session.sessionId === sessionA.sessionId)).toBe(false);
-    expect(await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/transcript`).then((response) => response.status)).toBe(404);
 
     wsA.close();
     wsB.close();

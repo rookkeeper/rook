@@ -90,7 +90,7 @@ If an action fails or merge is blocked, read the exact message from GitHub and f
 
 ### Merge with approval
 
-Ask whether the developer wants the PR merged; opening a PR is not approval to merge. After explicit approval, use a merge commit rather than squash or rebase unless the developer specifically requests another method. Verify the PR is actually merged and record the merge commit. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
+Ask whether the developer wants the PR merged, and get explicit consent immediately before running the merge; opening a PR is not approval to merge. After explicit approval, use a merge commit rather than squash or rebase unless the developer specifically requests another method. Verify the PR is actually merged and record the merge commit. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
 
 ### Record outcomes and clean up
 

@@ -15,7 +15,7 @@ This directory replaces the old single-file architecture summary with per-surfac
 
 Rook is built around two protocol boundaries:
 
-1. client ↔ server: session discovery + transcript hydration over REST (`GET /api/sessions`, `GET /api/sessions/:id/transcript`); agent interaction over one session-bound ACP WebSocket per session at `/api/ws?sessionId=...`
+1. client ↔ server: session discovery over REST (`GET /api/sessions`); agent interaction and transcript replay over one session-bound ACP WebSocket per loaded session at `/api/ws?sessionId=...`
 2. server ↔ runtime: ACP over stdio subprocesses, one process per public session
 
 The server is the stable broker. Clients are thin native surfaces over the same REST + ACP contract. Environment-repository storage, capability hashing, materialization, and authoring details are documented in [server.md](./server.md) and [database.md](./database.md), with the migration recap in [../CHANGES/2026-08-01-environment_repo_to_db/recap.md](../CHANGES/2026-08-01-environment_repo_to_db/recap.md).

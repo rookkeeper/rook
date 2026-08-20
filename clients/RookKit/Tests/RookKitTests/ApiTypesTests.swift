@@ -36,6 +36,16 @@ final class ApiTypesTests: XCTestCase {
         XCTAssertEqual(summary.name, "my-session")
         XCTAssertTrue(summary.running)
         XCTAssertEqual(summary.connectedClients, 2)
+        XCTAssertFalse(summary.pinned)
+    }
+
+    func testAgentSessionSummaryReadsPinnedMetadata() {
+        let summary = AgentSessionSummary(raw: .object([
+            "pinned": .bool(true),
+            "pinnedOrder": .number(3)
+        ]))
+        XCTAssertTrue(summary.pinned)
+        XCTAssertEqual(summary.pinnedOrder, 3)
     }
 
     func testAgentSessionSummaryActivityStatusUsesServerValue() {

@@ -33,10 +33,6 @@ assert_file() {
   [[ -f "$1" ]] || fail "expected file '$1' to exist"
 }
 
-assert_not_file() {
-  [[ ! -e "$1" ]] || fail "expected file '$1' not to exist"
-}
-
 assert_match() {
   [[ "$1" =~ $2 ]] || fail "expected '$1' to match '$2'"
 }
@@ -96,9 +92,12 @@ assert_empty "${ROOK_SERVER_HOST:-}"
 assert_empty "${ROOK_AGENT_RUNTIMES_PATH:-}"
 initialize_development_home
 assert_file "$ROOK_HOME/config/agent-runtimes.json"
-assert_not_file "$ROOK_HOME/rook.sqlite"
-assert_not_file "$ROOK_HOME/rook.sqlite-wal"
-assert_not_file "$ROOK_HOME/rook.sqlite-shm"
+assert_file "$ROOK_HOME/rook.sqlite"
+assert_file "$ROOK_HOME/rook.sqlite-wal"
+assert_file "$ROOK_HOME/rook.sqlite-shm"
+assert_eq "$(<"$ROOK_HOME/rook.sqlite")" "source-db"
+assert_eq "$(<"$ROOK_HOME/rook.sqlite-wal")" "source-wal"
+assert_eq "$(<"$ROOK_HOME/rook.sqlite-shm")" "source-shm"
 printf 'worktree-only\n' >"$ROOK_HOME/worktree-only.txt"
 printf 'source-only\n' >"$HOME/.rook/source-only.txt"
 initialize_development_home

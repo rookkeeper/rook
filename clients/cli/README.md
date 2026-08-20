@@ -2,7 +2,7 @@
 
 A tiny ACP-first command-line client for the real Rook server.
 
-It creates a new session for one configured runtime, keeps the same ACP WebSocket after `session/new`, and prints events as they arrive. Existing sessions use REST discovery/transcript hydration and a session-bound WebSocket.
+It creates a new session for one configured runtime, keeps the same ACP WebSocket after `session/new`, and prints events as they arrive. Existing sessions use REST discovery followed by requester-private ACP `session/load` replay on a session-bound WebSocket.
 
 ## Install
 

@@ -143,41 +143,9 @@ export class RookCliClient {
 
   async loadExistingSession() {
     if (this.sessionLoaded) return;
-    if (this.sessionRecord?.running) {
-      const response = await fetchJson(`${this.baseRestUrl()}/api/sessions/${encodeURIComponent(this.sessionId)}/transcript`, this.authToken);
-      for (const event of response?.events ?? []) this.applyTranscriptEvent(event);
-    } else {
-      await this.request("session/load", { sessionId: this.sessionId });
-    }
+    await this.request("session/load", { sessionId: this.sessionId });
     this.sessionLoaded = true;
     if (!this.lastMessageOnly && !this.transcript) printLine(COLORS.gray, `session: ${this.sessionId}`);
-  }
-
-  applyTranscriptEvent(event) {
-    const kind = event?.kind;
-    if (kind === "run_completed" || kind === "run_failed") return;
-    const update = {
-      sessionUpdate: kind === "plan_update" ? "plan" : kind,
-      ...(kind === "user_message_chunk" || kind === "agent_message_chunk" || kind === "agent_thought_chunk"
-        ? { content: { type: "text", text: event.text } }
-        : {}),
-      ...(kind === "tool_call" ? {
-        toolCallId: event.toolCallId,
-        title: event.title,
-        kind: event.toolKind,
-        status: event.status,
-        rawInput: event.rawInput,
-      } : {}),
-      ...(kind === "tool_call_update" ? {
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        status: event.status,
-        rawOutput: event.rawOutput,
-      } : {}),
-      ...(kind === "plan_update" ? { entries: event.entries } : {}),
-      ...(kind === "usage_update" ? { used: event.used, size: event.size, cost: event.cost } : {}),
-    };
-    if (update.sessionUpdate) this.handleUpdate(update);
   }
 
   async applyEnvironmentChanges() {

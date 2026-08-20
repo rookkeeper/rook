@@ -4,11 +4,11 @@ import type { EnvironmentBundleOffer, EnvironmentEventListener, EnvironmentResol
 import type { SessionAttentionStatus, SessionRecord, SessionRepository } from "../../sessions/repositories/SessionRepository.js";
 import { SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotification, type SessionRuntimeConfiguration } from "../SessionRuntime.js";
 import { runtimeLaunchPlan, runtimeSessionParams } from "../runtimeLaunchPlan.js";
-import { SessionTranscriptRepository } from "../../sessions/repositories/SessionTranscriptRepository.js";
-import { normalizedEventsFromRuntimeMessage, runCompletedEvent, runFailedEvent } from "../../sessions/services/sessionTranscriptEvents.js";
 import { CapabilityWorkspaceManager, type CapabilityWorkspaceResult } from "../CapabilityWorkspaceManager.js";
 
 export type SessionActivityStatus = "active" | "ready" | "error" | "on" | "off";
+
+type TurnDiagnostic = { hasActualContent: boolean; sawAutomaticRetry: boolean };
 
 /**
  * Owns the configured runtime catalog and lazily creates one isolated
@@ -19,6 +19,7 @@ export class AgentRuntimeManager {
   private readonly profilesById: Map<string, AgentRuntimeProfile>;
   private readonly sessionRuntimes = new Map<string, SessionRuntime>();
   private readonly activeTurns = new Map<string, number>();
+  private readonly turnDiagnostics = new Map<string, TurnDiagnostic>();
   private readonly viewedSessions = new Set<string>();
   private readonly subscribers = new Map<string, Map<RuntimeNotification, { environmentOffers: boolean }>>();
   private readonly unresolvedOffers = new Map<string, Map<string, EnvironmentBundleOffer>>();
@@ -29,8 +30,6 @@ export class AgentRuntimeManager {
   private readonly environmentSkillPaths = new Map<string, Map<string, string[]>>();
   private readonly environmentRestartQueues = new Map<string, Promise<void>>();
   private readonly privateReplayTargets = new Map<string, Set<RuntimeNotification>>();
-  private readonly privateReplayIdleTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private readonly privateReplayWaiters = new Map<string, Set<() => void>>();
   private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
   private readonly workspaceResults = new Map<string, CapabilityWorkspaceResult>();
 
@@ -40,7 +39,6 @@ export class AgentRuntimeManager {
     private readonly repoRoot: string,
     private readonly workspaceManager: CapabilityWorkspaceManager,
     private readonly environmentManager?: EnvironmentManager,
-    private readonly transcriptRepository?: SessionTranscriptRepository,
     private readonly logger: { info: (obj: Record<string, unknown>, msg?: string) => void } = console,
   ) {
     this.profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
@@ -91,6 +89,22 @@ export class AgentRuntimeManager {
     return { ...record, title: normalizedTitle };
   }
 
+  async setSessionPinned(sessionId: string, pinned: boolean): Promise<SessionRecord> {
+    await this.requireSession(sessionId);
+    await this.sessions.setPinned(sessionId, pinned);
+    return await this.requireSession(sessionId);
+  }
+
+  async reorderPinnedSessions(sessionIds: string[]): Promise<SessionRecord[]> {
+    const records = await this.sessions.list();
+    const pinnedIds = records.filter((record) => record.pinned).map((record) => record.sessionId);
+    if (sessionIds.length !== pinnedIds.length || new Set(sessionIds).size !== sessionIds.length || sessionIds.some((id) => !pinnedIds.includes(id))) {
+      throw new Error("Pinned reorder must contain each currently pinned session exactly once.");
+    }
+    await this.sessions.reorderPinned(sessionIds);
+    return await this.sessions.list();
+  }
+
   async touchSession(sessionId: string): Promise<SessionRecord> {
     await this.requireSession(sessionId);
     const updatedAt = new Date().toISOString();
@@ -133,6 +147,8 @@ export class AgentRuntimeManager {
       startedAt: now,
       updatedAt: now,
       attentionStatus: "clear",
+      pinned: false,
+      pinnedOrder: 0,
     };
     await this.sessions.save(record);
     this.attachSessionRuntime(record.sessionId, runtime);
@@ -167,8 +183,10 @@ export class AgentRuntimeManager {
     try {
       const result = await runtime.request(method, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration));
       if (method === "session/prompt") {
-        const stopReason = typeof (result as JsonObject | undefined)?.stopReason === "string" ? String((result as JsonObject).stopReason) : "end_turn";
-        await this.transcriptRepository?.append(sessionId, runCompletedEvent(stopReason));
+        const diagnostic = this.turnDiagnostics.get(sessionId);
+        if (diagnostic?.sawAutomaticRetry && !diagnostic.hasActualContent) {
+          throw new Error("Runtime retries exhausted before producing a response.");
+        }
         await this.workspaceManager.assessAndFlush();
         promptOutcome = "ready";
       }
@@ -182,7 +200,6 @@ export class AgentRuntimeManager {
       return rewriteResultSessionId(record, result);
     } catch (error) {
       if (isPrompt) {
-        await this.transcriptRepository?.append(sessionId, runFailedEvent(error instanceof Error ? error.message : String(error)));
         promptOutcome = "error";
       }
       this.timingLog("request_failed", {
@@ -195,7 +212,7 @@ export class AgentRuntimeManager {
       throw error;
     } finally {
       if (isPrompt) await this.finishTurn(sessionId, promptOutcome ?? "error");
-      if (privateReplay) await this.endPrivateReplayAfterQuiet(sessionId);
+      if (privateReplay) this.endPrivateReplay(sessionId);
     }
   }
 
@@ -272,7 +289,6 @@ export class AgentRuntimeManager {
         await runtime.close();
       }
     }
-    await this.transcriptRepository?.clear(sessionId);
     await this.workspaceManager.removeSession(sessionId);
     this.detachSessionRuntime(sessionId);
     await this.sessions.delete(sessionId);
@@ -315,6 +331,7 @@ export class AgentRuntimeManager {
     await Promise.all([...this.workspaceResults.keys()].map((sessionId) => this.workspaceManager.removeSession(sessionId)));
     this.sessionRuntimes.clear();
     this.activeTurns.clear();
+    this.turnDiagnostics.clear();
     this.viewedSessions.clear();
     this.inboundRequestRoutes.clear();
     if (this.environmentManager) {
@@ -358,6 +375,7 @@ export class AgentRuntimeManager {
     this.sessionRuntimes.set(sessionId, runtime);
     if (this.runtimeSubscriptions.has(sessionId)) return;
     this.runtimeSubscriptions.set(sessionId, runtime.onNotification((message) => {
+      this.observeTurnNotification(sessionId, message);
       let outbound = rewriteMessageSessionId(message, sessionId);
       if (typeof message.id === "string" || typeof message.id === "number") {
         const requestId = publicRuntimeRequestId(sessionId, message.id);
@@ -366,11 +384,9 @@ export class AgentRuntimeManager {
       }
       const privateTargets = this.privateReplayTargets.get(sessionId);
       if (privateTargets && privateTargets.size > 0) {
-        this.bumpPrivateReplayIdle(sessionId);
         for (const listener of privateTargets) listener(outbound);
         return;
       }
-      void this.captureTranscriptEvents(sessionId, outbound);
       for (const listener of this.subscribers.get(sessionId)?.keys() ?? []) listener(outbound);
     }));
   }
@@ -387,15 +403,10 @@ export class AgentRuntimeManager {
     this.runtimeSubscriptions.delete(sessionId);
     this.sessionRuntimes.delete(sessionId);
     this.activeTurns.delete(sessionId);
+    this.turnDiagnostics.delete(sessionId);
     this.viewedSessions.delete(sessionId);
     this.subscribers.delete(sessionId);
     this.privateReplayTargets.delete(sessionId);
-    const timer = this.privateReplayIdleTimers.get(sessionId);
-    if (timer) clearTimeout(timer);
-    this.privateReplayIdleTimers.delete(sessionId);
-    const waiters = this.privateReplayWaiters.get(sessionId) ?? new Set<() => void>();
-    for (const waiter of waiters) waiter();
-    this.privateReplayWaiters.delete(sessionId);
     if (this.environmentManager && this.environmentSubscriptions.delete(sessionId)) this.environmentManager.unsubscribe(sessionId);
     this.environmentSkillPaths.delete(sessionId);
     this.environmentRestartQueues.delete(sessionId);
@@ -483,38 +494,16 @@ export class AgentRuntimeManager {
     const listeners = this.privateReplayTargets.get(sessionId) ?? new Set<RuntimeNotification>();
     listeners.add(listener);
     this.privateReplayTargets.set(sessionId, listeners);
-    this.bumpPrivateReplayIdle(sessionId);
   }
 
-  private bumpPrivateReplayIdle(sessionId: string): void {
-    const existing = this.privateReplayIdleTimers.get(sessionId);
-    if (existing) clearTimeout(existing);
-    this.privateReplayIdleTimers.set(sessionId, setTimeout(() => {
-      this.privateReplayTargets.delete(sessionId);
-      this.privateReplayIdleTimers.delete(sessionId);
-      const waiters = this.privateReplayWaiters.get(sessionId) ?? new Set<() => void>();
-      for (const waiter of waiters) waiter();
-      this.privateReplayWaiters.delete(sessionId);
-    }, 80));
-  }
-
-  private async endPrivateReplayAfterQuiet(sessionId: string): Promise<void> {
-    await new Promise<void>((resolve) => {
-      const waiters = this.privateReplayWaiters.get(sessionId) ?? new Set<() => void>();
-      waiters.add(resolve);
-      this.privateReplayWaiters.set(sessionId, waiters);
-      if (!this.privateReplayIdleTimers.has(sessionId)) {
-        this.privateReplayTargets.delete(sessionId);
-        this.privateReplayWaiters.delete(sessionId);
-        resolve();
-        return;
-      }
-      this.bumpPrivateReplayIdle(sessionId);
-    });
+  private endPrivateReplay(sessionId: string): void {
+    this.privateReplayTargets.delete(sessionId);
   }
 
   private beginTurn(sessionId: string): void {
-    this.activeTurns.set(sessionId, (this.activeTurns.get(sessionId) ?? 0) + 1);
+    const active = this.activeTurns.get(sessionId) ?? 0;
+    this.activeTurns.set(sessionId, active + 1);
+    if (active === 0) this.turnDiagnostics.set(sessionId, { hasActualContent: false, sawAutomaticRetry: false });
   }
 
   private async finishTurn(sessionId: string, outcome: SessionAttentionStatus): Promise<void> {
@@ -524,12 +513,24 @@ export class AgentRuntimeManager {
       return;
     }
     this.activeTurns.delete(sessionId);
+    this.turnDiagnostics.delete(sessionId);
     await this.sessions.setAttentionStatus(sessionId, this.viewedSessions.has(sessionId) ? "clear" : outcome);
   }
 
-  private async captureTranscriptEvents(sessionId: string, message: JsonRpcMessage): Promise<void> {
-    for (const event of normalizedEventsFromRuntimeMessage(message)) {
-      await this.transcriptRepository?.append(sessionId, event);
+  private observeTurnNotification(sessionId: string, message: JsonRpcMessage): void {
+    const diagnostic = this.turnDiagnostics.get(sessionId);
+    if (!diagnostic) return;
+    const params = object(message.params);
+    const update = object(params?.update);
+    const kind = typeof update?.sessionUpdate === "string" ? update.sessionUpdate : "";
+    if (kind === "agent_message_chunk") {
+      const text = contentText(update?.content);
+      if (text && isAutomaticRetryStatus(text)) diagnostic.sawAutomaticRetry = true;
+      else if (text?.trim()) diagnostic.hasActualContent = true;
+      return;
+    }
+    if (kind === "agent_thought_chunk" || kind === "tool_call" || kind === "tool_call_update" || kind === "plan") {
+      diagnostic.hasActualContent = true;
     }
   }
 
@@ -584,6 +585,21 @@ function originalRuntimeRequestId(publicId: string): string | number {
 
 function environmentOfferMessage(sessionId: string, offer: EnvironmentBundleOffer): JsonRpcMessage {
   return { jsonrpc: "2.0", method: "_com.rookkeeper/environment_offer", params: { sessionId, ...offer } };
+}
+
+function isAutomaticRetryStatus(text: string): boolean {
+  const normalized = text.trim();
+  return normalized === "Retrying..." || normalized === "Retry finished, resuming." || (normalized.startsWith("Retrying (attempt ") && normalized.endsWith(")..."));
+}
+
+function contentText(value: unknown): string | undefined {
+  if (Array.isArray(value)) return value.map(contentText).filter((text): text is string => Boolean(text)).join("") || undefined;
+  const item = object(value);
+  return item?.type === "text" && typeof item.text === "string" ? item.text : undefined;
+}
+
+function object(value: unknown): JsonObject | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : undefined;
 }
 
 function rewriteMessageSessionId(message: JsonRpcMessage, sessionId: string): JsonRpcMessage {

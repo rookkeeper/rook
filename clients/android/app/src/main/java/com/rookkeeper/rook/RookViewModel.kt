@@ -58,6 +58,13 @@ import java.time.Instant
 
 enum class ServerState { UNKNOWN, OFFLINE, ONLINE, UNAUTHORIZED }
 
+private fun isAutomaticRetryStatus(text: String): Boolean {
+    val normalized = text.trim()
+    return normalized == "Retrying..." ||
+        normalized == "Retry finished, resuming." ||
+        (normalized.startsWith("Retrying (attempt ") && normalized.endsWith(")..."))
+}
+
 /** DFS matching RookModel.swift's agentTree: roots first, children under each root, orphans appended last at depth 0. */
 fun buildAgentTree(agents: List<AgentDefinition>): List<Pair<AgentDefinition, Int>> {
     val byParent = agents.groupBy { it.parentId }
@@ -78,7 +85,7 @@ fun buildAgentTree(agents: List<AgentDefinition>): List<Pair<AgentDefinition, In
 
 class RookViewModel(
     api: RookApi = RookApi(),
-    private val socket: AcpSocket = AcpSocket(),
+    private var socket: AcpSocket = AcpSocket(),
     private val locationController: LocationController? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 ) : ViewModel() {
@@ -194,6 +201,10 @@ class RookViewModel(
     private var blockCounter = 0
     private var autoResumeAttempted = false
     private var reconnectJob: Job? = null
+    private val sessionSockets = mutableMapOf<String, AcpSocket>()
+    private val sessionEventLogs = mutableMapOf<String, MutableList<AcpClientEvent>>()
+    private val loadedSessions = mutableSetOf<String>()
+    private val sessionReconnectJobs = mutableMapOf<String, Job>()
     private var environmentListAutoRefreshJob: Job? = null
     private var sessionListPollingJob: Job? = null
     private var userCancelledRun = false
@@ -202,7 +213,7 @@ class RookViewModel(
     // server as a normal RunCompleted with zero content instead of a RunFailed — this
     // catches that case client-side so the failure is still visible in the chat.
     private var turnHasContent = false
-    private var connectedSocketSessionId: String? = null
+    private var turnHadAutomaticRetry = false
     private var started = false
 
     fun start() {
@@ -215,12 +226,11 @@ class RookViewModel(
             lc.onRegionChange = { place -> handlePlace(place) }
             lc.onVisitArrival = { _, _ -> } // suggestion recording handled in emitArrival
         }
-        scope.launch { socket.events.collect { handleSocketEvent(it) } }
-        scope.launch { socket.isConnected.collect { handleSocketConnectionChange(it) } }
         scope.launch { while (true) { refreshHealth(); delay(4000) } }
     }
 
     override fun onCleared() {
+        sessionSockets.values.forEach { it.disconnect() }
         scope.cancel()
     }
 
@@ -238,14 +248,31 @@ class RookViewModel(
     }
 
     private suspend fun ensureSocketConnected(sessionId: String? = null) {
-        if (socket.isConnected.value && connectedSocketSessionId == sessionId) {
-            if (sessionId != null) socket.selectSession(sessionId)
+        if (sessionId == null) {
+            if (!socket.isConnected.value) socket.connect(api.webSocketUrl())
             return
         }
-        if (socket.isConnected.value) socket.disconnect()
-        socket.connect(api.webSocketUrl(sessionId))
-        connectedSocketSessionId = sessionId
-        if (sessionId != null) socket.selectSession(sessionId)
+        val sessionSocket = sessionSockets.getOrPut(sessionId) {
+            AcpSocket(scope).also { observeSocket(sessionId, it) }
+        }
+        socket = sessionSocket
+        if (!sessionSocket.isConnected.value) sessionSocket.connect(api.webSocketUrl(sessionId))
+        sessionSocket.selectSession(sessionId)
+    }
+
+    private fun observeSocket(sessionId: String, sessionSocket: AcpSocket) {
+        scope.launch {
+            sessionSocket.events.collect { event ->
+                sessionEventLogs.getOrPut(sessionId) { mutableListOf() }.add(event)
+                if (_currentSession.value?.id == sessionId) handleSocketEvent(event)
+            }
+        }
+        scope.launch {
+            sessionSocket.isConnected.collect { connected ->
+                if (_currentSession.value?.id == sessionId) handleSocketConnectionChange(sessionId, connected)
+                else if (!connected) scheduleSessionReconnect(sessionId, delaySeconds = 2)
+            }
+        }
     }
 
     fun refreshHealth() {
@@ -305,8 +332,8 @@ class RookViewModel(
         if (sessionListPollingJob != null) return
         sessionListPollingJob = scope.launch {
             while (true) {
-                delay(5_000)
                 loadSessions("", showLoading = false)
+                delay(5_000)
             }
         }
     }
@@ -324,7 +351,10 @@ class RookViewModel(
                 ensureSocketConnected()
                 val title = trimmedName.ifEmpty { "session" }
                 val sessionId = socket.createSession(agentId, title, System.getProperty("user.dir") ?: ".")
-                connectedSocketSessionId = sessionId
+                sessionSockets[sessionId] = socket
+                observeSocket(sessionId, socket)
+                sessionEventLogs[sessionId] = mutableListOf()
+                loadedSessions.add(sessionId)
                 val session = AgentSessionSummary(
                     raw = buildJsonObject {
                         put("sessionId", sessionId)
@@ -335,7 +365,7 @@ class RookViewModel(
                         put("running", true)
                     }
                 )
-                enterChat(session, resumed = false)
+                enterChat(session)
                 _sessions.value = api.sessions().map(::AgentSessionSummary)
                 _sessions.value.firstOrNull { it.id == sessionId }?.let { _currentSession.value = it }
             } catch (e: Exception) {
@@ -351,12 +381,8 @@ class RookViewModel(
             _startingSession.value = true
             try {
                 ensureSocketConnected(session.id)
-                enterChat(session, resumed = !session.running)
-                if (session.running) {
-                    restoreTranscript(api.sessionTranscript(session.id))
-                } else {
-                    socket.loadSession(session.id)
-                }
+                enterChat(session)
+                if (loadedSessions.add(session.id)) socket.loadSession(session.id)
                 if (acknowledge) {
                     _currentSession.value = AgentSessionSummary(api.touchSession(session.id))
                 }
@@ -387,13 +413,26 @@ class RookViewModel(
         }
     }
 
+    fun setSessionPinned(session: AgentSessionSummary, pinned: Boolean) {
+        scope.launch {
+            try {
+                api.setSessionPinned(session.id, pinned)
+                _sessions.value = api.sessions().map(::AgentSessionSummary)
+            } catch (e: Exception) {
+                _sessionsError.value = e.message ?: "Failed to update pinned session"
+            }
+        }
+    }
+
     fun deleteSession(session: AgentSessionSummary) {
         scope.launch {
             try {
                 api.deleteSession(session.id)
                 if (_currentSession.value?.id == session.id) {
-                    socket.disconnect()
-                    connectedSocketSessionId = null
+                    sessionSockets.remove(session.id)?.disconnect()
+                    sessionEventLogs.remove(session.id)
+                    loadedSessions.remove(session.id)
+                    sessionReconnectJobs.remove(session.id)?.cancel()
                     _currentSession.value = null
                     _chatVisible.value = false
                 }
@@ -425,76 +464,51 @@ class RookViewModel(
         _chatVisible.value = true
     }
 
-    private fun enterChat(session: AgentSessionSummary, resumed: Boolean, switchToChat: Boolean = true) {
+    private fun enterChat(session: AgentSessionSummary, switchToChat: Boolean = true) {
         reconnectJob?.cancel()
         reconnectJob = null
         _chatVisible.value = switchToChat
         _currentSession.value = session
+        socket = sessionSockets[session.id] ?: socket
+        resetVisibleState()
+        socket.selectSession(session.id)
+        if (loadedSessions.contains(session.id)) {
+            for (event in sessionEventLogs[session.id].orEmpty()) handleSocketEvent(event)
+        }
+    }
+
+    private fun resetVisibleState() {
         _blocks.value = emptyList()
         _queuedMessages.value = emptyList()
         _isRunning.value = false
         _statusLine.value = ""
         _contextUsage.value = null
-        if (resumed) {
-            appendBlock(ChatBlockKind.System("Resumed session — earlier messages aren't replayed."))
-        }
-        socket.selectSession(session.id)
+        blockCounter = 0
+        turnHasContent = false
+        turnHadAutomaticRetry = false
     }
 
-    private fun restoreTranscript(events: List<JsonObject>) {
-        for (event in events) {
-            when (event["kind"].textValue()) {
-                "user_message_chunk" -> event["text"].textValue()?.let { handleSocketEvent(AcpClientEvent.UserMessageChunk(it)) }
-                "agent_message_chunk" -> event["text"].textValue()?.let { handleSocketEvent(AcpClientEvent.AgentMessageChunk(it)) }
-                "agent_thought_chunk" -> event["text"].textValue()?.let { handleSocketEvent(AcpClientEvent.AgentThoughtChunk(it)) }
-                "tool_call" -> {
-                    val id = event["toolCallId"].textValue() ?: continue
-                    handleSocketEvent(
-                        AcpClientEvent.ToolCallStarted(
-                            toolCallId = id,
-                            title = event["title"].textValue() ?: "Tool",
-                            kind = event["toolKind"].textValue() ?: "",
-                            status = event["status"].textValue() ?: "pending",
-                            rawInput = event["rawInput"].payloadValue()
-                        )
-                    )
-                }
-                "tool_call_update" -> {
-                    val id = event["toolCallId"].textValue() ?: continue
-                    handleSocketEvent(
-                        AcpClientEvent.ToolCallUpdate(
-                            toolCallId = id,
-                            status = event["status"].textValue() ?: "",
-                            toolName = event["toolName"].textValue(),
-                            output = event["rawOutput"].payloadValue()
-                        )
-                    )
-                }
-                "plan_update" -> {
-                    val entries = (event["entries"] as? JsonArray).orEmpty().mapIndexed { index, raw ->
-                        val item = raw as? JsonObject
-                        PlanEntry(
-                            id = index,
-                            content = item?.get("content").textValue() ?: item?.get("text").textValue() ?: "",
-                            priority = item?.get("priority").textValue() ?: "medium",
-                            status = item?.get("status").textValue() ?: "pending"
-                        )
-                    }
-                    handleSocketEvent(AcpClientEvent.PlanUpdate(entries))
-                }
-                "usage_update" -> {
-                    val used = event["used"].intValue() ?: continue
-                    val size = event["size"].intValue() ?: continue
-                    handleSocketEvent(AcpClientEvent.UsageUpdate(used, size, null))
-                }
+    private suspend fun reloadSessionFromRuntime(sessionId: String) {
+        val sessionSocket = sessionSockets[sessionId] ?: throw IllegalStateException("Session socket is unavailable")
+        val previousEvents = sessionEventLogs[sessionId]?.toList().orEmpty()
+        sessionEventLogs[sessionId] = mutableListOf()
+        if (_currentSession.value?.id == sessionId) resetVisibleState()
+        socket = sessionSocket
+        try {
+            sessionSocket.loadSession(sessionId)
+            loadedSessions.add(sessionId)
+        } catch (error: Exception) {
+            sessionEventLogs[sessionId] = previousEvents.toMutableList()
+            if (_currentSession.value?.id == sessionId) {
+                resetVisibleState()
+                for (event in previousEvents) handleSocketEvent(event)
             }
+            throw error
         }
     }
 
     fun leaveChat() {
         _currentSession.value?.id?.let { sessionId -> scope.launch { runCatching { api.unviewSession(sessionId) } } }
-        socket.disconnect()
-        connectedSocketSessionId = null
         reconnectJob?.cancel()
         reconnectJob = null
         _currentSession.value = null
@@ -516,10 +530,12 @@ class RookViewModel(
 
     private fun deliver(text: String) {
         finalizeStreamingBlocks()
+        _currentSession.value?.id?.let { sessionEventLogs.getOrPut(it) { mutableListOf() }.add(AcpClientEvent.UserMessageChunk(text)) }
         appendBlock(ChatBlockKind.User(text))
         _isRunning.value = true
         _statusLine.value = "Agent is working…"
         turnHasContent = false
+        turnHadAutomaticRetry = false
         socket.sendPrompt(text)
     }
 
@@ -551,29 +567,41 @@ class RookViewModel(
     // MARK: - Reconnect
 
     private fun scheduleReconnect(delaySeconds: Int) {
-        val session = _currentSession.value ?: return
-        reconnectJob?.cancel()
-        _reconnecting.value = true
-        reconnectJob = scope.launch {
+        _currentSession.value?.id?.let { scheduleSessionReconnect(it, delaySeconds) }
+    }
+
+    private fun scheduleSessionReconnect(sessionId: String, delaySeconds: Int) {
+        sessionReconnectJobs[sessionId]?.cancel()
+        if (_currentSession.value?.id == sessionId) _reconnecting.value = true
+        val job = scope.launch {
             if (delaySeconds > 0) delay(delaySeconds * 1000L)
-            if (_currentSession.value == null) return@launch
             if (api.health()) {
                 try {
-                    ensureSocketConnected(session.id)
-                    if (session.running) {
-                        restoreTranscript(api.sessionTranscript(session.id))
-                    } else {
-                        socket.loadSession(session.id)
+                    ensureSocketConnected(sessionId)
+                    reloadSessionFromRuntime(sessionId)
+                    if (_currentSession.value?.id == sessionId) {
+                        _reconnecting.value = false
+                        deliverNextQueuedIfIdle()
                     }
-                    _reconnecting.value = false
-                    deliverNextQueuedIfIdle()
-                } catch (_: Exception) {
-                    scheduleReconnect(delaySeconds = 3)
+                } catch (error: Exception) {
+                    if (shouldRetryReconnect(error)) scheduleSessionReconnect(sessionId, delaySeconds = 3)
+                    else if (_currentSession.value?.id == sessionId) {
+                        _reconnecting.value = false
+                        appendErrorBlock("connection", error.message ?: "Session load failed")
+                    }
                 }
             } else {
-                scheduleReconnect(delaySeconds = 3)
+                scheduleSessionReconnect(sessionId, delaySeconds = 3)
             }
         }
+        sessionReconnectJobs[sessionId] = job
+        if (_currentSession.value?.id == sessionId) reconnectJob = job
+    }
+
+    private fun shouldRetryReconnect(error: Exception): Boolean {
+        val message = (error.message ?: "").lowercase()
+        return listOf("unknown session", "missing session", "invalid", "not found", "unsupported", "corrupt", "message too long")
+            .none { message.contains(it) }
     }
 
     private fun JsonElement?.textValue(): String? = (this as? JsonPrimitive)?.contentOrNull
@@ -588,22 +616,26 @@ class RookViewModel(
 
     private fun JsonElement?.intValue(): Int? = (this as? JsonPrimitive)?.intOrNull
 
-    private fun handleSocketConnectionChange(connected: Boolean) {
-        _socketConnected.value = connected
+    private fun handleSocketConnectionChange(sessionId: String, connected: Boolean) {
+        if (_currentSession.value?.id == sessionId) _socketConnected.value = connected
         if (connected) {
-            reconnectJob?.cancel()
-            reconnectJob = null
-            _reconnecting.value = false
+            if (_currentSession.value?.id == sessionId) {
+                reconnectJob?.cancel()
+                reconnectJob = null
+                _reconnecting.value = false
+            }
             return
         }
-        if (_isRunning.value) {
-            _isRunning.value = false
-            _statusLine.value = ""
-            finalizeStreamingBlocks()
-            appendErrorBlock("connection", "Connection lost while the agent was running.")
-        }
-        if (_currentSession.value != null) {
-            scheduleReconnect(delaySeconds = 2)
+        if (_currentSession.value?.id == sessionId) {
+            if (_isRunning.value) {
+                _isRunning.value = false
+                _statusLine.value = ""
+                finalizeStreamingBlocks()
+                appendErrorBlock("connection", "Connection lost while the agent was running.")
+            }
+            scheduleSessionReconnect(sessionId, delaySeconds = 2)
+        } else {
+            scheduleSessionReconnect(sessionId, delaySeconds = 2)
         }
     }
 
@@ -614,7 +646,8 @@ class RookViewModel(
             is AcpClientEvent.UserMessageChunk -> appendBlock(ChatBlockKind.User(event.text))
 
             is AcpClientEvent.AgentMessageChunk -> {
-                turnHasContent = true
+                if (isAutomaticRetryStatus(event.text)) turnHadAutomaticRetry = true
+                else turnHasContent = true
                 _statusLine.value = "Responding…"
                 appendStreamingText(event.text, isThinking = false)
             }
@@ -685,7 +718,12 @@ class RookViewModel(
                 val wasCancelled = userCancelledRun
                 userCancelledRun = false
                 if (!turnHasContent && event.stopReason != "cancelled" && !wasCancelled) {
-                    appendErrorBlock("run", "Agent produced no response — the model call likely failed upstream (check provider billing/auth).")
+                    val message = if (turnHadAutomaticRetry) {
+                        "Runtime retries exhausted before producing a response."
+                    } else {
+                        "Agent produced no response — the model call likely failed upstream (check provider billing/auth)."
+                    }
+                    appendErrorBlock("run", message)
                 }
                 deliverNextQueuedIfIdle()
             }
@@ -844,7 +882,12 @@ class RookViewModel(
         locationController?.baseUrl = trimmedUrl
         locationController?.authToken = trimmedToken
         api = RookApi(trimmedUrl, trimmedToken)
-        socket.disconnect()
+        sessionSockets.values.forEach { it.disconnect() }
+        sessionSockets.clear()
+        sessionEventLogs.clear()
+        loadedSessions.clear()
+        sessionReconnectJobs.values.forEach { it.cancel() }
+        sessionReconnectJobs.clear()
         reconnectJob?.cancel()
         reconnectJob = null
         _currentSession.value = null

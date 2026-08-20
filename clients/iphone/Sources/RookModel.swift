@@ -632,14 +632,7 @@ final class RookModel: ObservableObject {
                 let handle = getOrCreateHandle(for: session)
                 wireHandle(handle)
                 currentSession = session
-                if handle.isLoaded {
-                    try await handle.load()
-                } else if session.running {
-                    let events = try await api.sessionTranscript(sessionId: session.id)
-                    try await handle.attach(transcript: events)
-                } else {
-                    try await handle.load()
-                }
+                try await handle.load()
                 if acknowledge {
                     let touched = try await api.touchSession(sessionId: session.id)
                     currentSession = touched
@@ -680,6 +673,19 @@ final class RookModel: ObservableObject {
                 if currentSession?.id == session.id, let refreshed = sessions.first(where: { $0.id == session.id }) {
                     currentSession = refreshed
                 }
+            }
+        }
+    }
+
+    func setSessionPinned(_ session: AgentSessionSummary, pinned: Bool) {
+        Task { @MainActor in
+            do {
+                let updated = try await api.setSessionPinned(sessionId: session.id, pinned: pinned)
+                replaceSessionSummary(updated)
+                if currentSession?.id == session.id { currentSession = updated }
+                await loadSessions(showLoading: false)
+            } catch {
+                sessionsError = error.localizedDescription
             }
         }
     }
@@ -736,9 +742,10 @@ final class RookModel: ObservableObject {
         guard sessionListPollingTask == nil else { return }
         sessionListPollingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                guard !Task.isCancelled, let self else { return }
+                guard let self else { return }
                 await self.loadSessions(showLoading: false)
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
     }
