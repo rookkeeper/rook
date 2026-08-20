@@ -46,6 +46,21 @@ async function streamText(sessionId, text, kind = 'agent_message_chunk') {
   }
 }
 
+async function streamMessageChunk(sessionId, text, kind = 'agent_message_chunk') {
+  write({
+    jsonrpc: '2.0',
+    method: 'session/update',
+    params: {
+      sessionId,
+      update: {
+        sessionUpdate: kind,
+        content: { type: 'text', text },
+      },
+    },
+  });
+  await delay(5);
+}
+
 async function streamThoughts(sessionId, parts) {
   for (const part of parts) {
     await streamText(sessionId, part, 'agent_thought_chunk');
@@ -230,6 +245,24 @@ async function handlePrompt(message) {
 
   session.cancelRequested = false;
   session.transcript.push({ role: 'user', text });
+
+  if (lower.includes('retry exhausted')) {
+    await streamMessageChunk(sessionId, 'Retrying (attempt 1/3, waiting 2s)...');
+    await streamMessageChunk(sessionId, 'Retry finished, resuming.');
+    finish(message.id);
+    return;
+  }
+
+  if (lower.includes('retry recovery')) {
+    await streamMessageChunk(sessionId, 'Retrying (attempt 1/3, waiting 2s)...');
+    await streamMessageChunk(sessionId, 'Retry finished, resuming.');
+    const response = 'Recovered after a retry.';
+    session.lastAssistantMessage = response;
+    session.transcript.push({ role: 'assistant', text: response });
+    await streamText(sessionId, response);
+    finish(message.id);
+    return;
+  }
 
   if (lower === 'boom') {
     write({ jsonrpc: '2.0', id: message.id, error: { code: -32000, message: 'boom' } });

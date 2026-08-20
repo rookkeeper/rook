@@ -58,6 +58,13 @@ import java.time.Instant
 
 enum class ServerState { UNKNOWN, OFFLINE, ONLINE, UNAUTHORIZED }
 
+private fun isAutomaticRetryStatus(text: String): Boolean {
+    val normalized = text.trim()
+    return normalized == "Retrying..." ||
+        normalized == "Retry finished, resuming." ||
+        (normalized.startsWith("Retrying (attempt ") && normalized.endsWith(")..."))
+}
+
 /** DFS matching RookModel.swift's agentTree: roots first, children under each root, orphans appended last at depth 0. */
 fun buildAgentTree(agents: List<AgentDefinition>): List<Pair<AgentDefinition, Int>> {
     val byParent = agents.groupBy { it.parentId }
@@ -206,6 +213,7 @@ class RookViewModel(
     // server as a normal RunCompleted with zero content instead of a RunFailed — this
     // catches that case client-side so the failure is still visible in the chat.
     private var turnHasContent = false
+    private var turnHadAutomaticRetry = false
     private var started = false
 
     fun start() {
@@ -477,6 +485,7 @@ class RookViewModel(
         _contextUsage.value = null
         blockCounter = 0
         turnHasContent = false
+        turnHadAutomaticRetry = false
     }
 
     private suspend fun reloadSessionFromRuntime(sessionId: String) {
@@ -526,6 +535,7 @@ class RookViewModel(
         _isRunning.value = true
         _statusLine.value = "Agent is working…"
         turnHasContent = false
+        turnHadAutomaticRetry = false
         socket.sendPrompt(text)
     }
 
@@ -636,7 +646,8 @@ class RookViewModel(
             is AcpClientEvent.UserMessageChunk -> appendBlock(ChatBlockKind.User(event.text))
 
             is AcpClientEvent.AgentMessageChunk -> {
-                turnHasContent = true
+                if (isAutomaticRetryStatus(event.text)) turnHadAutomaticRetry = true
+                else turnHasContent = true
                 _statusLine.value = "Responding…"
                 appendStreamingText(event.text, isThinking = false)
             }
@@ -707,7 +718,12 @@ class RookViewModel(
                 val wasCancelled = userCancelledRun
                 userCancelledRun = false
                 if (!turnHasContent && event.stopReason != "cancelled" && !wasCancelled) {
-                    appendErrorBlock("run", "Agent produced no response — the model call likely failed upstream (check provider billing/auth).")
+                    val message = if (turnHadAutomaticRetry) {
+                        "Runtime retries exhausted before producing a response."
+                    } else {
+                        "Agent produced no response — the model call likely failed upstream (check provider billing/auth)."
+                    }
+                    appendErrorBlock("run", message)
                 }
                 deliverNextQueuedIfIdle()
             }

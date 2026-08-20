@@ -57,6 +57,7 @@ public final class SessionHandle {
     private var replayUserBuffer = ""
     private var replayAssistantBuffer = ""
     private var replayThinkingBuffer = ""
+    private var turnContentTracker = AgentTurnContentTracker()
 
     public init(sessionId: String, api: RookAPI, socket: AcpSocket? = nil, isLoaded: Bool = false, supportsImagePrompts: Bool? = nil) {
         self.sessionId = sessionId
@@ -299,6 +300,7 @@ public final class SessionHandle {
         autoScrollEnabled = true
         enteredEnvironments = []
         blockCounter = 0
+        turnContentTracker.reset()
         scrollTick = 0
     }
 
@@ -365,6 +367,7 @@ public final class SessionHandle {
         statusLine = "Agent is working…"
         lastStopReason = nil
         autoScrollEnabled = true
+        turnContentTracker.reset()
         socket.sendPrompt(content: content)
     }
 
@@ -416,6 +419,7 @@ public final class SessionHandle {
                 replayFlushIncompatibleSection("assistant")
                 replayAssistantBuffer += text
             } else {
+                turnContentTracker.recordAgentMessage(text)
                 statusLine = "Responding…"
                 appendStreamingText(text, isThinking: false)
                 onAgentTextChunk?(text)
@@ -425,6 +429,7 @@ public final class SessionHandle {
                 replayFlushIncompatibleSection("thinking")
                 replayThinkingBuffer += text
             } else {
+                turnContentTracker.recordActualContent()
                 statusLine = "Thinking…"
                 appendStreamingText(text, isThinking: true)
             }
@@ -432,6 +437,7 @@ public final class SessionHandle {
             if isReplaying {
                 replayFlushIncompatibleSection("tool")
             } else {
+                turnContentTracker.recordActualContent()
                 flushLiveIncompatibleSection()
                 statusLine = "Using tool: \(title)"
             }
@@ -486,6 +492,7 @@ public final class SessionHandle {
             pendingPermission = PendingPermissionRequest(requestId: requestId, toolCall: toolCall, options: options)
             statusLine = "Permission needed: \(toolCall.title)"
         case .planUpdate(let entries):
+            if !isReplaying { turnContentTracker.recordActualContent() }
             upsertPlanBlock(entries)
         case .usageUpdate(let used, let size, let cost):
             contextUsage = ContextUsageState(used: used, size: size, cost: cost)
@@ -504,7 +511,14 @@ public final class SessionHandle {
             statusLine = ""
             lastStopReason = stopReason
             pendingPermission = nil
+            let wasCancelled = userCancelledRun
             userCancelledRun = false
+            if stopReason != "cancelled", !wasCancelled, let errorMessage = turnContentTracker.completionErrorMessage {
+                if turnContentTracker.sawAutomaticRetry {
+                    Self.logger.error("session handle retry exhausted session=\(self.sessionId, privacy: .public) diagnostic=retry-exhausted")
+                }
+                appendErrorBlock(source: "run", message: errorMessage)
+            }
             deliverNextQueuedIfIdle()
         case .runFailed(let message):
             if isReplaying { flushReplayBuffers(); return }
