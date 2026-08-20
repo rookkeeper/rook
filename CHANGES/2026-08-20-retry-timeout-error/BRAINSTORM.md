@@ -19,8 +19,8 @@ Issue #153 reports that `pi-acp` emits automatic retry progress as ordinary `age
 2. **Change the server or `pi-acp` adapter to add a retry metadata extension.** This would be more explicit, but requires protocol/client plumbing and cannot be changed in the checked-in third-party package as part of this focused bug fix.
 3. **Treat every zero-content `end_turn` as an error.** This catches the bug but risks false positives for runtimes that legitimately produce no visible content.
 
-The preferred direction is (1), with a shared RookKit turn-content tracker and the equivalent Android reducer logic. Retry-only completion gets a distinct `retry-exhausted` error message and an error-level diagnostic log; genuine agent text, thinking, tools, or plans still count as successful content, and cancellation remains non-error.
+The preferred direction is (1), with a server-side turn diagnostic as the authoritative guard, a shared RookKit turn-content tracker, and the equivalent Android reducer logic. Retry-only completion gets a distinct `retry-exhausted` error message; genuine agent text, thinking, tools, or plans still count as successful content, and cancellation remains non-error.
 
 ## Direction
 
-Proceed with the preferred client-side classification. Add focused regression tests for retry-only completion and successful content completion. Keep the existing retry status messages visible. No changes to the external `pi-acp` dependency or ACP wire contract are needed.
+Proceed with the retry-aware classification across the server and native clients. The server converts retry exhaustion into a failed ACP request so PR #149's durable session error state is correct; clients retain visible retry progress and render the standard error block. Add focused regression tests for server error/recovery status and native retry-only completion. No changes to the external `pi-acp` dependency or ACP wire contract are needed.

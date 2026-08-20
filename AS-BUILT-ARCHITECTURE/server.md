@@ -195,7 +195,8 @@ Related tables:
 4. `AgentRuntimeManager` rewrites to the runtime-local session ID
 5. `SessionRuntime` forwards the request to the subprocess
 6. runtime emits `session/update` notifications
-7. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
+7. `AgentRuntimeManager` distinguishes pi-acp's retry-only progress messages from actual agent output; an `end_turn` with exhausted retry progress and no actual output becomes a failed prompt, while a recovered turn remains successful
+8. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
 
 ### Environment offer and approval
 1. a provider registers an environment candidate with `POST /api/environments/register`
