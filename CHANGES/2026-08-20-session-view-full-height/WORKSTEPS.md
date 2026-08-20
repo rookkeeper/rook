@@ -11,7 +11,7 @@
 - [x] Mark compatibility surfaces (none retained; copied profile state is the intended current behavior, not a legacy shim)
 - [x] Maintain product and architecture documentation
 - [x] Run final validation
-- [ ] Synchronize with main before submitting
+- [x] Synchronize with main before submitting (merged `origin/main` and reran launcher tests plus Mac build)
 - [ ] Open and validate the PR
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
