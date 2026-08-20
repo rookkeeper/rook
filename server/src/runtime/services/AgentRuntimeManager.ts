@@ -8,6 +8,8 @@ import { CapabilityWorkspaceManager, type CapabilityWorkspaceResult } from "../C
 
 export type SessionActivityStatus = "active" | "ready" | "error" | "on" | "off";
 
+type TurnDiagnostic = { hasActualContent: boolean; sawAutomaticRetry: boolean };
+
 /**
  * Owns the configured runtime catalog and lazily creates one isolated
  * `SessionRuntime` per public session. A process is never shared by sessions:
@@ -17,6 +19,7 @@ export class AgentRuntimeManager {
   private readonly profilesById: Map<string, AgentRuntimeProfile>;
   private readonly sessionRuntimes = new Map<string, SessionRuntime>();
   private readonly activeTurns = new Map<string, number>();
+  private readonly turnDiagnostics = new Map<string, TurnDiagnostic>();
   private readonly viewedSessions = new Set<string>();
   private readonly subscribers = new Map<string, Map<RuntimeNotification, { environmentOffers: boolean }>>();
   private readonly unresolvedOffers = new Map<string, Map<string, EnvironmentBundleOffer>>();
@@ -180,6 +183,10 @@ export class AgentRuntimeManager {
     try {
       const result = await runtime.request(method, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration));
       if (method === "session/prompt") {
+        const diagnostic = this.turnDiagnostics.get(sessionId);
+        if (diagnostic?.sawAutomaticRetry && !diagnostic.hasActualContent) {
+          throw new Error("Runtime retries exhausted before producing a response.");
+        }
         await this.workspaceManager.assessAndFlush();
         promptOutcome = "ready";
       }
@@ -324,6 +331,7 @@ export class AgentRuntimeManager {
     await Promise.all([...this.workspaceResults.keys()].map((sessionId) => this.workspaceManager.removeSession(sessionId)));
     this.sessionRuntimes.clear();
     this.activeTurns.clear();
+    this.turnDiagnostics.clear();
     this.viewedSessions.clear();
     this.inboundRequestRoutes.clear();
     if (this.environmentManager) {
@@ -367,6 +375,7 @@ export class AgentRuntimeManager {
     this.sessionRuntimes.set(sessionId, runtime);
     if (this.runtimeSubscriptions.has(sessionId)) return;
     this.runtimeSubscriptions.set(sessionId, runtime.onNotification((message) => {
+      this.observeTurnNotification(sessionId, message);
       let outbound = rewriteMessageSessionId(message, sessionId);
       if (typeof message.id === "string" || typeof message.id === "number") {
         const requestId = publicRuntimeRequestId(sessionId, message.id);
@@ -394,6 +403,7 @@ export class AgentRuntimeManager {
     this.runtimeSubscriptions.delete(sessionId);
     this.sessionRuntimes.delete(sessionId);
     this.activeTurns.delete(sessionId);
+    this.turnDiagnostics.delete(sessionId);
     this.viewedSessions.delete(sessionId);
     this.subscribers.delete(sessionId);
     this.privateReplayTargets.delete(sessionId);
@@ -491,7 +501,9 @@ export class AgentRuntimeManager {
   }
 
   private beginTurn(sessionId: string): void {
-    this.activeTurns.set(sessionId, (this.activeTurns.get(sessionId) ?? 0) + 1);
+    const active = this.activeTurns.get(sessionId) ?? 0;
+    this.activeTurns.set(sessionId, active + 1);
+    if (active === 0) this.turnDiagnostics.set(sessionId, { hasActualContent: false, sawAutomaticRetry: false });
   }
 
   private async finishTurn(sessionId: string, outcome: SessionAttentionStatus): Promise<void> {
@@ -501,7 +513,25 @@ export class AgentRuntimeManager {
       return;
     }
     this.activeTurns.delete(sessionId);
+    this.turnDiagnostics.delete(sessionId);
     await this.sessions.setAttentionStatus(sessionId, this.viewedSessions.has(sessionId) ? "clear" : outcome);
+  }
+
+  private observeTurnNotification(sessionId: string, message: JsonRpcMessage): void {
+    const diagnostic = this.turnDiagnostics.get(sessionId);
+    if (!diagnostic) return;
+    const params = object(message.params);
+    const update = object(params?.update);
+    const kind = typeof update?.sessionUpdate === "string" ? update.sessionUpdate : "";
+    if (kind === "agent_message_chunk") {
+      const text = contentText(update?.content);
+      if (text && isAutomaticRetryStatus(text)) diagnostic.sawAutomaticRetry = true;
+      else if (text?.trim()) diagnostic.hasActualContent = true;
+      return;
+    }
+    if (kind === "agent_thought_chunk" || kind === "tool_call" || kind === "tool_call_update" || kind === "plan") {
+      diagnostic.hasActualContent = true;
+    }
   }
 
   private requireProfile(runtimeId: string): AgentRuntimeProfile {
@@ -555,6 +585,21 @@ function originalRuntimeRequestId(publicId: string): string | number {
 
 function environmentOfferMessage(sessionId: string, offer: EnvironmentBundleOffer): JsonRpcMessage {
   return { jsonrpc: "2.0", method: "_com.rookkeeper/environment_offer", params: { sessionId, ...offer } };
+}
+
+function isAutomaticRetryStatus(text: string): boolean {
+  const normalized = text.trim();
+  return normalized === "Retrying..." || normalized === "Retry finished, resuming." || (normalized.startsWith("Retrying (attempt ") && normalized.endsWith(")..."));
+}
+
+function contentText(value: unknown): string | undefined {
+  if (Array.isArray(value)) return value.map(contentText).filter((text): text is string => Boolean(text)).join("") || undefined;
+  const item = object(value);
+  return item?.type === "text" && typeof item.text === "string" ? item.text : undefined;
+}
+
+function object(value: unknown): JsonObject | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : undefined;
 }
 
 function rewriteMessageSessionId(message: JsonRpcMessage, sessionId: string): JsonRpcMessage {

@@ -59,6 +59,19 @@ class RookViewModelReduceTest {
     }
 
     @Test
+    fun exhaustedRetryProgressShowsDistinctRunError() {
+        val viewModel = RookViewModel()
+
+        viewModel.handleSocketEvent(AcpClientEvent.AgentMessageChunk("Retrying (attempt 1/3, waiting 2s)..."))
+        viewModel.handleSocketEvent(AcpClientEvent.AgentMessageChunk("Retry finished, resuming."))
+        viewModel.handleSocketEvent(AcpClientEvent.RunCompleted("end_turn"))
+
+        val error = viewModel.blocks.value.last().kind as ChatBlockKind.Error
+        assertEquals("run", error.source)
+        assertEquals("Runtime retries exhausted before producing a response.", error.message)
+    }
+
+    @Test
     fun runCompletedWithContentStaysSilent() {
         val viewModel = RookViewModel()
 
