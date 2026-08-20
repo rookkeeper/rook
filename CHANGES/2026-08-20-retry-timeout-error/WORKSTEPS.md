@@ -12,6 +12,6 @@
 - [x] Maintain product and architecture documentation
 - [x] Run final validation — server typecheck/full tests and RookKit Swift tests pass; Android Gradle tests were unavailable because no Java runtime is installed
 - [x] Synchronize with main before submitting — fetched origin and merged origin/main; branch was already current
-- [ ] Open and validate the PR
+- [x] Open and validate the PR — PR #166 created; GitHub checks are being monitored
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
