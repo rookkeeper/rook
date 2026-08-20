@@ -53,7 +53,7 @@ struct RookView: View {
 
     @ViewBuilder
     private var displayedContent: some View {
-        if model.panelMode == .chat || model.panelMode == .environments {
+        if model.panelMode == .home || model.panelMode == .chat || model.panelMode == .environments {
             baseContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
@@ -258,6 +258,7 @@ private struct HomeContent: View {
             }
             footerActions
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(item: $sessionToRename) { session in
             RenameSessionSheet(
                 sessionName: session.name,
@@ -490,6 +491,7 @@ private struct HomeContent: View {
             newSessionCard
             sessionsCard
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func ensureSelectedRuntimeID() {
@@ -584,6 +586,7 @@ private struct HomeContent: View {
                 )
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
 
@@ -661,7 +664,8 @@ private struct MacSessionSections: View {
     private var recent: [AgentSessionSummary] { model.sessions.filter { !$0.pinned } }
 
     var body: some View {
-        ScrollView(.vertical) {
+        GeometryReader { proxy in
+            ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 6) {
                 if pinned.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
@@ -695,8 +699,10 @@ private struct MacSessionSections: View {
         .onDrop(of: [.text], delegate: SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in
             unpinIfPinned(id)
         })
-        .scrollIndicators(.visible)
-        .frame(minHeight: 100, maxHeight: 360)
+            .scrollIndicators(.visible)
+            .frame(height: max(100, proxy.size.height))
+        }
+        .frame(minHeight: 100)
     }
 
     private func sectionHeader(_ title: String, systemImage: String) -> some View {
