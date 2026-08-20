@@ -11,12 +11,13 @@ The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with 
   - wires infrastructure, domain services, repositories, and routes
 - `runtime/services/AgentRuntimeManager`
   - owns configured runtime profiles
-  - creates one `SessionRuntime` per public session
+  - creates one `SessionRuntime` process group per public session, with serialized per-session creation
   - maps public session IDs to runtime-local ACP session IDs
   - restarts only the affected session when environment state changes
 - `runtime/SessionRuntime`
-  - generic ACP stdio transport for a single session runtime process
+  - generic ACP stdio transport for a single session runtime process group
   - forwards standard ACP image prompt blocks unchanged to image-capable runtimes
+  - bounds shutdown and terminates adapter/provider descendants together
   - initializes the subprocess, sends JSON-RPC, and relays notifications
 - `environments/services/EnvironmentManager`
   - tracks available environments, offers, approvals, active/recent state, and session subscriptions
@@ -134,7 +135,7 @@ Persisted in SQLite:
 - `cwd`
 - `startedAt`
 - `updatedAt`
-- `attentionStatus` — durable `clear`, `ready`, or `error` enum constrained in SQLite
+- `attentionStatus` — durable `clear`, `ready`, or `error` enum constrained in SQLite; timeout/forced-cancel cleanup records `error`
 - `pinned` — durable boolean organization state
 - `pinnedOrder` — durable positional order among pinned sessions
 
@@ -197,6 +198,7 @@ Related tables:
 6. runtime emits `session/update` notifications
 7. `AgentRuntimeManager` distinguishes pi-acp's retry-only progress messages from actual agent output; an `end_turn` with exhausted retry progress and no actual output becomes a failed prompt, while a recovered turn remains successful
 8. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
+9. bounded request/cancellation waits force-stop an unresponsive runtime group, reconcile the turn state, and mark the session `error`; a later request lazily creates one replacement without replaying the interrupted prompt
 
 ### Environment offer and approval
 1. a provider registers an environment candidate with `POST /api/environments/register`
@@ -222,7 +224,9 @@ Related tables:
 
 ## Notable architectural characteristics
 
-- one public session = one runtime subprocess
+- one public session = one owned runtime process group
+- runtime request and prompt waits are bounded; cancellation timeout force-stops the group and reconciles turn state
+- Rook shutdown and session deletion terminate all owned runtime groups, including provider descendants
 - websocket connections are session-bound, not general multi-session ACP pipes
 - `session/load` replay is requester-private; it no longer fans out to every watcher of that session
 - session discovery uses the REST sessions endpoint

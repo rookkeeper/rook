@@ -146,7 +146,7 @@ async function handleMessage(
         const params = object(message.params) ?? {};
         const sessionId = requiredBoundSessionId(params, binding);
         subscribe(sessionId);
-        await runtimes.notifyForSession(sessionId, "session/cancel", withoutSessionId(params));
+        await runtimes.cancelSession(sessionId, withoutSessionId(params));
         if (isRequest) send(success(requestId!, { ok: true }));
         return;
       }

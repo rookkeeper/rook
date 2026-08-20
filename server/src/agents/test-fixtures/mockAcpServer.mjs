@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync } from 'node:fs';
 
 const sessions = new Map();
+if (process.env.MOCK_ACP_PID_FILE) appendFileSync(process.env.MOCK_ACP_PID_FILE, `${process.pid}\n`);
 let currentSessionId = null;
 let buffer = '';
 let processing = Promise.resolve();
@@ -266,6 +267,11 @@ async function handlePrompt(message) {
 
   if (lower === 'boom') {
     write({ jsonrpc: '2.0', id: message.id, error: { code: -32000, message: 'boom' } });
+    return;
+  }
+
+  if (lower.includes('hang forever')) {
+    await new Promise(() => {});
     return;
   }
 

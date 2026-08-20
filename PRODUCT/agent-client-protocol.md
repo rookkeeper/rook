@@ -41,8 +41,10 @@ The runtime receives files and paths, not repository/database handles. Personal 
 
 Rook uses ACP extension points for product-specific messages, including environment offers and their resolutions. Custom methods use `_`-prefixed names and carry Rook-specific semantics; standard ACP methods remain the runtime contract.
 
-Provider-specific behavior belongs inside the runtime adapter. Clients observe semantic session/environment events rather than knowing whether the subprocess is Pi, Claude, Cursor, or another ACP runtime.
+Provider-specific behavior belongs inside the runtime adapter. Clients observe semantic session/environment events rather than knowing whether the subprocess is Pi, Claude, Cursor, or another ACP runtime. The server bounds ACP startup, load, prompt, and cancellation waits. If a prompt or cancellation cannot settle, the server force-terminates the complete runtime process group, clears the in-flight turn, and reports an error instead of leaving the session Active indefinitely. A later client request starts one replacement runtime without replaying the interrupted prompt.
 
 ## Runtime safety
+
+Rook owns one runtime process group per public session. Runtime creation is serialized per session to prevent duplicate adapters, and Rook shutdown/session deletion terminate each owned group, including provider descendants launched by an adapter. Runtime timeout settings are server controls, with `ROOK_RUNTIME_PROMPT_TIMEOUT_MS`, `ROOK_RUNTIME_REQUEST_TIMEOUT_MS`, `ROOK_RUNTIME_CANCEL_GRACE_MS`, and `ROOK_RUNTIME_SHUTDOWN_TIMEOUT_MS` available for deployment/test tuning.
 
 ACP does not itself provide repository trust or filesystem isolation. Rook's bundle approval hash, per-session workspace, writable-source mapping, and read-only projection policy sit above ACP. Stronger OS isolation, runtime-specific tool replacement, prompt-injection validation, and MCP lifecycle security remain future work.
