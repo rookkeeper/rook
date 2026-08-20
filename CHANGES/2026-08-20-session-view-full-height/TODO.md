@@ -17,4 +17,4 @@ Make the Mac home screen's pinned/recent session selection area use all availabl
 - [x] Add or adjust focused validation for the layout behavior if the existing Mac test surface supports it. (No view-test target exists; validated with a Mac app build.)
 - [x] Review changed files for compatibility surfaces and documentation impact. (No compatibility surface retained; the launcher preserves existing profile state but does not add a compatibility shim.)
 - [x] Update launcher tests and relevant documentation for copied application-database state.
-- [ ] Run focused validation, inspect the diff, and complete lifecycle records.
+- [x] Run focused validation, inspect the diff, and complete lifecycle records.

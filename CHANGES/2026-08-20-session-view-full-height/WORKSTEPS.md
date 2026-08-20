@@ -10,7 +10,7 @@
 - [x] Implement and test
 - [x] Mark compatibility surfaces (none retained; copied profile state is the intended current behavior, not a legacy shim)
 - [x] Maintain product and architecture documentation
-- [ ] Run final validation
+- [x] Run final validation
 - [ ] Synchronize with main before submitting
 - [ ] Open and validate the PR
 - [ ] Merge with approval
