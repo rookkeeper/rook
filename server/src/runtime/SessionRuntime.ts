@@ -16,6 +16,11 @@ export interface SessionRuntimeConfiguration {
   appendSystemPrompt?: string;
 }
 
+export interface SessionRuntimeOptions {
+  /** Maximum time allowed to terminate the owned process group. */
+  shutdownTimeoutMs?: number;
+}
+
 export interface RuntimeLaunchPlan {
   command: string;
   args: string[];
@@ -39,12 +44,14 @@ type PendingRequest = { resolve(value: unknown): void; reject(error: Error): voi
 export class SessionRuntime {
   private child: ChildProcessWithoutNullStreams | null = null;
   private started: Promise<void> | null = null;
+  private closing: Promise<void> | null = null;
+  private childExit: Promise<void> | null = null;
   private readonly pending = new Map<JsonRpcId, PendingRequest>();
   private readonly listeners = new Set<RuntimeNotification>();
   private readonly decoder = new StringDecoder("utf8");
   private buffered = "";
   private requestIndex = 0;
-  private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
+  private readonly shutdownTimeoutMs: number;
 
   constructor(
     readonly profile: AgentRuntimeProfile,
@@ -52,7 +59,10 @@ export class SessionRuntime {
     private readonly launchPlanner: RuntimeLaunchPlanner,
     readonly configuration: SessionRuntimeConfiguration = emptyConfiguration(),
     private readonly logger: { info: (obj: Record<string, unknown>, msg?: string) => void; error?: (obj: Record<string, unknown>, msg?: string) => void } = console,
-  ) {}
+    options: SessionRuntimeOptions = {},
+  ) {
+    this.shutdownTimeoutMs = options.shutdownTimeoutMs ?? 1_000;
+  }
 
   get isAlive(): boolean {
     return this.child !== null;
@@ -64,10 +74,11 @@ export class SessionRuntime {
 
   /** Builds an unstarted replacement carrying new session-only environment state. */
   replacement(configuration: SessionRuntimeConfiguration): SessionRuntime {
-    return new SessionRuntime(this.profile, this.repoRoot, this.launchPlanner, configuration, this.logger);
+    return new SessionRuntime(this.profile, this.repoRoot, this.launchPlanner, configuration, this.logger, { shutdownTimeoutMs: this.shutdownTimeoutMs });
   }
 
   async initialize(): Promise<void> {
+    if (this.closing) throw new Error(`Runtime ${this.profile.id} is closed`);
     if (this.started) return this.started;
     this.started = this.start().catch((error) => {
       this.started = null;
@@ -96,12 +107,29 @@ export class SessionRuntime {
     this.write(message);
   }
 
+  /**
+   * Terminates the complete runtime process group. ACP adapters such as the
+   * Pi adapter commonly spawn a second provider process, so killing only the
+   * direct Node adapter would orphan the provider after Rook exits.
+   */
   async close(): Promise<void> {
+    if (this.closing) return this.closing;
+    this.closing = this.closeOwnedProcess();
+    return this.closing;
+  }
+
+  private async closeOwnedProcess(): Promise<void> {
     const error = new Error(`Runtime ${this.profile.id} closed`);
-    this.child?.kill();
+    const child = this.child;
     this.child = null;
     this.started = null;
     this.rejectPending(error);
+    if (!child) return;
+
+    signalProcessGroup(child, "SIGTERM");
+    await waitForExit(this.childExit, this.shutdownTimeoutMs);
+    signalProcessGroup(child, "SIGKILL");
+    await waitForExit(this.childExit, this.shutdownTimeoutMs);
   }
 
   private async start(): Promise<void> {
@@ -117,17 +145,31 @@ export class SessionRuntime {
       cwd: plan.cwd,
       env: { ...process.env, ...(plan.env ?? {}) },
       stdio: "pipe",
+      detached: process.platform !== "win32",
     });
     this.child = child;
+    this.childExit = new Promise<void>((resolve) => {
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      child.once("exit", settle);
+      child.once("error", settle);
+    });
     child.stdout.on("data", (chunk: Buffer) => this.readLines(chunk));
     child.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8").trim();
-      if (text) console.error(`[rook:${this.profile.id}:stderr] ${text}`);
+      if (text) this.logger.error?.({ runtimeId: this.profile.id, text }, "runtime stderr");
     });
     child.on("exit", (code, signal) => {
       if (this.child === child) this.child = null;
       this.started = null;
       this.rejectPending(new Error(`Runtime ${this.profile.id} exited${code === null ? "" : ` with code ${code}`}${signal ? ` (${signal})` : ""}`));
+      // If an adapter dies without Rook initiating close, reap any provider
+      // descendants that inherited its process group.
+      signalProcessGroup(child, "SIGKILL");
     });
     child.on("error", (error) => {
       if (this.child === child) this.child = null;
@@ -135,6 +177,10 @@ export class SessionRuntime {
       this.rejectPending(error);
     });
 
+    if (this.closing) {
+      signalProcessGroup(child, "SIGTERM");
+      throw new Error(`Runtime ${this.profile.id} closed during startup`);
+    }
     await this.requestRaw("initialize", {
       protocolVersion: 1,
       clientCapabilities: {},
@@ -207,9 +253,30 @@ export class SessionRuntime {
   }
 
   private timingLog(event: string, details: Record<string, unknown>): void {
-    if (!this.timingLogsEnabled) return;
+    if (process.env.ROOK_SESSION_TIMING_LOGS !== "1") return;
     this.logger.info({ component: "SessionRuntime", event, ...details }, "session timing");
   }
+}
+
+function signalProcessGroup(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+  try {
+    if (process.platform !== "win32" && child.pid) {
+      process.kill(-child.pid, signal);
+      return;
+    }
+  } catch {
+    // The group may already have exited; fall back to the direct child below.
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // The process is already gone.
+  }
+}
+
+async function waitForExit(exit: Promise<void> | null, timeoutMs: number): Promise<void> {
+  if (!exit) return;
+  await Promise.race([exit, new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
 }
 
 function emptyConfiguration(): SessionRuntimeConfiguration {
