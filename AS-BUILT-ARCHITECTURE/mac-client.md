@@ -111,7 +111,7 @@ Via `RookKit`:
 1. session list is fetched via REST, not the WebSocket
 2. starting a new session opens an unbound WebSocket, sends ACP `session/new`, then keeps that same socket as the new session's `SessionHandle`
 3. resuming an existing session creates or retrieves a `SessionHandle`
-4. if the session is already running, the handle hydrates from `GET /api/sessions/:id/transcript`; otherwise it performs ACP `session/load`
+4. the handle performs ACP `session/load` when it is new or recovering; an already-loaded background handle reuses its in-memory blocks
 5. after a successful resume/open, the client calls `POST /api/sessions/:id/touch` so the shared recents list reflects viewed sessions even without a prompt
 6. resumed handles open a dedicated session-bound WebSocket (`/api/ws?sessionId=...`) and run `initialize`
 7. the handle reduces `AcpClientEvent`s into `ChatBlock`s, tool states, plan state, permissions, and run lifecycle
@@ -172,7 +172,7 @@ The Mac instruments the beachball-adjacent paths: Accessibility title/document,
 web-tree, text, and actionable-element reads; Finder AppleScript observation;
 foreground/provider polling and registration; bridge routes; server supervision;
 REST health/session/environment calls; WebSocket initialization/reconnect; and
-session transcript hydration and prompt lifecycle. The in-app Rook Log viewer
+ACP replay and prompt lifecycle. The in-app Rook Log viewer
 shows recent unified logs for `com.rookkeeper.Rook`, tails them live, and includes
 the managed server log as context. Unified Logging is authoritative for client
 diagnostics.

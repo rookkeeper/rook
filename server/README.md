@@ -23,7 +23,7 @@ That starts the backend on `http://127.0.0.1:7665` from the main checkout. When 
 
 The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH` for the selected profile. The main checkout keeps the existing defaults (`~/.rook/` for user-local state and `~/.rook/rook.sqlite` for the application database). A worktree defaults to `~/.rook-<worktree-slug>/rook.sqlite` and uses the worktree's canonical `environment-repository/` directory. The slug includes a short hash of the canonical worktree path.
 
-The server's user-local repository, environment-authoring bindings, and application database honor `ROOK_HOME`. Worktree slugs include a short path hash, so same-named worktrees receive separate homes. When the profile home does not exist, the launcher seeds it by copying `~/.rook`, then removes the copied application database so the development profile starts without inherited production session history; subsequent configuration changes are isolated. `ROOK_AGENT_RUNTIMES_PATH` remains available as an explicit override. When starting the server through `run-rook.sh`, use `RUN_ROOK_HOME` / `RUN_ROOK_DATABASE_PATH` rather than ambient `ROOK_HOME` / `ROOK_DATABASE_PATH` to override the selected profile paths. The environment-repository API and bundle layout are unchanged.
+The server's user-local repository, environment-authoring bindings, and application database honor `ROOK_HOME`. Worktree slugs include a short path hash, so same-named worktrees receive separate homes. When the profile home does not exist, the launcher seeds it by copying `~/.rook`, including the application database, so the development profile starts with the same sessions and durable local state; subsequent configuration changes are isolated. `ROOK_AGENT_RUNTIMES_PATH` remains available as an explicit override. When starting the server through `run-rook.sh`, use `RUN_ROOK_HOME` / `RUN_ROOK_DATABASE_PATH` rather than ambient `ROOK_HOME` / `ROOK_DATABASE_PATH` to override the selected profile paths. The environment-repository API and bundle layout are unchanged.
 
 ## Network binding and auth
 
@@ -43,7 +43,7 @@ Default example:
 }
 ```
 
-A `MockAcpAgent` is configured for fast CLI-driven testing — it stores transcripts, replays history on `session/load`, and handles common prompt patterns.
+A `MockAcpAgent` is configured for fast CLI-driven testing — it keeps agent history in memory, replays it on `session/load`, and handles common prompt patterns.
 
 ## Architecture
 
@@ -54,7 +54,7 @@ The server is a single ACP-compliant agent from the client's perspective. Intern
 The server is organized **primarily by domain**:
 
 - `src/infrastructure/` — auth, config loading, path helpers, remote proxy, shared datastore bootstrap
-- `src/sessions/` — session routes, repository contract, SQLite session persistence, transcript storage/helpers
+- `src/sessions/` — session routes, repository contract, and SQLite session persistence
 - `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
 - `src/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
   - `SQLiteEnvironmentRepository` and `EnvironmentRepositoryDatastore` are the live database-backed repository path
@@ -85,7 +85,6 @@ For current SQLite tables and persistence ownership, see [../AS-BUILT-ARCHITECTU
 - `GET /api/health` — service health
 - `GET /api/agent_runtimes` — configured runtime catalog (only explicitly declared entries)
 - `GET /api/sessions` — session list + running state + server-authoritative activity status (`Active`, `Ready`, `Error`, `On`, or `Off`)
-- `GET /api/sessions/:sessionId/transcript` — coalesced logical server-owned transcript hydration
 - `POST /api/session/environments` — enter/leave environments for a session
 - `POST /api/environments/register` — mark an environment available
 - `POST /api/environments/decision` — record accept/approve/ignore/reject
@@ -108,10 +107,11 @@ It implements:
 - `session/prompt`, `session/cancel` — standard prompt flow; image-capable runtimes accept standard ACP image content blocks with per-session capability reporting and bounded base64 validation
 - `session/set_mode`, `session/set_config_option` — ACP controls
 - `session/close` — closes a session
-- `PATCH /api/sessions/:id` — rename a session without changing its recency ordering
+- `PATCH /api/sessions/:id` — rename or pin/unpin a session without changing its recency ordering
+- `POST /api/sessions/reorder-pinned` — replace the complete pinned-session order
 - `POST /api/sessions/:id/touch` — acknowledge pending attention and mark a session as recently viewed
 - `POST /api/sessions/:id/unview` — leave the viewed session so later turn results can become pending attention
-- `DELETE /api/sessions/:id` — delete a session, its transcript, and its workspace state
+- `DELETE /api/sessions/:id` — delete a session and its workspace state
 - `session/request_permission` — permission request relay
 - `_com.rookkeeper/environment_offer*` — negotiated env-offer extension
 
@@ -119,17 +119,19 @@ It implements:
 
 - Public session IDs are stable Rook-generated UUIDs (not runtime-derived)
 - Each session maps to `runtimeId` + runtime-local `runtimeSessionId` in SQLite
-- Sessions are a unified cross-runtime list ordered by `updatedAt` desc
+- Sessions are a unified cross-runtime list: pinned sessions use durable `pinnedOrder`, followed by unpinned sessions ordered by `updatedAt` desc
 - `updatedAt` now represents both prompt activity and explicit client-side "viewed" touches, so opening/resuming a session moves it to the top
-- `attention_status` durably stores `clear`, `ready`, or `error`; live turn/liveness state is combined into `activityStatus` with precedence `Active` > `Ready` > `Error` > `On` > `Off`
+- `attention_status` durably stores `clear`, `ready`, or `error`; live turn/liveness state is combined into `activityStatus` with precedence `Active` > `Ready` > `Error` > `On` > `Off`. Timed-out or force-cancelled turns become `Error` rather than remaining permanently Active.
 - Session-to-environment membership persists in `session_environments`
-- Logical transcript history persists in `session_transcript_events` so later viewers can hydrate from server state instead of forcing runtime replay; ACP chunks are merged and in-progress records are updated in place.
+- Runtime-owned ACP history is authoritative. Clients populate session state through requester-private `session/load` replay; the server stores session metadata and lifecycle state.
 
 ### Runtime management
 
-`AgentRuntimeManager` lazily creates one `SessionRuntime` subprocess per active session. Provider differences (Pi, Claude, Cursor, generic ACP) are composed launch strategies in `runtimeLaunchPlan.ts`, not subclasses.
+`AgentRuntimeManager` lazily creates one `SessionRuntime` subprocess per active session. Runtime creation is serialized per public session, so concurrent loads/prompts share one subprocess. Provider differences (Pi, Claude, Cursor, generic ACP) are composed launch strategies in `runtimeLaunchPlan.ts`, not subclasses.
 
-On environment change, only the affected session's runtime is restarted — the replacement process must take over the session before the old process retires. It normally does that by `session/load` of the existing ACP session. Runtimes that persist their transcript lazily (Claude Code writes it on the first prompt) cannot load a session that was never prompted, so a failed load falls back to `session/new` when the server transcript holds no conversation content; a load failure for a session with real history still aborts the restart rather than discarding it.
+ACP startup/load requests have bounded waits (`ROOK_RUNTIME_REQUEST_TIMEOUT_MS`). Prompts use an inactivity timeout (`ROOK_RUNTIME_PROMPT_INACTIVITY_TIMEOUT_MS`, one minute by default) that resets whenever the runtime streams an update, so long-running streamed turns remain valid. Cancellation has a shorter grace period (`ROOK_RUNTIME_CANCEL_GRACE_MS`). A timeout force-stops the owned runtime process group, clears the turn, and marks the session `Error`. Runtimes with no user or runtime activity for 30 minutes are collected (`ROOK_RUNTIME_IDLE_TIMEOUT_MS`) without deleting their durable sessions. The next client request lazily creates one replacement; it does not automatically replay `session/load` or the possibly side-effecting prompt. `ROOK_RUNTIME_SHUTDOWN_TIMEOUT_MS` bounds graceful process-group shutdown.
+
+On environment change, only the affected session's runtime is restarted. The replacement normally takes over through `session/load`; if the runtime returns an ACP response error for that load, Rook retries with `session/new` and persists the replacement runtime session id. Startup, transport, timeout, and malformed-load-response failures still abort the restart. Rook shutdown and session deletion terminate the complete adapter/provider process group, not only the direct ACP adapter.
 
 ### Environment system
 

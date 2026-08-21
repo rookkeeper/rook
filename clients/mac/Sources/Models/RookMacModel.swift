@@ -436,10 +436,11 @@ final class RookMacModel: ObservableObject {
         guard sessionListPollingTask == nil else { return }
         sessionListPollingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                guard !Task.isCancelled, let self else { return }
+                guard let self else { return }
                 await self.chatSessionController.loadSessions(showLoading: false)
+                guard !Task.isCancelled else { return }
                 self.syncChatState()
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
     }
@@ -494,6 +495,18 @@ final class RookMacModel: ObservableObject {
 
     func renameSession(_ session: AgentSessionSummary, title: String) {
         chatSessionController.renameSession(session, title: title)
+    }
+
+    func setSessionPinned(_ session: AgentSessionSummary, pinned: Bool, moveToRecent: Bool = false) {
+        chatSessionController.setSessionPinned(session, pinned: pinned, moveToRecent: moveToRecent)
+    }
+
+    func reorderPinnedSessions(_ sessions: [AgentSessionSummary]) {
+        chatSessionController.reorderPinnedSessions(sessions)
+    }
+
+    func pinSessionInPinned(_ session: AgentSessionSummary, before sessionID: String?) {
+        chatSessionController.pinSessionInPinned(session, before: sessionID)
     }
 
     func deleteSession(_ session: AgentSessionSummary) {

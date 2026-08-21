@@ -28,9 +28,8 @@ import { ServerAuth } from "./infrastructure/auth.js";
 import { loadAgentRuntimes } from "./infrastructure/config/agentRuntimes.js";
 import { RookDatastore } from "./infrastructure/datastores/RookDatastore.js";
 import { SqliteSessionRepository } from "./sessions/repositories/SqliteSessionRepository.js";
-import { AgentRuntimeManager } from "./runtime/services/AgentRuntimeManager.js";
+import { AgentRuntimeManager, type AgentRuntimeManagerOptions } from "./runtime/services/AgentRuntimeManager.js";
 import { CapabilityWorkspaceManager } from "./runtime/CapabilityWorkspaceManager.js";
-import { SessionTranscriptRepository } from "./sessions/repositories/SessionTranscriptRepository.js";
 import { startRemoteProxy } from "./infrastructure/remoteProxy.js";
 
 dotenv.config({ path: path.join(REPO_ROOT, ".env") });
@@ -58,6 +57,8 @@ export interface BuildServerOptions {
   personalEnvironmentRepositoryDatabase?: string;
   /** Test hook: observe registered routes. */
   onRoute?: (route: { method: string | readonly string[]; url: string; websocket?: boolean }) => void;
+  /** Runtime liveness controls; tests can use short values. */
+  runtimeOptions?: AgentRuntimeManagerOptions;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {
@@ -107,9 +108,8 @@ export async function buildServer(options: BuildServerOptions = {}) {
   });
   const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
   const sessionRepository = new SqliteSessionRepository(datastore);
-  const transcriptRepository = new SessionTranscriptRepository(datastore);
   const workspaceManager = await CapabilityWorkspaceManager.create();
-  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, workspaceManager, environmentManager, transcriptRepository, app.log);
+  const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, workspaceManager, environmentManager, app.log, options.runtimeOptions);
   await app.register(websocket);
 
   app.addHook("onRequest", async (request, reply) => {
@@ -129,7 +129,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
   app.get("/api/health", async () => ({ ok: true, service: "rook" }));
   await registerRuntimeRoutes(app, runtimeManager);
-  await registerSessionRoutes(app, runtimeManager, transcriptRepository);
+  await registerSessionRoutes(app, runtimeManager);
   await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar, runtimeManager);
   await registerDiagnosticRoutes(app, environmentManager);
   await registerAcpFacadeRoute(app, runtimeManager, auth);

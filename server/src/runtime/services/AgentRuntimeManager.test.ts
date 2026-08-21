@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { AgentRuntimeManager } from "./AgentRuntimeManager.js";
+import { RuntimeRequestError } from "../SessionRuntime.js";
 import type { AgentRuntimeProfile } from "../../infrastructure/config/agentRuntimes.js";
 import type { CapabilityWorkspaceManager } from "../CapabilityWorkspaceManager.js";
 import type { SessionRuntime, JsonObject, SessionRuntimeConfiguration } from "../SessionRuntime.js";
 import type { SessionAttentionStatus, SessionRecord, SessionRepository } from "../../sessions/repositories/SessionRepository.js";
-import type { SessionTranscriptRepository, TranscriptEventRecord } from "../../sessions/repositories/SessionTranscriptRepository.js";
 
 const PROFILE: AgentRuntimeProfile = { id: "FakeRuntime", type: "acp", command: "node", args: [] };
 const SESSION_ID = "11111111-1111-4111-8111-111111111111";
@@ -54,9 +54,7 @@ class FakeSessionRepository implements SessionRepository {
   readonly saved: SessionRecord[] = [];
   constructor(private record: SessionRecord) {}
 
-  async list(): Promise<SessionRecord[]> {
-    return [this.record];
-  }
+  async list(): Promise<SessionRecord[]> { return [this.record]; }
 
   async get(sessionId: string): Promise<SessionRecord | undefined> {
     return sessionId === this.record.sessionId ? { ...this.record } : undefined;
@@ -67,29 +65,16 @@ class FakeSessionRepository implements SessionRepository {
     this.saved.push({ ...record });
   }
 
-  async rename(_sessionId: string, title: string): Promise<void> {
-    this.record = { ...this.record, title };
-  }
-
-  async touch(_sessionId: string, updatedAt = new Date().toISOString()): Promise<void> {
-    this.record = { ...this.record, updatedAt };
-  }
-
-  async setAttentionStatus(_sessionId: string, status: SessionAttentionStatus): Promise<void> {
-    this.record = { ...this.record, attentionStatus: status };
-  }
-
+  async rename(_sessionId: string, title: string): Promise<void> { this.record = { ...this.record, title }; }
+  async setPinned(_sessionId: string, _pinned: boolean): Promise<void> {}
+  async reorderPinned(_sessionIds: string[]): Promise<void> {}
+  async touch(_sessionId: string, updatedAt = new Date().toISOString()): Promise<void> { this.record = { ...this.record, updatedAt }; }
+  async setAttentionStatus(_sessionId: string, status: SessionAttentionStatus): Promise<void> { this.record = { ...this.record, attentionStatus: status }; }
   async delete(): Promise<void> {}
-
-  async environmentIds(): Promise<string[]> {
-    return [];
-  }
-
+  async environmentIds(): Promise<string[]> { return []; }
   async replaceEnvironmentIds(): Promise<void> {}
 
-  current(): SessionRecord {
-    return this.record;
-  }
+  current(): SessionRecord { return this.record; }
 }
 
 function sessionRecord(): SessionRecord {
@@ -102,34 +87,25 @@ function sessionRecord(): SessionRecord {
     startedAt: "2026-08-12T00:00:00.000Z",
     updatedAt: "2026-08-12T00:00:00.000Z",
     attentionStatus: "clear",
+    pinned: false,
+    pinnedOrder: 0,
   };
-}
-
-function transcriptRepositoryWith(events: Array<Record<string, unknown>>): SessionTranscriptRepository {
-  const records: TranscriptEventRecord[] = events.map((event, index) => ({
-    sequence: index + 1,
-    sessionId: SESSION_ID,
-    createdAt: "2026-08-12T00:00:00.000Z",
-    event,
-  }));
-  return { list: vi.fn(async () => records) } as unknown as SessionTranscriptRepository;
 }
 
 function configuration(): SessionRuntimeConfiguration {
   return { enteredEnvironmentIds: ["web:example.com"], skillPaths: [], extensionPaths: [], workspaceRoot: "/workspace/session" };
 }
 
-function buildManager(options: { responder: RuntimeResponder; transcript?: Array<Record<string, unknown>> | undefined; withTranscriptRepository?: boolean }) {
+function buildManager(options: { responder: RuntimeResponder }) {
   const sessions = new FakeSessionRepository(sessionRecord());
   const logger = { info: vi.fn() };
-  const transcriptRepository = options.withTranscriptRepository === false ? undefined : transcriptRepositoryWith(options.transcript ?? []);
+  const workspaceManager = { assessAndFlush: vi.fn(async () => undefined), removeSession: vi.fn(async () => undefined) };
   const manager = new AgentRuntimeManager(
     [PROFILE],
     sessions,
     "/repo",
-    {} as unknown as CapabilityWorkspaceManager,
+    workspaceManager as unknown as CapabilityWorkspaceManager,
     undefined,
-    transcriptRepository,
     logger,
   );
   const current = new FakeSessionRuntime(PROFILE, { enteredEnvironmentIds: [], skillPaths: [], extensionPaths: [] }, options.responder);
@@ -138,8 +114,8 @@ function buildManager(options: { responder: RuntimeResponder; transcript?: Array
   return { manager, sessions, logger, current, installedRuntime };
 }
 
-function loadFailure(): Error {
-  return new Error("Resource not found");
+function loadResponseError(): RuntimeRequestError {
+  return new RuntimeRequestError({ code: 1234, message: "runtime could not load this session" });
 }
 
 describe("AgentRuntimeManager environment restart", () => {
@@ -156,13 +132,13 @@ describe("AgentRuntimeManager environment restart", () => {
     expect(sessions.current().runtimeSessionId).toBe(RUNTIME_SESSION_ID);
     expect(current.closed).toBe(true);
     expect(installedRuntime()).toBe(replacement as unknown as SessionRuntime);
+    await manager.close();
   });
 
-  it("recreates the runtime session when a never-prompted session fails to load", async () => {
+  it("recreates the runtime session after any ACP session/load response error", async () => {
     const { manager, sessions, logger, current, installedRuntime } = buildManager({
-      transcript: [],
       responder: (method) => {
-        if (method === "session/load") throw loadFailure();
+        if (method === "session/load") throw loadResponseError();
         return { sessionId: "runtime-session-2" };
       },
     });
@@ -176,34 +152,16 @@ describe("AgentRuntimeManager environment restart", () => {
     expect(current.closed).toBe(true);
     expect(installedRuntime()).toBe(replacement as unknown as SessionRuntime);
     expect(logger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: SESSION_ID, error: "Resource not found" }),
-      "session/load failed for never-prompted session; recreated runtime session via session/new",
+      expect.objectContaining({ sessionId: SESSION_ID, error: "runtime could not load this session", code: 1234 }),
+      "session/load failed; recreated runtime session via session/new",
     );
     expect(sessions.current().runtimeSessionId).toBe("runtime-session-2");
-  });
-
-  it("recreates the runtime session when the transcript holds only a run_failed marker", async () => {
-    const { manager, sessions, current } = buildManager({
-      transcript: [{ kind: "run_failed", message: "Resource not found" }],
-      responder: (method) => {
-        if (method === "session/load") throw loadFailure();
-        return { sessionId: "runtime-session-2" };
-      },
-    });
-
-    await manager.restartSessionForEnvironmentChange(SESSION_ID, configuration());
-
-    expect(current.replacementRuntime!.methods()).toEqual(["session/load", "session/new"]);
-    expect(sessions.current().runtimeSessionId).toBe("runtime-session-2");
+    await manager.close();
   });
 
   it("persists the recreated runtime session id on the session record", async () => {
     const { manager, sessions } = buildManager({
-      transcript: [],
-      responder: (method) => {
-        if (method === "session/load") throw loadFailure();
-        return { sessionId: "runtime-session-2" };
-      },
+      responder: (method) => method === "session/load" ? (() => { throw loadResponseError(); })() : { sessionId: "runtime-session-2" },
     });
 
     await manager.restartSessionForEnvironmentChange(SESSION_ID, configuration());
@@ -216,51 +174,32 @@ describe("AgentRuntimeManager environment restart", () => {
       cwd: "/workspace/session",
       startedAt: "2026-08-12T00:00:00.000Z",
     });
+    await manager.close();
   });
 
-  it("rethrows and retires the replacement when the transcript holds a user message", async () => {
-    const { manager, sessions, current, installedRuntime } = buildManager({
-      transcript: [{ kind: "user_message_chunk", text: "hello" }],
-      responder: (method) => {
-        if (method === "session/load") throw loadFailure();
-        return { sessionId: "runtime-session-2" };
-      },
-    });
-
-    await expect(manager.restartSessionForEnvironmentChange(SESSION_ID, configuration())).rejects.toThrow("Resource not found");
-
-    const replacement = current.replacementRuntime!;
-    expect(replacement.methods()).toEqual(["session/load"]);
-    expect(replacement.closed).toBe(true);
-    expect(current.closed).toBe(false);
-    expect(installedRuntime()).toBe(current as unknown as SessionRuntime);
-    expect(sessions.current().runtimeSessionId).toBe(RUNTIME_SESSION_ID);
-  });
-
-  it("rethrows when the transcript holds a tool call", async () => {
-    const { manager, current } = buildManager({
-      transcript: [{ kind: "tool_call", toolCallId: "tool-1", title: "ls" }],
-      responder: (method) => {
-        if (method === "session/load") throw loadFailure();
-        return { sessionId: "runtime-session-2" };
-      },
-    });
-
-    await expect(manager.restartSessionForEnvironmentChange(SESSION_ID, configuration())).rejects.toThrow("Resource not found");
-    expect(current.replacementRuntime!.methods()).toEqual(["session/load"]);
-  });
-
-  it("rethrows when no transcript repository is configured", async () => {
+  it("does not recreate after a startup or transport failure", async () => {
     const { manager, current, installedRuntime } = buildManager({
-      withTranscriptRepository: false,
-      responder: (method) => {
-        if (method === "session/load") throw loadFailure();
-        return { sessionId: "runtime-session-2" };
-      },
+      responder: () => { throw new Error("runtime exited before responding"); },
     });
 
-    await expect(manager.restartSessionForEnvironmentChange(SESSION_ID, configuration())).rejects.toThrow("Resource not found");
+    await expect(manager.restartSessionForEnvironmentChange(SESSION_ID, configuration())).rejects.toThrow("runtime exited before responding");
+
+    expect(current.replacementRuntime!.methods()).toEqual(["session/load"]);
     expect(current.replacementRuntime!.closed).toBe(true);
     expect(installedRuntime()).toBe(current as unknown as SessionRuntime);
+    await manager.close();
+  });
+
+  it("does not recreate when session/load returns a different session ID", async () => {
+    const { manager, current, installedRuntime } = buildManager({
+      responder: (method) => method === "session/load" ? { sessionId: "unexpected-session" } : { sessionId: "runtime-session-2" },
+    });
+
+    await expect(manager.restartSessionForEnvironmentChange(SESSION_ID, configuration())).rejects.toThrow("different session ID");
+
+    expect(current.replacementRuntime!.methods()).toEqual(["session/load"]);
+    expect(current.replacementRuntime!.closed).toBe(true);
+    expect(installedRuntime()).toBe(current as unknown as SessionRuntime);
+    await manager.close();
   });
 });

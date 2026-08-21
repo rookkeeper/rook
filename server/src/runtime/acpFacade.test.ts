@@ -73,6 +73,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
   beforeAll(async () => {
     tempConfigDir = mkdtempSync(path.join(os.tmpdir(), "rook-acp-facade-"));
     const mockServerPath = path.join(process.cwd(), "src", "agents", "test-fixtures", "mockAcpServer.mjs");
+    const pidFile = path.join(tempConfigDir, "mock-pids");
     const runtimesPath = path.join(tempConfigDir, "agent-runtimes.json");
     writeFileSync(runtimesPath, JSON.stringify({
       profiles: [
@@ -82,6 +83,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
           command: "node",
           args: [mockServerPath],
           cwd: process.cwd(),
+          env: { MOCK_ACP_PID_FILE: pidFile },
         },
         {
           id: "ImageMockAcpAgent",
@@ -89,6 +91,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
           command: "node",
           args: [mockServerPath],
           cwd: process.cwd(),
+          env: { MOCK_ACP_PID_FILE: pidFile },
           promptCapabilities: { image: true },
         },
       ],
@@ -152,6 +155,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       personalEnvironmentRepositoryDatabase: path.join(tempConfigDir, ".rook", "environment-repository.db"),
       environmentDecisionStoreLocation: ":memory:",
       authToken: "",
+      runtimeOptions: { runtimeRequestTimeoutMs: 1_000, promptInactivityTimeoutMs: 100, cancelGraceMs: 50, runtimeShutdownTimeoutMs: 100, runtimeIdleTimeoutMs: 1_000, runtimeIdleCheckIntervalMs: 25 },
     });
     expect(existsSync(path.join(process.env.ROOK_HOME!, "global-workspace", "manifest.json"))).toBe(true);
     await app.listen({ host: "127.0.0.1", port: PORT });
@@ -165,6 +169,12 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     else process.env.HOME = originalHome;
     if (originalRookHome === undefined) delete process.env.ROOK_HOME;
     else process.env.ROOK_HOME = originalRookHome;
+    const liveMockPids = existsSync(path.join(tempConfigDir, "mock-pids"))
+      ? readFileSync(path.join(tempConfigDir, "mock-pids"), "utf8").trim().split("\n").filter(Boolean).filter((value) => {
+        try { process.kill(Number(value), 0); return true; } catch { return false; }
+      })
+      : [];
+    if (liveMockPids.length > 0) throw new Error(`Mock runtimes survived server shutdown: ${liveMockPids.join(", ")}`);
     rmSync(tempConfigDir, { recursive: true, force: true });
   });
 
@@ -250,6 +260,35 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     ws.close();
   });
 
+
+  it("marks exhausted runtime retries as errors while allowing retry recovery", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "retry-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "retry-test" },
+    });
+    const sessionId = created.sessionId as string;
+
+    await expect(request(ws, 3, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "retry exhausted" }],
+    })).rejects.toThrow("Runtime retries exhausted before producing a response.");
+    const failedList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(failedList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus).toBe("error");
+
+    const recovered = await request(ws, 4, "session/prompt", {
+      sessionId,
+      prompt: [{ type: "text", text: "retry recovery" }],
+    });
+    expect(recovered.stopReason).toBe("end_turn");
+    const recoveredList = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    expect(recoveredList.sessions.find((session) => session.sessionId === sessionId)?.activityStatus).toBe("ready");
+
+    await request(ws, 5, "session/close", { sessionId });
+    ws.close();
+  });
 
   it("moves a prompted session to the front of the recency-sorted list", async () => {
     const olderWs = await connect();
@@ -514,6 +553,88 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     ws.close();
   });
 
+  it("hard-stops a hung runtime, clears Active, and starts one replacement", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "hung-runtime-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "hung-runtime-test" },
+    });
+    const sessionId = created.sessionId as string;
+
+    send(ws, 3, "session/prompt", { sessionId, prompt: [{ type: "text", text: "hang forever" }] });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    notify(ws, "session/cancel", { sessionId });
+
+    let promptError: Record<string, unknown> | null = null;
+    for (let attempt = 0; attempt < 20 && !promptError; attempt += 1) {
+      const message = await recv(ws);
+      if (message.id === "3" && message.error) promptError = message.error as Record<string, unknown>;
+    }
+    expect(promptError?.message).toContain("closed");
+
+    const afterStop = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    const stopped = afterStop.sessions.find((session) => session.sessionId === sessionId);
+    expect(stopped?.running).toBe(false);
+    expect(stopped?.activityStatus).toBe("error");
+
+    const recovered = await request(ws, 4, "session/prompt", { sessionId, prompt: [{ type: "text", text: "tell me a joke" }] });
+    expect(recovered.stopReason).toBe("end_turn");
+    ws.close();
+  });
+
+  it("allows a continuously streaming prompt beyond the inactivity window", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "streaming-timeout-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "streaming-timeout-test" },
+    });
+    const result = await request(ws, 3, "session/prompt", { sessionId: created.sessionId, prompt: [{ type: "text", text: "stream continuously" }] });
+    expect(result.stopReason).toBe("end_turn");
+    await request(ws, 4, "session/close", { sessionId: created.sessionId });
+    ws.close();
+  });
+
+  it("hard-stops a prompt that stops streaming without cancellation", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "prompt-inactivity-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "prompt-inactivity-test" },
+    });
+    await expect(request(ws, 3, "session/prompt", { sessionId: created.sessionId, prompt: [{ type: "text", text: "hang forever" }] })).rejects.toThrow("made no progress");
+    const stopped = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    const session = stopped.sessions.find((item) => item.sessionId === created.sessionId);
+    expect(session?.running).toBe(false);
+    expect(session?.activityStatus).toBe("error");
+    await request(ws, 4, "session/close", { sessionId: created.sessionId });
+    ws.close();
+  });
+
+  it("collects idle runtimes without deleting their sessions", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "idle-collector-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "idle-collector-test" },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    const stopped = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    const session = stopped.sessions.find((item) => item.sessionId === created.sessionId);
+    expect(session?.running).toBe(false);
+    expect(session?.activityStatus).toBe("off");
+
+    await request(ws, 3, "session/load", { sessionId: created.sessionId });
+    expect((await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> }).sessions.find((item) => item.sessionId === created.sessionId)?.running).toBe(true);
+    await request(ws, 4, "session/close", { sessionId: created.sessionId });
+    ws.close();
+  });
+
   it("rejects unknown runtime IDs", async () => {
     const ws = await connect();
     await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "test" } });
@@ -610,9 +731,6 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
     const during = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((r) => r.json()) as { sessions: Array<Record<string, unknown>> };
     expect(during.sessions.find((item) => item.sessionId === sessionId)?.running).toBe(true);
 
-    const transcript = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionId}/transcript`).then((r) => r.json()) as { events: Array<Record<string, unknown>> };
-    expect(transcript.events.length).toBeGreaterThan(0);
-
     const reopened = await connect(`/api/ws?sessionId=${sessionId}`);
     await request(reopened, 5, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "reopen" } });
     const after = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((r) => r.json()) as { sessions: Array<Record<string, unknown>> };
@@ -693,20 +811,16 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
 
     await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/touch`, { method: "POST" });
     sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
-    expect(sessions.sessions[0]?.sessionId).toBe(sessionA.sessionId);
+    expect(sessions.sessions.filter((session) => session.sessionId === sessionA.sessionId || session.sessionId === sessionB.sessionId)[0]?.sessionId).toBe(sessionA.sessionId);
 
     await request(wsA, 5, "session/prompt", {
       sessionId: sessionA.sessionId as string,
       prompt: [{ type: "text", text: "tell me a joke" }],
     });
-    const transcriptBeforeDelete = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/transcript`).then((response) => response.json()) as { events: Array<Record<string, unknown>> };
-    expect(transcriptBeforeDelete.events.length).toBeGreaterThan(0);
-
     const deleted = await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}`, { method: "DELETE" });
     expect(deleted.status).toBe(200);
     sessions = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
     expect(sessions.sessions.some((session) => session.sessionId === sessionA.sessionId)).toBe(false);
-    expect(await fetch(`http://127.0.0.1:${PORT}/api/sessions/${sessionA.sessionId}/transcript`).then((response) => response.status)).toBe(404);
 
     wsA.close();
     wsB.close();

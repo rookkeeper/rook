@@ -119,19 +119,27 @@ public struct RookAPI {
         return response.sessions.map { AgentSessionSummary(raw: $0) }
     }
 
-    public func sessionTranscript(sessionId: String) async throws -> [JSONValue] {
-        struct TranscriptResponse: Decodable {
-            let events: [JSONValue]
-        }
-        let response: TranscriptResponse = try await get(path: "api/sessions/\(sessionId)/transcript", query: [:])
-        return response.events
-    }
-
     public func renameSession(sessionId: String, title: String) async throws -> AgentSessionSummary {
         AgentSessionSummary(raw: try await patchJSON(
             path: "api/sessions/\(sessionId)",
             payload: .object(["title": .string(title)])
         ))
+    }
+
+    public func setSessionPinned(sessionId: String, pinned: Bool) async throws -> AgentSessionSummary {
+        AgentSessionSummary(raw: try await patchJSON(
+            path: "api/sessions/\(sessionId)",
+            payload: .object(["pinned": .bool(pinned)])
+        ))
+    }
+
+    public func reorderPinnedSessions(sessionIds: [String]) async throws -> [AgentSessionSummary] {
+        let response = try await postJSON(
+            path: "api/sessions/reorder-pinned",
+            payload: .object(["sessionIds": .array(sessionIds.map { .string($0) })])
+        )
+        guard case .array(let values) = response["sessions"] else { return [] }
+        return values.map(AgentSessionSummary.init(raw:))
     }
 
     public func touchSession(sessionId: String) async throws -> AgentSessionSummary {

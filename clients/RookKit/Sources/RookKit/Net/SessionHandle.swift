@@ -51,11 +51,13 @@ public final class SessionHandle {
     private var toolArgBuffers: [String: String] = [:]
     private var toolOutputBuffers: [String: String] = [:]
     private var reconnectTask: Task<Void, Never>?
+    private var loadTask: Task<Void, Error>?
     private var queuedMessageCounter = 0
     private var isReplaying = false
     private var replayUserBuffer = ""
     private var replayAssistantBuffer = ""
     private var replayThinkingBuffer = ""
+    private var turnContentTracker = AgentTurnContentTracker()
 
     public init(sessionId: String, api: RookAPI, socket: AcpSocket? = nil, isLoaded: Bool = false, supportsImagePrompts: Bool? = nil) {
         self.sessionId = sessionId
@@ -98,10 +100,28 @@ public final class SessionHandle {
     public func load() async throws {
         if isLoaded {
             Self.logger.info("session handle load reused session=\(self.sessionId, privacy: .public)")
-            // Already connected and subscribed — just report current state.
             onStateChange?()
             return
         }
+        if let loadTask {
+            try await loadTask.value
+            return
+        }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try await self.loadFromRuntime()
+        }
+        loadTask = task
+        do {
+            try await task.value
+            loadTask = nil
+        } catch {
+            loadTask = nil
+            throw error
+        }
+    }
+
+    private func loadFromRuntime() async throws {
         let timed = RookPerformance.begin(
             "LoadSessionHandle",
             operation: "session-handle-load",
@@ -131,33 +151,19 @@ public final class SessionHandle {
         }
     }
 
-    public func attach(transcript events: [JSONValue]) async throws {
-        if isLoaded {
-            Self.logger.info("session handle attach reused session=\(self.sessionId, privacy: .public)")
-            onStateChange?()
-            return
-        }
-        let timed = RookPerformance.begin(
-            "AttachTranscript",
-            operation: "session-handle-attach-transcript",
-            description: "session=\(self.sessionId) events=\(events.count)",
-            logger: Self.logger,
-            signposter: RookLog.sessionSignposter,
-            slowThresholdMs: 250,
-            hangThresholdMs: 1_000
-        )
+    public func reloadFromRuntime() async throws {
+        loadTask?.cancel()
+        loadTask = nil
+        let previousBlocks = blocks
+        let previousLoaded = isLoaded
+        isLoaded = false
+        resetVisibleState(preserveQueuedMessages: true)
         do {
-            resetVisibleState()
-            for event in events {
-                applyTranscriptEvent(event)
-            }
-            try await ensureSocketConnected()
-            socket.selectSession(sessionId)
-            isLoaded = true
-            onStateChange?()
-            timed.finish(details: "blocks=\(blocks.count)")
+            try await load()
         } catch {
-            timed.fail(error)
+            blocks = previousBlocks
+            isLoaded = previousLoaded
+            onStateChange?()
             throw error
         }
     }
@@ -165,6 +171,8 @@ public final class SessionHandle {
     public func close() {
         Self.logger.info("session handle close session=\(self.sessionId, privacy: .public)")
         reconnectTask?.cancel()
+        loadTask?.cancel()
+        loadTask = nil
         streamingFlushTask?.cancel()
         socket.disconnect()
         isLoaded = false
@@ -279,9 +287,9 @@ public final class SessionHandle {
         }
     }
 
-    private func resetVisibleState() {
+    private func resetVisibleState(preserveQueuedMessages: Bool = false) {
         blocks = []
-        queuedMessages = []
+        if !preserveQueuedMessages { queuedMessages = [] }
         isRunning = false
         statusLine = ""
         contextUsage = nil
@@ -292,97 +300,8 @@ public final class SessionHandle {
         autoScrollEnabled = true
         enteredEnvironments = []
         blockCounter = 0
+        turnContentTracker.reset()
         scrollTick = 0
-    }
-
-    private func applyTranscriptEvent(_ event: JSONValue) {
-        let kind = event["kind"]?.stringValue ?? ""
-        switch kind {
-        case "user_message_chunk":
-            if let text = event["text"]?.stringValue { appendBlock(.user(text: text)) }
-        case "agent_message_chunk":
-            if let text = event["text"]?.stringValue { appendBlock(.assistantText(text: text, streaming: false)) }
-        case "agent_thought_chunk":
-            if let text = event["text"]?.stringValue { appendBlock(.thinking(text: text, streaming: false)) }
-        case "tool_call":
-            guard let toolCallId = event["toolCallId"]?.stringValue else { return }
-            let state = ToolBlockState(
-                toolCallId: toolCallId,
-                title: event["title"]?.stringValue ?? "Tool",
-                kindLabel: event["toolKind"]?.stringValue ?? "",
-                status: transcriptStatus(event["status"]?.stringValue),
-                arguments: stringifyTranscriptJSON(event["rawInput"]),
-                output: stringifyTranscriptJSON(event["output"] ?? event["rawOutput"])
-            )
-            appendBlock(.tool(state), id: "tool-\(toolCallId)-\(blockCounter)")
-        case "tool_call_update":
-            guard let toolCallId = event["toolCallId"]?.stringValue else { return }
-            updateTool(toolCallId) { tool in
-                if let toolName = event["toolName"]?.stringValue, tool.title.isEmpty { tool.title = toolName }
-                if event["rawInput"] != nil {
-                    tool.arguments = stringifyTranscriptJSON(event["rawInput"])
-                }
-                let outputDelta = event["outputDelta"]?.stringValue
-                switch event["status"]?.stringValue {
-                case "pending": advanceToolStatus(&tool, to: .pending)
-                case "in_progress":
-                    advanceToolStatus(&tool, to: .running)
-                    if let outputDelta { tool.output += outputDelta }
-                    else if event["rawOutput"] != nil { tool.output = stringifyTranscriptJSON(event["rawOutput"]) }
-                case "completed":
-                    advanceToolStatus(&tool, to: .completed)
-                    if let outputDelta { tool.output += outputDelta }
-                    else if event["rawOutput"] != nil { tool.output = stringifyTranscriptJSON(event["rawOutput"]) }
-                case "failed":
-                    advanceToolStatus(&tool, to: .failed)
-                    if let outputDelta { tool.output += outputDelta }
-                    else if event["rawOutput"] != nil { tool.output = stringifyTranscriptJSON(event["rawOutput"]) }
-                case "cancelled": advanceToolStatus(&tool, to: .cancelled)
-                default: break
-                }
-            }
-        case "plan_update":
-            if case .array(let entries)? = event["entries"] {
-                let planEntries = entries.enumerated().compactMap { index, item -> PlanEntry? in
-                    guard let content = item["content"]?.stringValue ?? item["text"]?.stringValue else { return nil }
-                    return PlanEntry(id: Int(item["id"]?.numberValue ?? Double(index)), content: content, priority: item["priority"]?.stringValue ?? "", status: item["status"]?.stringValue ?? "")
-                }
-                upsertPlanBlock(planEntries)
-            }
-        case "usage_update":
-            if let used = event["used"]?.numberValue, let size = event["size"]?.numberValue {
-                contextUsage = ContextUsageState(used: Int(used), size: Int(size), cost: nil)
-            }
-        case "run_completed":
-            isRunning = false
-            statusLine = ""
-        case "run_failed":
-            isRunning = false
-            statusLine = ""
-            if let message = event["message"]?.stringValue { appendErrorBlock(source: "run", message: message) }
-        default:
-            break
-        }
-    }
-
-    private func transcriptStatus(_ raw: String?) -> ToolBlockStatus {
-        switch raw {
-        case "in_progress": return .running
-        case "completed": return .completed
-        case "failed": return .failed
-        case "cancelled": return .cancelled
-        case "ready": return .ready
-        case "input_streaming": return .inputStreaming
-        default: return .pending
-        }
-    }
-
-    private func stringifyTranscriptJSON(_ value: JSONValue?) -> String {
-        guard let value else { return "" }
-        if case .string(let text) = value { return text }
-        if case .null = value { return "" }
-        if let data = try? JSONEncoder().encode(value), let text = String(data: data, encoding: .utf8) { return text }
-        return ""
     }
 
     // MARK: - Private: connection
@@ -413,20 +332,29 @@ public final class SessionHandle {
                         hangThresholdMs: 1_000
                     )
                     try await ensureSocketConnected()
-                    try await socket.loadSession(sessionId)
+                    try await reloadFromRuntime()
                     guard !Task.isCancelled else { return }
                     reconnecting = false
                     timed.finish(details: "queuedMessages=\(self.queuedMessages.count)")
                     deliverNextQueuedIfIdle()
                 } catch {
                     Self.logger.warning("session handle reconnect failed session=\(self.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                    if !Task.isCancelled { scheduleReconnect(delaySeconds: 3) }
+                    if !Task.isCancelled {
+                        if shouldRetryReconnect(error) { scheduleReconnect(delaySeconds: 3) }
+                        else { reconnecting = false; appendErrorBlock(source: "connection", message: error.localizedDescription) }
+                    }
                 }
             } else if !Task.isCancelled {
                 Self.logger.info("session handle reconnect skipped unhealthy server session=\(self.sessionId, privacy: .public)")
                 scheduleReconnect(delaySeconds: 3)
             }
         }
+    }
+
+    private func shouldRetryReconnect(_ error: Error) -> Bool {
+        let message = error.localizedDescription.lowercased()
+        let permanentMarkers = ["unknown session", "missing session", "invalid", "not found", "unsupported", "corrupt", "message too long"]
+        return !permanentMarkers.contains { message.contains($0) }
     }
 
     // MARK: - Private: delivery
@@ -439,6 +367,7 @@ public final class SessionHandle {
         statusLine = "Agent is working…"
         lastStopReason = nil
         autoScrollEnabled = true
+        turnContentTracker.reset()
         socket.sendPrompt(content: content)
     }
 
@@ -490,6 +419,7 @@ public final class SessionHandle {
                 replayFlushIncompatibleSection("assistant")
                 replayAssistantBuffer += text
             } else {
+                turnContentTracker.recordAgentMessage(text)
                 statusLine = "Responding…"
                 appendStreamingText(text, isThinking: false)
                 onAgentTextChunk?(text)
@@ -499,6 +429,7 @@ public final class SessionHandle {
                 replayFlushIncompatibleSection("thinking")
                 replayThinkingBuffer += text
             } else {
+                turnContentTracker.recordActualContent()
                 statusLine = "Thinking…"
                 appendStreamingText(text, isThinking: true)
             }
@@ -506,6 +437,7 @@ public final class SessionHandle {
             if isReplaying {
                 replayFlushIncompatibleSection("tool")
             } else {
+                turnContentTracker.recordActualContent()
                 flushLiveIncompatibleSection()
                 statusLine = "Using tool: \(title)"
             }
@@ -560,6 +492,7 @@ public final class SessionHandle {
             pendingPermission = PendingPermissionRequest(requestId: requestId, toolCall: toolCall, options: options)
             statusLine = "Permission needed: \(toolCall.title)"
         case .planUpdate(let entries):
+            if !isReplaying { turnContentTracker.recordActualContent() }
             upsertPlanBlock(entries)
         case .usageUpdate(let used, let size, let cost):
             contextUsage = ContextUsageState(used: used, size: size, cost: cost)
@@ -578,7 +511,14 @@ public final class SessionHandle {
             statusLine = ""
             lastStopReason = stopReason
             pendingPermission = nil
+            let wasCancelled = userCancelledRun
             userCancelledRun = false
+            if stopReason != "cancelled", !wasCancelled, let errorMessage = turnContentTracker.completionErrorMessage {
+                if turnContentTracker.sawAutomaticRetry {
+                    Self.logger.error("session handle retry exhausted session=\(self.sessionId, privacy: .public) diagnostic=retry-exhausted")
+                }
+                appendErrorBlock(source: "run", message: errorMessage)
+            }
             deliverNextQueuedIfIdle()
         case .runFailed(let message):
             if isReplaying { flushReplayBuffers(); return }

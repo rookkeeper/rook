@@ -4,19 +4,13 @@
 
 Rook's durable server state is split across SQLite databases:
 
-- the application database stores sessions, transcripts, session membership, and durable environment decisions;
+- the application database stores sessions, session membership, and durable environment decisions;
 - the canonical environment repository database stores curated environment/capability content;
 - the personal environment repository database stores writable user content.
 
-The application database remains separate from environment repositories. This database is intentionally small: it stores session persistence and durable environment decisions. Runtime processes, active/recent environment caches, subscribers, and workspace projections remain transient. By default it lives under `ROOK_HOME/rook.sqlite` (`~/.rook/rook.sqlite` for the main checkout and `~/.rook-<worktree-slug>/rook.sqlite` for development worktrees), with `ROOK_DATABASE_PATH` as an explicit override.
+The application database remains separate from environment repositories. This database is intentionally small: it stores session persistence, session membership, and durable environment decisions. Runtime processes, ACP session history, active/recent environment caches, subscribers, and workspace projections remain outside this database. By default it lives under `ROOK_HOME/rook.sqlite` (`~/.rook/rook.sqlite` for the main checkout and `~/.rook-<worktree-slug>/rook.sqlite` for development worktrees), with `ROOK_DATABASE_PATH` as an explicit override.
 
-For session recency, the existing `sessions.updated_at` field represents both prompt activity and explicit client-side view/touch events. The sessions table also stores `attention_status`, a CHECK-constrained enum of `clear`, `ready`, or `error`. Active-turn state and view presence remain transient server state; the API combines them with the durable enum to return `activityStatus` as `active`, `ready`, `error`, `on`, or `off`.
-
-## Session transcript persistence
-
-`session_transcript_events` stores logical transcript records rather than one row per ACP transport chunk. Contiguous user, assistant, and thought chunks are merged; tool-call updates are merged by `toolCallId` into the tool record's arguments, status, and accumulated output; plan and usage records are replaced by their latest update within a section. The current in-progress record is updated in place so a second client can hydrate a running session without waiting for the turn to finish.
-
-The REST transcript response retains the normalized event shape consumed by clients, and its events are already coalesced.
+For session recency, the existing `sessions.updated_at` field represents both prompt activity and explicit client-side view/touch events. The sessions table also stores `attention_status`, a CHECK-constrained enum of `clear`, `ready`, or `error`, plus durable `pinned` and `pinned_order` metadata. Active-turn state and view presence remain transient server state; the API combines them with the durable enum to return `activityStatus` as `active`, `ready`, `error`, `on`, or `off`. Pinning and pinned reordering do not change `updated_at`; newly pinned sessions append to the pinned order, and unpinning compacts the remaining order.
 
 ## Environment repository schema
 

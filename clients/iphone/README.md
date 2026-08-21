@@ -28,7 +28,7 @@ binding, and bearer-token auth, start with [docs/setup.md](../../docs/setup.md).
   contains, then decide with the same 2×2 choices as every other client.
   Leaving the region simply stops refreshing it from the phone; the server ages
   it out on its own.
-- **Full chat parity.** Agent picker, REST-backed session discovery, session rename/delete management from the session list, one-socket session creation (`session/new` binds the just-opened websocket), per-session websocket attach for resumed sessions, transcript hydration for already-running sessions, and streaming ACP chat
+- **Full chat parity.** Agent picker, REST-backed session discovery, session rename/delete management from the session list, one-socket session creation (`session/new` binds the just-opened websocket), per-session websocket attach for resumed sessions, ACP `session/load` replay, and streaming ACP chat
   (text, thinking, tool calls, plans, errors, context usage) — including
   auto-rendering well-formed JSON tool arguments as human-readable YAML and
   assistant markdown with native drag-selection, standard copy/paste behavior,
@@ -40,7 +40,7 @@ binding, and bearer-token auth, start with [docs/setup.md](../../docs/setup.md).
   `AVSpeechSynthesizer` speaks the reply once the turn completes. The shared
   `VoiceController` adds an iOS `AVAudioSession` (`.playAndRecord`,
   `.spokenAudio`) so capture and playback coexist.
-- **Session activity selection pill.** The main session list quietly polls every five seconds and displays the server-authoritative Active/Ready/Error/On/Off state; per-agent session lists and chat keep their existing presentation.
+- **Session selection.** The global session list displays shared durable `Pinned` and recency-sorted `Recent` sections. Pin/Unpin is a native row action; mobile drag reordering is intentionally not supported. The main list quietly polls every five seconds and displays the server-authoritative Active/Ready/Error/On/Off state; per-agent session lists and chat keep their existing presentation.
 - **Live Activity / Dynamic Island.** The lock screen and Dynamic Island show
   the current place, whether skills are loaded, and the agent's status
   (idle/working) — for an active chat *or* ambiently when you're at a
@@ -100,7 +100,7 @@ dropped.
 
 ### The location → skill loop
 
-Mirrors `RookMacModel.handleForegroundApp`, with place in place of mac. Chat/session behavior mirrors the Mac too: one websocket per session, server-owned transcript hydration for already-running sessions, and no disruptive `session/load` on simple reselect/reopen.
+Mirrors `RookMacModel.handleForegroundApp`, with place in place of mac. Chat/session behavior mirrors the Mac too: one websocket per session, in-memory background handles, ACP `session/load` for new/recovered handles, and no reload on simple reselect/reopen.
 
 1. You define places → `PlaceStore`; `LocationProvider` monitors their regions
    (Always auth recommended for background entry).

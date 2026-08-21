@@ -8,10 +8,10 @@
 - [x] Record the agreed decision and TODO after the explicit decision gate
 - [ ] Prepare the implementation workspace after the planning commit
 - [x] Implement and test
-- [x] Mark compatibility surfaces — none retained; the diff adds a fallback with no legacy path, so no marker is warranted
+- [x] Mark compatibility surfaces — none retained; obsolete server-transcript recovery code was removed during the merge with current main
 - [x] Maintain product and architecture documentation
 - [x] Run final validation
-- [x] Synchronize with main before submitting
-- [ ] Open and validate the PR
+- [x] Synchronize with main before submitting — merged origin/main after resolving the transcript-replay redesign conflict
+- [ ] Open and validate the PR — update existing PR #152 after checks
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
