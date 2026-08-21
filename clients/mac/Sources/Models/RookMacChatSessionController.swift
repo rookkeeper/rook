@@ -145,30 +145,21 @@ final class ChatSessionController {
 
     func resumeSession(_ session: AgentSessionSummary, acknowledge: Bool = true, completion: (() -> Void)? = nil) {
         Self.logger.info("chat session controller resume session=\(session.id, privacy: .public) runtime=\(session.agent, privacy: .public) running=\(session.running, privacy: .public)")
-        startingSession = true
+        let handle = getOrCreateHandle(for: session)
+        currentSession = session
+        wireHandle(handle)
+        startingSession = !handle.isLoaded
+
         Task {
-            defer { self.startingSession = false; completion?() }
             do {
-                let handle = getOrCreateHandle(for: session)
-                currentSession = session
-                wireHandle(handle)
-                if handle.isLoaded {
-                    try await handle.load()
-                } else if session.running {
-                    let events = try await api.sessionTranscript(sessionId: session.id)
-                    try await handle.attach(transcript: events)
-                } else {
-                    try await handle.load()
-                }
-                if acknowledge {
-                    let touched = try await api.touchSession(sessionId: session.id)
-                    currentSession = touched
-                }
-                await loadSessions()
-                if let refreshed = sessions.first(where: { $0.id == session.id }) {
-                    currentSession = refreshed
-                }
+                try await handle.load()
+                // Make cached or freshly replayed blocks visible immediately. REST
+                // recency/list bookkeeping must not delay returning to the chat.
+                self.startingSession = false
+                completion?()
+                await refreshSessionMetadata(session, acknowledge: acknowledge)
             } catch {
+                self.startingSession = false
                 sessionsError = error.localizedDescription
             }
         }
@@ -191,6 +182,54 @@ final class ChatSessionController {
                 if currentSession?.id == session.id, let refreshed = sessions.first(where: { $0.id == session.id }) {
                     currentSession = refreshed
                 }
+            }
+        }
+    }
+
+    func setSessionPinned(_ session: AgentSessionSummary, pinned: Bool, moveToRecent: Bool = false) {
+        Task {
+            do {
+                let updated = try await api.setSessionPinned(sessionId: session.id, pinned: pinned)
+                replaceSessionSummary(updated)
+                if moveToRecent { _ = try await api.touchSession(sessionId: session.id) }
+                await loadSessions(showLoading: false)
+            } catch {
+                sessionsError = error.localizedDescription
+            }
+        }
+    }
+
+    func reorderPinnedSessions(_ sessions: [AgentSessionSummary]) {
+        Task {
+            do {
+                _ = try await api.reorderPinnedSessions(sessionIds: sessions.map(\.id))
+                await loadSessions(showLoading: false)
+            } catch {
+                sessionsError = error.localizedDescription
+                await loadSessions(showLoading: false)
+            }
+        }
+    }
+
+    func pinSessionInPinned(_ session: AgentSessionSummary, before sessionID: String?) {
+        Task {
+            do {
+                _ = try await api.setSessionPinned(sessionId: session.id, pinned: true)
+                let refreshed = try await api.sessions()
+                var ordered = refreshed.filter(\.pinned).sorted {
+                    $0.pinnedOrder == $1.pinnedOrder ? $0.id < $1.id : $0.pinnedOrder < $1.pinnedOrder
+                }
+                ordered.removeAll { $0.id == session.id }
+                if let sessionID, let index = ordered.firstIndex(where: { $0.id == sessionID }) {
+                    ordered.insert(session, at: index)
+                } else {
+                    ordered.append(session)
+                }
+                _ = try await api.reorderPinnedSessions(sessionIds: ordered.map(\.id))
+                await loadSessions(showLoading: false)
+            } catch {
+                sessionsError = error.localizedDescription
+                await loadSessions(showLoading: false)
             }
         }
     }
@@ -248,6 +287,24 @@ final class ChatSessionController {
     func appendSystemMessage(_ text: String) { currentHandle?.appendSystemMessage(text) }
 
     // MARK: - Private
+
+    private func refreshSessionMetadata(_ session: AgentSessionSummary, acknowledge: Bool) async {
+        do {
+            if acknowledge {
+                let touched = try await api.touchSession(sessionId: session.id)
+                if currentSession?.id == session.id {
+                    currentSession = touched
+                }
+            }
+            await loadSessions(showLoading: false)
+            if currentSession?.id == session.id,
+               let refreshed = sessions.first(where: { $0.id == session.id }) {
+                currentSession = refreshed
+            }
+        } catch {
+            sessionsError = error.localizedDescription
+        }
+    }
 
     private func replaceSessionSummary(_ summary: AgentSessionSummary) {
         guard let index = sessions.firstIndex(where: { $0.id == summary.id }) else { return }

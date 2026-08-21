@@ -100,17 +100,25 @@ class RookApi(
         return json.decodeFromJsonElement(SessionsResponse.serializer(), body).sessions
     }
 
-    suspend fun sessionTranscript(sessionId: String): List<JsonObject> {
-        @Serializable data class TranscriptResponse(val events: List<JsonObject>)
-        val body = getJson("api/sessions/$sessionId/transcript")
-        return json.decodeFromJsonElement(TranscriptResponse.serializer(), body).events
-    }
-
     suspend fun renameSession(sessionId: String, title: String): JsonObject =
         patchJson(
             "api/sessions/$sessionId",
             buildJsonObject { put("title", title) }
         ).jsonObject
+
+    suspend fun setSessionPinned(sessionId: String, pinned: Boolean): JsonObject =
+        patchJson(
+            "api/sessions/$sessionId",
+            buildJsonObject { put("pinned", pinned) }
+        ).jsonObject
+
+    suspend fun reorderPinnedSessions(sessionIds: List<String>): List<JsonObject> {
+        @Serializable data class SessionsResponse(val sessions: List<JsonObject>)
+        val body = postJson("api/sessions/reorder-pinned", buildJsonObject {
+            put("sessionIds", kotlinx.serialization.json.buildJsonArray { sessionIds.forEach { add(it) } })
+        })
+        return json.decodeFromJsonElement(SessionsResponse.serializer(), body).sessions
+    }
 
     suspend fun touchSession(sessionId: String): JsonObject =
         postJson("api/sessions/$sessionId/touch", buildJsonObject { }).jsonObject

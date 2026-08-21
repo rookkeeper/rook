@@ -149,31 +149,14 @@ struct SessionsHomeScreen: View {
                     .foregroundStyle(PanelPalette.textMuted)
                     .frame(maxWidth: .infinity, minHeight: 100, alignment: .center)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
-                        HStack(spacing: 8) {
-                            Button { model.resumeSession(session) } label: {
-                                SessionRow(session: session)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(model.startingSession)
-
-                            SessionActionsMenu(
-                                onRename: {
-                                    renameDraft = session.name
-                                    sessionToRename = session
-                                },
-                                onDelete: {
-                                    sessionToDelete = session
-                                }
-                            )
-                        }
-
-                        if index < model.sessions.count - 1 {
-                            Divider().overlay(PanelPalette.border).opacity(0.5)
-                        }
-                    }
-                }
+                IPhoneSessionSections(
+                    model: model,
+                    onRename: { session in
+                        renameDraft = session.name
+                        sessionToRename = session
+                    },
+                    onDelete: { session in sessionToDelete = session }
+                )
             }
         }
     }
@@ -238,6 +221,67 @@ struct SessionsHomeScreen: View {
             return "Server unreachable at \(model.baseURLString). Run `npm run dev` on the Mac; tap the gear to change the address."
         }
         return "Server unreachable at \(model.baseURLString). \(model.serverDiagnostic)"
+    }
+}
+
+private struct IPhoneSessionSections: View {
+    @ObservedObject var model: RookModel
+    var onRename: (AgentSessionSummary) -> Void
+    var onDelete: (AgentSessionSummary) -> Void
+
+    private var pinned: [AgentSessionSummary] {
+        model.sessions.filter(\.pinned).sorted {
+            $0.pinnedOrder == $1.pinnedOrder ? $0.id < $1.id : $0.pinnedOrder < $1.pinnedOrder
+        }
+    }
+
+    private var recent: [AgentSessionSummary] { model.sessions.filter { !$0.pinned } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Pinned", systemImage: "pin.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(PanelPalette.textMuted)
+            if pinned.isEmpty {
+                Text("Pin a session to keep it here.")
+                    .font(.callout)
+                    .foregroundStyle(PanelPalette.textMuted)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+            } else {
+                rows(pinned)
+            }
+            Label("Recent", systemImage: "clock.arrow.circlepath")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(PanelPalette.textMuted)
+                .padding(.top, 4)
+            if recent.isEmpty {
+                Text("No recent sessions")
+                    .font(.callout)
+                    .foregroundStyle(PanelPalette.textMuted)
+                    .padding(.vertical, 10)
+            } else {
+                rows(recent)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rows(_ sessions: [AgentSessionSummary]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
+                HStack(spacing: 8) {
+                    Button { model.resumeSession(session) } label: { SessionRow(session: session) }
+                        .buttonStyle(.plain)
+                        .disabled(model.startingSession)
+                    SessionActionsMenu(
+                        onTogglePin: { model.setSessionPinned(session, pinned: !session.pinned) },
+                        onRename: { onRename(session) },
+                        onDelete: { onDelete(session) }
+                    )
+                }
+                if index < sessions.count - 1 { Divider().overlay(PanelPalette.border).opacity(0.5) }
+            }
+        }
     }
 }
 
@@ -312,11 +356,15 @@ private struct SessionRow: View {
 }
 
 private struct SessionActionsMenu: View {
+    var onTogglePin: (() -> Void)? = nil
     var onRename: () -> Void
     var onDelete: () -> Void
 
     var body: some View {
         Menu {
+            if let onTogglePin {
+                Button("Pin/Unpin", action: onTogglePin)
+            }
             Button("Rename", action: onRename)
             Button("Delete", role: .destructive, action: onDelete)
         } label: {

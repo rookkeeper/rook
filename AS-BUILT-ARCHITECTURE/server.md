@@ -2,7 +2,7 @@
 
 ## Summary
 
-The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with an optional second remote/VPN listener. A Git worktree launched through `scripts/run-rook.sh` receives an isolated development profile with a deterministic alternate port and profile-specific local state. The server exposes a session-bound ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes, sessions, transcripts, and environments, and an internal runtime broker that launches one ACP subprocess per public session.
+The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with an optional second remote/VPN listener. A Git worktree launched through `scripts/run-rook.sh` receives an isolated development profile with a deterministic alternate port and profile-specific local state. The server exposes a session-bound ACP WebSocket facade at `/api/ws`, a REST control plane for runtimes, sessions, and environments, and an internal runtime broker that launches one ACP subprocess per public session.
 
 ## Main components
 
@@ -11,12 +11,13 @@ The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with 
   - wires infrastructure, domain services, repositories, and routes
 - `runtime/services/AgentRuntimeManager`
   - owns configured runtime profiles
-  - creates one `SessionRuntime` per public session
+  - creates one `SessionRuntime` process group per public session, with serialized per-session creation
   - maps public session IDs to runtime-local ACP session IDs
   - restarts only the affected session when environment state changes
 - `runtime/SessionRuntime`
-  - generic ACP stdio transport for a single session runtime process
+  - generic ACP stdio transport for a single session runtime process group
   - forwards standard ACP image prompt blocks unchanged to image-capable runtimes
+  - bounds shutdown and terminates adapter/provider descendants together
   - initializes the subprocess, sends JSON-RPC, and relays notifications
 - `environments/services/EnvironmentManager`
   - tracks available environments, offers, approvals, active/recent state, and session subscriptions
@@ -55,7 +56,7 @@ Top-level layout:
   - cross-domain bootstrap/support code
   - auth, config loading, path helpers, remote proxy, shared SQLite connection bootstrap, guarded outbound HTTP
 - `server/src/sessions/`
-  - session routes, repository contract, SQLite session repository, transcript persistence/helpers
+  - session routes, repository contract, and SQLite session repository
 - `server/src/runtime/`
   - ACP facade, runtime REST routes, subprocess transport, runtime orchestration, subscriber/replay routing, runtime-only extension code
 - `server/src/environments/`
@@ -96,11 +97,11 @@ See also: [database.md](./database.md)
 - `GET /api/health`
 - `GET /api/agent_runtimes`
 - `GET /api/sessions` — session listing over REST
-- `PATCH /api/sessions/:sessionId` — rename one session without changing recency ordering
+- `PATCH /api/sessions/:sessionId` — rename or pin/unpin one session without changing recency ordering
+- `POST /api/sessions/reorder-pinned` — replace the complete pinned-session order; the request must contain each currently pinned session exactly once
 - `POST /api/sessions/:sessionId/touch` — acknowledge pending attention, mark one session as recently viewed, and keep it open for activity acknowledgment
 - `POST /api/sessions/:sessionId/unview` — leave the session view so later completed turns can become pending attention
-- `DELETE /api/sessions/:sessionId` — delete one session plus transcript/workspace state
-- `GET /api/sessions/:sessionId/transcript` — server-owned normalized transcript for hydrators / second viewers
+- `DELETE /api/sessions/:sessionId` — delete one session plus workspace state
 - `POST /api/environments/register`
 - `POST /api/environments/decision`
 - `GET /api/environments/preview`
@@ -117,14 +118,15 @@ See also: [database.md](./database.md)
 
 ## Local profile configuration
 
-The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration, the application database, and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain isolated. On first launch, development profiles seed `ROOK_HOME` by copying the production `~/.rook` directory, then remove the copied application database so the development profile starts without inherited session history; later launches leave the existing profile home unchanged. Runtime definitions, user configuration, personal environment-repository state, and other durable local state therefore become profile-specific. The default application database path is `ROOK_HOME/rook.sqlite`. `run-rook.sh` computes and exports `ROOK_HOME` / `ROOK_DATABASE_PATH` for the selected profile, so ambient values are not treated as launcher inputs; use `RUN_ROOK_HOME` / `RUN_ROOK_DATABASE_PATH` when an explicit launcher override is intended. `ROOK_AGENT_RUNTIMES_PATH` remains an explicit escape hatch. The canonical environment repository remains the `environment-repository.db` SQLite file at the root of the checkout that launched the server (`ROOK_ENVIRONMENT_REPOSITORY_DB` overrides it). The web repository database defaults to `ROOK_HOME/web-environment-repository.db` (`ROOK_WEB_ENVIRONMENT_REPOSITORY_DB` overrides it); `ROOK_WEB_SCOUT_DISABLED=1` stops new scouts while stored web content is still served, and `ROOK_WEB_SCOUT_TTL_MS` / `ROOK_WEB_SCOUT_ERROR_TTL_MS` override the refresh intervals.
+The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration, the application database, and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain isolated. On first launch, development profiles seed `ROOK_HOME` by copying the production `~/.rook` directory, including the application database, so the development profile starts with the same sessions and durable local state; later launches leave the existing profile home unchanged. Runtime definitions, user configuration, personal environment-repository state, and other durable local state therefore become profile-specific. The default application database path is `ROOK_HOME/rook.sqlite`. `run-rook.sh` computes and exports `ROOK_HOME` / `ROOK_DATABASE_PATH` for the selected profile, so ambient values are not treated as launcher inputs; use `RUN_ROOK_HOME` / `RUN_ROOK_DATABASE_PATH` when an explicit launcher override is intended. `ROOK_AGENT_RUNTIMES_PATH` remains an explicit escape hatch. The canonical environment repository remains the `environment-repository/` directory belonging to the checkout that launched the server. The web repository database defaults to `ROOK_HOME/web-environment-repository.db` (`ROOK_WEB_ENVIRONMENT_REPOSITORY_DB` overrides it); `ROOK_WEB_SCOUT_DISABLED=1` stops new scouts while stored web content is still served, and `ROOK_WEB_SCOUT_TTL_MS` / `ROOK_WEB_SCOUT_ERROR_TTL_MS` override the refresh intervals.
 
 ## Persistence shape
 
 Current durable persistence is SQLite-backed and split between:
 
-- the application database: session records, coalesced logical transcript records (including in-progress snapshots), session-environment membership, and durable environment decisions
-- the environment repository databases: environments, reusable capabilities, and bundle memberships for the canonical, personal, and web repositories; the web database also holds per-host scout state
+- the application database: session records, session-environment membership, and durable environment decisions
+- runtime-owned ACP session files: conversation history and replay source
+- the environment repository databases: environments, reusable capabilities, and bundle memberships for canonical, personal, and web repositories; the web database also holds per-host scout state
 
 Canonical, personal, and web environment-repository content is SQLite-only. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
 
@@ -141,7 +143,9 @@ Persisted in SQLite:
 - `cwd`
 - `startedAt`
 - `updatedAt`
-- `attentionStatus` — durable `clear`, `ready`, or `error` enum constrained in SQLite
+- `attentionStatus` — durable `clear`, `ready`, or `error` enum constrained in SQLite; timeout/forced-cancel cleanup records `error`
+- `pinned` — durable boolean organization state
+- `pinnedOrder` — durable positional order among pinned sessions
 
 The `GET /api/sessions` response additionally includes `running` and the
 server-authoritative `activityStatus` (`active`, `ready`, `error`, `on`, or
@@ -149,11 +153,10 @@ server-authoritative `activityStatus` (`active`, `ready`, `error`, `on`, or
 pending attention states; `on` and `off` reflect live runtime liveness after
 attention precedence is applied. `updatedAt` is used for both prompt activity and explicit view/touch operations,
 so entering a session can move it to the top of the shared recents list without
-creating a synthetic prompt.
+creating a synthetic prompt. Pinned sessions are ordered by durable `pinnedOrder`, while unpinned sessions retain `updatedAt DESC` recency ordering; clients render the shared `Pinned` then `Recent` organization.
 
 Related tables:
 - `session_environments(session_id, environment_id, entered_at)`
-- `session_transcript_events(sequence, session_id, created_at, event_json)`
 
 ### Environment decision model
 - `accept` — allow for this session/visit
@@ -201,8 +204,9 @@ Related tables:
 4. `AgentRuntimeManager` rewrites to the runtime-local session ID
 5. `SessionRuntime` forwards the request to the subprocess
 6. runtime emits `session/update` notifications
-7. server normalizes live transcript notifications and coalesces them into logical records in `session_transcript_events`
-8. server rewrites session IDs back to the public ID and forwards the original live notifications to subscribed watchers of that same session
+7. `AgentRuntimeManager` distinguishes pi-acp's retry-only progress messages from actual agent output; an `end_turn` with exhausted retry progress and no actual output becomes a failed prompt, while a recovered turn remains successful
+8. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
+9. bounded request/cancellation waits force-stop an unresponsive runtime group, reconcile the turn state, and mark the session `error`; a later request lazily creates one replacement without replaying the interrupted prompt
 
 ### Environment offer and approval
 1. a provider registers an environment candidate with `POST /api/environments/register`
@@ -217,7 +221,7 @@ Related tables:
 2. `AgentRuntimeManager` resolves approved bundle content and asks `CapabilityWorkspaceManager` to update that session’s links and generated aggregate
 3. shared SQLite/project sources receive a final assessment before replacement; ordinary file edits do not themselves require runtime restart
 4. it creates a replacement `SessionRuntime` with the workspace as cwd
-5. replacement must successfully `session/load` the exact existing runtime session
+5. replacement normally takes over through `session/load` of the exact existing runtime session; if the runtime returns an ACP response error for that load, it retries with `session/new` and persists the new runtime session id, while startup, transport, timeout, and malformed-load-response failures abort the restart
 6. only then is the old subprocess retired
 
 ### Location registration
@@ -228,14 +232,17 @@ Related tables:
 
 ## Notable architectural characteristics
 
-- one public session = one runtime subprocess
+- one public session = one owned runtime process group
+- non-prompt runtime waits are bounded; prompt inactivity timeout resets on streamed updates, while cancellation timeout force-stops the group and reconciles turn state
+- runtimes idle for 30 minutes without user or runtime activity are collected without deleting their durable sessions; recovery waits for the client’s explicit `session/load` rather than replaying it implicitly
+- Rook shutdown and session deletion terminate all owned runtime groups, including provider descendants
 - websocket connections are session-bound, not general multi-session ACP pipes
 - `session/load` replay is requester-private; it no longer fans out to every watcher of that session
 - session discovery uses the REST sessions endpoint
-- the server owns a durable coalesced logical transcript for each session, including the current in-progress record, so additional viewers can hydrate without runtime replay
+- ACP runtime history is the sole transcript source; clients use requester-private `session/load` replay for initial and recovery hydration
 - environment state is session-specific at runtime launch time
 - writable SQLite capability files have one process-wide temporary materialization and are linked into per-session workspaces
-- durable decisions, transcript history, and session membership are SQLite-backed
+- durable decisions and session membership are SQLite-backed; ACP session history remains runtime-owned
 - canonical, personal, and web environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
 - web content is fetched only by the scout, off the session's critical path, through the guarded fetch helper; repository reads never touch the network
 - facts and `llms.txt` use capability-specific projections; MCP content is reviewable/read-only but not started by the runtime

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync } from 'node:fs';
 
 const sessions = new Map();
+if (process.env.MOCK_ACP_PID_FILE) appendFileSync(process.env.MOCK_ACP_PID_FILE, `${process.pid}\n`);
 let currentSessionId = null;
 let buffer = '';
 let processing = Promise.resolve();
@@ -44,6 +45,21 @@ async function streamText(sessionId, text, kind = 'agent_message_chunk') {
     });
     await delay(5);
   }
+}
+
+async function streamMessageChunk(sessionId, text, kind = 'agent_message_chunk') {
+  write({
+    jsonrpc: '2.0',
+    method: 'session/update',
+    params: {
+      sessionId,
+      update: {
+        sessionUpdate: kind,
+        content: { type: 'text', text },
+      },
+    },
+  });
+  await delay(5);
 }
 
 async function streamThoughts(sessionId, parts) {
@@ -215,10 +231,10 @@ async function handleLoad(message) {
   const sessionId = message.params.sessionId;
   const session = ensureSession(sessionId);
   currentSessionId = sessionId;
-  write({ jsonrpc: '2.0', id: message.id, result: { sessionId } });
   if (session.transcript.length > 0) {
     await replayTranscript(sessionId, session.transcript);
   }
+  write({ jsonrpc: '2.0', id: message.id, result: { sessionId } });
 }
 
 async function handlePrompt(message) {
@@ -231,14 +247,49 @@ async function handlePrompt(message) {
   session.cancelRequested = false;
   session.transcript.push({ role: 'user', text });
 
+  if (lower.includes('retry exhausted')) {
+    await streamMessageChunk(sessionId, 'Retrying (attempt 1/3, waiting 2s)...');
+    await streamMessageChunk(sessionId, 'Retry finished, resuming.');
+    finish(message.id);
+    return;
+  }
+
+  if (lower.includes('retry recovery')) {
+    await streamMessageChunk(sessionId, 'Retrying (attempt 1/3, waiting 2s)...');
+    await streamMessageChunk(sessionId, 'Retry finished, resuming.');
+    const response = 'Recovered after a retry.';
+    session.lastAssistantMessage = response;
+    session.transcript.push({ role: 'assistant', text: response });
+    await streamText(sessionId, response);
+    finish(message.id);
+    return;
+  }
+
   if (lower === 'boom') {
     write({ jsonrpc: '2.0', id: message.id, error: { code: -32000, message: 'boom' } });
+    return;
+  }
+
+  if (lower.includes('hang forever')) {
+    await new Promise(() => {});
+    return;
+  }
+
+  if (lower.includes('stream continuously')) {
+    for (let index = 0; index < 12; index += 1) {
+      await streamMessageChunk(sessionId, 'still working');
+      await delay(20);
+    }
+    session.lastAssistantMessage = 'Finished streaming continuously.';
+    session.transcript.push({ role: 'assistant', text: session.lastAssistantMessage });
+    finish(message.id);
     return;
   }
 
   if (lower.includes('long task')) {
     await streamThoughts(sessionId, ['Starting a long-running mock task.']);
     for (let index = 0; index < 100; index += 1) {
+      if (index % 3 === 0) await streamMessageChunk(sessionId, 'still working', 'agent_thought_chunk');
       if (session.cancelRequested) {
         session.cancelRequested = false;
         finish(message.id, 'cancelled');

@@ -9,7 +9,7 @@ status remains local to the chat experience. Ported from the Swift clients in
 
 ## Getting it running
 
-The repo-level launcher target is currently being split/reworked. For the
+The global session-selection screen shows durable Pinned and recency-sorted Recent sections; Pin/Unpin is available from each row's overflow menu. The repo-level launcher target is currently being split/reworked. For the
 moment `../../scripts/run-rook.sh android` is only a placeholder target, so use
 the manual `adb reverse` + Gradle flow below for real Android bring-up.
 
