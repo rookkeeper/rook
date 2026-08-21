@@ -7,11 +7,11 @@
 - [x] Brainstorm to work, or bypass because the work is simple or obvious; do not mark complete until the developer confirms the direction — bypassed: root cause was fully diagnosed in issue #151 and the developer approved the fix approach directly
 - [x] Record the agreed decision and TODO after the explicit decision gate
 - [ ] Prepare the implementation workspace after the planning commit
-- [ ] Implement and test
-- [ ] Mark compatibility surfaces
-- [ ] Maintain product and architecture documentation
-- [ ] Run final validation
-- [ ] Synchronize with main before submitting
-- [ ] Open and validate the PR
+- [x] Implement and test
+- [x] Mark compatibility surfaces — none retained; obsolete server-transcript recovery code was removed during the merge with current main
+- [x] Maintain product and architecture documentation
+- [x] Run final validation
+- [x] Synchronize with main before submitting — merged origin/main after resolving the transcript-replay redesign conflict
+- [ ] Open and validate the PR — update existing PR #152 after checks
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
