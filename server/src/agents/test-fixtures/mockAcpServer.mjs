@@ -275,9 +275,21 @@ async function handlePrompt(message) {
     return;
   }
 
+  if (lower.includes('stream continuously')) {
+    for (let index = 0; index < 12; index += 1) {
+      await streamMessageChunk(sessionId, 'still working');
+      await delay(20);
+    }
+    session.lastAssistantMessage = 'Finished streaming continuously.';
+    session.transcript.push({ role: 'assistant', text: session.lastAssistantMessage });
+    finish(message.id);
+    return;
+  }
+
   if (lower.includes('long task')) {
     await streamThoughts(sessionId, ['Starting a long-running mock task.']);
     for (let index = 0; index < 100; index += 1) {
+      if (index % 3 === 0) await streamMessageChunk(sessionId, 'still working', 'agent_thought_chunk');
       if (session.cancelRequested) {
         session.cancelRequested = false;
         finish(message.id, 'cancelled');

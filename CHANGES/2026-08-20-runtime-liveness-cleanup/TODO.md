@@ -17,9 +17,13 @@ Ensure an ACP runtime cannot leave a session permanently Active or remain as an 
 ## Work checklist
 
 - [x] Add serialized per-session runtime lifecycle ownership and prevent duplicate subprocess creation.
-- [x] Add bounded ACP request/startup/load/prompt/cancel handling and forced process-tree termination.
+- [x] Add bounded ACP request/startup/load/cancel handling and forced process-tree termination.
+- [x] Replace the absolute prompt deadline with a one-minute inactivity deadline reset by runtime stream updates.
+- [x] Collect runtimes idle for 30 minutes without user/runtime activity while preserving their sessions.
+- [x] Verify lazy replacement does not automatically replay `session/load` or prompts.
 - [x] Reconcile turn/activity state on every terminal path, including runtime exit and timeout.
 - [x] Ensure Rook shutdown closes all owned runtime process trees and session deletion does the same.
+- [x] Add mock/runtime regression coverage for streaming prompt inactivity and idle collection.
 - [x] Add mock/runtime regression coverage for hung requests, cancellation, replacement, and cleanup.
 - [x] Update server architecture, ACP product documentation, and relevant README guidance.
 - [x] Run final full validation and complete the implementation validation record.

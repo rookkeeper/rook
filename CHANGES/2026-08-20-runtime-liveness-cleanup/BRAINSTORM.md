@@ -26,9 +26,11 @@ A runtime can remain alive while an ACP prompt request is no longer making progr
 Implement server-authoritative runtime ownership and liveness:
 
 - one serialized runtime lifecycle per public session;
-- per-request deadlines and cancellation grace periods;
+- bounded non-prompt requests and cancellation grace periods;
+- prompt inactivity detection, resetting the deadline whenever the runtime streams an update;
 - forced process-tree termination when a prompt or cancel cannot settle;
 - explicit error/ready state instead of permanent Active;
-- lazy replacement on the next load/prompt, without automatic prompt replay;
+- lazy replacement on the next explicit load/prompt, without automatic session/load or prompt replay;
+- stop idle runtimes after 30 minutes without user/runtime activity, while preserving the durable session;
 - process-group ownership and shutdown tests so Rook closes every runtime it started;
-- diagnostics and tests for duplicate startup, hung prompts, cancellation, child exit, and server shutdown.
+- diagnostics and tests for duplicate startup, hung prompts, streaming prompts, cancellation, idle collection, child exit, and server shutdown.

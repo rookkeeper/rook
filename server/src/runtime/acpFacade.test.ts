@@ -155,7 +155,7 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       personalEnvironmentRepositoryDatabase: path.join(tempConfigDir, ".rook", "environment-repository.db"),
       environmentDecisionStoreLocation: ":memory:",
       authToken: "",
-      runtimeOptions: { runtimeRequestTimeoutMs: 1_000, promptTimeoutMs: 5_000, cancelGraceMs: 50, runtimeShutdownTimeoutMs: 100 },
+      runtimeOptions: { runtimeRequestTimeoutMs: 1_000, promptInactivityTimeoutMs: 100, cancelGraceMs: 50, runtimeShutdownTimeoutMs: 100, runtimeIdleTimeoutMs: 1_000, runtimeIdleCheckIntervalMs: 25 },
     });
     expect(existsSync(path.join(process.env.ROOK_HOME!, "global-workspace", "manifest.json"))).toBe(true);
     await app.listen({ host: "127.0.0.1", port: PORT });
@@ -581,6 +581,57 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
 
     const recovered = await request(ws, 4, "session/prompt", { sessionId, prompt: [{ type: "text", text: "tell me a joke" }] });
     expect(recovered.stopReason).toBe("end_turn");
+    ws.close();
+  });
+
+  it("allows a continuously streaming prompt beyond the inactivity window", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "streaming-timeout-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "streaming-timeout-test" },
+    });
+    const result = await request(ws, 3, "session/prompt", { sessionId: created.sessionId, prompt: [{ type: "text", text: "stream continuously" }] });
+    expect(result.stopReason).toBe("end_turn");
+    await request(ws, 4, "session/close", { sessionId: created.sessionId });
+    ws.close();
+  });
+
+  it("hard-stops a prompt that stops streaming without cancellation", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "prompt-inactivity-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "prompt-inactivity-test" },
+    });
+    await expect(request(ws, 3, "session/prompt", { sessionId: created.sessionId, prompt: [{ type: "text", text: "hang forever" }] })).rejects.toThrow("made no progress");
+    const stopped = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    const session = stopped.sessions.find((item) => item.sessionId === created.sessionId);
+    expect(session?.running).toBe(false);
+    expect(session?.activityStatus).toBe("error");
+    await request(ws, 4, "session/close", { sessionId: created.sessionId });
+    ws.close();
+  });
+
+  it("collects idle runtimes without deleting their sessions", async () => {
+    const ws = await connect();
+    await request(ws, 1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "idle-collector-test" } });
+    const created = await request(ws, 2, "session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+      _meta: { runtimeId: "MockAcpAgent", title: "idle-collector-test" },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    const stopped = await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> };
+    const session = stopped.sessions.find((item) => item.sessionId === created.sessionId);
+    expect(session?.running).toBe(false);
+    expect(session?.activityStatus).toBe("off");
+
+    await request(ws, 3, "session/load", { sessionId: created.sessionId });
+    expect((await fetch(`http://127.0.0.1:${PORT}/api/sessions`).then((response) => response.json()) as { sessions: Array<Record<string, unknown>> }).sessions.find((item) => item.sessionId === created.sessionId)?.running).toBe(true);
+    await request(ws, 4, "session/close", { sessionId: created.sessionId });
     ws.close();
   });
 

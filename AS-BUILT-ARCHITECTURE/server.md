@@ -225,7 +225,8 @@ Related tables:
 ## Notable architectural characteristics
 
 - one public session = one owned runtime process group
-- runtime request and prompt waits are bounded; cancellation timeout force-stops the group and reconciles turn state
+- non-prompt runtime waits are bounded; prompt inactivity timeout resets on streamed updates, while cancellation timeout force-stops the group and reconciles turn state
+- runtimes idle for 30 minutes without user or runtime activity are collected without deleting their durable sessions; recovery waits for the client’s explicit `session/load` rather than replaying it implicitly
 - Rook shutdown and session deletion terminate all owned runtime groups, including provider descendants
 - websocket connections are session-bound, not general multi-session ACP pipes
 - `session/load` replay is requester-private; it no longer fans out to every watcher of that session

@@ -9,18 +9,24 @@ import { CapabilityWorkspaceManager, type CapabilityWorkspaceResult } from "../C
 export type SessionActivityStatus = "active" | "ready" | "error" | "on" | "off";
 
 type TurnDiagnostic = { hasActualContent: boolean; sawAutomaticRetry: boolean };
+type RuntimeActivity = { lastUserInteractionAt: number; lastRuntimeActivityAt: number; inFlightRequests: number };
+type RuntimeActivityListener = () => void;
 
 export interface AgentRuntimeManagerOptions {
   runtimeRequestTimeoutMs?: number;
-  promptTimeoutMs?: number;
+  promptInactivityTimeoutMs?: number;
   cancelGraceMs?: number;
   runtimeShutdownTimeoutMs?: number;
+  runtimeIdleTimeoutMs?: number;
+  runtimeIdleCheckIntervalMs?: number;
 }
 
 const DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS = 30_000;
-const DEFAULT_PROMPT_TIMEOUT_MS = 10 * 60_000;
+const DEFAULT_PROMPT_INACTIVITY_TIMEOUT_MS = 60_000;
 const DEFAULT_CANCEL_GRACE_MS = 5_000;
 const DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_MS = 1_000;
+const DEFAULT_RUNTIME_IDLE_TIMEOUT_MS = 30 * 60_000;
+const DEFAULT_RUNTIME_IDLE_CHECK_INTERVAL_MS = 60_000;
 
 /**
  * Owns the configured runtime catalog and lazily creates one isolated
@@ -33,6 +39,8 @@ export class AgentRuntimeManager {
   private readonly runtimeCreationQueues = new Map<string, Promise<SessionRuntime>>();
   private readonly runtimeStopQueues = new Map<string, Promise<void>>();
   private readonly transientRuntimes = new Set<SessionRuntime>();
+  private readonly runtimeActivities = new Map<string, RuntimeActivity>();
+  private readonly promptActivityListeners = new Map<string, Set<RuntimeActivityListener>>();
   private readonly activeTurns = new Map<string, Set<number>>();
   private readonly turnDiagnostics = new Map<string, Map<number, TurnDiagnostic>>();
   private readonly turnIdleWaiters = new Map<string, Set<() => void>>();
@@ -50,9 +58,12 @@ export class AgentRuntimeManager {
   private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
   private readonly workspaceResults = new Map<string, CapabilityWorkspaceResult>();
   private readonly runtimeRequestTimeoutMs: number;
-  private readonly promptTimeoutMs: number;
+  private readonly promptInactivityTimeoutMs: number;
   private readonly cancelGraceMs: number;
   private readonly runtimeShutdownTimeoutMs: number;
+  private readonly runtimeIdleTimeoutMs: number;
+  private readonly idleCollector: NodeJS.Timeout;
+  private idleCollection: Promise<void> | null = null;
   private closed = false;
 
   constructor(
@@ -65,10 +76,18 @@ export class AgentRuntimeManager {
     options: AgentRuntimeManagerOptions = {},
   ) {
     this.profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
-    this.runtimeRequestTimeoutMs = options.runtimeRequestTimeoutMs ?? Number(process.env.ROOK_RUNTIME_REQUEST_TIMEOUT_MS ?? DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS);
-    this.promptTimeoutMs = options.promptTimeoutMs ?? Number(process.env.ROOK_RUNTIME_PROMPT_TIMEOUT_MS ?? DEFAULT_PROMPT_TIMEOUT_MS);
-    this.cancelGraceMs = options.cancelGraceMs ?? Number(process.env.ROOK_RUNTIME_CANCEL_GRACE_MS ?? DEFAULT_CANCEL_GRACE_MS);
-    this.runtimeShutdownTimeoutMs = options.runtimeShutdownTimeoutMs ?? Number(process.env.ROOK_RUNTIME_SHUTDOWN_TIMEOUT_MS ?? DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_MS);
+    this.runtimeRequestTimeoutMs = duration(options.runtimeRequestTimeoutMs ?? Number(process.env.ROOK_RUNTIME_REQUEST_TIMEOUT_MS ?? DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS), DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS);
+    this.promptInactivityTimeoutMs = duration(options.promptInactivityTimeoutMs ?? Number(process.env.ROOK_RUNTIME_PROMPT_INACTIVITY_TIMEOUT_MS ?? DEFAULT_PROMPT_INACTIVITY_TIMEOUT_MS), DEFAULT_PROMPT_INACTIVITY_TIMEOUT_MS);
+    this.cancelGraceMs = duration(options.cancelGraceMs ?? Number(process.env.ROOK_RUNTIME_CANCEL_GRACE_MS ?? DEFAULT_CANCEL_GRACE_MS), DEFAULT_CANCEL_GRACE_MS);
+    this.runtimeShutdownTimeoutMs = duration(options.runtimeShutdownTimeoutMs ?? Number(process.env.ROOK_RUNTIME_SHUTDOWN_TIMEOUT_MS ?? DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_MS), DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_MS);
+    this.runtimeIdleTimeoutMs = duration(options.runtimeIdleTimeoutMs ?? Number(process.env.ROOK_RUNTIME_IDLE_TIMEOUT_MS ?? DEFAULT_RUNTIME_IDLE_TIMEOUT_MS), DEFAULT_RUNTIME_IDLE_TIMEOUT_MS);
+    const idleCheckIntervalMs = duration(options.runtimeIdleCheckIntervalMs ?? Number(process.env.ROOK_RUNTIME_IDLE_CHECK_INTERVAL_MS ?? DEFAULT_RUNTIME_IDLE_CHECK_INTERVAL_MS), DEFAULT_RUNTIME_IDLE_CHECK_INTERVAL_MS);
+    this.idleCollector = setInterval(() => {
+      void this.collectIdleRuntimes().catch((error) => {
+        this.logger.info({ error: error instanceof Error ? error.message : String(error) }, "idle runtime collection failed");
+      });
+    }, idleCheckIntervalMs);
+    this.idleCollector.unref?.();
   }
 
   runtimeIds(): string[] {
@@ -181,7 +200,7 @@ export class AgentRuntimeManager {
       };
       await this.sessions.save(record);
       this.transientRuntimes.delete(runtime);
-      this.attachSessionRuntime(record.sessionId, runtime);
+      this.attachSessionRuntime(record.sessionId, runtime, Date.parse(record.updatedAt));
       this.subscribeToEnvironments(record.sessionId);
       this.timingLog("create_session_complete", {
         runtimeId,
@@ -199,31 +218,32 @@ export class AgentRuntimeManager {
   }
 
   async requestForSession(sessionId: string, method: string, params: JsonObject, options: { privateReplayListener?: RuntimeNotification } = {}): Promise<unknown> {
+    this.beginRuntimeOperation(sessionId);
     const startedAt = performance.now();
-    const record = await this.requireSession(sessionId);
-    await this.restoreEnvironmentMembership(record);
-    const runtime = await this.runtimeFor(record);
-    const runtimeParams =
-      method === "session/load"
-        ? { cwd: record.cwd, mcpServers: [], ...params, sessionId: record.runtimeSessionId }
-        : { ...params, sessionId: record.runtimeSessionId };
-    const privateReplay = method === "session/load" && options.privateReplayListener;
-    const isPrompt = method === "session/prompt";
-    if (privateReplay) this.beginPrivateReplay(sessionId, options.privateReplayListener!);
     let turnId: number | undefined;
-    if (isPrompt) {
-      await this.sessions.touch(sessionId);
-      turnId = this.beginTurn(sessionId);
-    }
+    let privateReplay = false;
+    let runtime: SessionRuntime | undefined;
+    let record: SessionRecord | undefined;
+    const isPrompt = method === "session/prompt";
     let promptOutcome: SessionAttentionStatus | undefined;
     try {
-      const result = await this.requestWithTimeout(
-        runtime,
-        method,
-        runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration),
-        isPrompt ? this.promptTimeoutMs : this.runtimeRequestTimeoutMs,
-      );
-      if (method === "session/prompt") {
+      record = await this.requireSession(sessionId);
+      await this.restoreEnvironmentMembership(record);
+      runtime = await this.runtimeFor(record);
+      const runtimeParams =
+        method === "session/load"
+          ? { cwd: record.cwd, mcpServers: [], ...params, sessionId: record.runtimeSessionId }
+          : { ...params, sessionId: record.runtimeSessionId };
+      privateReplay = method === "session/load" && options.privateReplayListener !== undefined;
+      if (privateReplay) this.beginPrivateReplay(sessionId, options.privateReplayListener!);
+      if (isPrompt) {
+        await this.sessions.touch(sessionId);
+        turnId = this.beginTurn(sessionId);
+      }
+      const result = isPrompt
+        ? await this.requestPromptWithInactivityTimeout(runtime, sessionId, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration))
+        : await this.requestWithTimeout(runtime, method, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration), this.runtimeRequestTimeoutMs);
+      if (isPrompt) {
         const diagnostic = turnId === undefined ? undefined : this.turnDiagnostics.get(sessionId)?.get(turnId);
         if (diagnostic?.sawAutomaticRetry && !diagnostic.hasActualContent) {
           throw new Error("Runtime retries exhausted before producing a response.");
@@ -240,13 +260,11 @@ export class AgentRuntimeManager {
       });
       return rewriteResultSessionId(record, result);
     } catch (error) {
-      if (isPrompt) {
-        promptOutcome = "error";
-      }
+      if (isPrompt) promptOutcome = "error";
       this.timingLog("request_failed", {
         method,
         sessionId,
-        runtimeId: record.runtimeId,
+        runtimeId: record?.runtimeId,
         elapsedMs: roundMs(performance.now() - startedAt),
         error: error instanceof Error ? error.message : String(error),
       });
@@ -254,36 +272,50 @@ export class AgentRuntimeManager {
     } finally {
       if (turnId !== undefined) await this.finishTurn(sessionId, turnId, promptOutcome ?? "error");
       if (privateReplay) this.endPrivateReplay(sessionId);
+      this.markRuntimeActivity(sessionId);
+      this.endRuntimeOperation(sessionId);
     }
   }
 
   async notifyForSession(sessionId: string, method: string, params: JsonObject): Promise<void> {
-    const record = await this.requireSession(sessionId);
-    await this.restoreEnvironmentMembership(record);
-    const runtime = await this.runtimeFor(record);
-    await runtime.notify(method, { ...params, sessionId: record.runtimeSessionId });
-    await this.sessions.touch(sessionId);
+    this.beginRuntimeOperation(sessionId);
+    try {
+      const record = await this.requireSession(sessionId);
+      await this.restoreEnvironmentMembership(record);
+      const runtime = await this.runtimeFor(record);
+      await runtime.notify(method, { ...params, sessionId: record.runtimeSessionId });
+      await this.sessions.touch(sessionId);
+    } finally {
+      this.markRuntimeActivity(sessionId);
+      this.endRuntimeOperation(sessionId);
+    }
   }
 
   async cancelSession(sessionId: string, params: JsonObject = {}): Promise<void> {
-    const record = await this.requireSession(sessionId);
-    await this.restoreEnvironmentMembership(record);
-    const runtime = await this.runtimeFor(record);
+    this.beginRuntimeOperation(sessionId);
     try {
-      await withTimeout(
-        runtime.notify("session/cancel", { ...params, sessionId: record.runtimeSessionId }),
-        this.runtimeRequestTimeoutMs,
-        `session/cancel timed out after ${this.runtimeRequestTimeoutMs}ms`,
-      );
-      await this.sessions.touch(sessionId);
-    } catch (error) {
-      await this.hardStopRuntime(sessionId, runtime, "cancel_write_failed", error);
-      return;
-    }
-    if (this.activeTurnCount(sessionId) === 0) return;
-    const settled = await this.waitForTurnsIdle(sessionId, this.cancelGraceMs);
-    if (!settled && this.sessionRuntimes.get(sessionId) === runtime) {
-      await this.hardStopRuntime(sessionId, runtime, "cancel_timeout", new Error("Runtime did not settle after cancellation."));
+      const record = await this.requireSession(sessionId);
+      await this.restoreEnvironmentMembership(record);
+      const runtime = await this.runtimeFor(record);
+      try {
+        await withTimeout(
+          runtime.notify("session/cancel", { ...params, sessionId: record.runtimeSessionId }),
+          this.runtimeRequestTimeoutMs,
+          `session/cancel timed out after ${this.runtimeRequestTimeoutMs}ms`,
+        );
+        await this.sessions.touch(sessionId);
+      } catch (error) {
+        await this.hardStopRuntime(sessionId, runtime, "cancel_write_failed", error);
+        return;
+      }
+      if (this.activeTurnCount(sessionId) === 0) return;
+      const settled = await this.waitForTurnsIdle(sessionId, this.cancelGraceMs);
+      if (!settled && this.sessionRuntimes.get(sessionId) === runtime) {
+        await this.hardStopRuntime(sessionId, runtime, "cancel_timeout", new Error("Runtime did not settle after cancellation."));
+      }
+    } finally {
+      this.markRuntimeActivity(sessionId);
+      this.endRuntimeOperation(sessionId);
     }
   }
 
@@ -314,50 +346,61 @@ export class AgentRuntimeManager {
   }
 
   async restartSessionForEnvironmentChange(sessionId: string, configuration: SessionRuntimeConfiguration): Promise<void> {
-    const record = await this.requireSession(sessionId);
-    const current = await this.runtimeFor(record);
-    const replacement = current.replacement(configuration);
+    this.beginRuntimeOperation(sessionId);
     try {
-      const result = await this.requestWithTimeout(
-        replacement,
-        "session/load",
-        runtimeSessionParams(replacement.profile, { sessionId: record.runtimeSessionId, cwd: record.cwd, mcpServers: [] }, configuration),
-        this.runtimeRequestTimeoutMs,
-      );
-      if (typeof result === "object" && result !== null && "sessionId" in result && (result as JsonObject).sessionId !== record.runtimeSessionId) {
-        throw new Error("ACP session/load returned a different session ID; refusing to replace session runtime.");
+      const record = await this.requireSession(sessionId);
+      const current = await this.runtimeFor(record);
+      const replacement = current.replacement(configuration);
+      try {
+        const result = await this.requestWithTimeout(
+          replacement,
+          "session/load",
+          runtimeSessionParams(replacement.profile, { sessionId: record.runtimeSessionId, cwd: record.cwd, mcpServers: [] }, configuration),
+          this.runtimeRequestTimeoutMs,
+        );
+        if (typeof result === "object" && result !== null && "sessionId" in result && (result as JsonObject).sessionId !== record.runtimeSessionId) {
+          throw new Error("ACP session/load returned a different session ID; refusing to replace session runtime.");
+        }
+      } catch (error) {
+        await replacement.close();
+        throw error;
       }
-    } catch (error) {
-      await replacement.close();
-      throw error;
-    }
 
-    this.replaceSessionRuntime(sessionId, replacement);
-    await current.close();
-    await this.sessions.touch(sessionId);
+      this.replaceSessionRuntime(sessionId, replacement);
+      await current.close();
+      await this.sessions.touch(sessionId);
+    } finally {
+      this.markRuntimeActivity(sessionId);
+      this.endRuntimeOperation(sessionId);
+    }
   }
 
   async deleteSession(sessionId: string): Promise<unknown> {
-    const record = await this.requireSession(sessionId);
-    await this.workspaceManager.assessAndFlush();
-    let result: unknown = { ok: true };
-    const runtime = this.sessionRuntimes.get(record.sessionId);
-    if (runtime) {
-      // ACP runtimes are not required to implement session/close. The server
-      // owns the public session lifecycle, so terminating the per-session
-      // runtime must not be blocked by an optional/unsupported ACP method.
-      try {
-        result = await this.requestWithTimeout(runtime, "session/close", { sessionId: record.runtimeSessionId }, this.runtimeRequestTimeoutMs);
-      } catch (error) {
-        this.logger.info({ sessionId, error: error instanceof Error ? error.message : String(error) }, "runtime did not accept session/close; terminating runtime directly");
-      } finally {
-        await runtime.close();
+    this.beginRuntimeOperation(sessionId);
+    try {
+      const record = await this.requireSession(sessionId);
+      await this.workspaceManager.assessAndFlush();
+      let result: unknown = { ok: true };
+      const runtime = this.sessionRuntimes.get(record.sessionId);
+      if (runtime) {
+        // ACP runtimes are not required to implement session/close. The server
+        // owns the public session lifecycle, so terminating the per-session
+        // runtime must not be blocked by an optional/unsupported ACP method.
+        try {
+          result = await this.requestWithTimeout(runtime, "session/close", { sessionId: record.runtimeSessionId }, this.runtimeRequestTimeoutMs);
+        } catch (error) {
+          this.logger.info({ sessionId, error: error instanceof Error ? error.message : String(error) }, "runtime did not accept session/close; terminating runtime directly");
+        } finally {
+          await runtime.close();
+        }
       }
+      await this.workspaceManager.removeSession(sessionId);
+      this.detachSessionRuntime(sessionId);
+      await this.sessions.delete(sessionId);
+      return result;
+    } finally {
+      this.endRuntimeOperation(sessionId);
     }
-    await this.workspaceManager.removeSession(sessionId);
-    this.detachSessionRuntime(sessionId);
-    await this.sessions.delete(sessionId);
-    return result;
   }
 
   /** Relay a standard ACP response to an ACP request initiated by a runtime. */
@@ -391,6 +434,7 @@ export class AgentRuntimeManager {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    clearInterval(this.idleCollector);
     await this.workspaceManager.assessAndFlush();
     for (const unsubscribe of this.runtimeSubscriptions.values()) unsubscribe();
     this.runtimeSubscriptions.clear();
@@ -402,6 +446,8 @@ export class AgentRuntimeManager {
     this.transientRuntimes.clear();
     this.runtimeCreationQueues.clear();
     this.runtimeStopQueues.clear();
+    this.runtimeActivities.clear();
+    this.promptActivityListeners.clear();
     this.activeTurns.clear();
     this.turnDiagnostics.clear();
     this.turnIdleWaiters.clear();
@@ -459,8 +505,15 @@ export class AgentRuntimeManager {
     };
   }
 
-  private attachSessionRuntime(sessionId: string, runtime: SessionRuntime): void {
+  private attachSessionRuntime(sessionId: string, runtime: SessionRuntime, userActivityAt = Date.now()): void {
     this.sessionRuntimes.set(sessionId, runtime);
+    const activity = this.runtimeActivities.get(sessionId) ?? {
+      lastUserInteractionAt: Number.isFinite(userActivityAt) ? userActivityAt : Date.now(),
+      lastRuntimeActivityAt: Date.now(),
+      inFlightRequests: 0,
+    };
+    activity.lastRuntimeActivityAt = Date.now();
+    this.runtimeActivities.set(sessionId, activity);
     if (this.runtimeSubscriptions.has(sessionId)) return;
     this.runtimeSubscriptions.set(sessionId, runtime.onNotification((message) => {
       this.observeTurnNotification(sessionId, message);
@@ -500,6 +553,8 @@ export class AgentRuntimeManager {
     this.environmentRestartQueues.delete(sessionId);
     this.restoredEnvironmentMembership.delete(sessionId);
     this.workspaceResults.delete(sessionId);
+    this.runtimeActivities.delete(sessionId);
+    this.promptActivityListeners.delete(sessionId);
   }
 
   private subscribeToEnvironments(sessionId: string): void {
@@ -638,6 +693,88 @@ export class AgentRuntimeManager {
     for (const waiter of this.turnIdleWaiters.get(sessionId) ?? []) waiter();
   }
 
+  private beginRuntimeOperation(sessionId: string): void {
+    const now = Date.now();
+    const activity = this.runtimeActivities.get(sessionId) ?? {
+      lastUserInteractionAt: now,
+      lastRuntimeActivityAt: now,
+      inFlightRequests: 0,
+    };
+    activity.lastUserInteractionAt = now;
+    activity.inFlightRequests += 1;
+    this.runtimeActivities.set(sessionId, activity);
+  }
+
+  private endRuntimeOperation(sessionId: string): void {
+    const activity = this.runtimeActivities.get(sessionId);
+    if (!activity) return;
+    activity.inFlightRequests = Math.max(0, activity.inFlightRequests - 1);
+  }
+
+  private markRuntimeActivity(sessionId: string): void {
+    const activity = this.runtimeActivities.get(sessionId);
+    if (activity) activity.lastRuntimeActivityAt = Date.now();
+    for (const listener of this.promptActivityListeners.get(sessionId) ?? []) listener();
+  }
+
+  private collectIdleRuntimes(): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    if (this.idleCollection) return this.idleCollection;
+    const collection = this.collectIdleRuntimesNow();
+    let tracked: Promise<void>;
+    tracked = collection.finally(() => {
+      if (this.idleCollection === tracked) this.idleCollection = null;
+    });
+    this.idleCollection = tracked;
+    return tracked;
+  }
+
+  private async collectIdleRuntimesNow(): Promise<void> {
+    const now = Date.now();
+    for (const [sessionId, runtime] of this.sessionRuntimes) {
+      const activity = this.runtimeActivities.get(sessionId);
+      if (!activity || !runtime.isAlive || activity.inFlightRequests > 0 || this.activeTurnCount(sessionId) > 0) continue;
+      const lastActivityAt = Math.max(activity.lastUserInteractionAt, activity.lastRuntimeActivityAt);
+      if (now - lastActivityAt < this.runtimeIdleTimeoutMs) continue;
+      await this.hardStopRuntime(
+        sessionId,
+        runtime,
+        "idle_timeout",
+        new Error(`Runtime has been idle for at least ${this.runtimeIdleTimeoutMs}ms.`),
+        false,
+      );
+    }
+  }
+
+  private async requestPromptWithInactivityTimeout(runtime: SessionRuntime, sessionId: string, params: JsonObject): Promise<unknown> {
+    let timer: NodeJS.Timeout | undefined;
+    let settled = false;
+    let rejectInactivity: ((error: Error) => void) | undefined;
+    const onActivity = () => {
+      if (settled) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        rejectInactivity?.(new RuntimeTimeoutError(`session/prompt made no progress for ${this.promptInactivityTimeoutMs}ms`));
+      }, this.promptInactivityTimeoutMs);
+    };
+    const listeners = this.promptActivityListeners.get(sessionId) ?? new Set<RuntimeActivityListener>();
+    listeners.add(onActivity);
+    this.promptActivityListeners.set(sessionId, listeners);
+    onActivity();
+    try {
+      const inactivity = new Promise<never>((_, reject) => { rejectInactivity = reject; });
+      return await Promise.race([runtime.request("session/prompt", params), inactivity]);
+    } catch (error) {
+      if (error instanceof RuntimeTimeoutError) await this.hardStopRuntime(sessionId, runtime, "prompt_inactivity_timeout", error);
+      throw error;
+    } finally {
+      settled = true;
+      if (timer) clearTimeout(timer);
+      listeners.delete(onActivity);
+      if (listeners.size === 0) this.promptActivityListeners.delete(sessionId);
+    }
+  }
+
   private async requestWithTimeout(runtime: SessionRuntime, method: string, params: JsonObject, timeoutMs: number): Promise<unknown> {
     try {
       return await withTimeout(runtime.request(method, params), timeoutMs, `${method} timed out after ${timeoutMs}ms`);
@@ -655,7 +792,7 @@ export class AgentRuntimeManager {
     return undefined;
   }
 
-  private async hardStopRuntime(sessionId: string, runtime: SessionRuntime, reason: string, error: unknown): Promise<void> {
+  private async hardStopRuntime(sessionId: string, runtime: SessionRuntime, reason: string, error: unknown, markError = true): Promise<void> {
     const stop = runtime.close();
     this.runtimeStopQueues.set(sessionId, stop);
     if (this.sessionRuntimes.get(sessionId) === runtime) {
@@ -669,7 +806,7 @@ export class AgentRuntimeManager {
     this.activeTurns.delete(sessionId);
     this.turnDiagnostics.delete(sessionId);
     this.resolveTurnIdleWaiters(sessionId);
-    await this.sessions.setAttentionStatus(sessionId, "error");
+    if (markError) await this.sessions.setAttentionStatus(sessionId, "error");
     try {
       await stop;
     } finally {
@@ -679,6 +816,7 @@ export class AgentRuntimeManager {
   }
 
   private observeTurnNotification(sessionId: string, message: JsonRpcMessage): void {
+    this.markRuntimeActivity(sessionId);
     const diagnostics = this.turnDiagnostics.get(sessionId);
     if (!diagnostics || diagnostics.size === 0) return;
     const params = object(message.params);
@@ -731,6 +869,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
       (error) => { clearTimeout(timer); reject(error); },
     );
   });
+}
+
+function duration(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 function supportsImagePrompts(profile: AgentRuntimeProfile): boolean {
