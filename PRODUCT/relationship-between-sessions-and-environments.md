@@ -48,6 +48,6 @@ Each public session has its own ACP runtime subprocess, disposable agent workspa
 
 ## Restart behavior
 
-Environment changes update the session's links and generated aggregate, start a replacement runtime, and only retire the old process after successful ACP session loading. Shared file edits are watched and do not independently require runtime restart. Session membership remains durable; transcript history remains owned by the ACP runtime.
+Environment changes update the session's links and generated aggregate, start a replacement runtime, and normally retire the old process after successful ACP session loading. If the runtime rejects `session/load` with an ACP response error, the replacement retries with `session/new`; startup, transport, timeout, and malformed-load-response failures still abort the restart. Shared file edits are watched and do not independently require runtime restart. Session membership remains durable; transcript history remains owned by the ACP runtime.
 
 Concurrent edits to one personal bundle are currently last-write-wins/deferred; conflict merging is future work.
