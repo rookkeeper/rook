@@ -2,7 +2,7 @@ import type { AgentRuntimeProfile } from "../../infrastructure/config/agentRunti
 import type { EnvironmentManager } from "../../environments/services/EnvironmentManager.js";
 import type { EnvironmentBundleOffer, EnvironmentEventListener, EnvironmentResolution } from "../../environments/support/types.js";
 import type { SessionAttentionStatus, SessionRecord, SessionRepository } from "../../sessions/repositories/SessionRepository.js";
-import { SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotification, type SessionRuntimeConfiguration } from "../SessionRuntime.js";
+import { RuntimeRequestError, SessionRuntime, type JsonObject, type JsonRpcMessage, type RuntimeNotification, type SessionRuntimeConfiguration } from "../SessionRuntime.js";
 import { runtimeLaunchPlan, runtimeSessionParams } from "../runtimeLaunchPlan.js";
 import { CapabilityWorkspaceManager, type CapabilityWorkspaceResult } from "../CapabilityWorkspaceManager.js";
 
@@ -351,16 +351,10 @@ export class AgentRuntimeManager {
       const record = await this.requireSession(sessionId);
       const current = await this.runtimeFor(record);
       const replacement = current.replacement(configuration);
+      let runtimeSessionId: string;
       try {
-        const result = await this.requestWithTimeout(
-          replacement,
-          "session/load",
-          runtimeSessionParams(replacement.profile, { sessionId: record.runtimeSessionId, cwd: record.cwd, mcpServers: [] }, configuration),
-          this.runtimeRequestTimeoutMs,
-        );
-        if (typeof result === "object" && result !== null && "sessionId" in result && (result as JsonObject).sessionId !== record.runtimeSessionId) {
-          throw new Error("ACP session/load returned a different session ID; refusing to replace session runtime.");
-        }
+        runtimeSessionId = await this.adoptSessionOnRuntime(record, replacement, configuration);
+        if (runtimeSessionId !== record.runtimeSessionId) await this.sessions.save({ ...record, runtimeSessionId });
       } catch (error) {
         await replacement.close();
         throw error;
@@ -372,6 +366,40 @@ export class AgentRuntimeManager {
     } finally {
       this.markRuntimeActivity(sessionId);
       this.endRuntimeOperation(sessionId);
+    }
+  }
+
+  /**
+   * Loads the existing ACP session when possible. A response-level load error
+   * means the runtime rejected that session, so a fresh ACP session can take
+   * over without confusing startup, transport, or timeout failures with an
+   * unresumable session.
+   */
+  private async adoptSessionOnRuntime(record: SessionRecord, replacement: SessionRuntime, configuration: SessionRuntimeConfiguration): Promise<string> {
+    try {
+      const result = await this.requestWithTimeout(
+        replacement,
+        "session/load",
+        runtimeSessionParams(replacement.profile, { sessionId: record.runtimeSessionId, cwd: record.cwd, mcpServers: [] }, configuration),
+        this.runtimeRequestTimeoutMs,
+      );
+      if (typeof result === "object" && result !== null && "sessionId" in result && (result as JsonObject).sessionId !== record.runtimeSessionId) {
+        throw new Error("ACP session/load returned a different session ID; refusing to replace session runtime.");
+      }
+      return record.runtimeSessionId;
+    } catch (error) {
+      if (!(error instanceof RuntimeRequestError)) throw error;
+      const result = await this.requestWithTimeout(
+        replacement,
+        "session/new",
+        runtimeSessionParams(replacement.profile, { cwd: record.cwd, mcpServers: [] }, configuration),
+        this.runtimeRequestTimeoutMs,
+      );
+      this.logger.info(
+        { sessionId: record.sessionId, runtimeId: record.runtimeId, error: error.message, ...(error.code !== undefined ? { code: error.code } : {}) },
+        "session/load failed; recreated runtime session via session/new",
+      );
+      return sessionIdFromResult(result);
     }
   }
 

@@ -7,6 +7,19 @@ export type JsonRpcId = string | number;
 export type JsonRpcMessage = Record<string, unknown>;
 export type RuntimeNotification = (message: JsonRpcMessage) => void;
 
+/** A response-level ACP error, distinct from startup, transport, and timeout failures. */
+export class RuntimeRequestError extends Error {
+  readonly code: number | undefined;
+  readonly data: unknown;
+
+  constructor(error: JsonObject) {
+    super(typeof error.message === "string" ? error.message : "ACP request failed");
+    this.name = "RuntimeRequestError";
+    this.code = typeof error.code === "number" ? error.code : undefined;
+    this.data = error.data;
+  }
+}
+
 export interface SessionRuntimeConfiguration {
   enteredEnvironmentIds: string[];
   skillPaths: string[];
@@ -237,8 +250,10 @@ export class SessionRuntime {
       if (!pending) return;
       this.pending.delete(id);
       if ("error" in message) {
-        const error = message.error as { message?: unknown };
-        pending.reject(new Error(typeof error?.message === "string" ? error.message : "ACP request failed"));
+        const error = typeof message.error === "object" && message.error !== null && !Array.isArray(message.error)
+          ? message.error as JsonObject
+          : {};
+        pending.reject(new RuntimeRequestError(error));
       } else {
         pending.resolve(message.result);
       }

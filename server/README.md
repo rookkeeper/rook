@@ -131,7 +131,7 @@ It implements:
 
 ACP startup/load requests have bounded waits (`ROOK_RUNTIME_REQUEST_TIMEOUT_MS`). Prompts use an inactivity timeout (`ROOK_RUNTIME_PROMPT_INACTIVITY_TIMEOUT_MS`, one minute by default) that resets whenever the runtime streams an update, so long-running streamed turns remain valid. Cancellation has a shorter grace period (`ROOK_RUNTIME_CANCEL_GRACE_MS`). A timeout force-stops the owned runtime process group, clears the turn, and marks the session `Error`. Runtimes with no user or runtime activity for 30 minutes are collected (`ROOK_RUNTIME_IDLE_TIMEOUT_MS`) without deleting their durable sessions. The next client request lazily creates one replacement; it does not automatically replay `session/load` or the possibly side-effecting prompt. `ROOK_RUNTIME_SHUTDOWN_TIMEOUT_MS` bounds graceful process-group shutdown.
 
-On environment change, only the affected session's runtime is restarted — the replacement process must successfully `session/load` the existing ACP session before the old process retires. A failed load never creates a fresh replacement session. Rook shutdown and session deletion terminate the complete adapter/provider process group, not only the direct ACP adapter.
+On environment change, only the affected session's runtime is restarted. The replacement normally takes over through `session/load`; if the runtime returns an ACP response error for that load, Rook retries with `session/new` and persists the replacement runtime session id. Startup, transport, timeout, and malformed-load-response failures still abort the restart. Rook shutdown and session deletion terminate the complete adapter/provider process group, not only the direct ACP adapter.
 
 ### Environment system
 
