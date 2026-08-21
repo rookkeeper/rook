@@ -129,8 +129,7 @@ initialize_development_home() {
   mkdir -p "$ROOK_HOME"
   if [[ -d "$source_home" && "$source_home" != "$ROOK_HOME" ]]; then
     cp -a "$source_home/." "$ROOK_HOME/"
-    rm -f "$ROOK_HOME/rook.sqlite" "$ROOK_HOME/rook.sqlite-shm" "$ROOK_HOME/rook.sqlite-wal"
-    log "initialized development Rook home by copying $source_home without session database"
+    log "initialized development Rook home by copying $source_home, including the application database"
   else
     log "initialized empty development Rook home at $ROOK_HOME"
   fi
