@@ -84,7 +84,7 @@ Before pushing or opening or updating a PR, fetch `origin` and merge `origin/mai
 
 ### Open and validate the PR
 
-Draft a concise PR explaining what changed, why it matters, the relevant product and architecture context, tests, and any rollout notes. Push the branch and open the PR with `gh`. Confirm that required tests and GitHub Actions pass and that GitHub reports the PR as mergeable.
+Use [`references/PR-TEMPLATE.md`](references/PR-TEMPLATE.md) as the starting point for the PR description. Keep it concise: explain why the change matters, summarize what changed, and include the layered architecture impact when applicable. The layered section should explicitly call out new or changed API endpoints/protocol contracts, service-layer behavior, repository/data-access changes, and database/schema changes; omit it or mark it not applicable when the work is unrelated to those layers. Include a high-level test summary with counts of tests added, updated, and removed, rather than listing every test case, along with the relevant validation commands and rollout notes. Push the branch and open the PR with `gh`. Confirm that required tests and GitHub Actions pass and that GitHub reports the PR as mergeable.
 
 If an action fails or merge is blocked, read the exact message from GitHub and follow those instructions. Do not bypass, reinterpret, or work around the failure. Make the requested changes and rerun the action. When complete, check off this phase in [`WORKSTEPS.md`](WORKSTEPS.md).
 
