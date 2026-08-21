@@ -12,6 +12,6 @@
 - [x] Maintain product and architecture documentation
 - [x] Run final validation
 - [x] Synchronize with main before submitting — merged origin/main after resolving the transcript-replay redesign conflict
-- [ ] Open and validate the PR — update existing PR #152 after checks
-- [ ] Merge with approval
-- [ ] Record outcomes and clean up
+- [x] Open and validate the PR — PR #152 updated after the 2026-08-20 rework; CI green, mergeable
+- [x] Merge with approval — merged by the maintainer (`b4f73ce`, 2026-08-21) after he integrated the fix with the #169 runtime-liveness work
+- [x] Record outcomes and clean up — OUTCOMES.md added; worktree, local and fork branches removed
