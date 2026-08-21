@@ -16,11 +16,14 @@ Use this section when the change crosses the application layers. If it is unrela
 
 ## Tests
 
-- **Added:** [count] — high-level surfaces or behaviors covered:
-- **Updated:** [count] — high-level behavior changes covered:
-- **Removed:** [count] — why, if applicable:
-- **Validation:** Builds, checks, smoke tests, or other relevant commands:
+- **Added:** [count]. [One-line summary of the high-level surfaces or behaviors covered.]
+- **Updated:** [count]. [One-line summary of the high-level behavior changes covered.]
+- **Removed:** [count]. [One-line explanation, if applicable.]
 
 ## Notes
 
-- Compatibility, rollout, migration, or follow-up notes:
+Examples of optional notes to include:
+
+- **Backwards compatibility:** State `None` when there is no compatibility code. If this PR retains a shim, fallback, migration bridge, or other backwards-compatibility behavior, flag it explicitly with `THIS IS FOR BACKWARDS COMPATIBILITY` and explain what is being preserved.
+- **Rollout or migration:** Mention deployment sequencing, data migration, configuration, or operational considerations when relevant.
+- **Follow-up:** Mention deferred work, known limitations, or useful follow-up when relevant.
