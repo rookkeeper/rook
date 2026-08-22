@@ -11,7 +11,7 @@
 - [x] Mark compatibility surfaces — retained PR #152 environment-restart fallback is annotated; ordinary runtime recovery does not use it
 - [x] Maintain product and architecture documentation
 - [x] Run final validation — focused tests, full server tests (152 passed, 5 skipped), typecheck, build, and diff check completed
-- [ ] Synchronize with main before submitting
+- [x] Synchronize with main before submitting — fetched `origin` and merged `origin/main` as `e519e64`; local `main` has unrelated unpushed planning commits and could not fast-forward
 - [ ] Open and validate the PR
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
