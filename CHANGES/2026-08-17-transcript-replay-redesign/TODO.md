@@ -15,7 +15,7 @@ Rook's normalized SQLite transcript copy amplified replay failures and was not n
 - Use the completed ACP `session/load` response as the replay boundary; remove the 80 ms quiet timer.
 - After a genuine WebSocket disconnect or platform suspension, reconnect and use ACP `session/load` to resynchronize.
 - Apply recovery replay by replacing cached session blocks, never appending to them.
-- Truncate oversized client-facing ACP presentation payloads to a maximum serialized notification size of 10 kB in both live delivery and replay. Do not alter the runtime's source history.
+- Truncate oversized client-facing ACP presentation payloads to a maximum serialized notification size of 1 MB in both live delivery and replay. Do not alter the runtime's source history.
 - Retry transient ACP load failures with backoff; stop on permanent session/configuration/protocol/history failures.
 - Physically delete obsolete transcript tables and rows from existing application databases without retaining application compatibility code.
 - Apply the same lifecycle contract to Mac, iPhone, Android, and CLI; platform UI differences are allowed.
@@ -30,7 +30,7 @@ Rook's normalized SQLite transcript copy amplified replay failures and was not n
 - [x] Ensure ordinary session switching never reloads or resets a live handle.
 - [x] Return to cached Mac sessions immediately and coalesce concurrent `session/load` calls per handle.
 - [x] Replace the 80 ms replay quiet timer with the completed `session/load` request boundary.
-- [x] Add server-side bounded serialization/truncation for oversized live and replay presentation payloads, enforcing the 10 kB serialized-notification limit.
+- [x] Add server-side bounded serialization/truncation for oversized live and replay presentation payloads, enforcing the 1 MB serialized-notification limit.
 - [ ] Define and test transient/permanent ACP load-error classification and bounded backoff.
 - [x] Physically delete obsolete transcript tables and rows without leaving application compatibility code.
 - [ ] Add focused regression tests for replay shape, message bounds, handle reuse, background sessions, disconnect recovery, runtime restoration, retry classification, table cleanup, and absence of transcript persistence.

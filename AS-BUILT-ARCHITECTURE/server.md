@@ -198,7 +198,7 @@ Related tables:
 6. runtime emits `session/update` notifications
 7. `AgentRuntimeManager` distinguishes pi-acp's retry-only progress messages from actual agent output; an `end_turn` with exhausted retry progress and no actual output becomes a failed prompt, while a recovered turn remains successful
 8. server rewrites session IDs back to the public ID and forwards live notifications to subscribed watchers of that same session
-9. bounded request/cancellation waits force-stop an unresponsive runtime group, reconcile the turn state, and mark the session `error`; a later request lazily creates one replacement without replaying the interrupted prompt
+9. bounded request/cancellation waits force-stop an unresponsive runtime group, reconcile the turn state, and mark the session `error`; a later request lazily creates one replacement, privately adopts the persisted ACP session with `session/load`, and then forwards the new prompt without replaying the transcript or interrupted prompt
 
 ### Environment offer and approval
 1. a provider registers an environment candidate with `POST /api/environments/register`
@@ -226,12 +226,12 @@ Related tables:
 
 - one public session = one owned runtime process group
 - non-prompt runtime waits are bounded; prompt inactivity timeout resets on streamed updates, while cancellation timeout force-stops the group and reconciles turn state
-- runtimes idle for 30 minutes without user or runtime activity are collected without deleting their durable sessions; recovery waits for the client’s explicit `session/load` rather than replaying it implicitly
+- runtimes idle for 30 minutes without user or runtime activity are collected without deleting their durable sessions; the next server request privately restores the persisted ACP session before prompting
 - Rook shutdown and session deletion terminate all owned runtime groups, including provider descendants
 - websocket connections are session-bound, not general multi-session ACP pipes
 - `session/load` replay is requester-private; it no longer fans out to every watcher of that session
 - session discovery uses the REST sessions endpoint
-- ACP runtime history is the sole transcript source; clients use requester-private `session/load` replay for initial and recovery hydration
+- ACP runtime history is the sole transcript source; clients use requester-private `session/load` replay for initial hydration, while server-side runtime recovery discards the replay before attaching the replacement to visible subscribers
 - environment state is session-specific at runtime launch time
 - writable SQLite capability files have one process-wide temporary materialization and are linked into per-session workspaces
 - durable decisions and session membership are SQLite-backed; ACP session history remains runtime-owned

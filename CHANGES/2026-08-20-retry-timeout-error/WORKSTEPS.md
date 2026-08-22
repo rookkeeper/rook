@@ -11,7 +11,7 @@
 - [x] Mark compatibility surfaces — no retained compatibility surfaces in changed files
 - [x] Maintain product and architecture documentation
 - [x] Run final validation — server typecheck/full tests and RookKit Swift tests pass; Android Gradle tests were unavailable because no Java runtime is installed
-- [x] Synchronize with main before submitting — fetched origin and merged origin/main; branch was already current
-- [x] Open and validate the PR — PR #166 created; `Reject compatibility markers` passed and GitHub reports the PR mergeable
-- [ ] Merge with approval
-- [ ] Record outcomes and clean up
+- [x] Synchronize with main before submitting — fetched origin and merged origin/main; fast-forwarded to `e28f270` and reran validation
+- [x] Open and validate the PR — PR #166 created; `Reject compatibility markers` passed, and GitHub reported the PR mergeable
+- [x] Merge with approval — PR #166 was already merged as `be7d58a` before cleanup
+- [x] Record outcomes and clean up — recorded `OUTCOMES.md`; implementation worktree and feature branches removed

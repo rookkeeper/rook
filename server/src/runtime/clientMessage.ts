@@ -1,7 +1,7 @@
 import type { JsonRpcMessage } from "./SessionRuntime.js";
 
-export const MAX_CLIENT_MESSAGE_BYTES = 10 * 1024;
-const TRUNCATION_MARKER = "[Rook truncated this presentation payload because it exceeded 10 kB.]";
+export const MAX_CLIENT_MESSAGE_BYTES = 1 * 1024 * 1024;
+const TRUNCATION_MARKER = "[Rook truncated this presentation payload because it exceeded 1 MB.]";
 
 /** Bounds ACP messages sent to a client without changing the runtime's history. */
 export function boundedClientMessage(message: JsonRpcMessage): JsonRpcMessage {
