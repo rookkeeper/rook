@@ -20,6 +20,7 @@
 		3940FBAF5C395485EF47AD06 /* DescriptEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B45927F85F1F4A50E48CCDF /* DescriptEnvironmentProviderTests.swift */; };
 		419704B079AFD2478AA896D9 /* ObsidianEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 941EDDB77C90AA9FD6843DD6 /* ObsidianEnvironmentProviderTests.swift */; };
 		437DFA10167DD112587F7EB5 /* EnvironmentsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93A5264726E74327D489A47 /* EnvironmentsDetailView.swift */; };
+		4D8B85E3E3DCB309AE9263C4 /* RookViewNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE2033BA6D0930CAD5CB0F6 /* RookViewNavigationTests.swift */; };
 		5F1F805FD93B101F9833F16C /* BrowserEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E2BAE07BB6D910E0147F648 /* BrowserEnvironmentProvider.swift */; };
 		60A23F92DBE7E8434F6058CD /* MacImageAttachmentFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77DA2212E080B005F7111E80 /* MacImageAttachmentFactoryTests.swift */; };
 		620DCBCC3C91EFE21C5C2697 /* RookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 08EDA88AD90E24EB23D3D170 /* RookKit */; };
@@ -106,6 +107,7 @@
 		CE53483296E70F63627FCE2B /* RookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
 		D4C7EFEFCAA484A4561C9D8E /* BrowserEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserEnvironmentProviderTests.swift; sourceTree = "<group>"; };
+		DBE2033BA6D0930CAD5CB0F6 /* RookViewNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookViewNavigationTests.swift; sourceTree = "<group>"; };
 		E0C3E8AE268D668490DA6072 /* OBSStudioEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBSStudioEnvironmentProvider.swift; sourceTree = "<group>"; };
 		E97019F83CF168944C9CF691 /* RookMacChatSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RookMacChatSessionController.swift; sourceTree = "<group>"; };
 		E9E5581B2B0E5B8573C71E69 /* FinderEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderEnvironmentProviderTests.swift; sourceTree = "<group>"; };
@@ -188,6 +190,7 @@
 				941EDDB77C90AA9FD6843DD6 /* ObsidianEnvironmentProviderTests.swift */,
 				1FD0CA244739F56CDABF5F1C /* OBSStudioEnvironmentProviderTests.swift */,
 				FB97E548C9640FD9291F06F7 /* RookBundleIdentityTests.swift */,
+				DBE2033BA6D0930CAD5CB0F6 /* RookViewNavigationTests.swift */,
 				3343AE46AAED661AD40C912B /* SlackEnvironmentProviderTests.swift */,
 			);
 			path = Tests;
@@ -398,6 +401,7 @@
 				159D103CE9B49E8DBB2CA0F5 /* OBSStudioEnvironmentProviderTests.swift in Sources */,
 				419704B079AFD2478AA896D9 /* ObsidianEnvironmentProviderTests.swift in Sources */,
 				7D566FFB988AEF5C001840CF /* RookBundleIdentityTests.swift in Sources */,
+				4D8B85E3E3DCB309AE9263C4 /* RookViewNavigationTests.swift in Sources */,
 				C1C532DBF0E733EDBEE32EEA /* SlackEnvironmentProviderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
