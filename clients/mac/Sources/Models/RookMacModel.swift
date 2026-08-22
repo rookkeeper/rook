@@ -423,8 +423,10 @@ final class RookMacModel: ObservableObject {
 
     func goHome() {
         stopEnvironmentListAutoRefresh()
-        unviewCurrentSession()
+        // Publish the destination before starting best-effort server bookkeeping.
+        // Leaving chat must never wait for the unview request to finish.
         panelMode = .home
+        unviewCurrentSession()
     }
 
     func updateSessionListPolling() {

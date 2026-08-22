@@ -25,7 +25,6 @@ struct RookView: View {
                 alignment: .topLeading
             )
             .background(PanelBackground())
-            .background(measurementContent)
         .background(WindowAccessor { window in
             if hostingWindow !== window {
                 hostingWindow = window
@@ -53,26 +52,30 @@ struct RookView: View {
 
     @ViewBuilder
     private var displayedContent: some View {
-        if model.panelMode == .home || model.panelMode == .chat || model.panelMode == .environments {
-            baseContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } else {
+        if Self.usesIntrinsicHeight(for: model.panelMode) {
             baseContent
                 .fixedSize(horizontal: false, vertical: true)
+                .background(intrinsicHeightMeasurement)
+        } else {
+            baseContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
-    private var measurementContent: some View {
-        measurementBaseContent
-            .fixedSize(horizontal: false, vertical: true)
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .preference(key: PanelContentHeightKey.self, value: proxy.size.height + 24)
-                }
-            )
-            .hidden()
-            .allowsHitTesting(false)
+    private var intrinsicHeightMeasurement: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .preference(key: PanelContentHeightKey.self, value: proxy.size.height + 24)
+        }
+    }
+
+    static func usesIntrinsicHeight(for panelMode: PanelMode) -> Bool {
+        switch panelMode {
+        case .home, .chat, .environments:
+            return false
+        case .sessions, .environmentOffer:
+            return true
+        }
     }
 
     private var baseContent: some View {
@@ -92,23 +95,6 @@ struct RookView: View {
         }
     }
 
-    private var measurementBaseContent: some View {
-        ZStack(alignment: .topLeading) {
-            switch model.panelMode {
-            case .home:
-                HomeContent(model: model)
-            case .sessions(let agentId):
-                SessionsDetail(model: model, agentId: agentId)
-            case .chat:
-                ChatDetail(model: model, elasticThreadCard: false, measurementMode: true)
-            case .environmentOffer:
-                EnvironmentOfferDetail(model: model)
-            case .environments:
-                EnvironmentsDetail(model: model)
-            }
-        }
-    }
-
     // Panel size is applied WITHOUT animation. Animating the hosting view's
     // content size (here, the 372↔460 width on mode switches) makes AppKit
     // resize the window mid–constraint-pass and trap inside
@@ -119,10 +105,7 @@ struct RookView: View {
     }
 
     private var panelHeight: CGFloat {
-        if model.panelMode == .chat || model.panelMode == .environments {
-            return 420
-        }
-        return max(420, measuredContentHeight)
+        Self.usesIntrinsicHeight(for: model.panelMode) ? max(420, measuredContentHeight) : 420
     }
 
     private func applyWindowSizing(_ window: NSWindow?) {
@@ -666,7 +649,7 @@ private struct MacSessionSections: View {
     var body: some View {
         GeometryReader { proxy in
             ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 6) {
+            LazyVStack(alignment: .leading, spacing: 6) {
                 if pinned.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         sectionHeader("Pinned", systemImage: "pin.fill")
@@ -699,7 +682,7 @@ private struct MacSessionSections: View {
         .onDrop(of: [.text], delegate: SessionDropDelegate(onTargetChanged: { _, _ in clearDropTarget() }) { id, _ in
             unpinIfPinned(id)
         })
-            .scrollIndicators(.visible)
+            .scrollIndicators(.hidden)
             .frame(height: max(100, proxy.size.height))
         }
         .frame(minHeight: 100)
