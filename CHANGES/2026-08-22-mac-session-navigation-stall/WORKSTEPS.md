@@ -14,4 +14,4 @@
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
 
-Planning note: the developer explicitly limited this change to warm-session navigation and authorized implementation in an isolated worktree. Cold ACP `session/load` latency is a non-goal.
+Planning note: the first fixed-height implementation was explicitly rejected and deleted. The developer approved a replacement dynamic, lazy, scrollbar-hidden layout. Cold ACP session-load latency remains out of scope.

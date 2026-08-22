@@ -2,7 +2,7 @@
 
 ## User requirement
 
-Warm, already-loaded sessions should enter chat immediately, and leaving a live session with Back should return to the home/session screen immediately. Do not spend this change trying to make cold ACP `session/load` replay faster. Do not interrupt the production Rook server or Mac client; implementation and validation must use a worktree.
+Warm, already-loaded sessions should enter chat immediately, and leaving a live session with Back should return to the home/session screen immediately. The session list must remain dynamically resizable: it should fill the available window, scroll only when content exceeds the viewport, and hide the scrollbar. Cold ACP `session/load` replay latency is out of scope. Production Rook resources must not be interrupted; implementation and validation use an isolated worktree.
 
 ## Observed data
 
@@ -11,20 +11,23 @@ Warm, already-loaded sessions should enter chat immediately, and leaving a live 
 - The same process records multi-second main-thread watchdog stalls, and a sample points at SwiftUI/AppKit layout and accessibility graph work.
 - Cold `acp-session-load` is independently slow for some sessions; that is explicitly out of scope.
 - Commit `0b1c247` changed the home session list from a finite-height ScrollView to a GeometryReader/full-height layout shortly before this report. The current view also renders a hidden measurement copy of the active content and resizes the AppKit window on mode/measurement changes.
+- The first implementation attempt restored hard-coded finite sizing. The developer rejected that because it prevents the home UI from correctly painting when the user enlarges the window. That attempt was stopped, deleted, and will not be reused.
 
-## Candidate changes
+## Replacement approach
 
-1. Restore a finite home session-list layout so the 204-session list does not participate in an unbounded GeometryReader/layout pass during home transitions.
-2. Do not construct the hidden measurement copy for fixed-height chat and environment panels; it duplicates the expensive chat transcript tree during warm entry and exit.
-3. Mark the remaining measurement tree as accessibility-hidden, since it exists only for sizing.
-4. Make the Back transition publish `.home` before starting best-effort `unviewSession` cleanup. Cleanup must remain asynchronous and must not gate the visual transition.
+1. Keep one visible content tree. Remove the hidden duplicate measurement tree that eagerly constructs the entire home/chat hierarchy.
+2. Let the visible home content receive the current window height and keep the session list in a flexible scrolling viewport. Use `LazyVStack` and `.scrollIndicators(.hidden)`; do not impose a fixed session-list height.
+3. Use visible-content measurement only for panels that genuinely need intrinsic sizing, and ensure the measurement reports a minimum/desired size without forcing the user window back to that size.
+4. Preserve user enlargement. Window sizing may grow a window when content cannot fit its minimum, but must not shrink or cap a window that the user has enlarged.
+5. Keep Back navigation state-first and cleanup asynchronous.
 
 ## Decision
 
-Proceed with the four targeted Mac-client changes above. Add a focused test for the measurement policy, run Mac tests and build in an isolated worktree, and inspect the diff for regressions. No server, RookKit cold-load, or production process changes are planned.
+Proceed with the replacement approach above. The implementation must preserve dynamic window resizing and hidden-but-functional scrolling; fixed panel/list heights are a non-goal. Add focused tests for the sizing/measurement policy, run Mac tests and build in an isolated worktree, and inspect the result before any user-facing launch.
 
 ## Open questions for implementation
 
-- Confirm that the finite home list preserves scrolling and the existing minimum panel sizing.
-- Confirm that chat and environments already use a fixed 420-point panel height, so omitting their measurement tree does not change sizing.
-- Reassess timings after the worktree build; if a warm stall remains, use a worktree reproduction and sample rather than changing cold-load behavior.
+- Confirm which panels require intrinsic measurement after the duplicate tree is removed.
+- Confirm the visible home list gets a bounded viewport from the window without an unbounded GeometryReader feedback loop.
+- Confirm scrollbar hiding does not disable wheel, trackpad, keyboard, or programmatic scrolling.
+- Reassess warm navigation timings with a worktree build; do not use cold-load timings as an acceptance gate.
