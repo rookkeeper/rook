@@ -404,7 +404,7 @@ export class EnvironmentManager {
     for (const environmentId of this.enteredEnvironments(sessionId)) {
       const entry = this.remembered.get(environmentId);
       const resolved = await this.repositoryService.getResolvedBundles(environmentId);
-      const runtimeResolved = resolved.filter(({ bundle }) => entry?.status === "active" || isUserOwnedRepository(bundle.repository));
+      const runtimeResolved = [...resolved];
       if (!runtimeResolved.some(({ bundle }) => bundle.repository === "personal") && !environmentId.startsWith("dir:")) {
         const bundle = ephemeralPersonalBundle(environmentId);
         runtimeResolved.push({ bundle, bundleHash: hashEnvironmentBundle(bundle) });
@@ -437,7 +437,8 @@ export class EnvironmentManager {
     return result;
   }
 
-  isAvailable(environmentId: string): boolean {
+  /** Whether a provider has observed this environment during the active observation window. */
+  isObserved(environmentId: string): boolean {
     this.pruneMemory();
     return this.remembered.get(environmentId)?.status === "active";
   }
@@ -536,7 +537,7 @@ export class EnvironmentManager {
     const entered = this.entered.get(sessionId) ?? new Set();
     const entries = this.diagnosticSnapshot(sessionId);
     const knownEnvironmentIds = new Set(entries.map((entry) => entry.environmentId));
-    const unavailableEntered = [...entered]
+    const unobservedEntered = [...entered]
       .filter((environmentId) => !knownEnvironmentIds.has(environmentId))
       .map((environmentId) => ({
         environmentId,
@@ -561,7 +562,7 @@ export class EnvironmentManager {
         bundleCount: entry.bundles.length,
         approvedBundleCount: approved,
       };
-    }), ...unavailableEntered];
+    }), ...unobservedEntered];
 
     list.sort((a, b) => {
       if (a.entered !== b.entered) return a.entered ? -1 : 1;
