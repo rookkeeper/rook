@@ -19,4 +19,4 @@ Make warm Mac session entry and Back-to-home navigation visually immediate while
 - [x] Add or update focused Mac regression tests for scrolling, sizing, and navigation policy.
 - [x] Run Mac tests and build without launching or stopping the production profile.
 - [x] Review compatibility surfaces and documentation impact; no compatibility surfaces or product/architecture documentation changes apply.
-- [ ] Complete final validation and record outcomes.
+- [x] Complete final validation and record outcomes.
