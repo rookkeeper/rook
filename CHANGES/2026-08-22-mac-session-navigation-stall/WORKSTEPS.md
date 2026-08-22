@@ -10,7 +10,7 @@
 - [x] Maintain product and architecture documentation — no product or architecture behavior changed
 - [x] Run final validation
 - [x] Synchronize with main before submitting
-- [x] Open and validate the PR — PR #177 is open and currently mergeable; required checks are still running
+- [x] Open and validate the PR — PR #177 is open and mergeable; the required compatibility check passed
 - [ ] Merge with approval
 - [ ] Record outcomes and clean up
 
