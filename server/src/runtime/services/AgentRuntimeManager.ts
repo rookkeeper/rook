@@ -124,6 +124,13 @@ export class AgentRuntimeManager {
     return this.sessions.list();
   }
 
+  async listEnvironments(sessionId: string): Promise<ReturnType<EnvironmentManager["environmentList"]>> {
+    if (!this.environmentManager) return [];
+    const record = await this.requireSession(sessionId);
+    await this.restoreEnvironmentMembership(record);
+    return this.environmentManager.environmentList(sessionId);
+  }
+
   async getSession(sessionId: string): Promise<SessionRecord> {
     return this.requireSession(sessionId);
   }

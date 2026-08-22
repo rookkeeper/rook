@@ -91,6 +91,18 @@ function lastEnvironmentSegment(environmentId: string): string {
   return (parts.at(-1) ?? raw) || environmentId;
 }
 
+function fallbackEnvironmentDisplayName(environmentId: string): string {
+  const kind = environmentKind(environmentId);
+  const raw = environmentPath(environmentId);
+  if (kind === "mac") {
+    const bundleParts = raw.split(".").filter(Boolean);
+    if (bundleParts.length >= 3 && bundleParts[0] === "com") {
+      return bundleParts.slice(1).map((part) => part.slice(0, 1).toUpperCase() + part.slice(1)).join(" ");
+    }
+  }
+  return lastEnvironmentSegment(environmentId);
+}
+
 function stringMetadata(metadata: Record<string, unknown>, key: string): string | undefined {
   const value = metadata[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -441,7 +453,11 @@ export class EnvironmentManager {
 
     if (!this.remembered.has(environmentId)) {
       const environment = await this.repositoryService.getKnownEnvironment(environmentId);
-      if (!environment) return this.enteredEnvironments(sessionId);
+      if (!environment) {
+        if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
+        this.explicitlyEntered.get(sessionId)!.add(environmentId);
+        return this.syncEnteredEnvironments(sessionId, listener);
+      }
       await this.rememberAvailableEnvironment(
         { id: environment.id, metadata: environment.metadata },
         { displayName: environment.displayName },
@@ -515,8 +531,20 @@ export class EnvironmentManager {
     this.pruneMemory();
     const entered = this.entered.get(sessionId) ?? new Set();
     const entries = this.diagnosticSnapshot(sessionId);
+    const knownEnvironmentIds = new Set(entries.map((entry) => entry.environmentId));
+    const unavailableEntered = [...entered]
+      .filter((environmentId) => !knownEnvironmentIds.has(environmentId))
+      .map((environmentId) => ({
+        environmentId,
+        displayName: fallbackEnvironmentDisplayName(environmentId),
+        status: "recent" as const,
+        lastTouchedAt: new Date(this.now()).toISOString(),
+        entered: true,
+        bundleCount: 0,
+        approvedBundleCount: 0,
+      }));
 
-    const list = entries.map((entry) => {
+    const list = [...entries.map((entry) => {
       const approved = entry.bundles.filter(
         (b) => b.effectiveDecision === "accept" || b.effectiveDecision === "approve",
       ).length;
@@ -529,7 +557,7 @@ export class EnvironmentManager {
         bundleCount: entry.bundles.length,
         approvedBundleCount: approved,
       };
-    });
+    }), ...unavailableEntered];
 
     list.sort((a, b) => {
       if (a.entered !== b.entered) return a.entered ? -1 : 1;

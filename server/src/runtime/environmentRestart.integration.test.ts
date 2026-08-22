@@ -9,6 +9,7 @@ import { SQLiteEnvironmentRepository } from "../environments/repositories/SQLite
 
 const PORT = 19001;
 const ENVIRONMENT_ID = "web:restart.example.com";
+const UNAVAILABLE_ENVIRONMENT_ID = "mac:com.google.Chrome";
 const BUNDLE_ID = "55555555-5555-4555-8555-555555555555";
 const PERSONAL_BUNDLE_ID = "66666666-6666-4666-8666-666666666666";
 
@@ -196,6 +197,17 @@ describe("persistent session environments across server restart", { timeout: 30_
       return body.environments.some((environment) => environment.environmentId === ENVIRONMENT_ID && environment.status === "active");
     });
 
+    await fetch(`http://127.0.0.1:${PORT}/api/environments/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: UNAVAILABLE_ENVIRONMENT_ID, metadata: { displayName: "Google Chrome" } }),
+    });
+    await waitFor(async () => {
+      const response = await fetch(`http://127.0.0.1:${PORT}/api/diagnostics/environments`);
+      const body = await response.json() as { environments: Array<{ environmentId: string; status: string }> };
+      return body.environments.some((environment) => environment.environmentId === UNAVAILABLE_ENVIRONMENT_ID && environment.status === "active");
+    });
+
     const preview = await fetch(`http://127.0.0.1:${PORT}/api/environments/preview?environmentId=${encodeURIComponent(ENVIRONMENT_ID)}`).then((response) => response.json()) as { bundles: Array<{ bundleId: string; bundleHash: string; repository: string }> };
     const canonicalBundle = preview.bundles.find((bundle) => bundle.bundleId === BUNDLE_ID);
     expect(canonicalBundle).toBeDefined();
@@ -207,9 +219,9 @@ describe("persistent session environments across server restart", { timeout: 30_
     const entered = await fetch(`http://127.0.0.1:${PORT}/api/session/environments`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sessionId, enterEnvironmentIds: [ENVIRONMENT_ID], leaveEnvironmentIds: [] }),
+      body: JSON.stringify({ sessionId, enterEnvironmentIds: [ENVIRONMENT_ID, UNAVAILABLE_ENVIRONMENT_ID], leaveEnvironmentIds: [] }),
     }).then((response) => response.json()) as { entered: string[] };
-    expect(entered.entered).toEqual([ENVIRONMENT_ID]);
+    expect(entered.entered).toEqual([ENVIRONMENT_ID, UNAVAILABLE_ENVIRONMENT_ID]);
     expect(readFileSync(path.join(workspaceRoot, ".agents", "skills", "restart-skill", "SKILL.md"), "utf8")).toBe("restored canonical skill");
     expect(readFileSync(path.join(workspaceRoot, ".agents", "skills", "personal-restart-skill", "SKILL.md"), "utf8")).toBe("restored personal skill");
     expect(readFileSync(path.join(workspaceRoot, "AGENTS.md"), "utf8")).toContain("restored canonical instructions");
@@ -229,6 +241,12 @@ describe("persistent session environments across server restart", { timeout: 30_
 
     const environments = await fetch(`http://127.0.0.1:${PORT}/api/environments/list?sessionId=${encodeURIComponent(sessionId)}`).then((response) => response.json()) as Array<{ environmentId: string; entered: boolean }>;
     expect(environments.find((environment) => environment.environmentId === ENVIRONMENT_ID)?.entered).toBe(true);
+    expect(environments.find((environment) => environment.environmentId === UNAVAILABLE_ENVIRONMENT_ID)).toMatchObject({
+      displayName: "Google Chrome",
+      status: "recent",
+      entered: true,
+      bundleCount: 0,
+    });
     expect(readFileSync(path.join(workspaceRoot, ".agents", "skills", "restart-skill", "SKILL.md"), "utf8")).toBe("restored canonical skill");
     expect(readFileSync(path.join(workspaceRoot, ".agents", "skills", "personal-restart-skill", "SKILL.md"), "utf8")).toBe("restored personal skill");
     expect(readFileSync(path.join(workspaceRoot, "AGENTS.md"), "utf8")).toContain("restored canonical instructions");

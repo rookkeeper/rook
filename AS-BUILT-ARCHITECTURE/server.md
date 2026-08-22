@@ -218,7 +218,7 @@ Related tables:
 
 ### Session environment restoration
 1. the first request for a persisted session after server startup reads its durable `session_environments` membership
-2. known repository-backed environments are rehydrated into the fresh `EnvironmentManager`; environments without valid bundles are skipped without deleting membership
+2. known repository-backed environments are rehydrated into the fresh `EnvironmentManager`; environments without valid bundles remain entered as unavailable UI entries without an active projection or deleted membership
 3. rehydrated entries follow the normal bundle decision, workspace materialization, and affected-session runtime replacement flow
 4. the request then privately recovers the persisted ACP session before forwarding the client operation
 

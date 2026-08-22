@@ -21,7 +21,7 @@ Durable state lives elsewhere:
 
 ## Current runtime behavior
 
-Environment entry is explicit and literal. When a session enters or leaves an environment, the server resolves effective bundles, updates shared/direct source links, regenerates the read-only aggregate instructions, and reloads the existing ACP session in a replacement runtime. When a persisted session is first used after a server restart, known repository-backed memberships are rehydrated before the same projection and runtime recovery steps; memberships whose environments no longer have valid bundles remain durable but are skipped. This preserves session identity and ACP-owned session history while keeping writable SQLite content shared across sessions.
+Environment entry is explicit and literal. When a session enters or leaves an environment, the server resolves effective bundles, updates shared/direct source links, regenerates the read-only aggregate instructions, and reloads the existing ACP session in a replacement runtime. When a persisted session is first used after a server restart, known repository-backed memberships are rehydrated before the same projection and runtime recovery steps; memberships whose environments no longer have valid bundles remain durable and are surfaced as unavailable entered entries, without an active capability projection. This preserves session identity and ACP-owned session history while keeping writable SQLite content shared across sessions.
 
 Environment availability does not automatically enter an environment or inject capabilities. Providers may register candidates, and clients/users decide what to enter and which bundles to accept or approve.
 

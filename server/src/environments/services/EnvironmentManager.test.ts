@@ -251,15 +251,22 @@ describe("EnvironmentManager", () => {
     expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", []);
   });
 
-  it("skips a persisted environment that is no longer known", async () => {
+  it("retains a persisted environment that is no longer known as an unavailable entry", async () => {
     const repositoryService = mockRepositoryService();
     const manager = newManager(repositoryService);
     manager.subscribe("s1", mockListener());
 
-    await expect(manager.restoreEnvironment("s1", "web:missing.example")).resolves.toEqual([]);
+    await expect(manager.restoreEnvironment("s1", "mac:com.google.Chrome")).resolves.toEqual(["mac:com.google.Chrome"]);
 
-    expect(manager.enteredEnvironments("s1")).toEqual([]);
-    expect(manager.isAvailable("web:missing.example")).toBe(false);
+    expect(manager.enteredEnvironments("s1")).toEqual(["mac:com.google.Chrome"]);
+    expect(manager.isAvailable("mac:com.google.Chrome")).toBe(false);
+    expect(manager.environmentList("s1")).toMatchObject([{
+      environmentId: "mac:com.google.Chrome",
+      displayName: "Google Chrome",
+      status: "recent",
+      entered: true,
+      bundleCount: 0,
+    }]);
   });
 
   it("entering a child environment does not implicitly enter its parent", async () => {

@@ -6,7 +6,7 @@ Close GitHub issue #118 by ensuring a session resumed after a Rook restart regai
 
 ## Decision details
 
-Keep the existing SQLite `session_environments` membership and bundle-hash approval model. During lazy session restoration, rehydrate persisted environment IDs from the repository into the fresh in-memory environment manager before materializing the session workspace and recovering the ACP session. If an environment no longer has valid repository bundles, leave its durable membership intact but skip its active projection so the session can still resume. Do not persist the transient availability cache or add client-facing API contracts.
+Keep the existing SQLite `session_environments` membership and bundle-hash approval model. During lazy session restoration, rehydrate persisted environment IDs from the repository into the fresh in-memory environment manager before materializing the session workspace and recovering the ACP session. If an environment no longer has valid repository bundles, leave its durable membership intact, surface it as an unavailable entered entry, and skip its active capability projection so the session can still resume. Do not persist the transient availability cache or add client-facing API contracts.
 
 Add hermetic regression coverage that uses temporary SQLite repositories/application state and fake or mock runtimes, verifies restart/resume with approved canonical and personal capabilities, and verifies that unavailable environments do not block restoration. Preserve existing runtime `session/load` behavior and keep unrelated working-tree changes untouched.
 
@@ -14,7 +14,7 @@ Add hermetic regression coverage that uses temporary SQLite repositories/applica
 
 - [x] Add repository-backed environment rehydration for persisted session memberships.
 - [x] Ensure restoration materializes approved/personal bundles and waits for the resulting runtime restart before resume.
-- [x] Handle missing/unavailable environments without dropping durable membership or failing session resume.
+- [x] Handle missing/unavailable environments by retaining durable membership, showing an unavailable entered entry, and avoiding session-resume failure.
 - [x] Add focused repository/service tests for rehydration behavior.
 - [x] Add an end-to-end shutdown/restart/session-resume regression test with temporary stores and fake/mock runtime processes.
 - [x] Review changed files for compatibility surfaces; none were retained, so no compatibility annotations were needed.
