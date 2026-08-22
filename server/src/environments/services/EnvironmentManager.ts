@@ -269,7 +269,8 @@ export class EnvironmentManager {
     const now = this.now();
     const nowIso = new Date(now).toISOString();
     const existing = this.remembered.get(env.id);
-    const registeredAt = existing?.status === "active" ? (existing.registeredAt ?? nowIso) : nowIso;
+    const wasActive = existing?.status === "active";
+    const registeredAt = wasActive ? (existing.registeredAt ?? nowIso) : nowIso;
     const activeUntil = new Date(now + this.activeEnvironmentWindowMs).toISOString();
     const resolvedBundles = await this.repositoryService.getResolvedBundles(env.id);
     const bundles = resolvedBundles.map(({ bundle, bundleHash }) => ({
@@ -299,6 +300,7 @@ export class EnvironmentManager {
       bundleIds,
     };
     this.remembered.set(env.id, entry);
+    if (!wasActive && bundles.length > 0) this.activatePersistedMemberships(entry);
     this.logger.info(
       {
         environmentId: env.id,
@@ -566,6 +568,28 @@ export class EnvironmentManager {
     });
 
     return list;
+  }
+
+  private activatePersistedMemberships(entry: RememberedEnvironmentEntry): void {
+    for (const [sessionId, explicit] of this.explicitlyEntered.entries()) {
+      if (!explicit.has(entry.record.id) || !this.entered.get(sessionId)?.has(entry.record.id)) continue;
+      const listener = this.listeners.get(sessionId);
+      if (!listener) continue;
+
+      listener.onEnvironmentEntered(entry.record.id, this.skillPathsForEntry(entry, sessionId));
+      for (const bundle of entry.bundles) {
+        if (isUserOwnedRepository(bundle.repository) || this.effectiveDecision(bundle.bundleHash, sessionId) !== "undecided") continue;
+        listener.onEnvironmentOffered({
+          environmentId: entry.record.id,
+          displayName: deriveEnvironmentDisplayName(entry.record.id, entry.record.metadata, entry.info),
+          bundleId: bundle.bundleId,
+          bundleHash: bundle.bundleHash,
+          skills: bundle.skills,
+          mcpServers: bundle.mcpServers,
+          apps: bundle.apps,
+        });
+      }
+    }
   }
 
   private syncEnteredEnvironments(sessionId: string, listener: EnvironmentEventListener): string[] {

@@ -269,6 +269,19 @@ describe("EnvironmentManager", () => {
     }]);
   });
 
+  it("activates a persisted membership when its environment becomes available", async () => {
+    const repositoryService = mockRepositoryService();
+    const manager = newManager(repositoryService);
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.restoreEnvironment("s1", "dir:/tmp/project");
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue(resolvedBundle("dir:/tmp/project", "testing"));
+    await manager.registerCandidateEnvironment({ id: "dir:/tmp/project", metadata: { displayName: "Project" } });
+
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("dir:/tmp/project", []);
+  });
+
   it("entering a child environment does not implicitly enter its parent", async () => {
     const manager = newManager();
     const listener = mockListener();
