@@ -8,7 +8,7 @@
 - [x] Record the agreed decision and TODO after the explicit decision gate
 - [x] Prepare the implementation workspace after the planning commit
 - [x] Implement and test
-- [x] Mark compatibility surfaces — retained PR #152 environment-restart fallback is annotated; ordinary runtime recovery does not use it
+- [x] Mark compatibility surfaces — retained PR #152 environment-restart fallback predates this change and remains scoped to environment restarts; ordinary runtime recovery does not use it
 - [x] Maintain product and architecture documentation
 - [x] Run final validation — focused tests, full server tests (152 passed, 5 skipped), typecheck, build, and diff check completed
 - [x] Synchronize with main before submitting — fetched `origin` and merged `origin/main` as `e519e64`; local `main` has unrelated unpushed planning commits and could not fast-forward
