@@ -52,6 +52,7 @@ export class AgentRuntimeManager {
   private readonly inboundRequestRoutes = new Map<string, SessionRuntime>();
   private readonly environmentSubscriptions = new Set<string>();
   private readonly restoredEnvironmentMembership = new Set<string>();
+  private readonly environmentRestorationQueues = new Map<string, Promise<void>>();
   private readonly environmentSkillPaths = new Map<string, Map<string, string[]>>();
   private readonly environmentRestartQueues = new Map<string, Promise<void>>();
   private readonly privateReplayTargets = new Map<string, Set<RuntimeNotification>>();
@@ -496,6 +497,7 @@ export class AgentRuntimeManager {
     this.environmentSkillPaths.clear();
     this.environmentRestartQueues.clear();
     this.restoredEnvironmentMembership.clear();
+    this.environmentRestorationQueues.clear();
     this.workspaceResults.clear();
   }
 
@@ -596,6 +598,7 @@ export class AgentRuntimeManager {
     this.environmentSkillPaths.delete(sessionId);
     this.environmentRestartQueues.delete(sessionId);
     this.restoredEnvironmentMembership.delete(sessionId);
+    this.environmentRestorationQueues.delete(sessionId);
     this.workspaceResults.delete(sessionId);
     this.runtimeActivities.delete(sessionId);
     this.promptActivityListeners.delete(sessionId);
@@ -632,15 +635,29 @@ export class AgentRuntimeManager {
 
   private async restoreEnvironmentMembership(record: SessionRecord): Promise<void> {
     if (!this.environmentManager || this.restoredEnvironmentMembership.has(record.sessionId)) return;
+    const existing = this.environmentRestorationQueues.get(record.sessionId);
+    if (existing) return existing;
+
+    const restoration = this.restoreEnvironmentMembershipNow(record);
+    this.environmentRestorationQueues.set(record.sessionId, restoration);
+    try {
+      await restoration;
+    } catch (error) {
+      if (this.environmentRestorationQueues.get(record.sessionId) === restoration) this.environmentRestorationQueues.delete(record.sessionId);
+      throw error;
+    }
+  }
+
+  private async restoreEnvironmentMembershipNow(record: SessionRecord): Promise<void> {
     this.subscribeToEnvironments(record.sessionId);
     if (!this.workspaceResults.has(record.sessionId)) {
       this.workspaceResults.set(record.sessionId, await this.workspaceManager.materialize(record.sessionId, []));
     }
-    this.restoredEnvironmentMembership.add(record.sessionId);
     for (const environmentId of await this.sessions.environmentIds(record.sessionId)) {
-      await this.environmentManager.restoreEnvironment(record.sessionId, environmentId);
+      await this.environmentManager!.restoreEnvironment(record.sessionId, environmentId);
     }
     await this.environmentRestartQueues.get(record.sessionId);
+    this.restoredEnvironmentMembership.add(record.sessionId);
   }
 
   private updateEnvironmentState(sessionId: string, environmentId: string, skillPaths: string[]): void {

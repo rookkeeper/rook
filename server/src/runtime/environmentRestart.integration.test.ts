@@ -225,6 +225,8 @@ describe("persistent session environments across server restart", { timeout: 30_
     expect(readFileSync(path.join(workspaceRoot, ".agents", "skills", "restart-skill", "SKILL.md"), "utf8")).toBe("restored canonical skill");
     expect(readFileSync(path.join(workspaceRoot, ".agents", "skills", "personal-restart-skill", "SKILL.md"), "utf8")).toBe("restored personal skill");
     expect(readFileSync(path.join(workspaceRoot, "AGENTS.md"), "utf8")).toContain("restored canonical instructions");
+    expect(existsSync(path.join(workspaceRoot, ".agents", "editable-per-environment", "google-chrome", ".agents", "skills"))).toBe(true);
+    expect(readFileSync(path.join(workspaceRoot, "AGENTS.md"), "utf8")).toContain("google-chrome");
 
     firstSocket.close();
     await app?.close();
@@ -250,6 +252,8 @@ describe("persistent session environments across server restart", { timeout: 30_
     expect(readFileSync(path.join(workspaceRoot, ".agents", "skills", "restart-skill", "SKILL.md"), "utf8")).toBe("restored canonical skill");
     expect(readFileSync(path.join(workspaceRoot, ".agents", "skills", "personal-restart-skill", "SKILL.md"), "utf8")).toBe("restored personal skill");
     expect(readFileSync(path.join(workspaceRoot, "AGENTS.md"), "utf8")).toContain("restored canonical instructions");
+    expect(existsSync(path.join(workspaceRoot, ".agents", "editable-per-environment", "google-chrome", ".agents", "skills"))).toBe(true);
+    expect(readFileSync(path.join(workspaceRoot, "AGENTS.md"), "utf8")).toContain("google-chrome");
     resumedSocket.close();
   });
 });

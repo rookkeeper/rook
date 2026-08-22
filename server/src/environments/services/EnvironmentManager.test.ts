@@ -269,6 +269,22 @@ describe("EnvironmentManager", () => {
     }]);
   });
 
+  it("keeps a writable personal projection for an unavailable entered environment", async () => {
+    const repositoryService = mockRepositoryService();
+    const manager = newManager(repositoryService);
+    manager.subscribe("s1", mockListener());
+
+    await expect(manager.restoreEnvironment("s1", "mac:com.google.Chrome")).resolves.toEqual(["mac:com.google.Chrome"]);
+
+    const bundles = await manager.runtimeBundlesForSession("s1");
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0]).toMatchObject({
+      environmentName: "Google Chrome",
+      editable: true,
+      bundle: { repository: "personal" },
+    });
+  });
+
   it("activates a persisted membership when its environment becomes available", async () => {
     const repositoryService = mockRepositoryService();
     const manager = newManager(repositoryService);

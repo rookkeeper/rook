@@ -120,7 +120,7 @@ Current durable persistence is SQLite-backed and split between:
 - runtime-owned ACP session files: conversation history and replay source
 - the environment repository databases: environments, reusable capabilities, and bundle memberships for canonical and personal repositories
 
-Canonical and personal environment-repository content is SQLite-only. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
+Canonical and personal environment-repository content is SQLite-only. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage. Deterministic personal authoring bundles are recreated from entered non-directory memberships when their live environment is unavailable.
 
 The database details live in [database.md](./database.md).
 
@@ -218,7 +218,7 @@ Related tables:
 
 ### Session environment restoration
 1. the first request for a persisted session after server startup reads its durable `session_environments` membership
-2. known repository-backed environments are rehydrated into the fresh `EnvironmentManager`; environments without valid bundles remain entered as unavailable UI entries without an active projection or deleted membership
+2. known repository-backed environments are rehydrated into the fresh `EnvironmentManager`; environments without valid bundles remain entered as unavailable UI entries without deleting membership, while non-directory memberships receive their deterministic personal authoring projection
 3. rehydrated entries follow the normal bundle decision, workspace materialization, and affected-session runtime replacement flow
 4. the request then privately recovers the persisted ACP session before forwarding the client operation
 
