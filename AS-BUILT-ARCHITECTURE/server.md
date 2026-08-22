@@ -27,6 +27,14 @@ The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with 
   - stores canonical and personal capability content and bundle memberships in separate SQLite repositories
 - `environments/repositories/ProjectDirectoryEnvironmentRepository`
   - reads project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files in place
+- `environments/repositories/WebEnvironmentRepository`
+  - read-only `web` repository over its own SQLite database; serves the `web:<host>#site` bundle scouted for each host and never performs network I/O
+  - `recordScout` is the only writer; last in the composite repository
+- `environments/services/WebEnvironmentScout` and `WebScoutTrigger`
+  - the scout fetches `/llms.txt`, `/AGENTS.md`, and `/.well-known/agent-skills/index.json` (plus each listed `skill-md`) for one host through the guarded fetch helper, with per-host in-flight dedupe, a 24 h TTL (15 min after a failure), and conditional requests
+  - the trigger runs after `POST /api/environments/register` for `web:<host>` candidates: scout, then re-register the candidate when the stored content changed so summaries and offers refresh
+- `infrastructure/http/guardedFetch` and `ipAddressPolicy`
+  - the server's general outbound-HTTP path: HTTPS only, private/loopback/link-local addresses refused, same-host redirects up to 3 hops, one deadline per call, 1 MiB body cap, fixed `Rook/<version>` user agent
 - `runtime/CapabilityWorkspaceManager`
   - owns the process-wide `$ROOK_HOME/global-workspace/` SQLite materialization, environment-level manifest, watchers, and disposable per-session link projections; defaults to the active profile's `ROOK_HOME`, clears the global root at startup, and retains it after shutdown
   - links writable personal content into every applicable session, links project sources directly, and materializes immutable external content read-only
@@ -46,7 +54,7 @@ Top-level layout:
 
 - `server/src/infrastructure/`
   - cross-domain bootstrap/support code
-  - auth, config loading, path helpers, remote proxy, shared SQLite connection bootstrap
+  - auth, config loading, path helpers, remote proxy, shared SQLite connection bootstrap, guarded outbound HTTP
 - `server/src/sessions/`
   - session routes, repository contract, and SQLite session repository
 - `server/src/runtime/`
@@ -110,7 +118,7 @@ See also: [database.md](./database.md)
 
 ## Local profile configuration
 
-The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration, the application database, and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain isolated. On first launch, development profiles seed `ROOK_HOME` by copying the production `~/.rook` directory, including the application database, so the development profile starts with the same sessions and durable local state; later launches leave the existing profile home unchanged. Runtime definitions, user configuration, personal environment-repository state, and other durable local state therefore become profile-specific. The default application database path is `ROOK_HOME/rook.sqlite`. `run-rook.sh` computes and exports `ROOK_HOME` / `ROOK_DATABASE_PATH` for the selected profile, so ambient values are not treated as launcher inputs; use `RUN_ROOK_HOME` / `RUN_ROOK_DATABASE_PATH` when an explicit launcher override is intended. `ROOK_AGENT_RUNTIMES_PATH` remains an explicit escape hatch. The canonical environment repository remains the `environment-repository/` directory belonging to the checkout that launched the server.
+The launcher exports `ROOK_HOME` and `ROOK_DATABASE_PATH`. User-local configuration, the application database, and personal environment-repository bindings resolve under `ROOK_HOME`; the default is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree. The slug includes a short hash of the canonical worktree path, so same-named worktrees remain isolated. On first launch, development profiles seed `ROOK_HOME` by copying the production `~/.rook` directory, including the application database, so the development profile starts with the same sessions and durable local state; later launches leave the existing profile home unchanged. Runtime definitions, user configuration, personal environment-repository state, and other durable local state therefore become profile-specific. The default application database path is `ROOK_HOME/rook.sqlite`. `run-rook.sh` computes and exports `ROOK_HOME` / `ROOK_DATABASE_PATH` for the selected profile, so ambient values are not treated as launcher inputs; use `RUN_ROOK_HOME` / `RUN_ROOK_DATABASE_PATH` when an explicit launcher override is intended. `ROOK_AGENT_RUNTIMES_PATH` remains an explicit escape hatch. The canonical environment repository remains the `environment-repository/` directory belonging to the checkout that launched the server. The web repository database defaults to `ROOK_HOME/web-environment-repository.db` (`ROOK_WEB_ENVIRONMENT_REPOSITORY_DB` overrides it); `ROOK_WEB_SCOUT_DISABLED=1` stops new scouts while stored web content is still served, and `ROOK_WEB_SCOUT_TTL_MS` / `ROOK_WEB_SCOUT_ERROR_TTL_MS` override the refresh intervals.
 
 ## Persistence shape
 
@@ -118,9 +126,9 @@ Current durable persistence is SQLite-backed and split between:
 
 - the application database: session records, session-environment membership, and durable environment decisions
 - runtime-owned ACP session files: conversation history and replay source
-- the environment repository databases: environments, reusable capabilities, and bundle memberships for canonical and personal repositories
+- the environment repository databases: environments, reusable capabilities, and bundle memberships for canonical, personal, and web repositories; the web database also holds per-host scout state
 
-Canonical and personal environment-repository content is SQLite-only. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
+Canonical, personal, and web environment-repository content is SQLite-only. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
 
 The database details live in [database.md](./database.md).
 
@@ -202,7 +210,7 @@ Related tables:
 
 ### Environment offer and approval
 1. a provider registers an environment candidate with `POST /api/environments/register`
-2. the server finalizes it asynchronously, checking exact ids plus observed-path / observed-URL implied ids through `EnvironmentRepository`
+2. the server finalizes it asynchronously, checking exact ids plus observed-path / observed-URL implied ids through `EnvironmentRepository`; for a `web:<host>` candidate, `WebScoutTrigger` then scouts the host and re-registers the candidate if the stored web bundle changed
 3. finalized environments resolve matching bundles and hash them
 4. undecided bundles are offered to subscribed sessions when that session enters the finalized environment
 5. client resolves via REST decision or ACP extension resolution
@@ -235,7 +243,8 @@ Related tables:
 - environment state is session-specific at runtime launch time
 - writable SQLite capability files have one process-wide temporary materialization and are linked into per-session workspaces
 - durable decisions and session membership are SQLite-backed; ACP session history remains runtime-owned
-- canonical and personal environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
+- canonical, personal, and web environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources
+- web content is fetched only by the scout, off the session's critical path, through the guarded fetch helper; repository reads never touch the network
 - facts and `llms.txt` use capability-specific projections; MCP content is reviewable/read-only but not started by the runtime
 - personal authoring uses one shared writable source per environment, watcher-mediated current-content write-back and membership soft deletion, and explicit environment authoring directories; filesystem permissions are not a strong sandbox against same-user arbitrary shell access
 - location identification is provider-pluggable behind `PoiLookupProvider`

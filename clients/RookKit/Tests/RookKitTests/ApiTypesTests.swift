@@ -183,6 +183,106 @@ final class ApiTypesTests: XCTestCase {
         XCTAssertNil(bundle.content(for: "nonexistent"))
     }
 
+    func testEnvironmentPreviewDecodesWebBundleContent() throws {
+        let json = """
+        {
+          "environmentId": "web:example.com",
+          "bundles": [
+            {
+              "id": "web:example.com#site",
+              "bundleId": "site",
+              "environmentId": "web:example.com",
+              "repository": "web",
+              "valid": true,
+              "bundleHash": "hash-1",
+              "skills": [
+                {
+                  "id": "deploy",
+                  "files": { "deploy/SKILL.md": "# Deploy\\nRun the deploy." },
+                  "sourceUrl": "https://example.com/skills/deploy/SKILL.md"
+                }
+              ],
+              "mcpServers": [],
+              "apps": [],
+              "facts": [],
+              "llmsTxt": "# Example\\nllms",
+              "agentsMd": "# Agents\\nBe careful.",
+              "errors": [
+                {
+                  "code": "unreachable_url",
+                  "message": "digest mismatch",
+                  "repository": "web",
+                  "environmentId": "web:example.com",
+                  "bundleId": "site",
+                  "url": "https://example.com/skills/broken/SKILL.md"
+                }
+              ]
+            }
+          ]
+        }
+        """
+        let preview = try JSONDecoder().decode(EnvironmentPreview.self, from: Data(json.utf8))
+        let bundle = try XCTUnwrap(preview.bundles.first)
+        XCTAssertEqual(bundle.agentsMd, "# Agents\nBe careful.")
+        XCTAssertEqual(bundle.llmsTxt, "# Example\nllms")
+        XCTAssertEqual(bundle.skillMarkdown.map(\.id), ["deploy"])
+        XCTAssertEqual(bundle.skillMarkdown.first?.content, "# Deploy\nRun the deploy.")
+        let error = try XCTUnwrap(bundle.errors.first)
+        XCTAssertEqual(error.code, "unreachable_url")
+        XCTAssertEqual(error.url, "https://example.com/skills/broken/SKILL.md")
+        XCTAssertNil(error.path)
+        XCTAssertTrue(error.id.contains("https://example.com/skills/broken/SKILL.md"))
+    }
+
+    func testEnvironmentPreviewDecodesWithoutOptionalContentFields() throws {
+        let json = """
+        {
+          "environmentId": "dir:/tmp/project",
+          "bundles": [
+            {
+              "id": "dir:/tmp/project#default",
+              "bundleId": "default",
+              "environmentId": "dir:/tmp/project",
+              "repository": "project-directory",
+              "valid": true,
+              "bundleHash": "hash-2",
+              "skills": [
+                { "id": "notes", "files": { "SKILL.md": "bare skill", "README.md": "readme" } },
+                { "id": "empty", "files": {} }
+              ],
+              "mcpServers": [],
+              "apps": [],
+              "facts": [],
+              "errors": [
+                {
+                  "code": "invalid_skill",
+                  "message": "missing SKILL.md",
+                  "repository": "project-directory",
+                  "environmentId": "dir:/tmp/project",
+                  "path": "/tmp/project/.agents/skills/bad"
+                }
+              ]
+            }
+          ]
+        }
+        """
+        let preview = try JSONDecoder().decode(EnvironmentPreview.self, from: Data(json.utf8))
+        let bundle = try XCTUnwrap(preview.bundles.first)
+        XCTAssertNil(bundle.agentsMd)
+        XCTAssertNil(bundle.llmsTxt)
+        XCTAssertEqual(bundle.skillMarkdown.map(\.id), ["notes"])
+        XCTAssertEqual(bundle.skillMarkdown.first?.content, "bare skill")
+        XCTAssertNil(bundle.errors.first?.url)
+        XCTAssertNil(bundle.errors.first?.bundleId)
+        XCTAssertEqual(bundle.errors.first?.path, "/tmp/project/.agents/skills/bad")
+    }
+
+    func testArtifactPrimaryMarkdownFallsBackToFirstMarkdownFile() {
+        let artifact = EnvironmentArtifactPreview(id: "s1", files: ["z.txt": "text", "notes.md": "notes", "guide.md": "guide"])
+        XCTAssertEqual(artifact.primaryMarkdown, "guide")
+        XCTAssertNil(EnvironmentArtifactPreview(id: "s2", files: ["a.txt": "x"]).primaryMarkdown)
+    }
+
     // MARK: - IdentifyAvailableRequest
 
     func testIdentifyAvailableRequestEncodable() throws {

@@ -19,6 +19,8 @@ The macOS client is a native SwiftUI menu bar app with a regular app window. It 
   - proxies current-session UI state from the active handle
 - `EnvironmentsDetailView`
   - renders the environment-memory list
+- `BundleContentPreviewCard`
+  - shows the offered bundle's actual content (`AGENTS.md`, `llms.txt`, each skill's `SKILL.md`, MCP/app files, repository read errors) inside the offer detail before the decision buttons
 - `AcpSocket` and `RookAPI` from `RookKit`
   - ACP WebSocket transport and REST client
 - `ForegroundAppMonitor`
@@ -138,9 +140,10 @@ Via `RookKit`:
 
 ### Environment approval
 1. server emits `_com.rookkeeper/environment_offer`
-2. model loads preview content if needed
-3. user chooses allow once / always allow / not now / never
-4. client resolves through the ACP extension or REST decision endpoint
+2. model loads `GET /api/environments/preview` for the offered environment and selects the bundle by `bundleHash`
+3. the offer detail shows the bundle's `AGENTS.md`, `llms.txt`, skill `SKILL.md` contents, and any issues in collapsible monospaced sections, with loading and failure states
+4. user chooses allow once / always allow / not now / never
+5. client resolves through the ACP extension or REST decision endpoint
 
 ### Computer-use / bridge flow
 1. agent reaches the local bridge over HTTP

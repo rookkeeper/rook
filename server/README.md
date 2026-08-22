@@ -53,7 +53,7 @@ The server is a single ACP-compliant agent from the client's perspective. Intern
 
 The server is organized **primarily by domain**:
 
-- `src/infrastructure/` — auth, config loading, path helpers, remote proxy, shared datastore bootstrap
+- `src/infrastructure/` — auth, config loading, path helpers, remote proxy, shared datastore bootstrap, guarded outbound HTTP
 - `src/sessions/` — session routes, repository contract, and SQLite session persistence
 - `src/runtime/` — ACP facade, runtime REST routes, subprocess transport, runtime orchestration, realtime helpers
 - `src/environments/` — environment routes, services, repositories, datastores, prompt/binding/type support
@@ -135,7 +135,9 @@ On environment change, only the affected session's runtime is restarted. The rep
 
 ### Environment system
 
-The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The live server uses three-table canonical and personal SQLite repositories plus the intentional direct project-directory adapter. `ROOK_ENVIRONMENT_REPOSITORY_DB` and `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB` can override SQLite locations. `CapabilityWorkspaceManager` clears and reuses one project-shaped shared environment source at `$ROOK_HOME/global-workspace/` for writable SQLite sources, retains it after shutdown for inspection, links those sources into per-session workspaces under `$ROOK_HOME/agent-workspaces/`, links project files directly, and materializes immutable external content read-only. With no override, `$ROOK_HOME` is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree, so capability workspace state is isolated with the selected profile. Each runtime uses its agent workspace as cwd and discovers generated `AGENTS.md` plus standard `.agents/skills` there. Pi is launched with project approval because ACP is non-interactive and cannot answer Pi's trust prompt for the generated workspace. The aggregate contains tagged environment instructions, skill-authoring guidance, and a per-environment skill inventory; environment instructions are not duplicated through launch prompt injection. Watchers persist current personal capability content, soft-delete missing writable memberships, and reconcile direct project-source changes. `/api/environments/register` is treated as candidate registration: the server finalizes candidates asynchronously, can inspect observed path/URL implied environment ids through `EnvironmentRepository`, and only finalized environments participate in offers / approvals / runtime updates. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
+The environment system (registration, decision store, repository) continues to work through its existing HTTP API. The live server uses three-table canonical and personal SQLite repositories, a read-only web repository filled by scouting websites, plus the intentional direct project-directory adapter. `ROOK_ENVIRONMENT_REPOSITORY_DB`, `ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB`, and `ROOK_WEB_ENVIRONMENT_REPOSITORY_DB` (default `$ROOK_HOME/web-environment-repository.db`) can override SQLite locations. `CapabilityWorkspaceManager` clears and reuses one project-shaped shared environment source at `$ROOK_HOME/global-workspace/` for writable SQLite sources, retains it after shutdown for inspection, links those sources into per-session workspaces under `$ROOK_HOME/agent-workspaces/`, links project files directly, and materializes immutable external content read-only. With no override, `$ROOK_HOME` is `~/.rook` for production and `~/.rook-<worktree-slug>` for a development worktree, so capability workspace state is isolated with the selected profile. Each runtime uses its agent workspace as cwd and discovers generated `AGENTS.md` plus standard `.agents/skills` there. Pi is launched with project approval because ACP is non-interactive and cannot answer Pi's trust prompt for the generated workspace. The aggregate contains tagged environment instructions, skill-authoring guidance, and a per-environment skill inventory; environment instructions are not duplicated through launch prompt injection. Watchers persist current personal capability content, soft-delete missing writable memberships, and reconcile direct project-source changes. `/api/environments/register` is treated as candidate registration: the server finalizes candidates asynchronously, can inspect observed path/URL implied environment ids through `EnvironmentRepository`, and only finalized environments participate in offers / approvals / runtime updates. Environment offers use the negotiated `com.rookkeeper` ACP extension rather than proprietary session updates.
+
+Web scouting: registering a `web:<host>` candidate makes `WebEnvironmentScout` fetch `https://<host>/llms.txt`, `/AGENTS.md`, and `/.well-known/agent-skills/index.json` (plus each `skill-md` it lists) through the guarded fetch helper in `src/infrastructure/http/`, store the result as the host's `site` bundle in the web repository, and re-register the candidate when the content changed. Hosts are refreshed after 24 h (15 min after a failure) with conditional requests. `ROOK_WEB_SCOUT_DISABLED=1` stops new scouts while stored content is still served; `ROOK_WEB_SCOUT_TTL_MS` and `ROOK_WEB_SCOUT_ERROR_TTL_MS` override the intervals. See [../PRODUCT/environment-repository.md](../PRODUCT/environment-repository.md).
 
 ### Key source files
 
@@ -153,6 +155,9 @@ The environment system (registration, decision store, repository) continues to w
 - `src/environments/repositories/SQLiteEnvironmentRepository.ts` — SQLite repository
 - `src/environments/datastores/EnvironmentRepositoryDatastore.ts` — repository database connection/schema
 - `src/environments/repositories/ProjectDirectoryEnvironmentRepository.ts` — direct project-file capability source
+- `src/environments/repositories/WebEnvironmentRepository.ts` — read-only web repository and scout-state store
+- `src/environments/services/WebEnvironmentScout.ts`, `WebScoutTrigger.ts` — website scouting and its registration hook
+- `src/infrastructure/http/guardedFetch.ts` — guarded outbound HTTP (HTTPS only, private addresses refused, deadline, size cap)
 - `src/agents/test-fixtures/mockAcpServer.mjs` — mock ACP runtime for testing
 
 ## Tests
@@ -168,3 +173,6 @@ Key test files:
 - `src/sessions/repositories/SqliteSessionRepository.test.ts` — session persistence
 - `src/environments/repositories/EnvironmentDecisionRepository.test.ts` — decision repository
 - `src/environments/services/EnvironmentManager.test.ts` — environment lifecycle
+- `src/environments/services/WebEnvironmentScout.test.ts` — website scouting with an injected fetch
+
+Live network tests are skipped unless opted in: `ROOK_WEB_SCOUT_LIVE=1 npx vitest run WebEnvironmentScout.live` scouts real public sites through the real guarded fetch.

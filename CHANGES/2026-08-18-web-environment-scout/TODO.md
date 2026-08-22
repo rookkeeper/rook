@@ -20,15 +20,17 @@ and a read-only repository that serves the result through the normal offer → a
   the Cloudflare Agent Skills Discovery RFC (`$schema` must be a recognized
   `schemas.agentskills.io/discovery/…` URI; entries need `name`, `type`, `description`,
   `url`, `digest`). Only `type: "skill-md"` entries are fetched (the `url` is a single
-  `SKILL.md`, verified against `sha256:<hex>`); `archive` entries and entries whose
-  digest fails are skipped and reported in the bundle's `errors`. Path-scoped ids
+  `SKILL.md`, verified against `sha256:<hex>` and stored in the skill's file map as
+  `<name>/SKILL.md`); `archive` entries and entries whose digest fails are skipped
+  and reported in the bundle's `errors`. Path-scoped ids
   (`web:host/path`) are not scouted. MCP is out of scope (#3, #107).
 - **Shape.** New `WebEnvironmentRepository` (`repositoryId: "web"`, read-only, only
   `getBundles`, `listEnvironments`, `searchBundles` implemented) serving from a persistent store filled
   by a `WebEnvironmentScout`. One synthesized bundle per host: `bundleId: "site"`,
   `id: "<envId>#site"`, `repository: "web"`, `publisher: <host>`, `editable` unset so
-  materialization takes the read-only path. A host with nothing found yields
-  `environment` but zero bundles (mirrors `ProjectDirectoryEnvironmentRepository`).
+  materialization takes the read-only path. A host that was scouted and found
+  empty is remembered but yields no environment record and no bundles; an unknown host
+  yields nothing.
 - **Trigger and persistence.** Scouting starts when a `web:` candidate is registered
   (`POST /api/environments/register`, already fire-and-forget). `getBundles` never does
   network I/O; it reads a **persistent SQLite store** so scouted capabilities survive
@@ -45,12 +47,13 @@ and a read-only repository that serves the result through the normal offer → a
   recorded too (negative entry, same TTL) so they are not re-probed on every visit.
   Client-side debounce (≈1 s focus delay, 60 s per-environment duplicate suppression) is
   relied on and noted; the scout adds a per-host in-flight guard.
-- **Egress policy.** A small dedicated fetch helper: HTTPS only; 5 s timeout per
-  request; 1 MiB response cap; follow at most 3 same-host redirects; refuse hosts that
+- **Egress policy.** A small dedicated fetch helper: HTTPS only; 10 s deadline per
+  fetched resource (the guarded fetch deadline covers DNS, redirects, and the body read
+  for the whole call; skills on slow hosts need the headroom); 1 MiB response cap; follow at most 3 same-host redirects; refuse hosts that
   resolve to loopback/private/link-local addresses; fixed `User-Agent: Rook/<version>
-  (+https://github.com/rookkeeper/rook)`; only 2xx bodies are used; 404 and network
-  failures are non-errors for `llms.txt`/`AGENTS.md`/index (absent is normal) but are
-  logged at debug. Skill URLs from the index may be cross-origin (RFC allows it) and go
+  (+https://github.com/rookkeeper/rook)`; only 2xx bodies are used; 404 is normal and not
+  an error; network failures are recorded as `unreachable_url` bundle errors (stored
+  content for that resource is kept) and logged at warn. Skill URLs from the index may be cross-origin (RFC allows it) and go
   through the same helper. Fetched text is normalized to `\n` line endings and trailing
   whitespace trimmed before hashing so incidental serving differences do not churn the
   bundle hash.
@@ -78,31 +81,31 @@ and a read-only repository that serves the result through the normal offer → a
 
 ## Work checklist
 
-- [ ] `server/src/infrastructure/http/scoutFetch.ts` (name TBD in-code): the egress
+- [x] `server/src/infrastructure/http/scoutFetch.ts` (name TBD in-code): the egress
       helper above, injectable `fetch`, typed result (`ok | absent | error`), unit tests
       for timeout, size cap, redirect limit, private-address refusal, HTTPS-only.
-- [ ] Persistent store: `<ROOK_HOME>/web-environment-repository.db` opened through
+- [x] Persistent store: `<ROOK_HOME>/web-environment-repository.db` opened through
       the existing `EnvironmentRepositoryDatastore` schema plus a `web_scouts` table
       (host, fetched_at, per-resource etag/last-modified, last_status); ingest/replace
       bundle rows for a host; read side for `getBundles`; staleness query.
-- [ ] `WebEnvironmentScout` in `server/src/environments/`: given a host, fetch the
+- [x] `WebEnvironmentScout` in `server/src/environments/`: given a host, fetch the
       three resources (conditional requests when the store has validators), parse the
       discovery index (schema check, field validation, `skill-md` only, digest
       verification), assemble capability file maps and `errors`, write to the store;
       per-host in-flight dedupe; negative entries; `scout(host)` returns whether the
       stored result changed.
-- [ ] `WebEnvironmentRepository`: `getBundles(environmentId)` for `web:<host>` ids
+- [x] `WebEnvironmentRepository`: `getBundles(environmentId)` for `web:<host>` ids
       served from the store; `listEnvironments`/`searchBundles` over stored hosts;
       writes remain no-op. Wire into `CompositeEnvironmentRepository` in
       `server/src/index.ts` after `location-context`.
-- [ ] Trigger: hook `web:` candidate registration to `scout(host)` when the host is
+- [x] Trigger: hook `web:` candidate registration to `scout(host)` when the host is
       unknown or stale (in the register route or a thin wrapper around
       `registerCandidateEnvironment`) and re-register the candidate when the result
       changed. Keep it fire-and-forget with logging.
-- [ ] Shared types: `unreachable_url`, `unsupported_capability` error codes;
+- [x] Shared types: `unreachable_url`, `unsupported_capability` error codes;
       `sourceUrl` hints; confirm `hashEnvironmentBundle` covers the new content
       unchanged.
-- [ ] Tests (vitest, `// @vitest-environment node`, injected fake fetch): scout
+- [x] Tests (vitest, `// @vitest-environment node`, injected fake fetch): scout
       happy path (all three present), each resource absent, malformed index,
       unknown `$schema`, `archive` entry skipped with error, digest mismatch skipped,
       cross-origin skill URL, fresh entry skipped, stale entry re-scouted with
@@ -112,17 +115,18 @@ and a read-only repository that serves the result through the normal offer → a
       hosts; composite integration; manager re-registration refreshes summaries and
       produces an offer on entry. One env-gated live test (`ROOK_WEB_SCOUT_LIVE=1`) against a
       real public site.
-- [ ] Mac approval preview: `EnvironmentOfferDetail` loads the preview for the
+- [x] Mac approval preview: `EnvironmentOfferDetail` loads the preview for the
       offered environment, matches the bundle by hash, and renders `llms.txt`,
       `AGENTS.md`, skill `SKILL.md` contents (collapsible) and errors; RookKit type
       gains `agentsMd` if needed; loading/failure states; RookKit decoding test.
-- [ ] Docs per Decision details; add the discovery-index convention and a short
+- [x] Docs per Decision details; add the discovery-index convention and a short
       "publish for Rook" note for site owners in `PRODUCT/environment-repository.md`.
-- [ ] Manual verification (developer-driven): open a browser tab on a site that
+- [x] Manual verification (developer-driven): open a browser tab on a site that
       publishes at least one of the three resources; confirm the environment shows
       the `web` bundle, the offer appears on entry **with the content visible in the
       preview**, approval materializes the content read-only into the session
       workspace, the agent can use it, and after a server restart the site is still
       known without a re-fetch.
-- [ ] `npm run typecheck` and `npm test` in `server/` pass; final review; sync with
-      main; PR (documenting the adopted convention) through the fork.
+- [x] `npm run typecheck`, `node ./node_modules/typescript/bin/tsc -p tsconfig.server.json --noEmit`,
+      and `npm test` in `server/` pass; final review; sync with main; PR (documenting
+      the adopted convention) through the fork.

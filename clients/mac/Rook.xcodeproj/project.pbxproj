@@ -17,6 +17,7 @@
 		247B6E1117CD714B7D212531 /* ScreenOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31C1E516358520D9FFE6E0AE /* ScreenOCR.swift */; };
 		34A94A70284C66A6488672DA /* SlackEnvironmentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31A8FB01BC6227863C128862 /* SlackEnvironmentProvider.swift */; };
 		38F4F35F3EF2EC01A5D66DE7 /* EnvironmentOfferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */; };
+		7D2E3F4A5B6C7D8E9F0A1B2C /* EnvironmentOfferContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1D2E3F4A5B6C7D8E9F0A1B /* EnvironmentOfferContentView.swift */; };
 		3940FBAF5C395485EF47AD06 /* DescriptEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B45927F85F1F4A50E48CCDF /* DescriptEnvironmentProviderTests.swift */; };
 		419704B079AFD2478AA896D9 /* ObsidianEnvironmentProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 941EDDB77C90AA9FD6843DD6 /* ObsidianEnvironmentProviderTests.swift */; };
 		437DFA10167DD112587F7EB5 /* EnvironmentsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93A5264726E74327D489A47 /* EnvironmentsDetailView.swift */; };
@@ -104,6 +105,7 @@
 		C5DBA5E0EAEC34DC430F3FF7 /* GenericEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenericEnvironmentProvider.swift; sourceTree = "<group>"; };
 		CAB0B5D7F3477ABBB39A0B42 /* Rook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rook.entitlements; sourceTree = "<group>"; };
 		CE53483296E70F63627FCE2B /* RookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6C1D2E3F4A5B6C7D8E9F0A1B /* EnvironmentOfferContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferContentView.swift; sourceTree = "<group>"; };
 		D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentOfferView.swift; sourceTree = "<group>"; };
 		D4C7EFEFCAA484A4561C9D8E /* BrowserEnvironmentProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserEnvironmentProviderTests.swift; sourceTree = "<group>"; };
 		E0C3E8AE268D668490DA6072 /* OBSStudioEnvironmentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBSStudioEnvironmentProvider.swift; sourceTree = "<group>"; };
@@ -239,6 +241,7 @@
 			isa = PBXGroup;
 			children = (
 				7F2330969071E5BF5037823E /* ChatView.swift */,
+				6C1D2E3F4A5B6C7D8E9F0A1B /* EnvironmentOfferContentView.swift */,
 				D2293B2834523398CFD7FB21 /* EnvironmentOfferView.swift */,
 				A93A5264726E74327D489A47 /* EnvironmentsDetailView.swift */,
 				0087B8D63F86E9DD505D802D /* LogViewerView.swift */,
@@ -355,6 +358,7 @@
 				CEEBCE8607A6BCB97868C2A0 /* ChatView.swift in Sources */,
 				63D2E0332EA1C12AED347106 /* DescriptEnvironmentProvider.swift in Sources */,
 				ADCD9F49893544B3240D9190 /* DiscordEnvironmentProvider.swift in Sources */,
+				7D2E3F4A5B6C7D8E9F0A1B2C /* EnvironmentOfferContentView.swift in Sources */,
 				38F4F35F3EF2EC01A5D66DE7 /* EnvironmentOfferView.swift in Sources */,
 				B28FDE6264D3DCE11D737746 /* EnvironmentProviderSupport.swift in Sources */,
 				437DFA10167DD112587F7EB5 /* EnvironmentsDetailView.swift in Sources */,

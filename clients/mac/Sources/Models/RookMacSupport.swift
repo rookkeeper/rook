@@ -111,14 +111,30 @@ final class EnvironmentOfferController {
     var onDismissOfferView: (() -> Void)?
     var appendSystemMessage: ((String) -> Void)?
     var resolveOffer: ((String, String, String) async throws -> Void)?
+    /// Fetches the environment preview (`GET /api/environments/preview`) so the
+    /// offer view can show the bundle's actual content before the user decides.
+    var loadPreview: ((String) async throws -> EnvironmentPreview)?
 
     private(set) var pendingOffers: [EnvironmentOffer] = [] { didSet { onStateChange?() } }
     private(set) var offerBundles: [EnvironmentBundlePreview] = [] { didSet { onStateChange?() } }
     private(set) var offerLoading = false { didSet { onStateChange?() } }
     private(set) var offerError = "" { didSet { onStateChange?() } }
+    private(set) var offerPreviewError = "" { didSet { onStateChange?() } }
+    /// User overrides for the content preview's collapsible sections, keyed by
+    /// section id. Sections without an entry use the view's default.
+    private(set) var offerSectionExpansion: [String: Bool] = [:] { didSet { onStateChange?() } }
+    private var previewTask: Task<Void, Never>?
 
     var pendingOffer: EnvironmentOffer? { pendingOffers.first }
     var pendingOfferCount: Int { pendingOffers.count }
+
+    /// The loaded preview bundle for the head offer, matched by hash (the exact
+    /// content being approved) and falling back to the bundle id.
+    var offerPreviewBundle: EnvironmentBundlePreview? {
+        guard let offer = pendingOffer else { return nil }
+        return offerBundles.first { $0.bundleHash == offer.bundleHash }
+            ?? offerBundles.first { $0.bundleId == offer.bundleId }
+    }
 
     func handleEnvironmentOffered(_ offer: EnvironmentOffer) {
         guard !pendingOffers.contains(where: { $0.bundleHash == offer.bundleHash }) else {
@@ -165,17 +181,53 @@ final class EnvironmentOfferController {
     }
 
     func clearOfferViewState() {
+        previewTask?.cancel()
+        previewTask = nil
         offerBundles = []
         offerError = ""
+        offerPreviewError = ""
         offerLoading = false
+        offerSectionExpansion = [:]
+    }
+
+    /// Reloads the head offer's preview (used by the view's Retry button and
+    /// when the offer view is reopened after being dismissed).
+    func reloadOfferPreview() {
+        loadCurrentOfferPreview()
+    }
+
+    func ensureOfferPreviewLoaded() {
+        guard pendingOffer != nil, offerBundles.isEmpty, !offerLoading, offerPreviewError.isEmpty else { return }
+        loadCurrentOfferPreview()
+    }
+
+    func setOfferSection(_ id: String, expanded: Bool) {
+        offerSectionExpansion[id] = expanded
     }
 
     private func loadCurrentOfferPreview() {
-        guard pendingOffer != nil else {
-            clearOfferViewState()
-            return
-        }
         clearOfferViewState()
+        guard let offer = pendingOffer, let loadPreview else { return }
+        offerLoading = true
+        previewTask = Task { [weak self] in
+            let result: Result<EnvironmentPreview, Error>
+            do {
+                result = .success(try await loadPreview(offer.environmentId))
+            } catch {
+                result = .failure(error)
+            }
+            guard let self, !Task.isCancelled, self.pendingOffer?.bundleHash == offer.bundleHash else { return }
+            switch result {
+            case .success(let preview):
+                Self.logger.info("environment offer preview loaded environment=\(offer.environmentId, privacy: .public) bundles=\(preview.bundles.count, privacy: .public)")
+                self.offerBundles = preview.bundles
+            case .failure(let error):
+                Self.logger.error("environment offer preview failed environment=\(offer.environmentId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                self.offerPreviewError = error.localizedDescription
+            }
+            self.offerLoading = false
+            self.previewTask = nil
+        }
     }
 
     private func advanceOfferQueueOrDismissIfNeeded() {

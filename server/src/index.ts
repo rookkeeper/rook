@@ -10,7 +10,10 @@ import { CompositeEnvironmentRepository } from "./environments/repositories/Comp
 import { SQLiteEnvironmentRepository } from "./environments/repositories/SQLiteEnvironmentRepository.js";
 import { ProjectDirectoryEnvironmentRepository } from "./environments/repositories/ProjectDirectoryEnvironmentRepository.js";
 import { LocationContextRepository } from "./environments/repositories/LocationContextRepository.js";
+import { defaultWebEnvironmentRepositoryPath, WebEnvironmentRepository } from "./environments/repositories/WebEnvironmentRepository.js";
 import { EnvironmentRepositoryService } from "./environments/services/EnvironmentRepositoryService.js";
+import { WebEnvironmentScout, type GuardedFetcher } from "./environments/services/WebEnvironmentScout.js";
+import { WebScoutTrigger } from "./environments/services/WebScoutTrigger.js";
 import { JsonlEnvironmentMetadataCaptureSink } from "./environments/services/environmentMetadataCapture.js";
 import { EnvironmentIdentifier } from "./location/EnvironmentIdentifier.js";
 import { MockBuildingSkillSuggester } from "./location/BuildingSkillSuggester.js";
@@ -55,10 +58,29 @@ export interface BuildServerOptions {
   environmentRepositoryDatabase?: string;
   /** Optional user-local environment repository database used with the canonical database. */
   personalEnvironmentRepositoryDatabase?: string;
+  /** Optional store of website capabilities scouted for `web:` environments. */
+  webEnvironmentRepositoryDatabase?: string;
+  /**
+   * Web scouting on `web:` candidate registration. `enabled` defaults to true unless
+   * `ROOK_WEB_SCOUT_DISABLED=1`; disabling only stops new scouts, the repository still
+   * serves already-stored content. `fetch` is a test hook for the scout's egress.
+   */
+  webScout?: { enabled?: boolean; fetch?: GuardedFetcher; ttlMs?: number; errorTtlMs?: number };
   /** Test hook: observe registered routes. */
   onRoute?: (route: { method: string | readonly string[]; url: string; websocket?: boolean }) => void;
   /** Runtime liveness controls; tests can use short values. */
   runtimeOptions?: AgentRuntimeManagerOptions;
+}
+
+/**
+ * A non-negative numeric env override, or undefined when unset, empty, negative, or not a
+ * number (the default applies). Zero is accepted so a TTL of `0` genuinely disables caching.
+ */
+function optionalNumberEnv(name: string): number | undefined {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {
@@ -79,13 +101,16 @@ export async function buildServer(options: BuildServerOptions = {}) {
   const locationContextRepository = new LocationContextRepository();
   const environmentRepositoryDatabase = options.environmentRepositoryDatabase ?? process.env.ROOK_ENVIRONMENT_REPOSITORY_DB ?? path.join(REPO_ROOT, "environment-repository.db");
   const personalEnvironmentRepositoryDatabase = options.personalEnvironmentRepositoryDatabase ?? process.env.ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB ?? path.join(os.homedir(), ".rook", "environment-repository.db");
+  const webEnvironmentRepositoryDatabase = options.webEnvironmentRepositoryDatabase ?? process.env.ROOK_WEB_ENVIRONMENT_REPOSITORY_DB ?? defaultWebEnvironmentRepositoryPath();
   const canonicalEnvironmentRepository = new SQLiteEnvironmentRepository(environmentRepositoryDatabase, "canonical");
   const personalEnvironmentRepository = new SQLiteEnvironmentRepository(personalEnvironmentRepositoryDatabase, "personal");
+  const webEnvironmentRepository = new WebEnvironmentRepository(webEnvironmentRepositoryDatabase);
   const environmentRepository = new CompositeEnvironmentRepository([
     canonicalEnvironmentRepository,
     personalEnvironmentRepository,
     new ProjectDirectoryEnvironmentRepository(),
     locationContextRepository,
+    webEnvironmentRepository,
   ]);
   const environmentRepositoryService = new EnvironmentRepositoryService(environmentRepository);
   const datastore = new RookDatastore(options.environmentDecisionStoreLocation);
@@ -107,6 +132,23 @@ export async function buildServer(options: BuildServerOptions = {}) {
     skillSuggester: new MockBuildingSkillSuggester(),
   });
   const locationRegistrar = new LocationRegistrar(environmentManager, locationContextRepository);
+  const webScoutEnabled = options.webScout?.enabled ?? process.env.ROOK_WEB_SCOUT_DISABLED !== "1";
+  const webScoutTtlMs = options.webScout?.ttlMs ?? optionalNumberEnv("ROOK_WEB_SCOUT_TTL_MS");
+  const webScoutErrorTtlMs = options.webScout?.errorTtlMs ?? optionalNumberEnv("ROOK_WEB_SCOUT_ERROR_TTL_MS");
+  const webScoutTrigger = webScoutEnabled
+    ? new WebScoutTrigger({
+      scout: new WebEnvironmentScout({
+        repository: webEnvironmentRepository,
+        logger: app.log,
+        fetch: options.webScout?.fetch,
+        ttlMs: webScoutTtlMs,
+        errorTtlMs: webScoutErrorTtlMs,
+      }),
+      environmentManager,
+      logger: app.log,
+    })
+    : undefined;
+  app.log.info({ ttlMs: webScoutTtlMs ?? "default", errorTtlMs: webScoutErrorTtlMs ?? "default" }, `web scout ${webScoutEnabled ? "enabled" : "disabled"}`);
   const sessionRepository = new SqliteSessionRepository(datastore);
   const workspaceManager = await CapabilityWorkspaceManager.create();
   const runtimeManager = new AgentRuntimeManager(loadAgentRuntimes(), sessionRepository, REPO_ROOT, workspaceManager, environmentManager, app.log, options.runtimeOptions);
@@ -124,13 +166,14 @@ export async function buildServer(options: BuildServerOptions = {}) {
     await workspaceManager.close();
     canonicalEnvironmentRepository.close();
     personalEnvironmentRepository.close();
+    webEnvironmentRepository.close();
     datastore.close();
   });
 
   app.get("/api/health", async () => ({ ok: true, service: "rook" }));
   await registerRuntimeRoutes(app, runtimeManager);
   await registerSessionRoutes(app, runtimeManager);
-  await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar, runtimeManager);
+  await registerEnvironmentRoutes(app, environmentManager, environmentIdentifier, locationRegistrar, runtimeManager, webScoutTrigger);
   await registerDiagnosticRoutes(app, environmentManager);
   await registerAcpFacadeRoute(app, runtimeManager, auth);
 
