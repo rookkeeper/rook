@@ -11,18 +11,18 @@ A public Rook session can outlive its ACP subprocess. After a timeout, process e
 - When the server creates a replacement runtime, internally adopt the persisted ACP session with `session/load` before forwarding the user prompt.
 - Keep session-load replay private/discarded during recovery so the visible chat does not repaint the existing transcript.
 - Preserve the existing conversation when load succeeds.
-- Do not silently replace a non-virgin historical session with an empty `session/new` session when recovery fails; surface the recovery failure instead. Preserve any narrowly scoped virgin-session fallback only where the server can establish that no conversation exists.
+- Ordinary runtime-replacement recovery must not silently replace a historical session with an empty `session/new` session when `session/load` fails; it surfaces the recovery failure instead. The existing environment-restart fallback remains a compatibility path from PR #152 and is kept separate from ordinary runtime recovery.
 - Add server regression coverage for recovery after runtime loss, direct prompting on a live runtime, replay suppression, and load failure behavior.
 - Update the server/product/architecture documentation so it describes server-side recovery rather than requiring a client-issued load after runtime collection.
 
 ## Work checklist
 
-- [ ] Refactor runtime creation/replacement so a fresh runtime adopts the persisted ACP session before it is used for prompts or attached to normal subscribers.
-- [ ] Keep direct prompt behavior unchanged for a live runtime.
-- [ ] Suppress or privately route session-load replay during internal recovery.
-- [ ] Define and implement safe handling for session-load failures without discarding historical context.
-- [ ] Add focused AgentRuntimeManager regression tests, including a fake runtime that rejects direct prompt until `session/load` occurs.
-- [ ] Update ACP, server architecture, and session/environment restart documentation.
-- [ ] Review changed files for compatibility surfaces and annotate or document any retained behavior.
-- [ ] Run server typecheck/tests and the relevant launcher/client validation.
+- [x] Refactor runtime creation/replacement so a fresh runtime adopts the persisted ACP session before it is used for prompts or attached to normal subscribers.
+- [x] Keep direct prompt behavior unchanged for a live runtime.
+- [x] Suppress or privately route session-load replay during internal recovery.
+- [x] Define and implement safe handling for session-load failures without discarding historical context during ordinary runtime recovery.
+- [x] Add focused AgentRuntimeManager regression tests, including a fake runtime that rejects direct prompt until `session/load` occurs.
+- [x] Update ACP, server architecture, and session/environment restart documentation.
+- [x] Review changed files for compatibility surfaces and annotate or document any retained behavior.
+- [x] Run server typecheck/tests and the relevant launcher/client validation.
 - [ ] Inspect the final diff and complete the lifecycle record.

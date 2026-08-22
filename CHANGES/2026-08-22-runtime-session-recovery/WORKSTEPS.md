@@ -6,11 +6,11 @@
 - [x] Create the change directory and lifecycle record
 - [x] Brainstorm bypassed because the server-side recovery direction is explicit and implementation scope is clear
 - [x] Record the agreed decision and TODO after the explicit decision gate
-- [ ] Prepare the implementation workspace after the planning commit
-- [ ] Implement and test
-- [ ] Mark compatibility surfaces
-- [ ] Maintain product and architecture documentation
-- [ ] Run final validation
+- [x] Prepare the implementation workspace after the planning commit
+- [x] Implement and test
+- [x] Mark compatibility surfaces — retained PR #152 environment-restart fallback is annotated; ordinary runtime recovery does not use it
+- [x] Maintain product and architecture documentation
+- [x] Run final validation — focused tests, full server tests (152 passed, 5 skipped), typecheck, build, and diff check completed
 - [ ] Synchronize with main before submitting
 - [ ] Open and validate the PR
 - [ ] Merge with approval

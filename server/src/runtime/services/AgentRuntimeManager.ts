@@ -229,7 +229,7 @@ export class AgentRuntimeManager {
     try {
       record = await this.requireSession(sessionId);
       await this.restoreEnvironmentMembership(record);
-      runtime = await this.runtimeFor(record);
+      runtime = await this.runtimeFor(record, { adoptSession: method !== "session/load" });
       const runtimeParams =
         method === "session/load"
           ? { cwd: record.cwd, mcpServers: [], ...params, sessionId: record.runtimeSessionId }
@@ -349,7 +349,7 @@ export class AgentRuntimeManager {
     this.beginRuntimeOperation(sessionId);
     try {
       const record = await this.requireSession(sessionId);
-      const current = await this.runtimeFor(record);
+      const current = await this.runtimeFor(record, { adoptSession: false });
       const replacement = current.replacement(configuration);
       let runtimeSessionId: string;
       try {
@@ -370,12 +370,11 @@ export class AgentRuntimeManager {
   }
 
   /**
-   * Loads the existing ACP session when possible. A response-level load error
-   * means the runtime rejected that session, so a fresh ACP session can take
-   * over without confusing startup, transport, or timeout failures with an
-   * unresumable session.
+   * Loads the existing ACP session on a replacement runtime. Environment
+   * restarts may retain the historical virgin-session fallback, but ordinary
+   * runtime recovery must not silently discard a session's conversation.
    */
-  private async adoptSessionOnRuntime(record: SessionRecord, replacement: SessionRuntime, configuration: SessionRuntimeConfiguration): Promise<string> {
+  private async adoptSessionOnRuntime(record: SessionRecord, replacement: SessionRuntime, configuration: SessionRuntimeConfiguration, options: { allowNew?: boolean } = {}): Promise<string> {
     try {
       const result = await this.requestWithTimeout(
         replacement,
@@ -388,7 +387,10 @@ export class AgentRuntimeManager {
       }
       return record.runtimeSessionId;
     } catch (error) {
-      if (!(error instanceof RuntimeRequestError)) throw error;
+      if (options.allowNew === false || !(error instanceof RuntimeRequestError)) throw error;
+      // THIS IS FOR BACKWARDS COMPATIBILITY
+      // Environment-restart recovery retains the existing virgin-session fallback;
+      // ordinary runtime replacement never takes this path for historical sessions.
       const result = await this.requestWithTimeout(
         replacement,
         "session/new",
@@ -491,7 +493,7 @@ export class AgentRuntimeManager {
     this.workspaceResults.clear();
   }
 
-  private async runtimeFor(record: SessionRecord): Promise<SessionRuntime> {
+  private async runtimeFor(record: SessionRecord, options: { adoptSession?: boolean } = {}): Promise<SessionRuntime> {
     if (this.closed) throw new Error("Rook runtime manager is closed");
     const existing = this.sessionRuntimes.get(record.sessionId);
     if (existing?.isStarted) return existing;
@@ -507,6 +509,14 @@ export class AgentRuntimeManager {
         ...this.baseRuntimeConfiguration(),
         ...(workspace ? { workspaceRoot: workspace.root } : {}),
       });
+      try {
+        if (options.adoptSession !== false) {
+          await this.adoptSessionOnRuntime(record, runtime, runtime.configuration, { allowNew: false });
+        }
+      } catch (error) {
+        await runtime.close();
+        throw error;
+      }
       if (current) this.replaceSessionRuntime(record.sessionId, runtime);
       else this.attachSessionRuntime(record.sessionId, runtime);
       this.subscribeToEnvironments(record.sessionId);

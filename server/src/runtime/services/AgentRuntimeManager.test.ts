@@ -23,7 +23,7 @@ class FakeSessionRuntime {
 
   constructor(
     readonly profile: AgentRuntimeProfile,
-    readonly configuration: SessionRuntimeConfiguration,
+    configuration: SessionRuntimeConfiguration,
     private readonly respond: RuntimeResponder,
   ) {}
 
@@ -96,7 +96,7 @@ function configuration(): SessionRuntimeConfiguration {
   return { enteredEnvironmentIds: ["web:example.com"], skillPaths: [], extensionPaths: [], workspaceRoot: "/workspace/session" };
 }
 
-function buildManager(options: { responder: RuntimeResponder }) {
+function buildManager(options: { responder: RuntimeResponder; installCurrent?: boolean }) {
   const sessions = new FakeSessionRepository(sessionRecord());
   const logger = { info: vi.fn() };
   const workspaceManager = { assessAndFlush: vi.fn(async () => undefined), removeSession: vi.fn(async () => undefined) };
@@ -109,14 +109,71 @@ function buildManager(options: { responder: RuntimeResponder }) {
     logger,
   );
   const current = new FakeSessionRuntime(PROFILE, { enteredEnvironmentIds: [], skillPaths: [], extensionPaths: [] }, options.responder);
-  (manager as unknown as { sessionRuntimes: Map<string, SessionRuntime> }).sessionRuntimes.set(SESSION_ID, current as unknown as SessionRuntime);
+  if (options.installCurrent !== false) {
+    (manager as unknown as { sessionRuntimes: Map<string, SessionRuntime> }).sessionRuntimes.set(SESSION_ID, current as unknown as SessionRuntime);
+  }
   const installedRuntime = () => (manager as unknown as { sessionRuntimes: Map<string, SessionRuntime> }).sessionRuntimes.get(SESSION_ID);
   return { manager, sessions, logger, current, installedRuntime };
+}
+
+function buildRecoveryManager(responder: RuntimeResponder) {
+  const result = buildManager({ responder, installCurrent: false });
+  const replacement = new FakeSessionRuntime(PROFILE, { enteredEnvironmentIds: [], skillPaths: [], extensionPaths: [] }, responder);
+  (result.manager as unknown as { createSessionRuntime: (profile: AgentRuntimeProfile, configuration: SessionRuntimeConfiguration) => SessionRuntime }).createSessionRuntime = (_profile, configuration) => {
+    replacement.configuration = configuration;
+    return replacement as unknown as SessionRuntime;
+  };
+  return { ...result, replacement };
 }
 
 function loadResponseError(): RuntimeRequestError {
   return new RuntimeRequestError({ code: 1234, message: "runtime could not load this session" });
 }
+
+describe("AgentRuntimeManager runtime recovery", () => {
+  it("loads a persisted ACP session before prompting on a replacement runtime", async () => {
+    const { manager, replacement } = buildRecoveryManager((method) => {
+      if (method === "session/load") return { sessionId: RUNTIME_SESSION_ID };
+      return { stopReason: "end_turn" };
+    });
+
+    await manager.requestForSession(SESSION_ID, "session/prompt", { prompt: [{ type: "text", text: "hello" }] });
+
+    expect(replacement.methods()).toEqual(["session/load", "session/prompt"]);
+    expect(replacement.requests[0]?.params).toMatchObject({ sessionId: RUNTIME_SESSION_ID });
+    expect(replacement.requests[1]?.params).toMatchObject({ sessionId: RUNTIME_SESSION_ID });
+    await manager.close();
+  });
+
+  it("does not load twice when the client explicitly requests session/load", async () => {
+    const { manager, replacement } = buildRecoveryManager((method) => method === "session/load" ? { sessionId: RUNTIME_SESSION_ID } : {});
+
+    await manager.requestForSession(SESSION_ID, "session/load", {});
+
+    expect(replacement.methods()).toEqual(["session/load"]);
+    await manager.close();
+  });
+
+  it("prompts directly when the existing runtime is alive", async () => {
+    const { manager, current } = buildManager({ responder: () => ({ stopReason: "end_turn" }) });
+
+    await manager.requestForSession(SESSION_ID, "session/prompt", { prompt: [{ type: "text", text: "hello" }] });
+
+    expect(current.methods()).toEqual(["session/prompt"]);
+    await manager.close();
+  });
+
+  it("does not replace historical context with a new ACP session when recovery load fails", async () => {
+    const { manager, replacement } = buildRecoveryManager((method) => {
+      if (method === "session/load") throw loadResponseError();
+      return { stopReason: "end_turn" };
+    });
+
+    await expect(manager.requestForSession(SESSION_ID, "session/prompt", { prompt: [{ type: "text", text: "hello" }] })).rejects.toThrow("runtime could not load this session");
+    expect(replacement.methods()).toEqual(["session/load"]);
+    await manager.close();
+  });
+});
 
 describe("AgentRuntimeManager environment restart", () => {
   it("keeps the recorded runtime session when session/load succeeds", async () => {
