@@ -300,7 +300,7 @@ export class EnvironmentManager {
       bundleIds,
     };
     this.remembered.set(env.id, entry);
-    if (!wasActive) this.activatePersistedMemberships(entry);
+    if (!wasActive && bundles.length > 0) this.activatePersistedMemberships(entry);
     this.logger.info(
       {
         environmentId: env.id,
@@ -403,18 +403,20 @@ export class EnvironmentManager {
     const result: RuntimeEnvironmentBundle[] = [];
     for (const environmentId of this.enteredEnvironments(sessionId)) {
       const entry = this.remembered.get(environmentId);
-      if (!entry) continue;
       const resolved = await this.repositoryService.getResolvedBundles(environmentId);
-      const runtimeResolved = resolved.filter(({ bundle }) => entry.status === "active" || isUserOwnedRepository(bundle.repository));
-      if (!resolved.some(({ bundle }) => bundle.repository === "personal") && !environmentId.startsWith("dir:")) {
+      const runtimeResolved = resolved.filter(({ bundle }) => entry?.status === "active" || isUserOwnedRepository(bundle.repository));
+      if (!runtimeResolved.some(({ bundle }) => bundle.repository === "personal") && !environmentId.startsWith("dir:")) {
         const bundle = ephemeralPersonalBundle(environmentId);
         runtimeResolved.push({ bundle, bundleHash: hashEnvironmentBundle(bundle) });
       }
+      const environmentName = entry
+        ? deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info)
+        : fallbackEnvironmentDisplayName(environmentId);
       for (const { bundle, bundleHash } of runtimeResolved) {
         const decision = this.sessionDecisions.effective(bundleHash, sessionId);
         if (!isUserOwnedRepository(bundle.repository) && decision !== "accept" && decision !== "approve") continue;
         result.push({
-          environmentName: deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info),
+          environmentName,
           bundleName: bundle.repository === "personal" || bundle.repository === "project-directory" ? "Personal capabilities" : "Environment capabilities",
           editable: bundle.repository === "personal" || bundle.repository === "project-directory",
           ...(bundle.repository === "personal" ? {
@@ -456,7 +458,6 @@ export class EnvironmentManager {
     if (!this.remembered.has(environmentId)) {
       const environment = await this.repositoryService.getKnownEnvironment(environmentId);
       if (!environment) {
-        this.rememberUnavailableEnvironment(environmentId);
         if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
         this.explicitlyEntered.get(sessionId)!.add(environmentId);
         return this.syncEnteredEnvironments(sessionId, listener);
@@ -571,20 +572,6 @@ export class EnvironmentManager {
     return list;
   }
 
-  private rememberUnavailableEnvironment(environmentId: string): void {
-    if (this.remembered.has(environmentId)) return;
-    const nowIso = new Date(this.now()).toISOString();
-    const displayName = fallbackEnvironmentDisplayName(environmentId);
-    this.remembered.set(environmentId, {
-      record: { id: environmentId, metadata: {} },
-      info: { displayName },
-      lastTouchedAt: nowIso,
-      status: "recent",
-      bundles: [],
-      bundleIds: [],
-    });
-  }
-
   private activatePersistedMemberships(entry: RememberedEnvironmentEntry): void {
     for (const [sessionId, explicit] of this.explicitlyEntered.entries()) {
       if (!explicit.has(entry.record.id) || !this.entered.get(sessionId)?.has(entry.record.id)) continue;
@@ -615,9 +602,8 @@ export class EnvironmentManager {
     for (const environmentId of next) {
       if (current.has(environmentId)) continue;
       const entry = this.remembered.get(environmentId);
+      listener.onEnvironmentEntered(environmentId, entry ? this.skillPathsForEntry(entry, sessionId) : []);
       if (!entry) continue;
-
-      listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sessionId));
 
       for (const bundle of entry.bundles) {
         if (isUserOwnedRepository(bundle.repository) || this.effectiveDecision(bundle.bundleHash, sessionId) !== "undecided") continue;

@@ -254,10 +254,12 @@ describe("EnvironmentManager", () => {
   it("retains a persisted environment that is no longer known as an unavailable entry", async () => {
     const repositoryService = mockRepositoryService();
     const manager = newManager(repositoryService);
-    manager.subscribe("s1", mockListener());
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
 
     await expect(manager.restoreEnvironment("s1", "mac:com.google.Chrome")).resolves.toEqual(["mac:com.google.Chrome"]);
 
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("mac:com.google.Chrome", []);
     expect(manager.enteredEnvironments("s1")).toEqual(["mac:com.google.Chrome"]);
     expect(manager.isAvailable("mac:com.google.Chrome")).toBe(false);
     expect(manager.environmentList("s1")).toMatchObject([{
