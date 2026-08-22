@@ -631,7 +631,7 @@ export class AgentRuntimeManager {
     }
     this.restoredEnvironmentMembership.add(record.sessionId);
     for (const environmentId of await this.sessions.environmentIds(record.sessionId)) {
-      await this.environmentManager.enterEnvironment(record.sessionId, environmentId);
+      await this.environmentManager.restoreEnvironment(record.sessionId, environmentId);
     }
     await this.environmentRestartQueues.get(record.sessionId);
   }

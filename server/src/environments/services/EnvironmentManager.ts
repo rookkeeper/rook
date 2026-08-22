@@ -434,6 +434,23 @@ export class EnvironmentManager {
     return renderRookIdentityPrompt();
   }
 
+  async restoreEnvironment(sessionId: string, environmentId: string): Promise<string[]> {
+    this.pruneMemory();
+    const listener = this.listeners.get(sessionId);
+    if (!listener) return [];
+
+    if (!this.remembered.has(environmentId)) {
+      const environment = await this.repositoryService.getKnownEnvironment(environmentId);
+      if (!environment) return this.enteredEnvironments(sessionId);
+      await this.rememberAvailableEnvironment(
+        { id: environment.id, metadata: environment.metadata },
+        { displayName: environment.displayName },
+      );
+    }
+
+    return this.enterEnvironment(sessionId, environmentId);
+  }
+
   async enterEnvironment(sessionId: string, environmentId: string): Promise<string[]> {
     this.pruneMemory();
     const listener = this.listeners.get(sessionId);

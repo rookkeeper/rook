@@ -14,6 +14,7 @@ function mockRepositoryService(): EnvironmentRepositoryService {
     getResolvedBundles: vi.fn(async () => []),
     getValidBundles: vi.fn(async () => []),
     hasKnownEnvironment: vi.fn(async () => false),
+    getKnownEnvironment: vi.fn(async () => undefined),
     getEnvironmentPreview: vi.fn().mockResolvedValue({ environmentId: "web:example.com", bundles: [] }),
   } as unknown as EnvironmentRepositoryService;
 }
@@ -224,6 +225,41 @@ describe("EnvironmentManager", () => {
     expect(manager.environmentList("s1")[0]).toMatchObject({
       displayName: "docs",
     });
+  });
+
+  it("rehydrates a known repository environment during session restore", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getKnownEnvironment).mockResolvedValue({
+      id: "web:example.com",
+      displayName: "Example",
+      description: "Example website",
+      metadata: {},
+    });
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue(resolvedBundle("web:example.com", "testing"));
+    const manager = newManager(repositoryService);
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await expect(manager.restoreEnvironment("s1", "web:example.com")).resolves.toEqual(["web:example.com"]);
+
+    expect(manager.isAvailable("web:example.com")).toBe(true);
+    expect(manager.environmentList("s1")[0]).toMatchObject({
+      environmentId: "web:example.com",
+      displayName: "Example",
+      entered: true,
+    });
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", []);
+  });
+
+  it("skips a persisted environment that is no longer known", async () => {
+    const repositoryService = mockRepositoryService();
+    const manager = newManager(repositoryService);
+    manager.subscribe("s1", mockListener());
+
+    await expect(manager.restoreEnvironment("s1", "web:missing.example")).resolves.toEqual([]);
+
+    expect(manager.enteredEnvironments("s1")).toEqual([]);
+    expect(manager.isAvailable("web:missing.example")).toBe(false);
   });
 
   it("entering a child environment does not implicitly enter its parent", async () => {

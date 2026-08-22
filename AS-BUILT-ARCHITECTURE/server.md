@@ -216,6 +216,12 @@ Related tables:
 5. replacement normally takes over through `session/load` of the exact existing runtime session; if the runtime returns an ACP response error for that load, it retries with `session/new` and persists the new runtime session id, while startup, transport, timeout, and malformed-load-response failures abort the restart
 6. only then is the old subprocess retired
 
+### Session environment restoration
+1. the first request for a persisted session after server startup reads its durable `session_environments` membership
+2. known repository-backed environments are rehydrated into the fresh `EnvironmentManager`; environments without valid bundles are skipped without deleting membership
+3. rehydrated entries follow the normal bundle decision, workspace materialization, and affected-session runtime replacement flow
+4. the request then privately recovers the persisted ACP session before forwarding the client operation
+
 ### Location registration
 1. phone client posts `register-location`
 2. `EnvironmentIdentifier` ranks nearby business environments

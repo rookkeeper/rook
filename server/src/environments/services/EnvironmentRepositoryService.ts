@@ -1,4 +1,4 @@
-import type { EnvironmentBundleResult, EnvironmentBundle, CapabilityType } from "../../shared/environmentRepository.js";
+import type { EnvironmentBundleResult, EnvironmentBundle, EnvironmentRecord, CapabilityType } from "../../shared/environmentRepository.js";
 import type { EnvironmentPreview } from "../../shared/environment.js";
 import { EnvironmentRepository } from "../repositories/EnvironmentRepository.js";
 import { hashEnvironmentBundle } from "../../shared/environmentBundleHash.js";
@@ -54,6 +54,13 @@ export class EnvironmentRepositoryService {
 
   async hasKnownEnvironment(environmentId: string): Promise<boolean> {
     return (await this.getResolvedBundles(environmentId)).length > 0;
+  }
+
+  /** Returns repository metadata only when the environment still has valid bundles. */
+  async getKnownEnvironment(environmentId: string): Promise<EnvironmentRecord | undefined> {
+    const result = await this.repository.getBundles(environmentId);
+    if (!result.environment || !result.bundles.some((bundle) => bundle.valid)) return undefined;
+    return result.environment;
   }
 
   async getEnvironmentPreview(environmentId: string): Promise<EnvironmentPreview> {

@@ -12,11 +12,11 @@ Add hermetic regression coverage that uses temporary SQLite repositories/applica
 
 ## Work checklist
 
-- [ ] Add repository-backed environment rehydration for persisted session memberships.
-- [ ] Ensure restoration materializes approved/personal bundles and waits for the resulting runtime restart before resume.
-- [ ] Handle missing/unavailable environments without dropping durable membership or failing session resume.
-- [ ] Add focused repository/service tests for rehydration behavior.
-- [ ] Add an end-to-end shutdown/restart/session-resume regression test with temporary stores and fake/mock runtime processes.
-- [ ] Review changed files for compatibility surfaces and annotate or record any retained compatibility behavior.
-- [ ] Update relevant architecture/product/README documentation if the implemented behavior differs from current documentation.
-- [ ] Run focused server tests, typecheck/build, and final validation; inspect the diff and complete lifecycle records.
+- [x] Add repository-backed environment rehydration for persisted session memberships.
+- [x] Ensure restoration materializes approved/personal bundles and waits for the resulting runtime restart before resume.
+- [x] Handle missing/unavailable environments without dropping durable membership or failing session resume.
+- [x] Add focused repository/service tests for rehydration behavior.
+- [x] Add an end-to-end shutdown/restart/session-resume regression test with temporary stores and fake/mock runtime processes.
+- [x] Review changed files for compatibility surfaces; none were retained, so no compatibility annotations were needed.
+- [x] Update relevant architecture/product/README documentation.
+- [x] Run focused server tests, typecheck/build, and final validation; inspect the diff and complete lifecycle records.
