@@ -2,7 +2,7 @@
 
 ## Decision 1: bound server-to-client message size
 
-The server must never send a client-facing ACP notification larger than **10 kB**. Before forwarding or replaying an ACP notification, oversized presentation content will be truncated to a bounded representation.
+The server must never send a client-facing ACP notification larger than **1 MB**. Before forwarding or replaying an ACP notification, oversized presentation content will be truncated to a bounded representation.
 
 This applies to both live notifications and `session/load` replay. It is a client-presentation rule: it must not alter what the agent runtime receives or what the runtime considers its source history. Oversized raw input/output and content are replaced with a concise truncation marker while ACP identity fields such as update kind, tool-call id, status, title, and kind are retained.
 
@@ -44,7 +44,7 @@ Mac, iPhone, Android, and CLI will share the same session lifecycle contract:
 - initial session population through ACP `session/load`;
 - loaded handles retain their ACP connection and in-memory state while the client is alive;
 - switching away/back on a live handle does not reload;
-- client-facing ACP notifications are limited to 10 kB;
+- client-facing ACP notifications are limited to 1 MB;
 - successful replay replaces session state rather than appending duplicate blocks;
 - transient retry and permanent-failure behavior is consistent.
 

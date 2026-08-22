@@ -182,4 +182,4 @@ The architecture describes the transcript as coalesced logical persistence and `
 
 - Which exact ACP errors belong in the transient-retry versus permanent-failure categories, and what backoff limits should apply?
 
-Resolved: client-facing messages are capped at 10 kB with oversized presentation fields replaced by a marker; ACP `session/load` response is the replay boundary; loaded background session handles retain their ACP connections; genuine disconnects/suspensions reload through ACP and replace cached blocks; transcript tables are deleted but database files remain; and all clients share the same ACP-only lifecycle contract.
+Resolved: client-facing messages are capped at 1 MB with oversized presentation fields replaced by a marker; ACP `session/load` response is the replay boundary; loaded background session handles retain their ACP connections; genuine disconnects/suspensions reload through ACP and replace cached blocks; transcript tables are deleted but database files remain; and all clients share the same ACP-only lifecycle contract.

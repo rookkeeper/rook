@@ -21,7 +21,7 @@ describe("boundedClientMessage", () => {
           sessionUpdate: "tool_call_update",
           toolCallId: "tool-1",
           status: "completed",
-          rawOutput: { role: "toolResult", content: [{ type: "image", data: "A".repeat(100_000) }] },
+          rawOutput: { role: "toolResult", content: [{ type: "image", data: "A".repeat(2_000_000) }] },
         },
       },
     };
@@ -33,5 +33,6 @@ describe("boundedClientMessage", () => {
       update: { sessionUpdate: "tool_call_update", toolCallId: "tool-1", status: "completed" },
     });
     expect(JSON.stringify(bounded)).not.toContain("A".repeat(1_000));
+    expect(JSON.stringify(bounded)).toContain("[Rook truncated this presentation payload because it exceeded 1 MB.]");
   });
 });
