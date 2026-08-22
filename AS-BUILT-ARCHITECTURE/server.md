@@ -120,7 +120,7 @@ Current durable persistence is SQLite-backed and split between:
 - runtime-owned ACP session files: conversation history and replay source
 - the environment repository databases: environments, reusable capabilities, and bundle memberships for canonical and personal repositories
 
-Canonical and personal environment-repository content is SQLite-only. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage.
+Canonical and personal environment-repository content is SQLite-only. Project-directory environments remain the intentional direct file-backed exception. The global workspace is an inspectable projection, never durable storage. Deterministic personal authoring bundles are recreated from entered non-directory memberships independently of live observation status.
 
 The database details live in [database.md](./database.md).
 
@@ -215,6 +215,12 @@ Related tables:
 4. it creates a replacement `SessionRuntime` with the workspace as cwd
 5. replacement normally takes over through `session/load` of the exact existing runtime session; if the runtime returns an ACP response error for that load, it retries with `session/new` and persists the new runtime session id, while startup, transport, timeout, and malformed-load-response failures abort the restart
 6. only then is the old subprocess retired
+
+### Session environment restoration
+1. the first request for a persisted session after server startup reads its durable `session_environments` membership
+2. known repository-backed environments are rehydrated into the fresh `EnvironmentManager`; unobserved memberships remain entered as recent UI entries without deleting membership, while entered environments retain repository-backed bundles and non-directory memberships receive their deterministic personal authoring projection
+3. rehydrated entries follow the normal bundle decision, workspace materialization, and affected-session runtime replacement flow
+4. the request then privately recovers the persisted ACP session before forwarding the client operation
 
 ### Location registration
 1. phone client posts `register-location`

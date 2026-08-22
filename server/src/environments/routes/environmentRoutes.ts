@@ -186,6 +186,7 @@ export async function registerEnvironmentRoutes(
       reply.code(400).send({ error: "Missing sessionId" });
       return;
     }
+    if (runtimeManager) return runtimeManager.listEnvironments(sessionId);
     return environmentManager.environmentList(sessionId);
   });
 }

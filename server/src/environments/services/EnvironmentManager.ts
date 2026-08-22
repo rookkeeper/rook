@@ -91,6 +91,18 @@ function lastEnvironmentSegment(environmentId: string): string {
   return (parts.at(-1) ?? raw) || environmentId;
 }
 
+function fallbackEnvironmentDisplayName(environmentId: string): string {
+  const kind = environmentKind(environmentId);
+  const raw = environmentPath(environmentId);
+  if (kind === "mac") {
+    const bundleParts = raw.split(".").filter(Boolean);
+    if (bundleParts.length >= 3 && bundleParts[0] === "com") {
+      return bundleParts.slice(1).map((part) => part.slice(0, 1).toUpperCase() + part.slice(1)).join(" ");
+    }
+  }
+  return lastEnvironmentSegment(environmentId);
+}
+
 function stringMetadata(metadata: Record<string, unknown>, key: string): string | undefined {
   const value = metadata[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -257,7 +269,8 @@ export class EnvironmentManager {
     const now = this.now();
     const nowIso = new Date(now).toISOString();
     const existing = this.remembered.get(env.id);
-    const registeredAt = existing?.status === "active" ? (existing.registeredAt ?? nowIso) : nowIso;
+    const wasActive = existing?.status === "active";
+    const registeredAt = wasActive ? (existing.registeredAt ?? nowIso) : nowIso;
     const activeUntil = new Date(now + this.activeEnvironmentWindowMs).toISOString();
     const resolvedBundles = await this.repositoryService.getResolvedBundles(env.id);
     const bundles = resolvedBundles.map(({ bundle, bundleHash }) => ({
@@ -287,6 +300,7 @@ export class EnvironmentManager {
       bundleIds,
     };
     this.remembered.set(env.id, entry);
+    if (!wasActive && bundles.length > 0) this.activatePersistedMemberships(entry);
     this.logger.info(
       {
         environmentId: env.id,
@@ -389,18 +403,20 @@ export class EnvironmentManager {
     const result: RuntimeEnvironmentBundle[] = [];
     for (const environmentId of this.enteredEnvironments(sessionId)) {
       const entry = this.remembered.get(environmentId);
-      if (!entry || entry.status !== "active") continue;
       const resolved = await this.repositoryService.getResolvedBundles(environmentId);
       const runtimeResolved = [...resolved];
-      if (!resolved.some(({ bundle }) => bundle.repository === "personal") && !environmentId.startsWith("dir:")) {
+      if (!runtimeResolved.some(({ bundle }) => bundle.repository === "personal") && !environmentId.startsWith("dir:")) {
         const bundle = ephemeralPersonalBundle(environmentId);
         runtimeResolved.push({ bundle, bundleHash: hashEnvironmentBundle(bundle) });
       }
+      const environmentName = entry
+        ? deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info)
+        : fallbackEnvironmentDisplayName(environmentId);
       for (const { bundle, bundleHash } of runtimeResolved) {
         const decision = this.sessionDecisions.effective(bundleHash, sessionId);
         if (!isUserOwnedRepository(bundle.repository) && decision !== "accept" && decision !== "approve") continue;
         result.push({
-          environmentName: deriveEnvironmentDisplayName(environmentId, entry.record.metadata, entry.info),
+          environmentName,
           bundleName: bundle.repository === "personal" || bundle.repository === "project-directory" ? "Personal capabilities" : "Environment capabilities",
           editable: bundle.repository === "personal" || bundle.repository === "project-directory",
           ...(bundle.repository === "personal" ? {
@@ -421,7 +437,8 @@ export class EnvironmentManager {
     return result;
   }
 
-  isAvailable(environmentId: string): boolean {
+  /** Whether a provider has observed this environment during the active observation window. */
+  isObserved(environmentId: string): boolean {
     this.pruneMemory();
     return this.remembered.get(environmentId)?.status === "active";
   }
@@ -432,6 +449,27 @@ export class EnvironmentManager {
 
   runtimeIdentityInstructions(): string {
     return renderRookIdentityPrompt();
+  }
+
+  async restoreEnvironment(sessionId: string, environmentId: string): Promise<string[]> {
+    this.pruneMemory();
+    const listener = this.listeners.get(sessionId);
+    if (!listener) return [];
+
+    if (!this.remembered.has(environmentId)) {
+      const environment = await this.repositoryService.getKnownEnvironment(environmentId);
+      if (!environment) {
+        if (!this.explicitlyEntered.has(sessionId)) this.explicitlyEntered.set(sessionId, new Set());
+        this.explicitlyEntered.get(sessionId)!.add(environmentId);
+        return this.syncEnteredEnvironments(sessionId, listener);
+      }
+      await this.rememberAvailableEnvironment(
+        { id: environment.id, metadata: environment.metadata },
+        { displayName: environment.displayName },
+      );
+    }
+
+    return this.enterEnvironment(sessionId, environmentId);
   }
 
   async enterEnvironment(sessionId: string, environmentId: string): Promise<string[]> {
@@ -498,8 +536,20 @@ export class EnvironmentManager {
     this.pruneMemory();
     const entered = this.entered.get(sessionId) ?? new Set();
     const entries = this.diagnosticSnapshot(sessionId);
+    const knownEnvironmentIds = new Set(entries.map((entry) => entry.environmentId));
+    const unobservedEntered = [...entered]
+      .filter((environmentId) => !knownEnvironmentIds.has(environmentId))
+      .map((environmentId) => ({
+        environmentId,
+        displayName: fallbackEnvironmentDisplayName(environmentId),
+        status: "recent" as const,
+        lastTouchedAt: new Date(this.now()).toISOString(),
+        entered: true,
+        bundleCount: 0,
+        approvedBundleCount: 0,
+      }));
 
-    const list = entries.map((entry) => {
+    const list = [...entries.map((entry) => {
       const approved = entry.bundles.filter(
         (b) => b.effectiveDecision === "accept" || b.effectiveDecision === "approve",
       ).length;
@@ -512,7 +562,7 @@ export class EnvironmentManager {
         bundleCount: entry.bundles.length,
         approvedBundleCount: approved,
       };
-    });
+    }), ...unobservedEntered];
 
     list.sort((a, b) => {
       if (a.entered !== b.entered) return a.entered ? -1 : 1;
@@ -523,6 +573,28 @@ export class EnvironmentManager {
     return list;
   }
 
+  private activatePersistedMemberships(entry: RememberedEnvironmentEntry): void {
+    for (const [sessionId, explicit] of this.explicitlyEntered.entries()) {
+      if (!explicit.has(entry.record.id) || !this.entered.get(sessionId)?.has(entry.record.id)) continue;
+      const listener = this.listeners.get(sessionId);
+      if (!listener) continue;
+
+      listener.onEnvironmentEntered(entry.record.id, this.skillPathsForEntry(entry, sessionId));
+      for (const bundle of entry.bundles) {
+        if (isUserOwnedRepository(bundle.repository) || this.effectiveDecision(bundle.bundleHash, sessionId) !== "undecided") continue;
+        listener.onEnvironmentOffered({
+          environmentId: entry.record.id,
+          displayName: deriveEnvironmentDisplayName(entry.record.id, entry.record.metadata, entry.info),
+          bundleId: bundle.bundleId,
+          bundleHash: bundle.bundleHash,
+          skills: bundle.skills,
+          mcpServers: bundle.mcpServers,
+          apps: bundle.apps,
+        });
+      }
+    }
+  }
+
   private syncEnteredEnvironments(sessionId: string, listener: EnvironmentEventListener): string[] {
     if (!this.entered.has(sessionId)) this.entered.set(sessionId, new Set());
     const current = this.entered.get(sessionId)!;
@@ -531,9 +603,8 @@ export class EnvironmentManager {
     for (const environmentId of next) {
       if (current.has(environmentId)) continue;
       const entry = this.remembered.get(environmentId);
+      listener.onEnvironmentEntered(environmentId, entry ? this.skillPathsForEntry(entry, sessionId) : []);
       if (!entry) continue;
-
-      listener.onEnvironmentEntered(environmentId, this.skillPathsForEntry(entry, sessionId));
 
       for (const bundle of entry.bundles) {
         if (isUserOwnedRepository(bundle.repository) || this.effectiveDecision(bundle.bundleHash, sessionId) !== "undecided") continue;

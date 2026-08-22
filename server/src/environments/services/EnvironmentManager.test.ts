@@ -14,6 +14,7 @@ function mockRepositoryService(): EnvironmentRepositoryService {
     getResolvedBundles: vi.fn(async () => []),
     getValidBundles: vi.fn(async () => []),
     hasKnownEnvironment: vi.fn(async () => false),
+    getKnownEnvironment: vi.fn(async () => undefined),
     getEnvironmentPreview: vi.fn().mockResolvedValue({ environmentId: "web:example.com", bundles: [] }),
   } as unknown as EnvironmentRepositoryService;
 }
@@ -90,7 +91,7 @@ describe("EnvironmentManager", () => {
 
     await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: { displayName: "Example" } });
 
-    expect(manager.isAvailable("web:example.com")).toBe(true);
+    expect(manager.isObserved("web:example.com")).toBe(true);
     expect(manager.environmentList("s1")[0]?.bundleCount).toBe(0);
     expect(manager.environmentList("s1")[0]?.approvedBundleCount).toBe(0);
   });
@@ -124,8 +125,8 @@ describe("EnvironmentManager", () => {
       metadata: { displayName: "edit", observedUrls: ["https://docs.google.com/document/d/abc/edit"] },
     });
 
-    expect(manager.isAvailable("web:docs.google.com/document/d/abc/edit")).toBe(true);
-    expect(manager.isAvailable("web:docs.google.com")).toBe(false);
+    expect(manager.isObserved("web:docs.google.com/document/d/abc/edit")).toBe(true);
+    expect(manager.isObserved("web:docs.google.com")).toBe(false);
   });
 
   it("finalizes additional repository-backed environments discovered from observed urls", async () => {
@@ -141,9 +142,9 @@ describe("EnvironmentManager", () => {
       metadata: { displayName: "edit", observedUrls: ["https://docs.google.com/document/d/abc/edit"] },
     });
 
-    expect(manager.isAvailable("web:docs.google.com/document/d/abc/edit")).toBe(true);
-    expect(manager.isAvailable("web:docs.google.com/document")).toBe(true);
-    expect(manager.isAvailable("web:docs.google.com")).toBe(false);
+    expect(manager.isObserved("web:docs.google.com/document/d/abc/edit")).toBe(true);
+    expect(manager.isObserved("web:docs.google.com/document")).toBe(true);
+    expect(manager.isObserved("web:docs.google.com")).toBe(false);
   });
 
   it("finalizes additional repository-backed dir environments discovered from observed paths", async () => {
@@ -159,8 +160,8 @@ describe("EnvironmentManager", () => {
       metadata: { displayName: "src", observedPaths: ["/Users/john/project/src/main.cpp"] },
     });
 
-    expect(manager.isAvailable("dir:/Users/john/project/src")).toBe(true);
-    expect(manager.isAvailable("dir:/Users/john/project")).toBe(true);
+    expect(manager.isObserved("dir:/Users/john/project/src")).toBe(true);
+    expect(manager.isObserved("dir:/Users/john/project")).toBe(true);
   });
 
   it("keeps the exact candidate when an implied ancestor cannot be inspected", async () => {
@@ -177,7 +178,7 @@ describe("EnvironmentManager", () => {
       metadata: { displayName: "src", observedPaths: ["/Users/john/project/src/file.ts"] },
     })).resolves.toBeUndefined();
 
-    expect(manager.isAvailable("dir:/Users/john/project/src")).toBe(true);
+    expect(manager.isObserved("dir:/Users/john/project/src")).toBe(true);
   });
 
   it("moves an active environment to recent after the active window", async () => {
@@ -186,7 +187,7 @@ describe("EnvironmentManager", () => {
 
     nowMs += 1_001;
 
-    expect(manager.isAvailable("web:example.com")).toBe(false);
+    expect(manager.isObserved("web:example.com")).toBe(false);
   });
 
   it("forgets recent environments after the recent retention window", async () => {
@@ -194,7 +195,7 @@ describe("EnvironmentManager", () => {
     await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: {} });
 
     nowMs += 1_001;
-    expect(manager.isAvailable("web:example.com")).toBe(false);
+    expect(manager.isObserved("web:example.com")).toBe(false);
 
     nowMs += 2_001;
     expect(manager.diagnosticSnapshot()).toEqual([]);
@@ -224,6 +225,79 @@ describe("EnvironmentManager", () => {
     expect(manager.environmentList("s1")[0]).toMatchObject({
       displayName: "docs",
     });
+  });
+
+  it("rehydrates a known repository environment during session restore", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getKnownEnvironment).mockResolvedValue({
+      id: "web:example.com",
+      displayName: "Example",
+      description: "Example website",
+      metadata: {},
+    });
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue(resolvedBundle("web:example.com", "testing"));
+    const manager = newManager(repositoryService);
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await expect(manager.restoreEnvironment("s1", "web:example.com")).resolves.toEqual(["web:example.com"]);
+
+    expect(manager.isObserved("web:example.com")).toBe(true);
+    expect(manager.environmentList("s1")[0]).toMatchObject({
+      environmentId: "web:example.com",
+      displayName: "Example",
+      entered: true,
+    });
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("web:example.com", []);
+  });
+
+  it("retains a persisted environment that is not currently observed", async () => {
+    const repositoryService = mockRepositoryService();
+    const manager = newManager(repositoryService);
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await expect(manager.restoreEnvironment("s1", "mac:com.google.Chrome")).resolves.toEqual(["mac:com.google.Chrome"]);
+
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("mac:com.google.Chrome", []);
+    expect(manager.enteredEnvironments("s1")).toEqual(["mac:com.google.Chrome"]);
+    expect(manager.isObserved("mac:com.google.Chrome")).toBe(false);
+    expect(manager.environmentList("s1")).toMatchObject([{
+      environmentId: "mac:com.google.Chrome",
+      displayName: "Google Chrome",
+      status: "recent",
+      entered: true,
+      bundleCount: 0,
+    }]);
+  });
+
+  it("keeps a writable personal projection for an unobserved entered environment", async () => {
+    const repositoryService = mockRepositoryService();
+    const manager = newManager(repositoryService);
+    manager.subscribe("s1", mockListener());
+
+    await expect(manager.restoreEnvironment("s1", "mac:com.google.Chrome")).resolves.toEqual(["mac:com.google.Chrome"]);
+
+    const bundles = await manager.runtimeBundlesForSession("s1");
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0]).toMatchObject({
+      environmentName: "Google Chrome",
+      editable: true,
+      bundle: { repository: "personal" },
+    });
+  });
+
+  it("activates a persisted membership when its environment becomes available", async () => {
+    const repositoryService = mockRepositoryService();
+    const manager = newManager(repositoryService);
+    const listener = mockListener();
+    manager.subscribe("s1", listener);
+
+    await manager.restoreEnvironment("s1", "dir:/tmp/project");
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue(resolvedBundle("dir:/tmp/project", "testing"));
+    await manager.registerCandidateEnvironment({ id: "dir:/tmp/project", metadata: { displayName: "Project" } });
+
+    expect(listener.onEnvironmentEntered).toHaveBeenCalledWith("dir:/tmp/project", []);
   });
 
   it("entering a child environment does not implicitly enter its parent", async () => {
@@ -285,6 +359,26 @@ describe("EnvironmentManager", () => {
 
   });
 
+
+  it("retains approved external bundles after observation expires", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue(resolvedBundle("web:example.com", "external"));
+    const manager = newManager(repositoryService);
+    manager.subscribe("s1", mockListener());
+    await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: { displayName: "Example" } });
+    await manager.enterEnvironment("s1", "web:example.com");
+    manager.decideEnvironment("web:example.com", "approve", "hash-web:example.com-external");
+
+    nowMs += 6 * 60_000 + 1;
+    const bundles = await manager.runtimeBundlesForSession("s1");
+
+    expect(bundles).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        bundleName: "Environment capabilities",
+        bundle: expect.objectContaining({ repository: "/repo", bundleId: "external" }),
+      }),
+    ]));
+  });
 
   it("provides the Rook identity for plain sessions", () => {
     expect(newManager().runtimeIdentityInstructions()).toContain("## You are Rook");
