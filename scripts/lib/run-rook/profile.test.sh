@@ -57,7 +57,7 @@ git -C "$REPOSITORY" worktree add -q "$TEST_ROOT/two/shared-name" -b feature-two
 
 reset_environment() {
   unset ROOK_RUN_MODE ROOK_PRODUCTION_ROOT ROOK_SERVER_PORT ROOK_HOME
-  unset ROOK_DATABASE_PATH ROOK_AGENT_RUNTIMES_PATH ROOK_RUN_ROOT RUN_ROOK_BUILD_ROOT PORT
+  unset ROOK_DATABASE_PATH ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB ROOK_AGENT_RUNTIMES_PATH ROOK_RUN_ROOT RUN_ROOK_BUILD_ROOT PORT
   unset RUN_ROOK_HOME RUN_ROOK_DATABASE_PATH
   unset ROOK_BIND_IP ROOK_TAILSCALE_IP ROOK_REMOTE_HOSTNAME ROOK_SERVER_HOST
   SERVER_BIND_HOST="127.0.0.1"
@@ -75,6 +75,7 @@ assert_eq "$RUN_ROOK_PROFILE_SLUG" "production"
 assert_eq "$SERVER_PORT" "7665"
 assert_eq "$ROOK_HOME" "$HOME/.rook"
 assert_eq "$SERVER_DATABASE_PATH" "$HOME/.rook/rook.sqlite"
+assert_eq "$ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB" "$HOME/.rook/environment-repository.db"
 configure_for "$TEST_ROOT/one/shared-name"
 first_slug="$RUN_ROOK_PROFILE_SLUG"
 first_port="$SERVER_PORT"
@@ -84,6 +85,7 @@ assert_eq "$SERVER_PORT" "$(deterministic_dev_port "$first_slug")"
 assert_ne "$SERVER_PORT" "7665"
 assert_eq "$ROOK_HOME" "$HOME/.rook-$first_slug"
 assert_eq "$SERVER_DATABASE_PATH" "$HOME/.rook-$first_slug/rook.sqlite"
+assert_eq "$ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB" "$HOME/.rook-$first_slug/environment-repository.db"
 assert_eq "$RUN_ROOT" "$TEST_ROOT/one/shared-name/.var/run-rook"
 assert_empty "${ROOK_BIND_IP:-}"
 assert_empty "${ROOK_TAILSCALE_IP:-}"
@@ -118,9 +120,11 @@ PORT="7665"
 ROOK_BIND_IP="10.0.0.2"
 ROOK_REMOTE_HOSTNAME="worktree.example"
 ROOK_AGENT_RUNTIMES_PATH="$TEST_ROOT/custom-runtimes.json"
+ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB="$TEST_ROOT/custom-environment-repository.db"
 configure_run_profile
 assert_eq "$SERVER_PORT" "8123"
 assert_eq "$ROOK_AGENT_RUNTIMES_PATH" "$TEST_ROOT/custom-runtimes.json"
+assert_eq "$ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB" "$TEST_ROOT/custom-environment-repository.db"
 assert_eq "$PORT" "8123"
 assert_eq "$ROOK_BIND_IP" "10.0.0.2"
 assert_eq "$ROOK_REMOTE_HOSTNAME" "worktree.example"
