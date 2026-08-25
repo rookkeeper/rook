@@ -24,8 +24,8 @@ The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with 
 - `environments/services/EnvironmentRepositoryService`
   - resolves environment bundles from repo-backed repositories and canonical content hashes
 - `environments/repositories/SQLiteEnvironmentRepository`
-  - stores repository-scoped capability content and bundle memberships; personal and web
-    instances share one user-local datastore
+  - stores publisher-tagged capability content and bundle memberships; personal and web
+    projections share one user-local datastore while environments remain repository-neutral
 - `environments/repositories/ProjectDirectoryEnvironmentRepository`
   - reads project-owned `.agents/skills`, `AGENTS.md`, `CLAUDE.md`, and `.mcp.json` files in place
 - `environments/repositories/WebEnvironmentRepository`

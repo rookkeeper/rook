@@ -11,9 +11,10 @@ import { SQLiteEnvironmentRepository } from "./SQLiteEnvironmentRepository.js";
  * writers throw, and `replaceCapabilityFiles` and friends stay no-ops because the base
  * class only honours them for the `personal` repository.
  *
- * Storage reuses the personal repository datastore. Per-host scout bookkeeping lives in
- * the web environment row's `metadata_json`; contentless rows remain available for TTL
- * checks but are excluded from discovery and search.
+ * Storage reuses the personal repository datastore. Website bundles are identified by their
+ * hostname publisher; per-host scout bookkeeping lives in the environment row's
+ * `metadata_json`. Contentless rows remain available for TTL checks but are excluded from
+ * discovery and search.
  */
 export class WebEnvironmentRepository extends SQLiteEnvironmentRepository {
   constructor(datastore: EnvironmentRepositoryDatastore | string) {
@@ -42,8 +43,8 @@ export class WebEnvironmentRepository extends SQLiteEnvironmentRepository {
     const rows = this.db.prepare(`
       SELECT DISTINCT environment_id
       FROM bundles
-      WHERE repository = ? AND deleted_at IS NULL
-    `).all(this.repositoryId) as Array<{ environment_id: string }>;
+      WHERE publisher NOT IN ('personal', 'default') AND deleted_at IS NULL
+    `).all() as Array<{ environment_id: string }>;
     const withContent = new Set(rows.map((row) => row.environment_id));
     return environments.filter((environment) => withContent.has(environment.id));
   }
@@ -61,8 +62,8 @@ export class WebEnvironmentRepository extends SQLiteEnvironmentRepository {
   getScoutState(host: string): WebScoutState | null {
     const normalized = normalizeHost(host);
     if (!normalized) return null;
-    const row = this.db.prepare("SELECT metadata_json FROM environments WHERE repository = ? AND environment_id = ?")
-      .get(this.repositoryId, webEnvironmentIdForHost(normalized)) as { metadata_json: string } | undefined;
+    const row = this.db.prepare("SELECT metadata_json FROM environments WHERE environment_id = ?")
+      .get(webEnvironmentIdForHost(normalized)) as { metadata_json: string } | undefined;
     if (!row) return null;
     return scoutStateFromMetadata(normalized, parseMetadata(row.metadata_json));
   }
@@ -127,7 +128,7 @@ export class WebEnvironmentRepository extends SQLiteEnvironmentRepository {
         this.writeBundle(input.bundle, WEB_BUNDLE_ID, host);
         this.deleteOrphanedCapabilities();
       } else if (input.status === "empty") {
-        this.db.prepare("DELETE FROM bundles WHERE repository = ? AND environment_id = ?").run(this.repositoryId, environmentId);
+        this.db.prepare("DELETE FROM bundles WHERE environment_id = ? AND publisher NOT IN ('personal', 'default')").run(environmentId);
         this.deleteOrphanedCapabilities();
       }
       const after = this.bundleFingerprint(environmentId);
@@ -144,15 +145,15 @@ export class WebEnvironmentRepository extends SQLiteEnvironmentRepository {
     const rows = this.db.prepare(`
       SELECT b.bundle_id, c.type, c.name, c.content_hash
       FROM bundles b JOIN capabilities c ON c.capability_id = b.capability_id
-      WHERE b.repository = ? AND b.environment_id = ? AND b.deleted_at IS NULL
+      WHERE b.environment_id = ? AND b.deleted_at IS NULL AND b.publisher NOT IN ('personal', 'default')
       ORDER BY b.bundle_id, c.type, c.name, c.content_hash
-    `).all(this.repositoryId, environmentId) as Array<{ bundle_id: string; type: string; name: string; content_hash: string }>;
+    `).all(environmentId) as Array<{ bundle_id: string; type: string; name: string; content_hash: string }>;
     return rows.map((row) => `${row.bundle_id}\u0000${row.type}\u0000${row.name}\u0000${row.content_hash}`).join("\u0001");
   }
 
   private environmentMetadata(environmentId: string): Record<string, unknown> {
-    const row = this.db.prepare("SELECT metadata_json FROM environments WHERE repository = ? AND environment_id = ?")
-      .get(this.repositoryId, environmentId) as { metadata_json: string } | undefined;
+    const row = this.db.prepare("SELECT metadata_json FROM environments WHERE environment_id = ?")
+      .get(environmentId) as { metadata_json: string } | undefined;
     return parseMetadata(row?.metadata_json);
   }
 }

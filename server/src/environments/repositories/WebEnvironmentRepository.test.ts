@@ -195,7 +195,7 @@ describe("WebEnvironmentRepository", () => {
     record(repository, { validators: { "llms.txt": { etag: '"v2"' } } });
 
     expect(repository.getScoutState(HOST)?.validators).toEqual({ "llms.txt": { etag: '"v2"' } });
-    const metadata = datastore.db.prepare("SELECT metadata_json FROM environments WHERE repository = 'web' AND environment_id = ?")
+    const metadata = datastore.db.prepare("SELECT metadata_json FROM environments WHERE environment_id = ?")
       .get(`web:${HOST}`) as { metadata_json: string };
     expect(JSON.parse(metadata.metadata_json)).toMatchObject({
       scout: { validators: { "llms.txt": { etag: '"v2"' } } },
@@ -323,7 +323,7 @@ describe("WebEnvironmentRepository", () => {
     expect((await web.getBundles(`web:${HOST}`)).bundles).toEqual([]);
     expect((await personal.getBundles(`web:${HOST}`)).bundles[0]?.skills[0]?.id).toBe("personal-widget");
     expect(datastore.db.prepare("SELECT count(*) AS count FROM environments WHERE environment_id = ?").get(`web:${HOST}`))
-      .toEqual({ count: 2 });
+      .toEqual({ count: 1 });
   });
 
   it("maps hosts to host-rooted web environment ids and back", () => {

@@ -7,7 +7,8 @@ Rook's durable server state is split across SQLite databases:
 - the application database stores sessions, session membership, and durable environment decisions;
 - the canonical environment repository database stores curated environment/capability content;
 - the user-local environment repository database stores both writable personal content and
-  website-scouted content, separated by a repository discriminator.
+  website-published content; bundle publisher metadata distinguishes user-authored content
+  from external publication.
 
 The application database remains separate from environment repositories. This database is intentionally small: it stores session persistence, session membership, and durable environment decisions. Runtime processes, ACP session history, active/recent environment caches, subscribers, and workspace projections remain outside this database. By default it lives under `ROOK_HOME/rook.sqlite` (`~/.rook/rook.sqlite` for the main checkout and `~/.rook-<worktree-slug>/rook.sqlite` for development worktrees), with `ROOK_DATABASE_PATH` as an explicit override.
 
@@ -51,19 +52,18 @@ Only permanent decisions are stored here. Session-scoped `accept` and `ignore` d
 ## Environment repository schema
 
 Every environment repository database has the same three tables. The user-local database is
-shared by the `personal` and `web` repository projections.
+used as the personal repository and contains both user-authored and website-published bundles.
+The `personal` and `web` repository projections filter bundle rows by publisher.
 
 ### `environments`
 
 - `environment_id TEXT NOT NULL` — canonical environment identifier.
-- `repository TEXT NOT NULL DEFAULT 'personal'` — logical repository owner. Existing
-  user-local rows receive `personal` when this column is added.
 - `display_name TEXT NOT NULL` — UI name.
 - `description TEXT NOT NULL` — environment description.
 - `metadata_json TEXT NOT NULL DEFAULT '{}'` — serialized discovery metadata.
 
-Primary key: `(repository, environment_id)`. This permits personal and web content for
-the same logical website to coexist in the shared file.
+Primary key: `environment_id`. An environment is repository-neutral and exists once in the
+shared file.
 
 ### `capabilities`
 
@@ -81,36 +81,35 @@ The bundle table is the environment/capability membership table:
 
 - `bundle_id TEXT NOT NULL` — UUID grouping one atomic bundle.
 - `environment_id TEXT NOT NULL` — owning environment identifier.
-- `repository TEXT NOT NULL DEFAULT 'personal'` — repository owner, paired with the
-  environment id for the cascading foreign key.
 - `capability_id TEXT NOT NULL` — referenced capability, foreign key to `capabilities`.
-- `publisher TEXT NOT NULL DEFAULT 'default'` — publisher metadata.
+- `publisher TEXT NOT NULL DEFAULT 'default'` — publisher or authority; `personal` identifies
+  user-authored content and a website hostname identifies external publication.
 - `deleted_at TEXT NULL` — membership tombstone; a timestamp means the capability is deleted from this bundle/environment.
 
 Primary key:
 
 ```text
-(repository, bundle_id, capability_id)
+(bundle_id, capability_id)
 ```
 
 A capability can be referenced by memberships in multiple environments. Deleting one membership does not delete shared capability content. There are no revision tables, revision pointers, or persistent empty personal bundles.
 
 ### Web repository scout state
 
-The web repository shares the personal repository's user-local
-`<ROOK_HOME>/environment-repository.db`. One `environments` row per scouted host stores
-`fetched_at`, `status`, pass `errors`, and per-resource `etag` / `last_modified` validators
-under `metadata_json.scout`. Content uses one bundle (`site`, publisher = host) per
-environment. Empty and failed hosts keep their environment row for negative caching, but
-rows without live web bundle memberships are omitted from listings and search. An error
-scout leaves previous content and validators in place. `WebEnvironmentRepository.recordScout`
-is the only web writer.
+The web projection uses the personal repository's user-local
+`<ROOK_HOME>/environment-repository.db`. One repository-neutral `environments` row per
+scouted host stores `fetched_at`, `status`, pass `errors`, and per-resource `etag` /
+`last_modified` validators under `metadata_json.scout`. Content uses one bundle (`site`,
+publisher = host) per environment; user-authored bundles use publisher `personal`. Empty and
+failed hosts keep their environment row for negative caching, but rows without live web bundle
+memberships are omitted from listings and search. An error scout leaves previous content and
+validators in place. `WebEnvironmentRepository.recordScout` is the only web writer.
 
 ## Repository layering
 
 - `EnvironmentRepositoryDatastore` owns the SQLite connection and three-table schema.
-- `SQLiteEnvironmentRepository` scopes normalized rows by `repository`, reads and writes
-  them, and projects them into the bundle-facing `EnvironmentBundle` model.
+- `SQLiteEnvironmentRepository` projects publisher-filtered normalized rows into the
+  bundle-facing `EnvironmentBundle` model; the personal and web projections share storage.
 - `WebEnvironmentRepository` is a thin SQLite repository specialization for metadata-backed
   scout state, host guards, read-only public writes, and transactional `recordScout` updates.
 - `CompositeEnvironmentRepository` combines canonical, personal, project-directory, synthetic, and web repositories, in that order; the live synthetic source is `LocationContextRepository`.

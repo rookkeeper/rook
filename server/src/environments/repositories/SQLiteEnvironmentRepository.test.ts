@@ -79,6 +79,7 @@ describe("SQLiteEnvironmentRepository", () => {
     datastores.push(datastore);
     const repository = new SQLiteEnvironmentRepository(datastore, "personal");
     repository.saveResult(result("personal"));
+    expect(datastore.db.prepare("SELECT DISTINCT publisher FROM bundles").all()).toEqual([{ publisher: "personal" }]);
     await repository.replaceCapabilityFiles("web:example.com", BUNDLE_ID, "skill", "mail-search", { "mail-search/SKILL.md": "Changed search." });
 
     const loaded = (await repository.getBundles("web:example.com")).bundles[0]!;
@@ -233,7 +234,64 @@ describe("SQLiteEnvironmentRepository", () => {
     expect(loaded.bundles.map((bundle) => bundle.repository)).toEqual(["canonical", "personal"]);
   });
 
-  it("backfills legacy environment and bundle rows as personal", async () => {
+  it("collapses the unshipped repository-scoped schema into publisher-tagged rows", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "rook-environment-scope-migration-"));
+    tempDirs.push(directory);
+    const location = path.join(directory, "environment-repository.db");
+    const legacy = new DatabaseSync(location);
+    legacy.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE environments (
+        environment_id TEXT NOT NULL,
+        repository TEXT NOT NULL DEFAULT 'personal',
+        display_name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        PRIMARY KEY (repository, environment_id)
+      );
+      CREATE TABLE capabilities (
+        capability_id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        files_json TEXT NOT NULL,
+        content_hash TEXT NOT NULL
+      );
+      CREATE TABLE bundles (
+        bundle_id TEXT NOT NULL,
+        environment_id TEXT NOT NULL,
+        repository TEXT NOT NULL DEFAULT 'personal',
+        capability_id TEXT NOT NULL REFERENCES capabilities(capability_id),
+        publisher TEXT NOT NULL DEFAULT 'default',
+        deleted_at TEXT,
+        PRIMARY KEY (repository, bundle_id, capability_id),
+        FOREIGN KEY (repository, environment_id) REFERENCES environments(repository, environment_id)
+      );
+      INSERT INTO environments VALUES
+        ('web:merged.example', 'personal', 'Personal name', 'Personal description', '{"source":"personal"}'),
+        ('web:merged.example', 'web', 'merged.example', 'Website merged.example', '{"scout":{"status":"content"}}');
+      INSERT INTO capabilities VALUES
+        ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'skill', 'personal-skill', '{"personal-skill/SKILL.md":"Personal"}', 'personal-hash'),
+        ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'skill', 'web-skill', '{"web-skill/SKILL.md":"Web"}', 'web-hash');
+      INSERT INTO bundles VALUES
+        ('personal-bundle', 'web:merged.example', 'personal', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'default', NULL),
+        ('site', 'web:merged.example', 'web', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'merged.example', NULL);
+    `);
+    legacy.close();
+
+    const datastore = new EnvironmentRepositoryDatastore(location);
+    datastores.push(datastore);
+    const personal = new SQLiteEnvironmentRepository(datastore, "personal");
+    const web = new SQLiteEnvironmentRepository(datastore, "web");
+
+    expect(datastore.db.prepare("SELECT count(*) AS count FROM environments").get()).toEqual({ count: 1 });
+    expect(datastore.db.prepare("SELECT count(*) AS count FROM bundles").get()).toEqual({ count: 2 });
+    expect(JSON.parse((datastore.db.prepare("SELECT metadata_json FROM environments WHERE environment_id = ?").get("web:merged.example") as { metadata_json: string }).metadata_json))
+      .toMatchObject({ source: "personal", scout: { status: "content" } });
+    expect((await personal.getBundles("web:merged.example")).bundles[0]?.publisher).toBe("personal");
+    expect((await web.getBundles("web:merged.example")).bundles[0]?.publisher).toBe("merged.example");
+  });
+
+  it("treats legacy main-branch rows as personal content", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "rook-environment-migration-"));
     tempDirs.push(directory);
     const location = path.join(directory, "environment-repository.db");
@@ -275,10 +333,9 @@ describe("SQLiteEnvironmentRepository", () => {
     const personal = new SQLiteEnvironmentRepository(datastore, "personal");
     const web = new SQLiteEnvironmentRepository(datastore, "web");
 
-    expect(datastore.db.prepare("SELECT repository FROM environments WHERE environment_id = 'web:legacy.example'").get())
-      .toEqual({ repository: "personal" });
-    expect(datastore.db.prepare("SELECT repository FROM bundles WHERE environment_id = 'web:legacy.example'").get())
-      .toEqual({ repository: "personal" });
+    expect(datastore.db.prepare("PRAGMA table_info(environments)").all().some((row) => (row as { name: string }).name === "repository")).toBe(false);
+    expect(datastore.db.prepare("SELECT publisher FROM bundles WHERE environment_id = 'web:legacy.example'").get())
+      .toEqual({ publisher: "default" });
     expect((await personal.getBundles("web:legacy.example")).bundles[0]?.skills[0]?.id).toBe("legacy-skill");
     expect((await web.getBundles("web:legacy.example")).bundles).toEqual([]);
     expect(datastore.db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);

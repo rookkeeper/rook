@@ -22,12 +22,10 @@ export class EnvironmentRepositoryDatastore {
       PRAGMA foreign_keys = ON;
 
       CREATE TABLE IF NOT EXISTS environments (
-        environment_id TEXT NOT NULL,
-        repository TEXT NOT NULL DEFAULT 'personal',
+        environment_id TEXT PRIMARY KEY,
         display_name TEXT NOT NULL,
         description TEXT NOT NULL,
-        metadata_json TEXT NOT NULL DEFAULT '{}',
-        PRIMARY KEY (repository, environment_id)
+        metadata_json TEXT NOT NULL DEFAULT '{}'
       );
 
       CREATE TABLE IF NOT EXISTS capabilities (
@@ -40,78 +38,96 @@ export class EnvironmentRepositoryDatastore {
 
       CREATE TABLE IF NOT EXISTS bundles (
         bundle_id TEXT NOT NULL,
-        environment_id TEXT NOT NULL,
-        repository TEXT NOT NULL DEFAULT 'personal',
+        environment_id TEXT NOT NULL REFERENCES environments(environment_id) ON DELETE CASCADE,
         capability_id TEXT NOT NULL REFERENCES capabilities(capability_id) ON DELETE CASCADE,
         publisher TEXT NOT NULL DEFAULT 'default',
         deleted_at TEXT,
-        PRIMARY KEY (repository, bundle_id, capability_id),
-        FOREIGN KEY (repository, environment_id) REFERENCES environments(repository, environment_id) ON DELETE CASCADE
+        PRIMARY KEY (bundle_id, capability_id)
       );
     `);
-    this.ensureRepositoryScope();
+    this.migrateRepositoryScopedSchema();
     this.db.exec(`
-      CREATE INDEX IF NOT EXISTS bundles_environment_idx ON bundles(repository, environment_id);
+      CREATE INDEX IF NOT EXISTS bundles_environment_idx ON bundles(environment_id);
       CREATE INDEX IF NOT EXISTS bundles_capability_idx ON bundles(capability_id);
     `);
   }
 
-  private ensureRepositoryScope(): void {
+  /**
+   * THIS IS FOR BACKWARDS COMPATIBILITY
+   * The shared local database briefly used repository-scoped environment rows and
+   * bundle keys. Collapse that unshipped shape back to the repository-neutral schema.
+   * Existing personal rows are preserved; the old standalone web database is not read.
+   */
+  private migrateRepositoryScopedSchema(): void {
     const environmentColumns = this.db.prepare("PRAGMA table_info(environments)").all() as Array<Record<string, unknown>>;
     const bundleColumns = this.db.prepare("PRAGMA table_info(bundles)").all() as Array<Record<string, unknown>>;
-    const environmentHadRepository = environmentColumns.some((column) => column.name === "repository");
-    const bundlesHadRepository = bundleColumns.some((column) => column.name === "repository");
-    if (!environmentHadRepository) {
-      // Existing rows are personal rows, so SQLite's default backfills their repository.
-      this.db.exec("ALTER TABLE environments ADD COLUMN repository TEXT NOT NULL DEFAULT 'personal'");
-    }
-    if (!bundlesHadRepository) {
-      this.db.exec("ALTER TABLE bundles ADD COLUMN repository TEXT NOT NULL DEFAULT 'personal'");
-    }
+    if (!environmentColumns.some((column) => column.name === "repository") && !bundleColumns.some((column) => column.name === "repository")) return;
 
-    const primaryKey = (this.db.prepare("PRAGMA table_info(environments)").all() as Array<Record<string, unknown>>)
-      .filter((column) => Number(column.pk) > 0)
-      .sort((left, right) => Number(left.pk) - Number(right.pk))
-      .map((column) => String(column.name));
-    if (primaryKey.join(",") === "repository,environment_id") return;
+    const environmentRows = this.db.prepare("SELECT environment_id, repository, display_name, description, metadata_json FROM environments").all() as Array<Record<string, unknown>>;
+    const bundleRows = this.db.prepare("SELECT bundle_id, environment_id, repository, capability_id, publisher, deleted_at FROM bundles").all() as Array<Record<string, unknown>>;
+    const environments = new Map<string, { displayName: string; description: string; metadata: Record<string, unknown> }>();
+    environmentRows.sort((left, right) => (String(left.repository) === "personal" ? -1 : 0) - (String(right.repository) === "personal" ? -1 : 0));
+    for (const row of environmentRows) {
+      const id = String(row.environment_id);
+      const existing = environments.get(id);
+      const metadata = { ...(existing?.metadata ?? {}), ...parseMetadata(row.metadata_json) };
+      environments.set(id, {
+        // Personal identity wins over the web display fallback when both existed.
+        displayName: existing?.displayName ?? String(row.display_name),
+        description: existing?.description ?? String(row.description),
+        metadata,
+      });
+    }
 
     this.db.exec("PRAGMA foreign_keys = OFF");
     try {
       this.db.exec(`
         BEGIN;
+        DROP INDEX IF EXISTS bundles_environment_idx;
+        DROP INDEX IF EXISTS bundles_capability_idx;
         ALTER TABLE bundles RENAME TO bundles_legacy_repository_scope;
         ALTER TABLE environments RENAME TO environments_legacy_repository_scope;
 
         CREATE TABLE environments (
-          environment_id TEXT NOT NULL,
-          repository TEXT NOT NULL DEFAULT 'personal',
+          environment_id TEXT PRIMARY KEY,
           display_name TEXT NOT NULL,
           description TEXT NOT NULL,
-          metadata_json TEXT NOT NULL DEFAULT '{}',
-          PRIMARY KEY (repository, environment_id)
+          metadata_json TEXT NOT NULL DEFAULT '{}'
         );
-        INSERT INTO environments (environment_id, repository, display_name, description, metadata_json)
-        SELECT environment_id, repository, display_name, description, metadata_json
-        FROM environments_legacy_repository_scope;
-
         CREATE TABLE bundles (
           bundle_id TEXT NOT NULL,
-          environment_id TEXT NOT NULL,
-          repository TEXT NOT NULL DEFAULT 'personal',
+          environment_id TEXT NOT NULL REFERENCES environments(environment_id) ON DELETE CASCADE,
           capability_id TEXT NOT NULL REFERENCES capabilities(capability_id) ON DELETE CASCADE,
           publisher TEXT NOT NULL DEFAULT 'default',
           deleted_at TEXT,
-          PRIMARY KEY (repository, bundle_id, capability_id),
-          FOREIGN KEY (repository, environment_id) REFERENCES environments(repository, environment_id) ON DELETE CASCADE
+          PRIMARY KEY (bundle_id, capability_id)
         );
-        INSERT INTO bundles (bundle_id, environment_id, repository, capability_id, publisher, deleted_at)
-        SELECT bundle_id, environment_id, repository, capability_id, publisher, deleted_at
-        FROM bundles_legacy_repository_scope;
+      `);
+      const insertEnvironment = this.db.prepare(`
+        INSERT INTO environments (environment_id, display_name, description, metadata_json)
+        VALUES (?, ?, ?, ?)
+      `);
+      for (const [id, environment] of environments) {
+        insertEnvironment.run(id, environment.displayName, environment.description, JSON.stringify(environment.metadata));
+      }
 
+      const insertBundle = this.db.prepare(`
+        INSERT OR IGNORE INTO bundles (bundle_id, environment_id, capability_id, publisher, deleted_at)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      for (const row of bundleRows) {
+        const repository = String(row.repository);
+        const oldPublisher = String(row.publisher ?? "default");
+        const publisher = repository === "personal"
+          ? "personal"
+          : repository === "web"
+            ? (oldPublisher === "default" ? hostFromEnvironmentId(String(row.environment_id)) : oldPublisher)
+            : oldPublisher;
+        insertBundle.run(row.bundle_id, row.environment_id, row.capability_id, publisher, row.deleted_at ?? null);
+      }
+      this.db.exec(`
         DROP TABLE bundles_legacy_repository_scope;
         DROP TABLE environments_legacy_repository_scope;
-        CREATE INDEX bundles_environment_idx ON bundles(repository, environment_id);
-        CREATE INDEX bundles_capability_idx ON bundles(capability_id);
         COMMIT;
       `);
     } catch (error) {
@@ -121,4 +137,18 @@ export class EnvironmentRepositoryDatastore {
       this.db.exec("PRAGMA foreign_keys = ON");
     }
   }
+}
+
+function parseMetadata(value: unknown): Record<string, unknown> {
+  if (typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function hostFromEnvironmentId(environmentId: string): string {
+  return environmentId.startsWith("web:") ? environmentId.slice("web:".length) : "web";
 }

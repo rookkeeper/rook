@@ -6,9 +6,9 @@ Rook's environment repository maps recognizable environments to capability bundl
 
 Environment-repository SQLite storage uses three tables:
 
-- `environments` — repository-scoped environment identity, display metadata, and source-specific metadata.
+- `environments` — repository-neutral environment identity, display metadata, and discovery metadata.
 - `capabilities` — reusable capability content and a content hash.
-- `bundles` — repository-scoped membership rows joining a bundle, environment, and capability.
+- `bundles` — bundle membership rows joining a bundle, environment, capability, and publisher.
 
 A capability is stored in one uniform nested file-map format. A skill stores its complete directory, including `SKILL.md`, scripts, references, and assets. `AGENTS.md`, `llms.txt`, facts, MCP content, and app content use the same representation.
 
@@ -16,14 +16,14 @@ Capabilities use UUID `TEXT` identifiers and may be referenced by bundle members
 
 `deleted_at` belongs to a bundle membership, not the shared capability row. Deleting a writable capability from one environment leaves the capability content available to other memberships. Restoration clears the membership timestamp.
 
-The canonical repository uses the checkout database. Personal and web repository instances
-share the user-local `environment-repository.db` and are isolated by the `repository`
-discriminator on environments and bundle memberships:
+The canonical repository uses the checkout database. The user-local
+`environment-repository.db` is the personal repository and stores both user-authored and
+website-published bundles. The existing `publisher` field distinguishes them:
 
 - canonical content is read-only and externally curated;
-- personal content is writable and does not require approval;
-- project-directory content is a direct filesystem source and is not stored in SQLite;
-- web content is read-only, fetched from the site itself, and requires approval like canonical content.
+- bundles with publisher `personal` are writable and do not require approval;
+- bundles with a website hostname as publisher are read-only and require approval;
+- project-directory content is a direct filesystem source and is not stored in SQLite.
 
 Entering an environment does not create an empty personal bundle. Rook creates temporary authoring state for the session and creates durable environment, capability, and bundle-membership rows only when real content is authored.
 
@@ -61,7 +61,7 @@ GET  /api/bundles/search?query=...&repository=canonical|personal|project-directo
 GET  /api/environments/preview?environmentId=...
 ```
 
-Previews expose the bundle hash, active capability content, and repository identity. Revision metadata is not part of the API.
+Previews expose the bundle hash, active capability content, repository identity, and publisher. Revision metadata is not part of the API.
 
 ## Runtime workspace projection
 
@@ -106,7 +106,7 @@ When the user is on a `web:<host>` environment, Rook probes the site for the res
 
 The skills index follows Cloudflare's Agent Skills Discovery RFC (`$schema` `https://schemas.agentskills.io/discovery/0.2.0/schema.json`): a `skills` array of `{name, description, type, url, digest}`. Each `skill-md` entry's `url` is a single `SKILL.md`, which Rook fetches, verifies against the `sha256:` digest, and stores as `<name>/SKILL.md`. `archive` entries are recorded as unsupported; entries that fail validation or their digest are dropped and reported in the bundle's `errors`. Only the host root is probed; `web:<host>/<path>` environments are not scouted, and MCP discovery is not part of the web repository.
 
-Everything found for a host forms one bundle, `web:<host>#site`, with the host as publisher. A site that publishes nothing is remembered as empty so it is not probed again on every visit.
+Everything found for a host forms one bundle, `web:<host>#site`, with the host as publisher. User-authored content for the same environment uses publisher `personal` and remains writable. A site that publishes nothing is remembered as empty so it is not probed again on every visit.
 Scout state (`fetched_at`, status, pass errors, and per-resource ETag/Last-Modified
 validators) is stored under `metadata_json.scout` on the web environment row. Empty and
 failed scouts therefore retain a negative-cache row without creating web-specific tables;

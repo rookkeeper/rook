@@ -39,6 +39,8 @@ export interface EnvironmentBundle {
   bundleId: string;
   environmentId: string;
   repository: string;
+  /** Publisher or authority associated with the bundle; `personal` means user-authored content. */
+  publisher?: string;
   /** Path to the bundle directory/root when one exists on disk (or an equivalent synthesized bundle root). */
   bundlePath?: string;
   /** URL the content was fetched from, when the bundle is web-sourced. */

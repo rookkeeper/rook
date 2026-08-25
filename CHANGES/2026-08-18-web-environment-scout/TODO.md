@@ -35,9 +35,9 @@ and a read-only repository that serves the result through the normal offer → a
   (`POST /api/environments/register`, already fire-and-forget). `getBundles` never does
   network I/O; it reads a **persistent SQLite store** so scouted capabilities survive
   restarts and are available offline and to search. Web rows share the personal
-  `<ROOK_HOME>/environment-repository.db`, with repository-scoped environment and bundle
-  rows. Per-host `fetched_at`, status, errors, and resource `etag`/`last_modified`
-  validators live under the web environment's `metadata_json.scout`. Refresh policy: on
+  `<ROOK_HOME>/environment-repository.db`, with one repository-neutral environment row and
+  publisher-tagged bundle rows. Per-host `fetched_at`, status, errors, and resource
+  `etag`/`last_modified` validators live under the environment's `metadata_json.scout`. Refresh policy: on
   registration, if the host's entry is older than the TTL (default 24 h, env override)
   re-scout in the background using conditional requests (`If-None-Match` /
   `If-Modified-Since`); if content changed, replace the bundle rows (new hash → new
@@ -84,8 +84,8 @@ and a read-only repository that serves the result through the normal offer → a
       helper above, injectable `fetch`, typed result (`ok | absent | error`), unit tests
       for timeout, size cap, redirect limit, private-address refusal, HTTPS-only.
 - [x] Persistent store: the personal `<ROOK_HOME>/environment-repository.db` opened once
-      and shared by personal and web repository projections; discriminator-scoped
-      environments and memberships plus metadata-backed per-host scout state; ingest /
+      and shared by personal and web repository projections; one environment row with
+      publisher-tagged memberships plus metadata-backed per-host scout state; ingest /
       replace bundle rows for a host; read side for `getBundles`; staleness query.
 - [x] `WebEnvironmentScout` in `server/src/environments/`: given a host, fetch the
       three resources (conditional requests when the store has validators), parse the
@@ -135,7 +135,8 @@ and a read-only repository that serves the result through the normal offer → a
 - [x] Give each generated `llms.txt` skill a meaningful, site-specific name and description.
 - [x] Verify published skill digests over the raw fetched bytes and improve mismatch diagnostics.
 - [x] Consolidate the web repository/database implementation with the shared repository
-      infrastructure. Personal and web share one datastore; repository-scoped composite
-      environment keys allow both sources for the same website; scout state is stored in
-      `metadata_json`; contentless negative-cache rows are excluded from list/search; no
-      web-only tables, path, configuration override, or web-database migration remain.
+      infrastructure. Personal and web share one datastore; environments remain keyed only
+      by environment id while publisher-tagged bundle rows allow both sources for the same
+      website; scout state is stored in `metadata_json`; contentless negative-cache rows are
+      excluded from list/search; no web-only tables, path, configuration override, or
+      web-database migration remain.
