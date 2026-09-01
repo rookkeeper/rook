@@ -31,9 +31,10 @@ Environment changes are Rook orchestration around ACP. They also produce a lifec
 1. resolve approved/personal bundles from active capability memberships
 2. update shared writable environment sources and per-session links
 3. generate the read-only aggregate `AGENTS.md`
-4. replace the affected runtime with the agent workspace as cwd
-5. load the existing runtime session successfully
-6. retire the previous subprocess
+4. wait for any active prompt on the affected session to finish
+5. replace the affected runtime with the agent workspace as cwd
+6. load the existing runtime session successfully through Rook's serialized ACP session-mutation gate
+7. retire the previous subprocess
 
 The runtime receives files and paths, not repository/database handles. Personal source edits are watched and persisted to SQLite; project edits remain direct project-file changes. For Pi, Rook starts the generated workspace with one-run project approval so non-interactive ACP startup loads the standard `.agents/skills` project resources; this is separate from Rook's bundle approval decisions.
 
@@ -45,6 +46,6 @@ Provider-specific behavior belongs inside the runtime adapter. Clients observe s
 
 ## Runtime safety
 
-Rook owns one runtime process group per public session. Runtime creation is serialized per session to prevent duplicate adapters, and Rook shutdown/session deletion terminate each owned group, including provider descendants launched by an adapter. Runtimes with no user or runtime activity for 30 minutes are collected without deleting the durable session. Runtime timeout settings are server controls, with `ROOK_RUNTIME_PROMPT_INACTIVITY_TIMEOUT_MS`, `ROOK_RUNTIME_REQUEST_TIMEOUT_MS`, `ROOK_RUNTIME_CANCEL_GRACE_MS`, `ROOK_RUNTIME_IDLE_TIMEOUT_MS`, and `ROOK_RUNTIME_SHUTDOWN_TIMEOUT_MS` available for deployment/test tuning.
+Rook owns one runtime process group per public session. Runtime creation is serialized per session to prevent duplicate adapters, and ACP `session/new`/`session/load` operations are serialized across sessions because Pi ACP persists their mappings in a shared file. Environment-driven replacements wait for active prompts before retiring the current runtime. Rook shutdown/session deletion terminate each owned group, including provider descendants launched by an adapter. Runtimes with no user or runtime activity for 30 minutes are collected without deleting the durable session. Runtime timeout settings are server controls, with `ROOK_RUNTIME_PROMPT_INACTIVITY_TIMEOUT_MS`, `ROOK_RUNTIME_REQUEST_TIMEOUT_MS`, `ROOK_RUNTIME_CANCEL_GRACE_MS`, `ROOK_RUNTIME_IDLE_TIMEOUT_MS`, and `ROOK_RUNTIME_SHUTDOWN_TIMEOUT_MS` available for deployment/test tuning.
 
 ACP does not itself provide repository trust or filesystem isolation. Rook's bundle approval hash, per-session workspace, writable-source mapping, and read-only projection policy sit above ACP. Stronger OS isolation, runtime-specific tool replacement, prompt-injection validation, and MCP lifecycle security remain future work.

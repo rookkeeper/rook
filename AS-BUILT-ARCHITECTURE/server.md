@@ -12,6 +12,7 @@ The server is a Fastify service on `127.0.0.1:7665` for the main checkout, with 
 - `runtime/services/AgentRuntimeManager`
   - owns configured runtime profiles
   - creates one `SessionRuntime` process group per public session, with serialized per-session creation
+  - globally serializes ACP `session/new`/`session/load` operations that can update pi-acp's shared session mapping file
   - maps public session IDs to runtime-local ACP session IDs
   - restarts only the affected session when environment state changes
 - `runtime/SessionRuntime`
@@ -200,7 +201,7 @@ Related tables:
 ### Session creation
 1. client sends `session/new` with runtime metadata on an unbound websocket
 2. `AgentRuntimeManager` creates a `SessionRuntime`
-3. server calls runtime `session/new`
+3. server calls runtime `session/new` through the server-wide ACP session-mutation gate
 4. server stores a public session record with a new public UUID
 5. server returns that public session ID and binds the same websocket to it
 
@@ -227,9 +228,10 @@ Related tables:
 1. session enters or exits an environment
 2. `AgentRuntimeManager` resolves approved bundle content and asks `CapabilityWorkspaceManager` to update that session’s links and generated aggregate
 3. shared SQLite/project sources receive a final assessment before replacement; ordinary file edits do not themselves require runtime restart
-4. it creates a replacement `SessionRuntime` with the workspace as cwd
-5. replacement normally takes over through `session/load` of the exact existing runtime session; if the runtime returns an ACP response error for that load, it retries with `session/new` and persists the new runtime session id, while startup, transport, timeout, and malformed-load-response failures abort the restart
-6. only then is the previous subprocess retired
+4. it waits for any active prompt on the session to finish
+5. it creates a replacement `SessionRuntime` with the workspace as cwd
+6. replacement normally takes over through the server-wide ACP session-mutation gate and `session/load` of the exact existing runtime session; if the runtime returns an ACP response error for that load, it retries with `session/new` and persists the new runtime session id, while startup, transport, timeout, and malformed-load-response failures abort the restart
+7. only then is the previous subprocess retired
 
 ### Session environment restoration
 1. the first request for a persisted session after server startup reads its durable `session_environments` membership
@@ -249,11 +251,12 @@ Related tables:
 - non-prompt runtime waits are bounded; prompt inactivity timeout resets on streamed updates, while cancellation timeout force-stops the group and reconciles turn state
 - runtimes idle for 30 minutes without user or runtime activity are collected without deleting their durable sessions; the next server request privately restores the persisted ACP session before prompting
 - Rook shutdown and session deletion terminate all owned runtime groups, including provider descendants
+- ACP session mapping mutations are serialized across sessions to protect pi-acp's shared map
 - websocket connections are session-bound, not general multi-session ACP pipes
 - `session/load` replay is requester-private; it is not fanned out to other watchers of that session
 - session discovery uses the REST sessions endpoint
 - ACP runtime history is the sole transcript source; clients use requester-private `session/load` replay for initial hydration, while server-side runtime recovery discards that replay before attaching the replacement to visible subscribers
-- environment state is session-specific at runtime launch time
+- environment state is session-specific at runtime launch time; environment-driven runtime replacement waits for active prompts before retiring the current runtime
 - writable SQLite capability files have one process-wide temporary materialization and are linked into per-session workspaces
 - durable decisions and session membership are SQLite-backed; ACP session history remains runtime-owned
 - canonical and personal environment repository content is SQLite-backed; project-directory environments remain direct file-backed sources

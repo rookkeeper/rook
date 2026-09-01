@@ -13,6 +13,14 @@ const RUNTIME_SESSION_ID = "runtime-session-1";
 
 type RuntimeResponder = (method: string, params: JsonObject) => unknown;
 
+function deferred<T = void>() {
+  let resolve!: (value?: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = (value?: T) => nextResolve(value as T);
+  });
+  return { promise, resolve };
+}
+
 /** Stands in for a runtime subprocess: records requests, never spawns anything. */
 class FakeSessionRuntime {
   readonly requests: Array<{ method: string; params: JsonObject }> = [];
@@ -171,6 +179,70 @@ describe("AgentRuntimeManager runtime recovery", () => {
 
     await expect(manager.requestForSession(SESSION_ID, "session/prompt", { prompt: [{ type: "text", text: "hello" }] })).rejects.toThrow("runtime could not load this session");
     expect(replacement.methods()).toEqual(["session/load"]);
+    await manager.close();
+  });
+});
+
+describe("AgentRuntimeManager session mapping protection", () => {
+  it("serializes mapping mutations across concurrent runtime replacements", async () => {
+    const firstLoadStarted = deferred();
+    const firstLoadRelease = deferred();
+    let loadCount = 0;
+    let activeLoads = 0;
+    let maximumActiveLoads = 0;
+    const { manager } = buildManager({
+      responder: async (method) => {
+        if (method !== "session/load") return {};
+        loadCount += 1;
+        activeLoads += 1;
+        maximumActiveLoads = Math.max(maximumActiveLoads, activeLoads);
+        if (loadCount === 1) {
+          firstLoadStarted.resolve();
+          await firstLoadRelease.promise;
+        }
+        activeLoads -= 1;
+        return { sessionId: RUNTIME_SESSION_ID };
+      },
+    });
+
+    const first = manager.restartSessionForEnvironmentChange(SESSION_ID, configuration());
+    await firstLoadStarted.promise;
+    const second = manager.restartSessionForEnvironmentChange(SESSION_ID, configuration());
+    await Promise.resolve();
+    expect(loadCount).toBe(1);
+
+    firstLoadRelease.resolve();
+    await Promise.all([first, second]);
+    expect(maximumActiveLoads).toBe(1);
+    await manager.close();
+  });
+
+  it("waits for an active prompt before replacing its runtime", async () => {
+    const promptStarted = deferred();
+    const promptRelease = deferred();
+    const { manager, current } = buildManager({
+      responder: async (method) => {
+        if (method === "session/prompt") {
+          promptStarted.resolve();
+          await promptRelease.promise;
+          return { stopReason: "end_turn" };
+        }
+        return method === "session/load" ? { sessionId: RUNTIME_SESSION_ID } : {};
+      },
+    });
+
+    const prompt = manager.requestForSession(SESSION_ID, "session/prompt", { prompt: [{ type: "text", text: "hello" }] });
+    await promptStarted.promise;
+    const restart = manager.restartSessionForEnvironmentChange(SESSION_ID, configuration());
+    await Promise.resolve();
+
+    expect(current.replacementRuntime).toBeUndefined();
+    expect(current.closed).toBe(false);
+
+    promptRelease.resolve();
+    await prompt;
+    await restart;
+    expect(current.closed).toBe(true);
     await manager.close();
   });
 });
