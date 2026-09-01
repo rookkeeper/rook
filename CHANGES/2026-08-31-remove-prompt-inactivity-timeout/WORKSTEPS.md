@@ -6,12 +6,12 @@
 - [x] Create the change directory and lifecycle record
 - [x] Brainstorm bypassed because the removal scope was established by the prior investigation and the developer approved proceeding
 - [x] Record the agreed decision and TODO after the explicit decision gate
-- [ ] Prepare the implementation workspace after the planning commit
-- [ ] Implement and test
-- [ ] Mark compatibility surfaces
-- [ ] Maintain product and architecture documentation
-- [ ] Run final validation
-- [ ] Synchronize with main before submitting
-- [ ] Open and validate the PR
-- [ ] Merge with approval
-- [ ] Record outcomes and clean up
+- [x] Prepare the implementation workspace after the planning commit
+- [x] Implement and test
+- [x] Mark compatibility surfaces — no compatibility shim or fallback was retained; the removed environment variable was intentionally unsupported
+- [x] Maintain product and architecture documentation
+- [x] Run final validation — server tests, typecheck, and build passed before merge; post-merge validation also passed
+- [x] Synchronize with main before submitting — fetched `origin` and merged `origin/main`, resolving two conflicts
+- [x] Open and validate the PR — opened #184; GitHub reported it mergeable and required checks passed
+- [x] Merge with approval — merged #184 with merge commit `2fef6489fd35e513c69dd073410677c3cf5130bc`
+- [x] Record outcomes and clean up
