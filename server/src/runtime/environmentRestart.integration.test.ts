@@ -63,7 +63,6 @@ async function buildTestServer(options: {
     authToken: "",
     runtimeOptions: {
       runtimeRequestTimeoutMs: 1_000,
-      promptInactivityTimeoutMs: 100,
       cancelGraceMs: 50,
       runtimeShutdownTimeoutMs: 100,
       runtimeIdleTimeoutMs: 1_000,

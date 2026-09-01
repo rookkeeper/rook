@@ -10,11 +10,9 @@ export type SessionActivityStatus = "active" | "ready" | "error" | "on" | "off";
 
 type TurnDiagnostic = { hasActualContent: boolean; sawAutomaticRetry: boolean };
 type RuntimeActivity = { lastUserInteractionAt: number; lastRuntimeActivityAt: number; inFlightRequests: number };
-type RuntimeActivityListener = () => void;
 
 export interface AgentRuntimeManagerOptions {
   runtimeRequestTimeoutMs?: number;
-  promptInactivityTimeoutMs?: number;
   cancelGraceMs?: number;
   runtimeShutdownTimeoutMs?: number;
   runtimeIdleTimeoutMs?: number;
@@ -22,7 +20,6 @@ export interface AgentRuntimeManagerOptions {
 }
 
 const DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS = 30_000;
-const DEFAULT_PROMPT_INACTIVITY_TIMEOUT_MS = 60_000;
 const DEFAULT_CANCEL_GRACE_MS = 5_000;
 const DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_MS = 1_000;
 const DEFAULT_RUNTIME_IDLE_TIMEOUT_MS = 30 * 60_000;
@@ -43,7 +40,6 @@ export class AgentRuntimeManager {
   private readonly runtimeStopQueues = new Map<string, Promise<void>>();
   private readonly transientRuntimes = new Set<SessionRuntime>();
   private readonly runtimeActivities = new Map<string, RuntimeActivity>();
-  private readonly promptActivityListeners = new Map<string, Set<RuntimeActivityListener>>();
   private readonly activeTurns = new Map<string, Set<number>>();
   private readonly turnDiagnostics = new Map<string, Map<number, TurnDiagnostic>>();
   private readonly turnIdleWaiters = new Map<string, Set<() => void>>();
@@ -62,7 +58,6 @@ export class AgentRuntimeManager {
   private readonly timingLogsEnabled = process.env.ROOK_SESSION_TIMING_LOGS === "1";
   private readonly workspaceResults = new Map<string, CapabilityWorkspaceResult>();
   private readonly runtimeRequestTimeoutMs: number;
-  private readonly promptInactivityTimeoutMs: number;
   private readonly cancelGraceMs: number;
   private readonly runtimeShutdownTimeoutMs: number;
   private readonly runtimeIdleTimeoutMs: number;
@@ -81,7 +76,6 @@ export class AgentRuntimeManager {
   ) {
     this.profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
     this.runtimeRequestTimeoutMs = duration(options.runtimeRequestTimeoutMs ?? Number(process.env.ROOK_RUNTIME_REQUEST_TIMEOUT_MS ?? DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS), DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS);
-    this.promptInactivityTimeoutMs = duration(options.promptInactivityTimeoutMs ?? Number(process.env.ROOK_RUNTIME_PROMPT_INACTIVITY_TIMEOUT_MS ?? DEFAULT_PROMPT_INACTIVITY_TIMEOUT_MS), DEFAULT_PROMPT_INACTIVITY_TIMEOUT_MS);
     this.cancelGraceMs = duration(options.cancelGraceMs ?? Number(process.env.ROOK_RUNTIME_CANCEL_GRACE_MS ?? DEFAULT_CANCEL_GRACE_MS), DEFAULT_CANCEL_GRACE_MS);
     this.runtimeShutdownTimeoutMs = duration(options.runtimeShutdownTimeoutMs ?? Number(process.env.ROOK_RUNTIME_SHUTDOWN_TIMEOUT_MS ?? DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_MS), DEFAULT_RUNTIME_SHUTDOWN_TIMEOUT_MS);
     this.runtimeIdleTimeoutMs = duration(options.runtimeIdleTimeoutMs ?? Number(process.env.ROOK_RUNTIME_IDLE_TIMEOUT_MS ?? DEFAULT_RUNTIME_IDLE_TIMEOUT_MS), DEFAULT_RUNTIME_IDLE_TIMEOUT_MS);
@@ -255,7 +249,7 @@ export class AgentRuntimeManager {
       }
       const request = () => this.requestWithTimeout(runtime!, method, runtimeSessionParams(runtime!.profile, runtimeParams, runtime!.configuration), this.runtimeRequestTimeoutMs);
       const result = isPrompt
-        ? await this.requestPromptWithInactivityTimeout(runtime, sessionId, runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration))
+        ? await runtime.request("session/prompt", runtimeSessionParams(runtime.profile, runtimeParams, runtime.configuration))
         : method === "session/load"
           ? await this.withAcpSessionMutation(request)
           : await request();
@@ -499,7 +493,6 @@ export class AgentRuntimeManager {
     this.runtimeCreationQueues.clear();
     this.runtimeStopQueues.clear();
     this.runtimeActivities.clear();
-    this.promptActivityListeners.clear();
     this.activeTurns.clear();
     this.turnDiagnostics.clear();
     for (const sessionId of this.turnIdleWaiters.keys()) this.resolveTurnIdleWaiters(sessionId);
@@ -618,7 +611,6 @@ export class AgentRuntimeManager {
     this.environmentRestorationQueues.delete(sessionId);
     this.workspaceResults.delete(sessionId);
     this.runtimeActivities.delete(sessionId);
-    this.promptActivityListeners.delete(sessionId);
   }
 
   private subscribeToEnvironments(sessionId: string): void {
@@ -807,7 +799,6 @@ export class AgentRuntimeManager {
   private markRuntimeActivity(sessionId: string): void {
     const activity = this.runtimeActivities.get(sessionId);
     if (activity) activity.lastRuntimeActivityAt = Date.now();
-    for (const listener of this.promptActivityListeners.get(sessionId) ?? []) listener();
   }
 
   private collectIdleRuntimes(): Promise<void> {
@@ -836,35 +827,6 @@ export class AgentRuntimeManager {
         new Error(`Runtime has been idle for at least ${this.runtimeIdleTimeoutMs}ms.`),
         false,
       );
-    }
-  }
-
-  private async requestPromptWithInactivityTimeout(runtime: SessionRuntime, sessionId: string, params: JsonObject): Promise<unknown> {
-    let timer: NodeJS.Timeout | undefined;
-    let settled = false;
-    let rejectInactivity: ((error: Error) => void) | undefined;
-    const onActivity = () => {
-      if (settled) return;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        rejectInactivity?.(new RuntimeTimeoutError(`session/prompt made no progress for ${this.promptInactivityTimeoutMs}ms`));
-      }, this.promptInactivityTimeoutMs);
-    };
-    const listeners = this.promptActivityListeners.get(sessionId) ?? new Set<RuntimeActivityListener>();
-    listeners.add(onActivity);
-    this.promptActivityListeners.set(sessionId, listeners);
-    onActivity();
-    try {
-      const inactivity = new Promise<never>((_, reject) => { rejectInactivity = reject; });
-      return await Promise.race([runtime.request("session/prompt", params), inactivity]);
-    } catch (error) {
-      if (error instanceof RuntimeTimeoutError) await this.hardStopRuntime(sessionId, runtime, "prompt_inactivity_timeout", error);
-      throw error;
-    } finally {
-      settled = true;
-      if (timer) clearTimeout(timer);
-      listeners.delete(onActivity);
-      if (listeners.size === 0) this.promptActivityListeners.delete(sessionId);
     }
   }
 

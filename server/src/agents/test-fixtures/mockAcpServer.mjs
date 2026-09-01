@@ -275,13 +275,12 @@ async function handlePrompt(message) {
     return;
   }
 
-  if (lower.includes('stream continuously')) {
-    for (let index = 0; index < 12; index += 1) {
-      await streamMessageChunk(sessionId, 'still working');
-      await delay(20);
-    }
-    session.lastAssistantMessage = 'Finished streaming continuously.';
-    session.transcript.push({ role: 'assistant', text: session.lastAssistantMessage });
+  if (lower.includes('delayed response')) {
+    await delay(200);
+    const response = 'Finished after a quiet delay.';
+    session.lastAssistantMessage = response;
+    session.transcript.push({ role: 'assistant', text: response });
+    await streamText(sessionId, response);
     finish(message.id);
     return;
   }

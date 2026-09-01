@@ -248,7 +248,7 @@ Related tables:
 ## Notable architectural characteristics
 
 - one public session = one owned runtime process group
-- non-prompt runtime waits are bounded; prompt inactivity timeout resets on streamed updates, while cancellation timeout force-stops the group and reconciles turn state
+- non-prompt runtime waits are bounded; prompts remain pending until completion, client cancellation, or runtime exit, while cancellation timeout force-stops the group and reconciles turn state
 - runtimes idle for 30 minutes without user or runtime activity are collected without deleting their durable sessions; the next server request privately restores the persisted ACP session before prompting
 - Rook shutdown and session deletion terminate all owned runtime groups, including provider descendants
 - ACP session mapping mutations are serialized across sessions to protect pi-acp's shared map
