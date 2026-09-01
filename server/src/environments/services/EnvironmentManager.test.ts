@@ -359,6 +359,59 @@ describe("EnvironmentManager", () => {
 
   });
 
+  it("keeps scouted personal-repository bundles read-only while user bundles stay editable", async () => {
+    const repositoryService = mockRepositoryService();
+    vi.mocked(repositoryService.getResolvedBundles).mockResolvedValue([
+      {
+        bundle: {
+          id: "web:example.com#site",
+          bundleId: "site",
+          environmentId: "web:example.com",
+          repository: "personal",
+          publisher: "example.com",
+          scoutPublished: true,
+          skills: [{ id: "site-skill", files: { "site-skill/SKILL.md": "Site." } }],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-site",
+      },
+      {
+        bundle: {
+          id: "web:example.com#mine",
+          bundleId: "mine",
+          environmentId: "web:example.com",
+          repository: "personal",
+          publisher: "default",
+          scoutPublished: false,
+          skills: [{ id: "my-skill", files: { "my-skill/SKILL.md": "Mine." } }],
+          mcpServers: [],
+          apps: [],
+          valid: true,
+          errors: [],
+        },
+        bundleHash: "hash-mine",
+      },
+    ]);
+    const manager = newManager(repositoryService);
+    manager.subscribe("s1", mockListener());
+    await manager.registerCandidateEnvironment({ id: "web:example.com", metadata: { displayName: "Example" } });
+    await manager.enterEnvironment("s1", "web:example.com");
+    manager.decideEnvironment("web:example.com", "approve", "hash-site", "s1");
+
+    const bundles = await manager.runtimeBundlesForSession("s1");
+    const site = bundles.find((entry) => entry.bundle.scoutPublished);
+    const personal = bundles.find((entry) => entry.bundle.publisher === "default");
+    expect(site).toMatchObject({ bundleName: "Environment capabilities", editable: false });
+    expect(site?.writeBackSkill).toBeUndefined();
+    expect(site?.writeBackInstructions).toBeUndefined();
+    expect(personal).toMatchObject({ bundleName: "Personal capabilities", editable: true });
+    expect(personal?.writeBackSkill).toEqual(expect.any(Function));
+    expect(personal?.writeBackInstructions).toEqual(expect.any(Function));
+  });
+
 
   it("retains approved external bundles after observation expires", async () => {
     const repositoryService = mockRepositoryService();

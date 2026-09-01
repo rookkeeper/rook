@@ -94,6 +94,25 @@ describe("CapabilityWorkspaceManager", () => {
     await manager.close();
   });
 
+  it("materializes scout-published personal repository content without an authoring source", async () => {
+    const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
+    const bundle = personalBundle({ skills: [skill("site-skill")], agentsMd: "Site instructions." });
+    bundle.bundleName = "Environment capabilities";
+    bundle.editable = false;
+    delete bundle.writeBackSkill;
+    delete bundle.writeBackNewSkill;
+    delete bundle.writeBackInstructions;
+    bundle.bundle.publisher = "mail.example";
+    bundle.bundle.scoutPublished = true;
+
+    const workspace = await manager.materialize("session", [bundle]);
+
+    expect((await lstat(path.join(workspace.skillsRoot, "site-skill"))).isSymbolicLink()).toBe(false);
+    await expect(access(path.join(workspace.editablePerEnvironmentRoot, "mail"))).rejects.toThrow();
+    expect(await readFile(path.join(workspace.skillsRoot, "site-skill", "SKILL.md"), "utf8")).toBe("site-skill");
+    await manager.close();
+  });
+
   it("aliases the projection for Claude runtimes via .claude/skills and CLAUDE.md links", async () => {
     const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
     const workspace = await manager.materialize("session", [personalBundle({ skills: [skill("remember")], agentsMd: "Remember this." })]);
@@ -310,8 +329,26 @@ describe("CapabilityWorkspaceManager", () => {
 
     expect(await readFile(workspace.agentsPath, "utf8")).toContain("short fact");
     expect(await readFile(path.join(workspace.skillsRoot, "fact-long-fact", "SKILL.md"), "utf8")).toContain("x".repeat(4_001));
-    expect(await readFile(path.join(workspace.skillsRoot, "llms-personal-capabilities", "SKILL.md"), "utf8")).toContain("# Reference");
+    expect(await readFile(path.join(workspace.skillsRoot, "mail-example-llms", "SKILL.md"), "utf8")).toContain("# Reference");
     expect(await readFile(path.join(workspace.mcpRoot, "service", ".mcp.json"), "utf8")).toBe("{}");
+    await manager.close();
+  });
+
+  it("names generated llms.txt skills after distinct web environments", async () => {
+    const manager = await CapabilityWorkspaceManager.create({ workspaceRoot: await temporaryDirectory(), sessionRoot: await temporaryDirectory() });
+    const evilMartians = personalBundle({ environmentId: "web:evilmartians.com", environmentName: "Evil Martians" });
+    const example = personalBundle({ environmentId: "web:example.com", environmentName: "Example" });
+    evilMartians.bundle.llmsTxt = "# Evil Martians";
+    example.bundle.llmsTxt = "# Example";
+
+    const workspace = await manager.materialize("session", [evilMartians, example]);
+
+    expect(await readFile(path.join(workspace.skillsRoot, "evilmartians-com-llms", "SKILL.md"), "utf8")).toContain(
+      "name: evilmartians-com-llms\ndescription: Guide to evilmartians.com content published by the site's llms.txt.",
+    );
+    expect(await readFile(path.join(workspace.skillsRoot, "example-com-llms", "SKILL.md"), "utf8")).toContain(
+      "name: example-com-llms\ndescription: Guide to example.com content published by the site's llms.txt.",
+    );
     await manager.close();
   });
 

@@ -34,7 +34,9 @@ WebSocket protocol. For repo-level setup, `.env`, binding, and auth, start with
   bundle-level approval view showing the offered bundle name plus the names of
   any bundled skills, MCP servers, and apps, with the four 2×2 decisions
   (`POST /api/environments/decision`): allow this visit / always allow /
-  not now / never.
+  not now / never. The detail loads `GET /api/environments/preview` and shows
+  the bundle's `AGENTS.md`, `llms.txt`, each skill's `SKILL.md`, and any
+  read errors before the decision buttons.
 - **Server supervision** - health polling; if the server is down the panel can
   launch `npm run dev` for the repo and tail its log
   (`~/Library/Logs/Rook/server.log`).

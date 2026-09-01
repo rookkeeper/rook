@@ -231,4 +231,5 @@ describe("SQLiteEnvironmentRepository", () => {
     const loaded = await combined.getBundles("web:example.com");
     expect(loaded.bundles.map((bundle) => bundle.repository)).toEqual(["canonical", "personal"]);
   });
+
 });
