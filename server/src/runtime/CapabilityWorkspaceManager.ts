@@ -126,10 +126,10 @@ export class CapabilityWorkspaceManager {
       const nickname = nicknames.get(environmentId)!;
       const skillNames = skillNamesByEnvironment.get(nickname) ?? new Set<string>();
       skillNamesByEnvironment.set(nickname, skillNames);
-      if (entry.bundle.repository === "personal" || entry.bundle.repository === "project-directory") {
+      if (entry.editable && (entry.bundle.repository === "personal" || entry.bundle.repository === "project-directory")) {
         await this.ensureAuthoringRoot(entry);
       }
-      if (entry.bundle.repository === "personal") {
+      if (entry.bundle.repository === "personal" && entry.editable) {
         const personalRoot = personalEnvironmentPath(this.workspaceRoot, entry);
         await mkdir(path.join(personalRoot, ".agents", "skills"), { recursive: true });
         await replaceWithSymlink(
@@ -167,7 +167,16 @@ export class CapabilityWorkspaceManager {
         }
       }
       if (entry.bundle.llmsTxt !== undefined) {
-        const derived = generatedReferenceSkill(`llms-${safeName(entry.bundleName)}`, "llms.txt", entry.bundle.llmsTxt);
+        const website = entry.bundle.environmentId.startsWith("web:")
+          ? entry.bundle.environmentId.slice("web:".length)
+          : nickname;
+        const id = `${skillNameSlug(website)}-llms`;
+        const derived = generatedReferenceSkill(
+          id,
+          "llms.txt",
+          entry.bundle.llmsTxt,
+          `Guide to ${website} content published by the site's llms.txt.`,
+        );
         skillNames.add(derived.id);
         await materializeDerivedSkill(skillsRoot, derived, usedSkillNames, skillPaths);
       }
@@ -629,11 +638,15 @@ function artifactText(artifact: BundleArtifact): string {
   return Object.values(artifact.files).join("\n\n");
 }
 
-function generatedReferenceSkill(id: string, sourceName: string, content: string): BundleArtifact {
+function generatedReferenceSkill(id: string, sourceName: string, content: string, description = `Reference material from ${sourceName}.`): BundleArtifact {
   return {
     id,
     files: {
-      [`${id}/SKILL.md`]: `---\nname: ${id}\ndescription: Reference material from ${sourceName}.\n---\n\n# ${sourceName}\n\n${content}`,
+      [`${id}/SKILL.md`]: `---\nname: ${id}\ndescription: ${description}\n---\n\n# ${sourceName}\n\n${content}`,
     },
   };
+}
+
+function skillNameSlug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "environment";
 }

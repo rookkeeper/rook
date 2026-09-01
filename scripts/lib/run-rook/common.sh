@@ -419,38 +419,28 @@ build_mac_app() {
 }
 
 open_mac_app_bundle() {
-  need_cmd open
   local app_path="$1"
-  log "opening $(basename "$app_path") through LaunchServices"
-  if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
-    launchctl setenv ROOK_AUTH_TOKEN "$SERVER_AUTH_TOKEN"
-  fi
-  if [[ -n "${ROOK_VERBOSE_LOGGING:-}" ]]; then
-    launchctl setenv ROOK_VERBOSE_LOGGING "$ROOK_VERBOSE_LOGGING"
-  fi
-  launchctl setenv ROOK_SERVER_BASE_URL "http://127.0.0.1:${SERVER_PORT}"
-  launchctl setenv ROOK_RUN_MODE "$RUN_ROOK_PROFILE"
-  launchctl setenv ROOK_HOME "$ROOK_HOME"
-  launchctl setenv ROOK_DATABASE_PATH "$SERVER_DATABASE_PATH"
-  if [[ -n "${ROOK_AGENT_RUNTIMES_PATH:-}" ]]; then
-    launchctl setenv ROOK_AGENT_RUNTIMES_PATH "$ROOK_AGENT_RUNTIMES_PATH"
-  fi
-  launchctl setenv PORT "$SERVER_PORT"
-  open -n "$app_path"
+  local executable="$app_path/Contents/MacOS/Rook"
+  [[ -x "$executable" ]] || die "missing executable: $executable"
+  log "launching $(basename "$app_path") directly with the profile environment"
+
+  local -a launch_env=(
+    "ROOK_SERVER_BASE_URL=http://127.0.0.1:${SERVER_PORT}"
+    "ROOK_RUN_MODE=$RUN_ROOK_PROFILE"
+    "ROOK_HOME=$ROOK_HOME"
+    "ROOK_DATABASE_PATH=$SERVER_DATABASE_PATH"
+    "ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB=${ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB:-$ROOK_HOME/environment-repository.db}"
+    "PORT=$SERVER_PORT"
+  )
+  [[ -n "$SERVER_AUTH_TOKEN" ]] && launch_env+=("ROOK_AUTH_TOKEN=$SERVER_AUTH_TOKEN")
+  [[ -n "${ROOK_VERBOSE_LOGGING:-}" ]] && launch_env+=("ROOK_VERBOSE_LOGGING=$ROOK_VERBOSE_LOGGING")
+  [[ -n "${ROOK_AGENT_RUNTIMES_PATH:-}" ]] && launch_env+=("ROOK_AGENT_RUNTIMES_PATH=$ROOK_AGENT_RUNTIMES_PATH")
+
+  env "${launch_env[@]}" "$executable" >/dev/null 2>&1 &
+  local pid=$!
   sleep 1
-  launchctl unsetenv ROOK_SERVER_BASE_URL
-  launchctl unsetenv ROOK_RUN_MODE
-  launchctl unsetenv ROOK_HOME
-  launchctl unsetenv ROOK_DATABASE_PATH
-  if [[ -n "${ROOK_AGENT_RUNTIMES_PATH:-}" ]]; then
-    launchctl unsetenv ROOK_AGENT_RUNTIMES_PATH
-  fi
-  launchctl unsetenv PORT
-  if [[ -n "$SERVER_AUTH_TOKEN" ]]; then
-    launchctl unsetenv ROOK_AUTH_TOKEN
-  fi
-  if [[ -n "${ROOK_VERBOSE_LOGGING:-}" ]]; then
-    launchctl unsetenv ROOK_VERBOSE_LOGGING
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
+    die "Rook exited while launching from $app_path"
   fi
   activate_mac_app "$app_path"
 }

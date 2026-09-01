@@ -72,6 +72,8 @@ export class EnvironmentRepositoryService {
         bundleId: bundle.bundleId,
         environmentId: bundle.environmentId,
         repository: bundle.repository,
+        publisher: bundle.publisher,
+        scoutPublished: bundle.scoutPublished,
         valid: bundle.valid,
         bundleHash: hashEnvironmentBundle(bundle),
         skills: bundle.skills,

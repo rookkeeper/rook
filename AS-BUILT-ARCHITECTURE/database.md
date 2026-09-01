@@ -6,7 +6,8 @@ Rook's durable server state is split across SQLite databases:
 
 - the application database stores sessions, session membership, and durable environment decisions;
 - the canonical environment repository database stores curated environment/capability content;
-- the personal environment repository database stores writable user content.
+- the user-local environment repository database stores both writable personal content and
+  website-scouted content; bundle publishers distinguish their ownership.
 
 The application database remains separate from environment repositories. This database is intentionally small: it stores session persistence, session membership, and durable environment decisions. Runtime processes, ACP session history, active/recent environment caches, subscribers, and workspace projections remain outside this database. By default it lives under `ROOK_HOME/rook.sqlite` (`~/.rook/rook.sqlite` for the main checkout and `~/.rook-<worktree-slug>/rook.sqlite` for development worktrees), with `ROOK_DATABASE_PATH` as an explicit override.
 
@@ -49,7 +50,8 @@ Only permanent decisions are stored here. Session-scoped `accept` and `ignore` d
 
 ## Environment repository schema
 
-Each environment repository database has exactly three tables.
+Every environment repository database has the same three tables. The user-local database has
+one `personal` repository projection that serves both user- and site-published bundles.
 
 ### `environments`
 
@@ -57,6 +59,9 @@ Each environment repository database has exactly three tables.
 - `display_name TEXT NOT NULL` — UI name.
 - `description TEXT NOT NULL` — environment description.
 - `metadata_json TEXT NOT NULL DEFAULT '{}'` — serialized discovery metadata.
+
+There is exactly one row per environment id. User-authored display metadata and scout state
+therefore coexist on the same `web:<host>` row.
 
 ### `capabilities`
 
@@ -73,9 +78,10 @@ A skill stores all of its files, including `SKILL.md`, scripts, references, and 
 The bundle table is the environment/capability membership table:
 
 - `bundle_id TEXT NOT NULL` — UUID grouping one atomic bundle.
-- `environment_id TEXT NOT NULL` — owning environment, foreign key to `environments`.
+- `environment_id TEXT NOT NULL` — owning environment identifier.
 - `capability_id TEXT NOT NULL` — referenced capability, foreign key to `capabilities`.
-- `publisher TEXT NOT NULL DEFAULT 'default'` — publisher metadata.
+- `publisher TEXT NOT NULL DEFAULT 'default'` — ownership discriminator. Existing personal
+  paths keep their publisher; the scout writes the normalized host.
 - `deleted_at TEXT NULL` — membership tombstone; a timestamp means the capability is deleted from this bundle/environment.
 
 Primary key:
@@ -86,11 +92,28 @@ Primary key:
 
 A capability can be referenced by memberships in multiple environments. Deleting one membership does not delete shared capability content. There are no revision tables, revision pointers, or persistent empty personal bundles.
 
+### Web scout state
+
+The scout writes into the personal repository's user-local
+`<ROOK_HOME>/environment-repository.db`. The single `environments` row for a host stores
+`fetched_at`, `status`, pass `errors`, and per-resource `etag` / `last_modified` validators
+under `metadata_json.scout`. Content uses one bundle (`site`, publisher = host) per
+environment. Empty and failed hosts keep their environment row for negative caching, but
+rows without any live bundle memberships are omitted from listings and search. A refresh
+replaces or removes only memberships whose publisher is that host; publishers such as
+`default` are untouched. An error scout leaves previous content and validators in place.
+`WebEnvironmentScoutStore.recordScout` is the only scout writer and preserves user-authored
+display text.
+
 ## Repository layering
 
 - `EnvironmentRepositoryDatastore` owns the SQLite connection and three-table schema.
-- `SQLiteEnvironmentRepository` reads and writes normalized rows and projects them into the bundle-facing `EnvironmentBundle` model.
-- `CompositeEnvironmentRepository` combines canonical, personal, project-directory, and synthetic repositories; the live synthetic source is `LocationContextRepository`.
+- `SQLiteEnvironmentRepository` reads and writes normalized rows and projects publisher plus
+  the derived `scoutPublished` flag into the bundle-facing `EnvironmentBundle` model.
+- `WebEnvironmentScoutStore` owns metadata-backed scout state, host guards, and transactional,
+  publisher-scoped `recordScout` updates; it is not a repository projection.
+- `CompositeEnvironmentRepository` combines canonical, personal, project-directory, and
+  synthetic repositories; the live synthetic source is `LocationContextRepository`.
 - `EnvironmentRepositoryService` resolves bundles, calculates atomic bundle hashes, exposes search/preview, and routes capability write/delete/restore operations.
 
 The API remains bundle-oriented even though storage is capability-oriented. Instructions and `llms.txt` are projected into `agentsMd` and `llmsTxt`; skills, facts, MCP, and apps are projected into their corresponding collections.

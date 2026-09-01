@@ -155,7 +155,9 @@ describe("ACP facade integration", { timeout: 30000 }, () => {
       personalEnvironmentRepositoryDatabase: path.join(tempConfigDir, ".rook", "environment-repository.db"),
       environmentDecisionStoreLocation: ":memory:",
       authToken: "",
-      runtimeOptions: { runtimeRequestTimeoutMs: 1_000, cancelGraceMs: 50, runtimeShutdownTimeoutMs: 100, runtimeIdleTimeoutMs: 1_000, runtimeIdleCheckIntervalMs: 25 },
+      // Registering `web:example.com` below must not scout the real site.
+      webScout: { enabled: false },
+      runtimeOptions: { runtimeRequestTimeoutMs: 1_000, cancelGraceMs: 50, runtimeShutdownTimeoutMs: 100, runtimeIdleTimeoutMs: 1_000, runtimeIdleCheckIntervalMs: 25 }
     });
     expect(existsSync(path.join(process.env.ROOK_HOME!, "global-workspace", "manifest.json"))).toBe(true);
     await app.listen({ host: "127.0.0.1", port: PORT });

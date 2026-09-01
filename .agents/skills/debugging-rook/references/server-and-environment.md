@@ -32,24 +32,49 @@ A worktree profile has isolated ports, `ROOK_HOME`, SQLite state, and app identi
 
 ## Environment storage
 
-Checked-in bundles:
+Environment repositories are SQLite databases, not directories:
 
 ```text
-environment-repository/<kind>/<path>/.bundles/<bundle-id>/
+<checkout>/environment-repository.db                # canonical (ROOK_ENVIRONMENT_REPOSITORY_DB)
+~/.rook/environment-repository.db                   # personal, writable (ROOK_PERSONAL_ENVIRONMENT_REPOSITORY_DB)
+$ROOK_HOME/web-environment-repository.db            # web, scouted from sites (ROOK_WEB_ENVIRONMENT_REPOSITORY_DB)
 ```
 
-Runtime-authored bundles:
-
-```text
-~/.rook/environment-repository/<kind>/<path>/.bundles/<bundle-id>/
-```
-
-For the filesystem shape and authoring model, read:
+Each has `environments`, `capabilities`, and `bundles`; the web database adds `web_scouts` and `web_scout_resources`. Project-directory content is read from the project's own files. For the storage and authoring model, read:
 
 - `PRODUCT/environment-repository.md`
 - `PRODUCT/environment-local-authoring.md`
+- `AS-BUILT-ARCHITECTURE/database.md`
 
-When a skill or instruction seems missing, inspect both locations. The user-local location is where `--join` finds agent-authored artifacts.
+When a skill or instruction seems missing, query the databases directly:
+
+```bash
+sqlite3 ~/.rook/environment-repository.db "SELECT environment_id, bundle_id, publisher, deleted_at FROM bundles"
+sqlite3 ~/.rook/environment-repository.db "SELECT capability_id, type, name FROM capabilities"
+```
+
+Personal writable sources are also visible under `$ROOK_HOME/global-workspace/writable/<environment-key>/`, which is where `--join` finds agent-authored artifacts.
+
+## Web scouting
+
+When a `web:<host>` environment shows no bundle or a stale one, check the scout state:
+
+```bash
+sqlite3 "$ROOK_HOME/web-environment-repository.db" "SELECT host, fetched_at, status, errors_json FROM web_scouts"
+sqlite3 "$ROOK_HOME/web-environment-repository.db" "SELECT environment_id, bundle_id, capability_id FROM bundles"
+sqlite3 "$ROOK_HOME/web-environment-repository.db" "SELECT type, name, content_hash FROM capabilities"
+```
+
+`status` is `content`, `empty` (the site publishes nothing; not re-probed until the 24 h TTL), or `error` (retried after 15 min). The server log has `scouted web environment` lines with `host`, `status`, `changed`, and error counts; `web scout disabled` at startup means `ROOK_WEB_SCOUT_DISABLED=1`.
+
+To force a re-scout, delete the host's row and register the environment again (revisit the site or `POST /api/environments/register`), or run a dev profile with the TTL zeroed:
+
+```bash
+sqlite3 "$ROOK_HOME/web-environment-repository.db" "DELETE FROM web_scouts WHERE host = 'example.com'"
+ROOK_WEB_SCOUT_TTL_MS=0 ROOK_WEB_SCOUT_ERROR_TTL_MS=0 ./scripts/run-rook.sh server
+```
+
+Without its `web_scouts` row a host serves no bundle; its old bundle rows stay in the file until the next scout replaces or clears them.
 
 ## Prompt and instruction traces
 

@@ -13,12 +13,16 @@ export interface RepositoryReadError {
     | "invalid_environment_directory"
     | "invalid_bundle_directory"
     | "invalid_bundle_contents"
-    | "unreadable_path";
+    | "unreadable_path"
+    | "unreachable_url"
+    | "unsupported_capability";
   message: string;
   repository: string;
   environmentId: string;
   bundleId?: string;
   path?: string;
+  /** URL the error refers to, for web-sourced content. */
+  url?: string;
 }
 
 export interface BundleArtifact {
@@ -26,6 +30,8 @@ export interface BundleArtifact {
   files: Record<string, string>;
   /** Internal-only path hint for directory-backed bundle artifacts. */
   sourcePath?: string;
+  /** URL the content was fetched from, when the bundle is web-sourced. */
+  sourceUrl?: string;
 }
 
 export interface EnvironmentBundle {
@@ -33,8 +39,14 @@ export interface EnvironmentBundle {
   bundleId: string;
   environmentId: string;
   repository: string;
+  /** Bundle publisher stored in the repository (`default` for existing user content). */
+  publisher?: string;
+  /** True when a website scout, rather than the user, published this bundle. */
+  scoutPublished?: boolean;
   /** Path to the bundle directory/root when one exists on disk (or an equivalent synthesized bundle root). */
   bundlePath?: string;
+  /** URL the content was fetched from, when the bundle is web-sourced. */
+  sourceUrl?: string;
   skills: BundleArtifact[];
   mcpServers: BundleArtifact[];
   apps: BundleArtifact[];

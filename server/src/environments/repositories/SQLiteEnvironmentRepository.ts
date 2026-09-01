@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type {
-  BundleArtifact,
   CapabilityType,
   EnvironmentBundle,
   EnvironmentBundleResult,
@@ -13,7 +12,7 @@ import { EnvironmentRepository } from "./EnvironmentRepository.js";
 
 /** SQLite-backed repository using current capability content and bundle memberships. */
 export class SQLiteEnvironmentRepository extends EnvironmentRepository {
-  private readonly db: DatabaseSync;
+  protected readonly db: DatabaseSync;
   private readonly ownedDatastore: EnvironmentRepositoryDatastore | null;
 
   constructor(
@@ -49,32 +48,42 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
       FROM environments WHERE environment_id = ?
     `).get(environmentId);
     const environment = environmentRow ? environmentFromRow(environmentRow) : defaultEnvironmentRecord(environmentId);
+    const scoutHost = hostForWebEnvironmentId(environmentId);
+    const scoutState = environmentRow && scoutHost
+      ? scoutStateFromMetadata(parseMetadata((environmentRow as Record<string, unknown>).metadata_json))
+      : null;
     const rows = this.db.prepare(`
       SELECT b.bundle_id, b.environment_id, b.publisher,
              c.capability_id, c.type, c.name, c.files_json, c.content_hash
       FROM bundles b
       JOIN capabilities c ON c.capability_id = b.capability_id
       WHERE b.environment_id = ? AND b.deleted_at IS NULL
-      ORDER BY b.bundle_id, c.type, c.name
+      ORDER BY b.bundle_id, b.publisher, c.type, c.name
     `).all(environmentId) as Array<Record<string, unknown>>;
 
     const byBundle = new Map<string, EnvironmentBundle>();
     for (const row of rows) {
       const bundleId = String(row.bundle_id);
-      let bundle = byBundle.get(bundleId);
+      const publisher = String(row.publisher);
+      const scoutPublished = scoutHost !== null && publisher === scoutHost;
+      const bundleKey = `${bundleId}\u0000${publisher}`;
+      let bundle = byBundle.get(bundleKey);
       if (!bundle) {
         bundle = {
           id: `${environmentId}#${bundleId}`,
           bundleId,
           environmentId,
           repository: this.repositoryId,
+          publisher,
+          scoutPublished,
+          ...(scoutPublished ? { sourceUrl: `https://${scoutHost}/` } : {}),
           skills: [],
           mcpServers: [],
           apps: [],
           valid: true,
-          errors: [],
+          errors: scoutPublished ? scoutState?.errors ?? [] : [],
         };
-        byBundle.set(bundleId, bundle);
+        byBundle.set(bundleKey, bundle);
       }
       const type = String(row.type) as CapabilityType;
       const name = String(row.name);
@@ -87,13 +96,21 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
       else if (type === "app") bundle.apps.push({ id: name, files });
     }
 
-    return { environment, bundles: [...byBundle.values()], errors: [] };
+    const bundles = [...byBundle.values()];
+    const errors = scoutState && !bundles.some((bundle) => bundle.scoutPublished) ? scoutState.errors : [];
+    return { environment, bundles, errors };
   }
 
   async listEnvironments(): Promise<EnvironmentRecord[]> {
     return this.db.prepare(`
       SELECT environment_id, display_name, description, metadata_json
-      FROM environments ORDER BY environment_id
+      FROM environments
+      WHERE EXISTS (
+        SELECT 1 FROM bundles
+        WHERE bundles.environment_id = environments.environment_id
+          AND bundles.deleted_at IS NULL
+      )
+      ORDER BY environment_id
     `).all().map(environmentFromRow);
   }
 
@@ -126,7 +143,7 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
     this.db.exec("BEGIN");
     try {
       this.upsertEnvironment(environment);
-      this.db.prepare("DELETE FROM bundles WHERE environment_id = ?").run(environment.id);
+      this.deleteUserBundles(environment.id);
       for (const bundle of result.bundles.filter((candidate) => candidate.valid)) {
         this.writeBundle(bundle, normalizedBundleId(bundle.bundleId));
       }
@@ -199,7 +216,14 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   }
 
   private writeBundle(bundle: EnvironmentBundle, bundleId: string): void {
-    this.db.prepare("DELETE FROM bundles WHERE bundle_id = ? AND environment_id = ?").run(bundleId, bundle.environmentId);
+    const scoutHost = hostForWebEnvironmentId(bundle.environmentId);
+    if (scoutHost) {
+      this.db.prepare("DELETE FROM bundles WHERE bundle_id = ? AND environment_id = ? AND publisher <> ?")
+        .run(bundleId, bundle.environmentId, scoutHost);
+    } else {
+      this.db.prepare("DELETE FROM bundles WHERE bundle_id = ? AND environment_id = ?")
+        .run(bundleId, bundle.environmentId);
+    }
     const capabilities: Array<{ type: CapabilityType; name: string; files: Record<string, string> }> = [];
     if (bundle.agentsMd?.trim()) capabilities.push({ type: "instructions", name: "AGENTS.md", files: { "AGENTS.md": bundle.agentsMd } });
     if (bundle.llmsTxt !== undefined) capabilities.push({ type: "llms-txt", name: "llms.txt", files: { "llms.txt": bundle.llmsTxt } });
@@ -222,7 +246,11 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   }
 
   private upsertEnvironment(environment: EnvironmentRecord): void {
-    const metadataJson = JSON.stringify(environment.metadata ?? {});
+    const existingMetadata = this.repositoryId === "personal" ? this.environmentMetadata(environment.id) : {};
+    const metadataJson = JSON.stringify({
+      ...(environment.metadata ?? {}),
+      ...(existingMetadata.scout === undefined ? {} : { scout: existingMetadata.scout }),
+    });
     this.db.prepare(`
       INSERT INTO environments (environment_id, display_name, description, metadata_json)
       VALUES (?, ?, ?, ?)
@@ -234,22 +262,59 @@ export class SQLiteEnvironmentRepository extends EnvironmentRepository {
   }
 
   private ensureEnvironment(environmentId: string): void {
-    this.upsertEnvironment(defaultEnvironmentRecord(environmentId));
+    const environment = defaultEnvironmentRecord(environmentId);
+    this.db.prepare(`
+      INSERT OR IGNORE INTO environments (environment_id, display_name, description, metadata_json)
+      VALUES (?, ?, ?, '{}')
+    `).run(environment.id, environment.displayName, environment.description);
   }
 
   private findMembership(environmentId: string, bundleId: string, type: CapabilityType, name: string): { capabilityId: string; deletedAt: string | null } | undefined {
+    const scoutHost = hostForWebEnvironmentId(environmentId);
     const row = this.db.prepare(`
       SELECT c.capability_id, b.deleted_at
       FROM bundles b JOIN capabilities c ON c.capability_id = b.capability_id
       WHERE b.environment_id = ? AND b.bundle_id = ? AND c.type = ? AND c.name = ?
+        ${scoutHost ? "AND b.publisher <> ?" : ""}
       LIMIT 1
-    `).get(environmentId, bundleId, type, name) as { capability_id?: string; deleted_at?: string | null } | undefined;
+    `).get(environmentId, bundleId, type, name, ...(scoutHost ? [scoutHost] : [])) as { capability_id?: string; deleted_at?: string | null } | undefined;
     return row?.capability_id ? { capabilityId: row.capability_id, deletedAt: row.deleted_at ?? null } : undefined;
+  }
+
+  private deleteUserBundles(environmentId: string): void {
+    const scoutHost = hostForWebEnvironmentId(environmentId);
+    if (scoutHost) {
+      this.db.prepare("DELETE FROM bundles WHERE environment_id = ? AND publisher <> ?").run(environmentId, scoutHost);
+    } else {
+      this.db.prepare("DELETE FROM bundles WHERE environment_id = ?").run(environmentId);
+    }
+  }
+
+  private environmentMetadata(environmentId: string): Record<string, unknown> {
+    const row = this.db.prepare("SELECT metadata_json FROM environments WHERE environment_id = ?")
+      .get(environmentId) as { metadata_json?: string } | undefined;
+    return parseMetadata(row?.metadata_json);
   }
 
   private deleteOrphanedCapabilities(): void {
     this.db.exec("DELETE FROM capabilities WHERE capability_id NOT IN (SELECT capability_id FROM bundles)");
   }
+}
+
+/** The host of a host-rooted `web:` id; null for anything else (path-scoped ids included). */
+export function hostForWebEnvironmentId(environmentId: string): string | null {
+  if (!environmentId.startsWith("web:")) return null;
+  const host = environmentId.slice("web:".length).trim().toLowerCase();
+  if (!host || host.includes("/") || /\s/.test(host)) return null;
+  return host;
+}
+
+function scoutStateFromMetadata(metadata: Record<string, unknown>): { errors: RepositoryReadError[] } | null {
+  const scout = metadata.scout;
+  if (!scout || typeof scout !== "object" || Array.isArray(scout)) return null;
+  const value = scout as Record<string, unknown>;
+  if (typeof value.fetched_at !== "string" || !["content", "empty", "error"].includes(String(value.status))) return null;
+  return { errors: Array.isArray(value.errors) ? value.errors as RepositoryReadError[] : [] };
 }
 
 function validEnvironmentId(environmentId: string): boolean {

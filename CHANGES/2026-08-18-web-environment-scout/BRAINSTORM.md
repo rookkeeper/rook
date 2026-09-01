@@ -103,7 +103,7 @@ MCP is out of scope for this change (its attachment model is open in #3 and #107
   fills a store that a read-only `WebEnvironmentRepository` serves from. `getBundles`
   never touches the network. Precedent: `LocationRegistrar` → `LocationContextRepository`.
   Needs a small hook or event from the manager, or the scout observing registrations.
-- **C. Scout persists into a SQLite repository** (a `web` DB via
+- **C. Scout persists into a repository-scoped SQLite projection** (via
   `SQLiteEnvironmentRepository.saveBundle`). Durable across restarts, searchable,
   reuses ingest code. Blurs "fetched cache" with "curated content"; needs an
   expiry/refresh story SQLite rows do not have today.
@@ -146,8 +146,8 @@ MCP is out of scope for this change (its attachment model is open in #3 and #107
   with `skill-md` entries only. `archive` entries are skipped and reported in the
   bundle's `errors` so the omission is visible; archive support is a follow-up issue.
   MCP is out of scope.
-- **Architecture:** scout on candidate registration; results persisted to a
-  profile-local SQLite store (`<ROOK_HOME>/web-environment-repository.db`) and served
+- **Architecture:** scout on candidate registration; results persisted to the
+  profile-local personal environment repository (`<ROOK_HOME>/environment-repository.db`) and served
   through a read-only `WebEnvironmentRepository` (`repositoryId: "web"`), so scouted
   capabilities survive restarts and are searchable. `getBundles` never performs network
   I/O. Stale entries (default 24 h) are refreshed in the background with conditional
