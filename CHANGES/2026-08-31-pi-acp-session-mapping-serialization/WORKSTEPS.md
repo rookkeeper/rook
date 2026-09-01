@@ -13,5 +13,5 @@
 - [x] Run final validation
 - [x] Synchronize with main before submitting
 - [x] Open and validate the PR
-- [ ] Merge with approval
+- [x] Merge with approval
 - [ ] Record outcomes and clean up
