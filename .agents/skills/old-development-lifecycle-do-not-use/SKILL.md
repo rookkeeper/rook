@@ -3,6 +3,9 @@ name: development-lifecycle
 description: Plan, implement, validate, review, merge, and clean up substantial Rook development work as one adaptable lifecycle.
 ---
 
+Note that this is old. Do not use this. Instead, we are building a new factory.
+
+
 # Rook development lifecycle
 
 This is the main lifecycle for carrying substantial Rook development work from an idea to its completion. It combines the planning, implementation-worktree, product and architecture review, pull-request, merge, and cleanup practices that otherwise live in separate instructions.
